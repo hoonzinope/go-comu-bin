@@ -27,10 +27,39 @@ func (s *BoardService) GetBoards(limit, offset int) ([]*domain.Board, error) {
 
 func (s *BoardService) CreateBoard(userID int64, name, description string) (int64, error) {
 	// 게시판 생성 로직 구현
-	// TODO: only admin can create board
+	user, err := s.repository.UserRepository.SelectUserByID(userID) // user 존재 여부 확인
+	if user == nil || err != nil {
+		return 0, customError.ErrInternalServerError
+	}
 	boardID, err := s.repository.BoardRepository.SaveBoard(name, description)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
 	return boardID, nil
+}
+
+func (s *BoardService) UpdateBoard(id, userID int64, name, description string) error {
+	// 게시판 수정 로직 구현
+	user, err := s.repository.UserRepository.SelectUserByID(userID) // user 존재 여부 확인
+	if user == nil || err != nil {
+		return customError.ErrInternalServerError
+	}
+	err = s.repository.BoardRepository.UpdateBoard(id, name, description)
+	if err != nil {
+		return customError.ErrInternalServerError
+	}
+	return nil
+}
+
+func (s *BoardService) DeleteBoard(id, userID int64) error {
+	// 게시판 삭제 로직 구현
+	user, err := s.repository.UserRepository.SelectUserByID(userID) // user 존재 여부 확인
+	if user == nil || err != nil {
+		return customError.ErrInternalServerError
+	}
+	err = s.repository.BoardRepository.DeleteBoard(id)
+	if err != nil {
+		return customError.ErrInternalServerError
+	}
+	return nil
 }

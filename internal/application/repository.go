@@ -6,6 +6,7 @@ type UserRepository interface {
 	// User 관련 Repository 메서드 정의
 	SaveUser(username, password string) (int64, error)
 	SelectUserByUsername(username string) (*domain.User, error)
+	SelectUserByID(id int64) (*domain.User, error)
 	DeleteUser(username string) error
 }
 
