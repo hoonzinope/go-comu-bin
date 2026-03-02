@@ -62,3 +62,11 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	}
 	return nil
 }
+
+func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string) ([]*entity.Reaction, error) {
+	reactions, err := s.repository.ReactionRepository.GetByTarget(targetID, targetType)
+	if err != nil {
+		return nil, customError.ErrInternalServerError
+	}
+	return reactions, nil
+}

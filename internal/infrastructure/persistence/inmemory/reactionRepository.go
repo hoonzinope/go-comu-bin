@@ -21,11 +21,11 @@ func NewReactionRepository() *ReactionRepository {
 	}
 }
 
-func (r *ReactionRepository) Add(reaction *entity.Reaction) (int64, error) {
+func (r *ReactionRepository) Add(reaction *entity.Reaction) error {
 	r.reactionDB.ID++
 	reaction.ID = r.reactionDB.ID
 	r.reactionDB.Data[reaction.ID] = reaction
-	return reaction.ID, nil
+	return nil
 }
 
 func (r *ReactionRepository) Remove(reaction *entity.Reaction) error {

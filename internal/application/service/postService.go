@@ -40,7 +40,7 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	return postID, nil
 }
 
-func (s *PostService) GetPostsByBoard(boardID int64, limit, offset int) (*dto.PostList, error) {
+func (s *PostService) GetPostsList(boardID int64, limit, offset int) (*dto.PostList, error) {
 	// 게시글 목록 조회 로직 구현
 	posts, err := s.repository.PostRepository.SelectPosts(boardID, limit, offset)
 	if err != nil {
