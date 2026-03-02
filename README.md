@@ -4,7 +4,7 @@ single binary community engine for go
 
 ## structure
 
-delivery -> useCaseInterface -> application Layer -> persistence Layer -> infra
+delivery -> useCaseInterface -> application Layer -> repository Layer -> infrastructure
 
 ## domain
 - user
@@ -47,7 +47,7 @@ delivery -> useCaseInterface -> application Layer -> persistence Layer -> infra
 
 ## useCase
 - user
-    - signIn
+    - signUp
     - signOut
     - login
     - logout
@@ -72,6 +72,6 @@ delivery -> useCaseInterface -> application Layer -> persistence Layer -> infra
     - getComment(s)
 
 - reaction
-    - createReaction (only registered user)
-    - deleteReaction (only author or admin)
-    - getReaction(s)
+    - addReaction (only registered user)
+    - removeReaction (only author or admin)
+    - getReactions(targetID, targetType)
