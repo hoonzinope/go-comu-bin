@@ -174,6 +174,21 @@ internal/
 
 ## 실행 방법
 
+### 0) Makefile 사용 (권장)
+
+```bash
+make help
+```
+
+주요 타깃:
+
+- `make build`: 단일 바이너리 빌드 (`bin/commu-bin`)
+- `make run`: 빌드 후 실행
+- `make test`: 전체 테스트
+- `make test-unit`: 단위 테스트만 실행
+- `make test-integration`: 통합 테스트만 실행
+- `make clean`: 빌드 산출물 삭제
+
 ### 1) 실행
 
 ```bash
