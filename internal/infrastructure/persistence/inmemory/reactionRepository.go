@@ -1,6 +1,11 @@
 package inmemory
 
-import "github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+import (
+	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+)
+
+var _ application.ReactionRepository = (*ReactionRepository)(nil)
 
 type ReactionRepository struct {
 	reactionDB struct {

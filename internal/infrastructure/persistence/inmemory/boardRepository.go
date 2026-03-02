@@ -1,8 +1,11 @@
 package inmemory
 
 import (
+	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
+
+var _ application.BoardRepository = (*BoardRepository)(nil)
 
 type BoardRepository struct {
 	boardDB struct {

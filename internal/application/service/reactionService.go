@@ -6,6 +6,8 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
+var _ application.ReactionUseCase = (*ReactionService)(nil)
+
 type ReactionService struct {
 	repository application.Repository
 }
@@ -55,6 +57,9 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	removeReaction, err := s.repository.ReactionRepository.GetByID(ID)
 	if removeReaction == nil || err != nil {
 		return customError.ErrInternalServerError
+	}
+	if removeReaction.UserID != UserID && !user.IsAdmin() {
+		return customError.ErrForbidden
 	}
 	err = s.repository.ReactionRepository.Remove(removeReaction)
 	if err != nil {

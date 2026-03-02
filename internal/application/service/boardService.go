@@ -7,6 +7,8 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
+var _ application.BoardUseCase = (*BoardService)(nil)
+
 type BoardService struct {
 	repository application.Repository
 }
@@ -35,7 +37,10 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	// 게시판 생성 로직 구현
 	user, err := s.repository.UserRepository.SelectUserByID(userID) // user 존재 여부 확인
 	if user == nil || err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.ErrUserNotFound
+	}
+	if !user.IsAdmin() {
+		return 0, customError.ErrForbidden
 	}
 	newBoard := &entity.Board{}
 	newBoard.NewBoard(name, description)
@@ -50,7 +55,10 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	// 게시판 수정 로직 구현
 	user, err := s.repository.UserRepository.SelectUserByID(userID) // user 존재 여부 확인
 	if user == nil || err != nil {
-		return customError.ErrInternalServerError
+		return customError.ErrUserNotFound
+	}
+	if !user.IsAdmin() {
+		return customError.ErrForbidden
 	}
 	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
 	if existingBoard == nil || err != nil {
@@ -68,7 +76,10 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	// 게시판 삭제 로직 구현
 	user, err := s.repository.UserRepository.SelectUserByID(userID) // user 존재 여부 확인
 	if user == nil || err != nil {
-		return customError.ErrInternalServerError
+		return customError.ErrUserNotFound
+	}
+	if !user.IsAdmin() {
+		return customError.ErrForbidden
 	}
 	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
 	if existingBoard == nil || err != nil {

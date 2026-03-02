@@ -7,6 +7,8 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
+var _ application.CommentUseCase = (*CommentService)(nil)
+
 type CommentService struct {
 	repository application.Repository
 }
@@ -57,7 +59,13 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 		return customError.ErrInternalServerError
 	}
 	if comment.AuthorID != authorID {
-		return customError.ErrInternalServerError
+		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+		if requester == nil || err != nil {
+			return customError.ErrUserNotFound
+		}
+		if !requester.IsAdmin() {
+			return customError.ErrForbidden
+		}
 	}
 	comment.UpdateComment(content)
 	err = s.repository.CommentRepository.Update(comment)
@@ -74,7 +82,13 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 		return customError.ErrInternalServerError
 	}
 	if comment.AuthorID != authorID {
-		return customError.ErrInternalServerError
+		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+		if requester == nil || err != nil {
+			return customError.ErrUserNotFound
+		}
+		if !requester.IsAdmin() {
+			return customError.ErrForbidden
+		}
 	}
 	err = s.repository.CommentRepository.Delete(comment.ID)
 	if err != nil {

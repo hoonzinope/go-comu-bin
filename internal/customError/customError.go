@@ -1,10 +1,12 @@
-package error
+package customerror
 
 import "errors"
 
 var (
 	// 공통 에러 정의
 	ErrInternalServerError = errors.New("internal server error")
+	ErrForbidden           = errors.New("forbidden")
+	ErrInvalidCredential   = errors.New("invalid credential")
 	// User 관련 에러 정의
 	ErrUserAlreadyExists = errors.New("user already exists")
 	ErrUserNotFound      = errors.New("user not found")

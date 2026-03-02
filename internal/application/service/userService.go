@@ -6,6 +6,8 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
+var _ application.UserUseCase = (*UserService)(nil)
+
 type UserService struct {
 	repository application.Repository
 }
@@ -21,7 +23,7 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 	// duplicate username check
 	existingUser, err := s.repository.UserRepository.SelectUserByUsername(username)
 	if err != nil {
-		return "", customError.ErrUserNotFound
+		return "", customError.ErrInternalServerError
 	}
 	if existingUser != nil {
 		return "", customError.ErrUserAlreadyExists
@@ -46,6 +48,9 @@ func (s *UserService) Quit(username, password string) error {
 	}
 	if existingUser == nil {
 		return customError.ErrUserNotFound
+	}
+	if existingUser.Password != password {
+		return customError.ErrInvalidCredential
 	}
 
 	err = s.repository.UserRepository.Delete(existingUser.ID)

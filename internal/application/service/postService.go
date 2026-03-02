@@ -11,6 +11,8 @@ var (
 	commentDefaultLimit = 10
 )
 
+var _ application.PostUseCase = (*PostService)(nil)
+
 type PostService struct {
 	repository application.Repository
 }
@@ -93,7 +95,13 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 		return customError.ErrInternalServerError
 	}
 	if post.AuthorID != authorID {
-		return customError.ErrInternalServerError
+		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+		if requester == nil || err != nil {
+			return customError.ErrUserNotFound
+		}
+		if !requester.IsAdmin() {
+			return customError.ErrForbidden
+		}
 	}
 	post.UpdatePost(title, content)
 	err = s.repository.PostRepository.Update(post)
@@ -110,7 +118,13 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 		return customError.ErrInternalServerError
 	}
 	if post.AuthorID != authorID {
-		return customError.ErrInternalServerError
+		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+		if requester == nil || err != nil {
+			return customError.ErrUserNotFound
+		}
+		if !requester.IsAdmin() {
+			return customError.ErrForbidden
+		}
 	}
 	err = s.repository.PostRepository.Delete(post.ID)
 	if err != nil {
