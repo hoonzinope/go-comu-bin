@@ -192,6 +192,16 @@ go test ./...
 GOCACHE=/tmp/go-comu-bin-gocache go test ./...
 ```
 
+### 3) 패키지별 테스트 실행
+
+```bash
+go test ./internal/application/service -v
+go test ./internal/delivery -v
+go test ./internal/infrastructure/persistence/inmemory -v
+go test ./internal/domain/entity -v
+go test ./internal/integration -v
+```
+
 ---
 
 ## 예시 요청
@@ -234,3 +244,28 @@ curl -X POST http://localhost:18577/boards \
 3. 저장소 어댑터 교체 가능성 검증 (RDB adapter 추가)
 4. 플러그인/이벤트 버스 확장 포인트 정의
 
+---
+
+## 테스트 구성
+
+현재 테스트는 아래 레벨로 구성되어 있습니다.
+
+- Unit Test
+  - `internal/domain/entity`: 엔티티 생성/수정 메서드 검증
+  - `internal/infrastructure/persistence/inmemory`: 저장소 CRUD, 필터링, pagination, 경계값 검증
+  - `internal/application/service`: 유스케이스 권한/정책/오류 분기 검증
+  - `internal/delivery`: HTTP 라우팅, 상태코드, 입력 검증, 에러 매핑 검증
+- Integration Test
+  - `internal/integration`: HTTP + Service + InMemory를 실제 조합으로 end-to-end 흐름 검증
+
+### 통합 테스트 주요 시나리오
+
+- main flow: admin 로그인 -> board 생성 -> user 회원가입/로그인
+- main flow: board 조회 -> post 생성/조회/수정
+- main flow: comment 생성/조회/수정
+- main flow: comment reaction 생성/조회/삭제 -> comment 삭제
+- main flow: post reaction 생성/조회/삭제 -> post 삭제
+- main flow: user 로그아웃/탈퇴 -> admin 로그아웃
+- forbidden flow: 비관리자의 board 생성 거부
+- forbidden flow: 비작성자/비관리자의 post, comment 수정/삭제 거부
+- forbidden flow: 비작성자/비관리자의 reaction 삭제 거부
