@@ -43,7 +43,7 @@ type CommentUseCase interface {
 type ReactionUseCase interface {
 	// Reaction 관련 UseCase 메서드 정의
 	AddReaction(userID, targetID int64, targetType, reactionType string) error
-	RemoveReaction(userID, targetID int64, targetType string) error
+	RemoveReaction(userID, id int64) error
 	GetReactionsByTarget(targetID int64, targetType string) ([]*entity.Reaction, error)
 }
 

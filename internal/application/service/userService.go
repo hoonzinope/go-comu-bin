@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 type UserService struct {
@@ -26,7 +27,10 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 		return "", customError.ErrUserAlreadyExists
 	}
 
-	_, err = s.repository.UserRepository.SaveUser(username, password)
+	newUser := &entity.User{}
+	newUser.NewUser(username, password)
+
+	_, err = s.repository.UserRepository.Save(newUser)
 	if err != nil {
 		return "", customError.ErrInternalServerError
 	}
@@ -44,7 +48,7 @@ func (s *UserService) Quit(username, password string) error {
 		return customError.ErrUserNotFound
 	}
 
-	err = s.repository.UserRepository.DeleteUser(username)
+	err = s.repository.UserRepository.Delete(existingUser.ID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}

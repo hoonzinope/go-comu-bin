@@ -31,7 +31,9 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if user == nil || err != nil {
 		return 0, customError.ErrInternalServerError
 	}
-	boardID, err := s.repository.BoardRepository.SaveBoard(name, description)
+	newBoard := &entity.Board{}
+	newBoard.NewBoard(name, description)
+	boardID, err := s.repository.BoardRepository.Save(newBoard)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -44,7 +46,12 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if user == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	err = s.repository.BoardRepository.UpdateBoard(id, name, description)
+	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
+	if existingBoard == nil || err != nil {
+		return customError.ErrInternalServerError
+	}
+	existingBoard.UpdateBoard(name, description)
+	err = s.repository.BoardRepository.Update(existingBoard)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
@@ -57,7 +64,11 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	if user == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	err = s.repository.BoardRepository.DeleteBoard(id)
+	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
+	if existingBoard == nil || err != nil {
+		return customError.ErrInternalServerError
+	}
+	err = s.repository.BoardRepository.Delete(existingBoard.ID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}

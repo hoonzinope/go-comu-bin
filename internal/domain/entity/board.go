@@ -9,35 +9,13 @@ type Board struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// board getter, setter
-func (b *Board) GetID() int64 {
-	return b.ID
-}
-
-func (b *Board) GetName() string {
-	return b.Name
-}
-
-func (b *Board) GetDescription() string {
-	return b.Description
-}
-
-func (b *Board) GetCreatedAt() time.Time {
-	return b.CreatedAt
-}
-
-func (b *Board) SetID(id int64) {
-	b.ID = id
-}
-
-func (b *Board) SetName(name string) {
+func (b *Board) NewBoard(name, description string) {
 	b.Name = name
-}
-
-func (b *Board) SetDescription(description string) {
 	b.Description = description
+	b.CreatedAt = time.Now()
 }
 
-func (b *Board) SetCreatedAt(createdAt time.Time) {
-	b.CreatedAt = createdAt
+func (b *Board) UpdateBoard(name, description string) {
+	b.Name = name
+	b.Description = description
 }

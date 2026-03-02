@@ -4,6 +4,11 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+)
+
+var (
+	commentDefaultLimit = 10
 )
 
 type PostService struct {
@@ -26,7 +31,9 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	if board == nil || err != nil {
 		return 0, customError.ErrInternalServerError
 	}
-	postID, err := s.repository.PostRepository.SavePost(title, content, authorID, boardID)
+	newPost := &entity.Post{}
+	newPost.NewPost(title, content, authorID, boardID)
+	postID, err := s.repository.PostRepository.Save(newPost)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -41,7 +48,7 @@ func (s *PostService) GetPostsByBoard(boardID int64, limit, offset int) ([]*dto.
 	}
 	postDetails := make([]*dto.PostDetail, len(posts))
 	for i, post := range posts {
-		reactions, err := s.repository.ReactionRepository.GetReactionsByTarget(post.ID, "post")
+		reactions, err := s.repository.ReactionRepository.GetByTarget(post.ID, "post")
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
@@ -58,17 +65,17 @@ func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 	if post == nil || err != nil {
 		return nil, customError.ErrInternalServerError
 	}
-	reactions, err := s.repository.ReactionRepository.GetReactionsByTarget(post.ID, "post")
+	reactions, err := s.repository.ReactionRepository.GetByTarget(post.ID, "post")
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
-	comments, err := s.repository.CommentRepository.SelectCommentsByPostID(post.ID, 100, 0) // 댓글은 최대 100개까지 조회
+	comments, err := s.repository.CommentRepository.SelectCommentsByPostID(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
 	commentDetails := make([]*dto.CommentDetail, len(comments))
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
 	for i, comment := range comments {
-		commentReactions, err := s.repository.ReactionRepository.GetReactionsByTarget(comment.ID, "comment")
+		commentReactions, err := s.repository.ReactionRepository.GetByTarget(comment.ID, "comment")
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
@@ -94,7 +101,8 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if post.AuthorID != authorID {
 		return customError.ErrInternalServerError
 	}
-	err = s.repository.PostRepository.UpdatePost(id, title, content)
+	post.UpdatePost(title, content)
+	err = s.repository.PostRepository.Update(post)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
@@ -110,7 +118,7 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if post.AuthorID != authorID {
 		return customError.ErrInternalServerError
 	}
-	err = s.repository.PostRepository.DeletePost(id)
+	err = s.repository.PostRepository.Delete(post.ID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}

@@ -4,6 +4,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 type CommentService struct {
@@ -26,7 +27,9 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	if post == nil || err != nil {
 		return 0, customError.ErrInternalServerError
 	}
-	commentID, err := s.repository.CommentRepository.SaveComment(content, authorID, postID)
+	newComment := &entity.Comment{}
+	newComment.NewComment(content, authorID, postID, nil)
+	commentID, err := s.repository.CommentRepository.Save(newComment)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -41,7 +44,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit, offset int) ([]*
 	}
 	commentDetails := make([]*dto.CommentDetail, len(comments))
 	for i, comment := range comments {
-		reactions, err := s.repository.ReactionRepository.GetReactionsByTarget(comment.ID, "comment")
+		reactions, err := s.repository.ReactionRepository.GetByTarget(comment.ID, "comment")
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
@@ -62,7 +65,8 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if comment.AuthorID != authorID {
 		return customError.ErrInternalServerError
 	}
-	err = s.repository.CommentRepository.UpdateComment(id, content)
+	comment.UpdateComment(content)
+	err = s.repository.CommentRepository.Update(comment)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
@@ -78,7 +82,7 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	if comment.AuthorID != authorID {
 		return customError.ErrInternalServerError
 	}
-	err = s.repository.CommentRepository.DeleteComment(id)
+	err = s.repository.CommentRepository.Delete(comment.ID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}

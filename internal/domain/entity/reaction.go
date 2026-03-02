@@ -11,51 +11,14 @@ type Reaction struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// reaction getter, setter
-func (r *Reaction) GetID() int64 {
-	return r.ID
-}
-
-func (r *Reaction) GetTargetType() string {
-	return r.TargetType
-}
-
-func (r *Reaction) GetTargetID() int64 {
-	return r.TargetID
-}
-
-func (r *Reaction) GetType() string {
-	return r.Type
-}
-
-func (r *Reaction) GetUserID() int64 {
-	return r.UserID
-}
-
-func (r *Reaction) GetCreatedAt() time.Time {
-	return r.CreatedAt
-}
-
-func (r *Reaction) SetID(id int64) {
-	r.ID = id
-}
-
-func (r *Reaction) SetTargetType(targetType string) {
+func (r *Reaction) NewReaction(targetType string, targetID int64, reactionType string, userID int64) {
 	r.TargetType = targetType
-}
-
-func (r *Reaction) SetTargetID(targetID int64) {
 	r.TargetID = targetID
-}
-
-func (r *Reaction) SetType(reactionType string) {
 	r.Type = reactionType
-}
-
-func (r *Reaction) SetUserID(userID int64) {
 	r.UserID = userID
+	r.CreatedAt = time.Now()
 }
 
-func (r *Reaction) SetCreatedAt(createdAt time.Time) {
-	r.CreatedAt = createdAt
+func (r *Reaction) UpdateReaction(reactionType string) {
+	r.Type = reactionType
 }

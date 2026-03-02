@@ -11,51 +11,14 @@ type Comment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// comment getter, setter
-func (c *Comment) GetID() int64 {
-	return c.ID
-}
-
-func (c *Comment) GetContent() string {
-	return c.Content
-}
-
-func (c *Comment) GetAuthorID() int64 {
-	return c.AuthorID
-}
-
-func (c *Comment) GetPostID() int64 {
-	return c.PostID
-}
-
-func (c *Comment) GetParentID() *int64 {
-	return c.ParentID
-}
-
-func (c *Comment) GetCreatedAt() time.Time {
-	return c.CreatedAt
-}
-
-func (c *Comment) SetID(id int64) {
-	c.ID = id
-}
-
-func (c *Comment) SetContent(content string) {
+func (c *Comment) NewComment(content string, authorID, postID int64, parentID *int64) {
 	c.Content = content
-}
-
-func (c *Comment) SetAuthorID(authorID int64) {
 	c.AuthorID = authorID
-}
-
-func (c *Comment) SetPostID(postID int64) {
 	c.PostID = postID
-}
-
-func (c *Comment) SetParentID(parentID *int64) {
 	c.ParentID = parentID
+	c.CreatedAt = time.Now()
 }
 
-func (c *Comment) SetCreatedAt(createdAt time.Time) {
-	c.CreatedAt = createdAt
+func (c *Comment) UpdateComment(content string) {
+	c.Content = content
 }

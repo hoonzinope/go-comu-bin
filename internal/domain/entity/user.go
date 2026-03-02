@@ -10,43 +10,20 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// user getter, setter
-func (u *User) GetID() int64 {
-	return u.ID
+func (u *User) IsAdmin() bool {
+	return u.Role == "admin"
 }
 
-func (u *User) GetName() string {
-	return u.Name
-}
-
-func (u *User) GetPassword() string {
-	return u.Password
-}
-
-func (u *User) GetRole() string {
-	return u.Role
-}
-
-func (u *User) GetCreatedAt() time.Time {
-	return u.CreatedAt
-}
-
-func (u *User) SetID(id int64) {
-	u.ID = id
-}
-
-func (u *User) SetName(name string) {
+func (u *User) NewUser(name, password string) {
 	u.Name = name
-}
-
-func (u *User) SetPassword(password string) {
 	u.Password = password
+	u.Role = "user"
+	u.CreatedAt = time.Now()
 }
 
-func (u *User) SetRole(role string) {
-	u.Role = role
-}
-
-func (u *User) SetCreatedAt(createdAt time.Time) {
-	u.CreatedAt = createdAt
+func (u *User) NewAdmin(name, password string) {
+	u.Name = name
+	u.Password = password
+	u.Role = "admin"
+	u.CreatedAt = time.Now()
 }

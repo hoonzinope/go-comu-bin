@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 type ReactionService struct {
@@ -21,60 +22,41 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 	if user == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	var targetExists bool
+	newReaction := &entity.Reaction{}
 	switch TargetType {
 	case "post":
 		post, err := s.repository.PostRepository.SelectPostByID(TargetID) // post 존재 여부 확인
 		if post == nil || err != nil {
 			return customError.ErrInternalServerError
 		}
-		targetExists = true
+		newReaction.NewReaction(TargetType, TargetID, ReactionType, UserID)
 	case "comment":
 		comment, err := s.repository.CommentRepository.SelectCommentByID(TargetID) // comment 존재 여부 확인
 		if comment == nil || err != nil {
 			return customError.ErrInternalServerError
 		}
-		targetExists = true
+		newReaction.NewReaction(TargetType, TargetID, ReactionType, UserID)
 	default:
 		return customError.ErrInternalServerError
 	}
-	if !targetExists {
-		return customError.ErrInternalServerError
-	}
-	err = s.repository.ReactionRepository.AddReaction(UserID, TargetID, TargetType, ReactionType)
+	err = s.repository.ReactionRepository.Add(newReaction)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
 	return nil
 }
 
-func (s *ReactionService) RemoveReaction(UserID, TargetID int64, TargetType string) error {
+func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	// 리액션 제거 로직 구현
 	user, err := s.repository.UserRepository.SelectUserByID(UserID) // user 존재 여부 확인
 	if user == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	var targetExists bool
-	switch TargetType {
-	case "post":
-		post, err := s.repository.PostRepository.SelectPostByID(TargetID) // post 존재 여부 확인
-		if post == nil || err != nil {
-			return customError.ErrInternalServerError
-		}
-		targetExists = true
-	case "comment":
-		comment, err := s.repository.CommentRepository.SelectCommentByID(TargetID) // comment 존재 여부 확인
-		if comment == nil || err != nil {
-			return customError.ErrInternalServerError
-		}
-		targetExists = true
-	default:
+	removeReaction, err := s.repository.ReactionRepository.GetByID(ID)
+	if removeReaction == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	if !targetExists {
-		return customError.ErrInternalServerError
-	}
-	err = s.repository.ReactionRepository.RemoveReaction(UserID, TargetID, TargetType)
+	err = s.repository.ReactionRepository.Remove(removeReaction)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}

@@ -12,59 +12,17 @@ type Post struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// post getter, setter
-func (p *Post) GetID() int64 {
-	return p.ID
-}
-
-func (p *Post) GetTitle() string {
-	return p.Title
-}
-
-func (p *Post) GetContent() string {
-	return p.Content
-}
-
-func (p *Post) GetAuthorID() int64 {
-	return p.AuthorID
-}
-
-func (p *Post) GetBoardID() int64 {
-	return p.BoardID
-}
-
-func (p *Post) GetCreatedAt() time.Time {
-	return p.CreatedAt
-}
-
-func (p *Post) GetUpdatedAt() time.Time {
-	return p.UpdatedAt
-}
-
-func (p *Post) SetID(id int64) {
-	p.ID = id
-}
-
-func (p *Post) SetTitle(title string) {
+func (p *Post) NewPost(title, content string, authorID, boardID int64) {
 	p.Title = title
-}
-
-func (p *Post) SetContent(content string) {
 	p.Content = content
-}
-
-func (p *Post) SetAuthorID(authorID int64) {
 	p.AuthorID = authorID
-}
-
-func (p *Post) SetBoardID(boardID int64) {
 	p.BoardID = boardID
+	p.CreatedAt = time.Now()
+	p.UpdatedAt = time.Now()
 }
 
-func (p *Post) SetCreatedAt(createdAt time.Time) {
-	p.CreatedAt = createdAt
-}
-
-func (p *Post) SetUpdatedAt(updatedAt time.Time) {
-	p.UpdatedAt = updatedAt
+func (p *Post) UpdatePost(title, content string) {
+	p.Title = title
+	p.Content = content
+	p.UpdatedAt = time.Now()
 }
