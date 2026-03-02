@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -16,13 +17,18 @@ func NewBoardService(repository application.Repository) *BoardService {
 	}
 }
 
-func (s *BoardService) GetBoards(limit, offset int) ([]*entity.Board, error) {
+func (s *BoardService) GetBoards(limit, offset int) (*dto.BoardList, error) {
 	// 게시판 목록 조회 로직 구현
 	boards, err := s.repository.BoardRepository.SelectBoardList(limit, offset)
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
-	return boards, nil
+
+	return &dto.BoardList{
+		Boards: boards,
+		Limit:  limit,
+		Offset: offset,
+	}, nil
 }
 
 func (s *BoardService) CreateBoard(userID int64, name, description string) (int64, error) {

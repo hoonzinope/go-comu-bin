@@ -15,7 +15,7 @@ type UserUseCase interface {
 
 type BoardUseCase interface {
 	// Board 관련 UseCase 메서드 정의
-	GetBoards(limit, offset int) ([]*entity.Board, error)
+	GetBoards(limit, offset int) (*dto.BoardList, error)
 	// only admin can create, update, delete board
 	CreateBoard(userID int64, name, description string) (int64, error)
 	UpdateBoard(id, userID int64, name, description string) error
@@ -25,7 +25,7 @@ type BoardUseCase interface {
 type PostUseCase interface {
 	// Post 관련 UseCase 메서드 정의
 	CreatePost(title, content string, authorID, boardID int64) (int64, error)
-	GetPostsByBoard(boardID int64, limit, offset int) ([]*dto.PostDetail, error)
+	GetPostsList(boardID int64, limit, offset int) (*dto.PostList, error)
 	GetPostDetail(postID int64) (*dto.PostDetail, error)
 	// only author can update, delete post
 	UpdatePost(id, authorID int64, title, content string) error
@@ -35,7 +35,7 @@ type PostUseCase interface {
 type CommentUseCase interface {
 	// Comment 관련 UseCase 메서드 정의
 	CreateComment(content string, authorID, postID int64) (int64, error)
-	GetCommentsByPost(postID int64, limit, offset int) ([]*dto.CommentDetail, error)
+	GetCommentsByPost(postID int64, limit, offset int) (*dto.CommentList, error)
 	UpdateComment(id, authorID int64, content string) error
 	DeleteComment(id, authorID int64) error
 }

@@ -1,6 +1,8 @@
 package application
 
-import "github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+import (
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+)
 
 type UserRepository interface {
 	// User 관련 Repository 메서드 정의
@@ -23,7 +25,7 @@ type PostRepository interface {
 	// Post 관련 Repository 메서드 정의
 	Save(*entity.Post) (int64, error)
 	SelectPostByID(id int64) (*entity.Post, error)
-	SelectPostsByBoardID(boardID int64, limit, offset int) ([]*entity.Post, error)
+	SelectPosts(boardID int64, limit, offset int) ([]*entity.Post, error)
 	Update(*entity.Post) error
 	Delete(id int64) error
 }
@@ -32,7 +34,7 @@ type CommentRepository interface {
 	// Comment 관련 Repository 메서드 정의
 	Save(*entity.Comment) (int64, error)
 	SelectCommentByID(id int64) (*entity.Comment, error)
-	SelectCommentsByPostID(postID int64, limit, offset int) ([]*entity.Comment, error)
+	SelectComments(postID int64, limit, offset int) ([]*entity.Comment, error)
 	Update(*entity.Comment) error
 	Delete(id int64) error
 }

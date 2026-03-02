@@ -40,24 +40,18 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	return postID, nil
 }
 
-func (s *PostService) GetPostsByBoard(boardID int64, limit, offset int) ([]*dto.PostDetail, error) {
+func (s *PostService) GetPostsByBoard(boardID int64, limit, offset int) (*dto.PostList, error) {
 	// 게시글 목록 조회 로직 구현
-	posts, err := s.repository.PostRepository.SelectPostsByBoardID(boardID, limit, offset)
+	posts, err := s.repository.PostRepository.SelectPosts(boardID, limit, offset)
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
-	postDetails := make([]*dto.PostDetail, len(posts))
-	for i, post := range posts {
-		reactions, err := s.repository.ReactionRepository.GetByTarget(post.ID, "post")
-		if err != nil {
-			return nil, customError.ErrInternalServerError
-		}
-		postDetails[i] = &dto.PostDetail{
-			Post:      post,
-			Reactions: reactions,
-		}
-	}
-	return postDetails, nil
+
+	return &dto.PostList{
+		Posts:  posts,
+		Limit:  limit,
+		Offset: offset,
+	}, nil
 }
 
 func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
@@ -69,7 +63,7 @@ func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
-	comments, err := s.repository.CommentRepository.SelectCommentsByPostID(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
+	comments, err := s.repository.CommentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
 	commentDetails := make([]*dto.CommentDetail, len(comments))
 	if err != nil {
 		return nil, customError.ErrInternalServerError

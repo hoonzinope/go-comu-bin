@@ -36,24 +36,18 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	return commentID, nil
 }
 
-func (s *CommentService) GetCommentsByPost(postID int64, limit, offset int) ([]*dto.CommentDetail, error) {
+func (s *CommentService) GetCommentsByPost(postID int64, limit, offset int) (*dto.CommentList, error) {
 	// 댓글 목록 조회 로직 구현
-	comments, err := s.repository.CommentRepository.SelectCommentsByPostID(postID, limit, offset)
+	comments, err := s.repository.CommentRepository.SelectComments(postID, limit, offset)
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
-	commentDetails := make([]*dto.CommentDetail, len(comments))
-	for i, comment := range comments {
-		reactions, err := s.repository.ReactionRepository.GetByTarget(comment.ID, "comment")
-		if err != nil {
-			return nil, customError.ErrInternalServerError
-		}
-		commentDetails[i] = &dto.CommentDetail{
-			Comment:   comment,
-			Reactions: reactions,
-		}
-	}
-	return commentDetails, nil
+
+	return &dto.CommentList{
+		Comments: comments,
+		Limit:    limit,
+		Offset:   offset,
+	}, nil
 }
 
 func (s *CommentService) UpdateComment(id, authorID int64, content string) error {
