@@ -41,3 +41,45 @@ func TestUserService_Quit_InvalidCredential(t *testing.T) {
 		t.Fatalf("expected ErrInvalidCredential, got: %v", err)
 	}
 }
+
+func TestUserService_Quit_Success(t *testing.T) {
+	repository := newTestRepository()
+	svc := NewUserService(repository)
+	_, _ = svc.SignUp("alice", "pw")
+
+	err := svc.Quit("alice", "pw")
+	if err != nil {
+		t.Fatalf("Quit returned error: %v", err)
+	}
+}
+
+func TestUserService_Quit_UserNotFound(t *testing.T) {
+	repository := newTestRepository()
+	svc := NewUserService(repository)
+
+	err := svc.Quit("nope", "pw")
+	if !errors.Is(err, customError.ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got: %v", err)
+	}
+}
+
+func TestUserService_Login_UserNotFound(t *testing.T) {
+	repository := newTestRepository()
+	svc := NewUserService(repository)
+
+	_, err := svc.Login("nope", "pw")
+	if !errors.Is(err, customError.ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got: %v", err)
+	}
+}
+
+func TestUserService_Login_WrongPassword(t *testing.T) {
+	repository := newTestRepository()
+	svc := NewUserService(repository)
+	_, _ = svc.SignUp("alice", "pw")
+
+	_, err := svc.Login("alice", "wrong")
+	if !errors.Is(err, customError.ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got: %v", err)
+	}
+}

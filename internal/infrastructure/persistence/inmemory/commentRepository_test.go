@@ -51,3 +51,30 @@ func TestCommentRepository_SaveSelectUpdateDelete(t *testing.T) {
 		t.Fatalf("expected nil after delete, got %+v", deleted)
 	}
 }
+
+func TestCommentRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
+	repo := NewCommentRepository()
+	_, _ = repo.Save(testComment("c1", 1, 1))
+	_, _ = repo.Save(testComment("c2", 2, 1))
+
+	comments, err := repo.SelectComments(1, 10, 2)
+	if err != nil {
+		t.Fatalf("SelectComments returned error: %v", err)
+	}
+	if len(comments) != 0 {
+		t.Fatalf("expected empty result, got %d", len(comments))
+	}
+}
+
+func TestCommentRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
+	repo := NewCommentRepository()
+	c := testComment("x", 1, 1)
+	c.ID = 999
+
+	if err := repo.Update(c); err != nil {
+		t.Fatalf("Update returned error: %v", err)
+	}
+	if err := repo.Delete(999); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+}

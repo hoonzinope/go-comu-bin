@@ -247,6 +247,32 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 	}
 }
 
+func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	req := httptest.NewRequest(http.MethodPost, "/users/signup", bytes.NewBufferString("{invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/users/signup", map[string]any{
+		"username": "alice",
+		"password": "pw",
+		"extra":    "unknown",
+	})
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
 func TestHTTP_UserQuit_Unauthorized(t *testing.T) {
 	user := &fakeUserUseCase{
 		quit: func(username, password string) error {
@@ -291,12 +317,69 @@ func TestHTTP_BoardGet_BadLimit(t *testing.T) {
 	}
 }
 
+func TestHTTP_BoardGet_BadOffset(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?offset=bad", nil)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestHTTP_BoardWithID_InvalidBoardID(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPut, "/boards/abc", map[string]any{
+		"user_id": 1,
+		"name":    "free",
+	})
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestHTTP_PostWithID_InvalidPostID(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/abc", nil)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
 func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodDelete, "/reactions/1?user_id=bad", nil)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestHTTP_ReactionList_MissingTargetType(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions?target_id=1", nil)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestHTTP_ReactionList_MissingTargetID(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions?target_type=post", nil)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions/1", nil)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
 	}
 }
 

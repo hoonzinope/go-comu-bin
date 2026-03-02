@@ -51,3 +51,30 @@ func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
 		t.Fatalf("expected nil after delete, got %+v", deleted)
 	}
 }
+
+func TestPostRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
+	repo := NewPostRepository()
+	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
+	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
+
+	posts, err := repo.SelectPosts(1, 10, 2)
+	if err != nil {
+		t.Fatalf("SelectPosts returned error: %v", err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("expected empty result, got %d", len(posts))
+	}
+}
+
+func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
+	repo := NewPostRepository()
+	p := testPost("x", "y", 1, 1)
+	p.ID = 999
+
+	if err := repo.Update(p); err != nil {
+		t.Fatalf("Update returned error: %v", err)
+	}
+	if err := repo.Delete(999); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+}

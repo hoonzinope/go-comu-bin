@@ -50,3 +50,38 @@ func TestReactionService_RemoveReaction_AllowedForAdmin(t *testing.T) {
 		t.Fatalf("RemoveReaction returned error: %v", err)
 	}
 }
+
+func TestReactionService_AddReaction_InvalidTargetType(t *testing.T) {
+	repository := newTestRepository()
+	userID := seedUser(repository, "user", "pw", "user")
+	svc := NewReactionService(repository)
+
+	err := svc.AddReaction(userID, 1, "invalid", "like")
+	if !errors.Is(err, customError.ErrInternalServerError) {
+		t.Fatalf("expected ErrInternalServerError, got: %v", err)
+	}
+}
+
+func TestReactionService_GetReactionsByTarget_AndOwnerDelete(t *testing.T) {
+	repository := newTestRepository()
+	userID := seedUser(repository, "user", "pw", "user")
+	boardID := seedBoard(repository, "free", "desc")
+	postID := seedPost(repository, userID, boardID, "title", "content")
+	commentID := seedComment(repository, userID, postID, "comment")
+	svc := NewReactionService(repository)
+
+	if err := svc.AddReaction(userID, commentID, "comment", "like"); err != nil {
+		t.Fatalf("AddReaction returned error: %v", err)
+	}
+	reactions, err := svc.GetReactionsByTarget(commentID, "comment")
+	if err != nil {
+		t.Fatalf("GetReactionsByTarget returned error: %v", err)
+	}
+	if len(reactions) != 1 {
+		t.Fatalf("expected 1 reaction, got %d", len(reactions))
+	}
+
+	if err := svc.RemoveReaction(userID, reactions[0].ID); err != nil {
+		t.Fatalf("RemoveReaction returned error: %v", err)
+	}
+}

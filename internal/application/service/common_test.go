@@ -40,3 +40,10 @@ func seedPost(repository application.Repository, authorID, boardID int64, title,
 	id, _ := repository.PostRepository.Save(post)
 	return id
 }
+
+func seedComment(repository application.Repository, authorID, postID int64, content string) int64 {
+	comment := &entity.Comment{}
+	comment.NewComment(content, authorID, postID, nil)
+	id, _ := repository.CommentRepository.Save(comment)
+	return id
+}

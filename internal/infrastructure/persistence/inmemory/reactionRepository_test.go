@@ -37,3 +37,15 @@ func TestReactionRepository_AddGetRemove(t *testing.T) {
 		t.Fatalf("expected nil after remove, got %+v", deleted)
 	}
 }
+
+func TestReactionRepository_GetMissing_ReturnsNil(t *testing.T) {
+	repo := NewReactionRepository()
+
+	r, err := repo.GetByID(999)
+	if err != nil {
+		t.Fatalf("GetByID returned error: %v", err)
+	}
+	if r != nil {
+		t.Fatalf("expected nil for missing reaction, got %+v", r)
+	}
+}

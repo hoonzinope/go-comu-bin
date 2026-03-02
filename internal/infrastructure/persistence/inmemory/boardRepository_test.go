@@ -54,3 +54,30 @@ func TestBoardRepository_SaveSelectUpdateDelete(t *testing.T) {
 		t.Fatalf("expected nil after delete, got %+v", deleted)
 	}
 }
+
+func TestBoardRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
+	repo := NewBoardRepository()
+	_, _ = repo.Save(testBoard("b1", "d1"))
+	_, _ = repo.Save(testBoard("b2", "d2"))
+
+	boards, err := repo.SelectBoardList(10, 2)
+	if err != nil {
+		t.Fatalf("SelectBoardList returned error: %v", err)
+	}
+	if len(boards) != 0 {
+		t.Fatalf("expected empty result, got %d", len(boards))
+	}
+}
+
+func TestBoardRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
+	repo := NewBoardRepository()
+	b := testBoard("x", "y")
+	b.ID = 999
+
+	if err := repo.Update(b); err != nil {
+		t.Fatalf("Update returned error: %v", err)
+	}
+	if err := repo.Delete(999); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+}
