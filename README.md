@@ -52,7 +52,7 @@ Go로 작성한 single-binary 커뮤니티 엔진입니다.
 초기 조립(Composition Root):
 
 - `cmd/main.go`
-- 서버 실행 포트: `:18577`
+- 서버 실행 포트: `config.yml`의 `delivery.http.port` 값
 - 부팅 시 admin 계정 시드: `admin/admin`
 
 ---
@@ -191,9 +191,29 @@ make help
 
 ### 1) 실행
 
+`cmd/main.go`는 시작 시 `config.yml`을 로드합니다.
+
 ```bash
 go run ./cmd
 ```
+
+### 1-1) 설정 파일 (`config.yml`)
+
+루트 경로(`./config.yml`) 또는 `./config/config.yml`을 읽습니다.
+
+예시:
+
+```yaml
+delivery:
+  http:
+    port: 18577
+```
+
+검증 규칙:
+
+- `delivery.http.port`는 `1..65535` 범위여야 합니다.
+- 알 수 없는 설정 키가 있으면(`UnmarshalExact`) 서버 시작 시 에러를 반환합니다.
+  - 예: `delivery.http.prt` 같은 오타도 실패 처리
 
 ### 2) 테스트
 
