@@ -14,6 +14,8 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIntegration_MainFlow(t *testing.T) {
@@ -101,9 +103,8 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 
 	admin := &entity.User{}
 	admin.NewAdmin("admin", "admin")
-	if _, err := repository.UserRepository.Save(admin); err != nil {
-		t.Fatalf("failed to seed admin: %v", err)
-	}
+	_, err := repository.UserRepository.Save(admin)
+	require.NoError(t, err)
 
 	useCases := application.UseCase{
 		UserUseCase:     service.NewUserService(repository),
@@ -123,9 +124,7 @@ func mustLogin(t *testing.T, baseURL, username, password string) int64 {
 		"username": username,
 		"password": password,
 	})
-	if status != http.StatusOK {
-		t.Fatalf("login failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "login failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	return int64(resp["user_id"].(float64))
@@ -137,9 +136,7 @@ func mustSignUp(t *testing.T, baseURL, username, password string) {
 		"username": username,
 		"password": password,
 	})
-	if status != http.StatusCreated {
-		t.Fatalf("signup failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusCreated, status, "signup failed: body=%s", string(body))
 }
 
 func mustLogout(t *testing.T, baseURL, username string) {
@@ -147,9 +144,7 @@ func mustLogout(t *testing.T, baseURL, username string) {
 	body, status := requestJSON(t, baseURL, http.MethodPost, "/users/logout", map[string]any{
 		"username": username,
 	})
-	if status != http.StatusOK {
-		t.Fatalf("logout failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "logout failed: body=%s", string(body))
 }
 
 func mustQuit(t *testing.T, baseURL, username, password string) {
@@ -158,9 +153,7 @@ func mustQuit(t *testing.T, baseURL, username, password string) {
 		"username": username,
 		"password": password,
 	})
-	if status != http.StatusNoContent {
-		t.Fatalf("quit failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusNoContent, status, "quit failed: body=%s", string(body))
 }
 
 func mustCreateBoard(t *testing.T, baseURL string, userID int64, name, description string) int64 {
@@ -170,9 +163,7 @@ func mustCreateBoard(t *testing.T, baseURL string, userID int64, name, descripti
 		"name":        name,
 		"description": description,
 	})
-	if status != http.StatusCreated {
-		t.Fatalf("create board failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusCreated, status, "create board failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	return int64(resp["id"].(float64))
@@ -181,19 +172,13 @@ func mustCreateBoard(t *testing.T, baseURL string, userID int64, name, descripti
 func mustGetBoards(t *testing.T, baseURL string, expectedBoardID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodGet, "/boards", nil)
-	if status != http.StatusOK {
-		t.Fatalf("get boards failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "get boards failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	boards := resp["Boards"].([]any)
-	if len(boards) == 0 {
-		t.Fatal("expected at least one board")
-	}
+	require.NotEmpty(t, boards)
 	first := boards[0].(map[string]any)
-	if int64(first["id"].(float64)) != expectedBoardID {
-		t.Fatalf("unexpected board id: got=%v want=%d", first["id"], expectedBoardID)
-	}
+	assert.EqualValues(t, expectedBoardID, int64(first["id"].(float64)))
 }
 
 func mustCreatePost(t *testing.T, baseURL string, boardID, authorID int64, title, content string) int64 {
@@ -203,9 +188,7 @@ func mustCreatePost(t *testing.T, baseURL string, boardID, authorID int64, title
 		"title":     title,
 		"content":   content,
 	})
-	if status != http.StatusCreated {
-		t.Fatalf("create post failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusCreated, status, "create post failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	return int64(resp["id"].(float64))
@@ -214,15 +197,11 @@ func mustCreatePost(t *testing.T, baseURL string, boardID, authorID int64, title
 func mustGetPost(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
-	if status != http.StatusOK {
-		t.Fatalf("get post failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "get post failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	post := resp["Post"].(map[string]any)
-	if int64(post["id"].(float64)) != postID {
-		t.Fatalf("unexpected post id: got=%v want=%d", post["id"], postID)
-	}
+	assert.EqualValues(t, postID, int64(post["id"].(float64)))
 }
 
 func mustUpdatePost(t *testing.T, baseURL string, postID, authorID int64, title, content string) {
@@ -232,17 +211,13 @@ func mustUpdatePost(t *testing.T, baseURL string, postID, authorID int64, title,
 		"title":     title,
 		"content":   content,
 	})
-	if status != http.StatusNoContent {
-		t.Fatalf("update post failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusNoContent, status, "update post failed: body=%s", string(body))
 }
 
 func mustDeletePost(t *testing.T, baseURL string, postID, authorID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodDelete, fmt.Sprintf("/posts/%d?author_id=%d", postID, authorID), nil)
-	if status != http.StatusNoContent {
-		t.Fatalf("delete post failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusNoContent, status, "delete post failed: body=%s", string(body))
 }
 
 func mustCreateComment(t *testing.T, baseURL string, postID, authorID int64, content string) int64 {
@@ -251,9 +226,7 @@ func mustCreateComment(t *testing.T, baseURL string, postID, authorID int64, con
 		"author_id": authorID,
 		"content":   content,
 	})
-	if status != http.StatusCreated {
-		t.Fatalf("create comment failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusCreated, status, "create comment failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	return int64(resp["id"].(float64))
@@ -262,19 +235,13 @@ func mustCreateComment(t *testing.T, baseURL string, postID, authorID int64, con
 func mustGetComments(t *testing.T, baseURL string, postID, expectedCommentID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
-	if status != http.StatusOK {
-		t.Fatalf("get comments failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	comments := resp["Comments"].([]any)
-	if len(comments) == 0 {
-		t.Fatal("expected at least one comment")
-	}
+	require.NotEmpty(t, comments)
 	first := comments[0].(map[string]any)
-	if int64(first["id"].(float64)) != expectedCommentID {
-		t.Fatalf("unexpected comment id: got=%v want=%d", first["id"], expectedCommentID)
-	}
+	assert.EqualValues(t, expectedCommentID, int64(first["id"].(float64)))
 }
 
 func mustUpdateComment(t *testing.T, baseURL string, commentID, authorID int64, content string) {
@@ -283,17 +250,13 @@ func mustUpdateComment(t *testing.T, baseURL string, commentID, authorID int64, 
 		"author_id": authorID,
 		"content":   content,
 	})
-	if status != http.StatusNoContent {
-		t.Fatalf("update comment failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusNoContent, status, "update comment failed: body=%s", string(body))
 }
 
 func mustDeleteComment(t *testing.T, baseURL string, commentID, authorID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodDelete, fmt.Sprintf("/comments/%d?author_id=%d", commentID, authorID), nil)
-	if status != http.StatusNoContent {
-		t.Fatalf("delete comment failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusNoContent, status, "delete comment failed: body=%s", string(body))
 }
 
 func mustAddReaction(t *testing.T, baseURL string, userID, targetID int64, targetType, reactionType string) {
@@ -304,39 +267,29 @@ func mustAddReaction(t *testing.T, baseURL string, userID, targetID int64, targe
 		"target_type":   targetType,
 		"reaction_type": reactionType,
 	})
-	if status != http.StatusCreated {
-		t.Fatalf("add reaction failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusCreated, status, "add reaction failed: body=%s", string(body))
 }
 
 func mustGetFirstReactionID(t *testing.T, baseURL string, targetID int64, targetType string) int64 {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
-	if status != http.StatusOK {
-		t.Fatalf("get reactions failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "get reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
-	if len(resp) == 0 {
-		t.Fatalf("expected reactions for target_id=%d target_type=%s", targetID, targetType)
-	}
+	require.NotEmpty(t, resp)
 	return int64(resp[0]["id"].(float64))
 }
 
 func mustDeleteReaction(t *testing.T, baseURL string, reactionID, userID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodDelete, fmt.Sprintf("/reactions/%d?user_id=%d", reactionID, userID), nil)
-	if status != http.StatusNoContent {
-		t.Fatalf("delete reaction failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusNoContent, status, "delete reaction failed: body=%s", string(body))
 }
 
 func mustNoComments(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
-	if status != http.StatusOK {
-		t.Fatalf("get comments failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
 	rawComments, exists := resp["Comments"]
@@ -344,41 +297,29 @@ func mustNoComments(t *testing.T, baseURL string, postID int64) {
 		return
 	}
 	comments, ok := rawComments.([]any)
-	if !ok {
-		t.Fatalf("unexpected comments payload type: %T", rawComments)
-	}
-	if len(comments) != 0 {
-		t.Fatalf("expected zero comments, got %d", len(comments))
-	}
+	require.True(t, ok, "unexpected comments payload type: %T", rawComments)
+	assert.Empty(t, comments)
 }
 
 func mustNoReactions(t *testing.T, baseURL string, targetID int64, targetType string) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
-	if status != http.StatusOK {
-		t.Fatalf("get reactions failed: status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusOK, status, "get reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
-	if len(resp) != 0 {
-		t.Fatalf("expected zero reactions, got %d", len(resp))
-	}
+	assert.Empty(t, resp)
 }
 
 func mustPostNotAccessible(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
 	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
-	if status != http.StatusInternalServerError {
-		t.Fatalf("expected deleted post to be inaccessible(500), status=%d body=%s", status, string(body))
-	}
+	assert.Equal(t, http.StatusInternalServerError, status, "expected deleted post to be inaccessible(500), body=%s", string(body))
 }
 
 func assertStatus(t *testing.T, baseURL, method, path string, body any, expected int) {
 	t.Helper()
 	respBody, status := requestJSON(t, baseURL, method, path, body)
-	if status != expected {
-		t.Fatalf("expected status=%d got=%d path=%s body=%s", expected, status, path, string(respBody))
-	}
+	assert.Equal(t, expected, status, "path=%s body=%s", path, string(respBody))
 }
 
 func requestJSON(t *testing.T, baseURL, method, path string, body any) ([]byte, int) {
@@ -387,34 +328,24 @@ func requestJSON(t *testing.T, baseURL, method, path string, body any) ([]byte, 
 	var payload io.Reader
 	if body != nil {
 		buf := &bytes.Buffer{}
-		if err := json.NewEncoder(buf).Encode(body); err != nil {
-			t.Fatalf("failed to encode request body: %v", err)
-		}
+		require.NoError(t, json.NewEncoder(buf).Encode(body))
 		payload = buf
 	}
 
 	req, err := http.NewRequest(method, baseURL+path, payload)
-	if err != nil {
-		t.Fatalf("failed to create request: %v", err)
-	}
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response body: %v", err)
-	}
+	require.NoError(t, err)
 	return respBody, resp.StatusCode
 }
 
 func mustUnmarshal(t *testing.T, body []byte, dst any) {
 	t.Helper()
-	if err := json.Unmarshal(body, dst); err != nil {
-		t.Fatalf("failed to unmarshal body=%s err=%v", string(body), err)
-	}
+	require.NoError(t, json.Unmarshal(body, dst), "failed to unmarshal body=%s", string(body))
 }

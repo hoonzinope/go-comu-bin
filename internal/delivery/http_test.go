@@ -12,6 +12,8 @@ import (
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fakeUserUseCase struct {
@@ -210,9 +212,7 @@ func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
-		if err := json.NewEncoder(&buf).Encode(body); err != nil {
-			t.Fatalf("failed to encode body: %v", err)
-		}
+		require.NoError(t, json.NewEncoder(&buf).Encode(body))
 	}
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
@@ -225,9 +225,7 @@ func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/users/signup", nil)
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
 
 func TestHTTP_UserSignUp_Conflict(t *testing.T) {
@@ -242,9 +240,7 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 		"username": "alice",
 		"password": "pw",
 	})
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusConflict, rr.Code)
 }
 
 func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
@@ -255,9 +251,7 @@ func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
@@ -268,9 +262,7 @@ func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
 		"password": "pw",
 		"extra":    "unknown",
 	})
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_UserQuit_Unauthorized(t *testing.T) {
@@ -285,9 +277,7 @@ func TestHTTP_UserQuit_Unauthorized(t *testing.T) {
 		"username": "alice",
 		"password": "wrong",
 	})
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
@@ -303,27 +293,21 @@ func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 		"name":        "free",
 		"description": "desc",
 	})
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusForbidden, rr.Code)
 }
 
 func TestHTTP_BoardGet_BadLimit(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?limit=bad", nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_BoardGet_BadOffset(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?offset=bad", nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_BoardWithID_InvalidBoardID(t *testing.T) {
@@ -333,54 +317,42 @@ func TestHTTP_BoardWithID_InvalidBoardID(t *testing.T) {
 		"user_id": 1,
 		"name":    "free",
 	})
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_PostWithID_InvalidPostID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/abc", nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodDelete, "/reactions/1?user_id=bad", nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_ReactionList_MissingTargetType(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions?target_id=1", nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_ReactionList_MissingTargetID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions?target_type=post", nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions/1", nil)
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
 
 func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
@@ -392,16 +364,12 @@ func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 }
 
 func TestHTTP_NotFound(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/unknown", nil)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", rr.Code)
-	}
+	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
