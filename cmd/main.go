@@ -37,7 +37,7 @@ func main() {
 		ReactionUseCase: service.NewReactionService(repository),
 	}
 
-	server := delivery.NewHTTPServer(port(cfg), useCases)
+	server := delivery.NewHTTPServer(port(cfg), jwtSecret(cfg), useCases)
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
@@ -52,4 +52,8 @@ func seedAdmin(repository application.Repository) {
 
 func port(cfg *config.Config) string {
 	return fmt.Sprintf(":%d", cfg.Delivery.HTTP.Port)
+}
+
+func jwtSecret(cfg *config.Config) string {
+	return cfg.Delivery.HTTP.Auth.Secret
 }

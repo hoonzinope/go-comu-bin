@@ -10,6 +10,9 @@ type Config struct {
 	Delivery struct {
 		HTTP struct {
 			Port int `yaml:"port"`
+			Auth struct {
+				Secret string `yaml:"secret"`
+			} `yaml:"auth"`
 		} `yaml:"http"`
 	} `yaml:"delivery"`
 }
@@ -44,6 +47,9 @@ func validate(cfg *Config) error {
 	port := cfg.Delivery.HTTP.Port
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("invalid delivery.http.port: %d (must be 1..65535)", port)
+	}
+	if cfg.Delivery.HTTP.Auth.Secret == "" {
+		return fmt.Errorf("invalid delivery.http.auth.secret: cannot be empty")
 	}
 	return nil
 }

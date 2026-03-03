@@ -9,9 +9,12 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 )
 
 type HTTPHandler struct {
+	authMiddleware  *middleware.AuthMiddleware
 	userUseCase     application.UserUseCase
 	boardUseCase    application.BoardUseCase
 	postUseCase     application.PostUseCase
@@ -19,8 +22,9 @@ type HTTPHandler struct {
 	reactionUseCase application.ReactionUseCase
 }
 
-func NewHTTPHandler(useCase application.UseCase) *HTTPHandler {
+func NewHTTPHandler(useCase application.UseCase, authMiddleware *middleware.AuthMiddleware) *HTTPHandler {
 	return &HTTPHandler{
+		authMiddleware:  authMiddleware,
 		userUseCase:     useCase.UserUseCase,
 		boardUseCase:    useCase.BoardUseCase,
 		postUseCase:     useCase.PostUseCase,
@@ -32,22 +36,32 @@ func NewHTTPHandler(useCase application.UseCase) *HTTPHandler {
 func (h *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/users/signup", h.handleUserSignUp)
 	mux.HandleFunc("/users/login", h.handleUserLogin)
-	mux.HandleFunc("/users/logout", h.handleUserLogout)
+	mux.Handle("/users/logout", h.authMiddleware.AuthByMethods(http.HandlerFunc(h.handleUserLogout), http.MethodPost))
 	mux.HandleFunc("/users/quit", h.handleUserQuit)
 
-	mux.HandleFunc("/boards", h.handleBoards)
-	mux.HandleFunc("/boards/", h.handleBoardWithID)
-	mux.HandleFunc("/posts/", h.handlePosts)
-	mux.HandleFunc("/comments/", h.handleComments)
-	mux.HandleFunc("/reactions", h.handleReactions)
-	mux.HandleFunc("/reactions/", h.handleReactionWithID)
+	mux.Handle("/boards", h.authMiddleware.AuthByMethods(http.HandlerFunc(h.handleBoards), http.MethodPost))
+	mux.Handle("/boards/", h.authMiddleware.AuthByMethods(http.HandlerFunc(h.handleBoardWithID), http.MethodPut, http.MethodDelete, http.MethodPost))
+	mux.Handle("/posts/", h.authMiddleware.AuthByMethods(http.HandlerFunc(h.handlePosts), http.MethodPut, http.MethodDelete, http.MethodPost))
+	mux.Handle("/comments/", h.authMiddleware.AuthByMethods(http.HandlerFunc(h.handleComments), http.MethodPut, http.MethodDelete))
+	mux.Handle("/reactions", h.authMiddleware.AuthByMethods(http.HandlerFunc(h.handleReactions), http.MethodPost))
+	mux.Handle("/reactions/", h.authMiddleware.AuthByMethods(http.HandlerFunc(h.handleReactionWithID), http.MethodDelete))
 }
 
-func NewHTTPServer(addr string, useCase application.UseCase) *http.Server {
+func NewHTTPServer(addr string, jwtSecret string, useCase application.UseCase) *http.Server {
 	mux := http.NewServeMux()
-	handler := NewHTTPHandler(useCase)
+	authMiddleware := middleware.NewAuthMiddleware(auth.NewJwtTokenProvider(jwtSecret))
+	handler := NewHTTPHandler(useCase, authMiddleware)
 	handler.RegisterRoutes(mux)
 	return &http.Server{Addr: addr, Handler: mux}
+}
+
+func (h *HTTPHandler) requireAuthUserID(w http.ResponseWriter, r *http.Request) (int64, error) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, customError.ErrUnauthorized.Error(), http.StatusUnauthorized)
+		return 0, customError.ErrUnauthorized
+	}
+	return userID, nil
 }
 
 func (h *HTTPHandler) handleUserSignUp(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +107,14 @@ func (h *HTTPHandler) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		writeUseCaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int64{"user_id": userID})
+	token, err := h.authMiddleware.AuthUseCase.IdToToken(userID)
+	if err != nil {
+		writeUseCaseError(w, err)
+		return
+	}
+	// header에 토큰을 담아서 반환
+	w.Header().Set("Authorization", "Bearer "+token)
+	writeJSON(w, http.StatusOK, map[string]string{"login": "ok"})
 }
 
 func (h *HTTPHandler) handleUserLogout(w http.ResponseWriter, r *http.Request) {
@@ -101,22 +122,12 @@ func (h *HTTPHandler) handleUserLogout(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	var req struct {
-		Username string `json:"username"`
-	}
-	if err := decodeJSON(r, &req); err != nil {
-		badRequest(w, err)
+	_, err := h.requireAuthUserID(w, r)
+	if err != nil {
 		return
 	}
-	if req.Username == "" {
-		badRequest(w, errors.New("username is required"))
-		return
-	}
-	if err := h.userUseCase.Logout(req.Username); err != nil {
-		writeUseCaseError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
+	// 여기서는 간단히 성공 응답만 반환
+	writeJSON(w, http.StatusOK, map[string]string{"logout": "ok"})
 }
 
 func (h *HTTPHandler) handleUserQuit(w http.ResponseWriter, r *http.Request) {
@@ -157,8 +168,11 @@ func (h *HTTPHandler) handleBoards(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, boards)
 	case http.MethodPost:
+		userID, err := h.requireAuthUserID(w, r)
+		if err != nil {
+			return
+		}
 		var req struct {
-			UserID      int64  `json:"user_id"`
 			Name        string `json:"name"`
 			Description string `json:"description"`
 		}
@@ -166,11 +180,11 @@ func (h *HTTPHandler) handleBoards(w http.ResponseWriter, r *http.Request) {
 			badRequest(w, err)
 			return
 		}
-		if req.UserID == 0 || req.Name == "" {
+		if userID == 0 || req.Name == "" {
 			badRequest(w, errors.New("user_id and name are required"))
 			return
 		}
-		id, err := h.boardUseCase.CreateBoard(req.UserID, req.Name, req.Description)
+		id, err := h.boardUseCase.CreateBoard(userID, req.Name, req.Description)
 		if err != nil {
 			writeUseCaseError(w, err)
 			return
@@ -204,7 +218,6 @@ func (h *HTTPHandler) handleBoardWithID(w http.ResponseWriter, r *http.Request) 
 	switch r.Method {
 	case http.MethodPut:
 		var req struct {
-			UserID      int64  `json:"user_id"`
 			Name        string `json:"name"`
 			Description string `json:"description"`
 		}
@@ -212,19 +225,22 @@ func (h *HTTPHandler) handleBoardWithID(w http.ResponseWriter, r *http.Request) 
 			badRequest(w, err)
 			return
 		}
-		if req.UserID == 0 || req.Name == "" {
+		userID, err := h.requireAuthUserID(w, r)
+		if err != nil {
+			return
+		}
+		if userID == 0 || req.Name == "" {
 			badRequest(w, errors.New("user_id and name are required"))
 			return
 		}
-		if err := h.boardUseCase.UpdateBoard(boardID, req.UserID, req.Name, req.Description); err != nil {
+		if err := h.boardUseCase.UpdateBoard(boardID, userID, req.Name, req.Description); err != nil {
 			writeUseCaseError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodDelete:
-		userID, err := parseInt64(r.URL.Query().Get("user_id"))
+		userID, err := h.requireAuthUserID(w, r)
 		if err != nil {
-			badRequest(w, errors.New("invalid user_id"))
 			return
 		}
 		if err := h.boardUseCase.DeleteBoard(boardID, userID); err != nil {
@@ -251,20 +267,23 @@ func (h *HTTPHandler) handleBoardPosts(w http.ResponseWriter, r *http.Request, b
 		}
 		writeJSON(w, http.StatusOK, posts)
 	case http.MethodPost:
+		authorID, err := h.requireAuthUserID(w, r)
+		if err != nil {
+			return
+		}
 		var req struct {
-			AuthorID int64  `json:"author_id"`
-			Title    string `json:"title"`
-			Content  string `json:"content"`
+			Title   string `json:"title"`
+			Content string `json:"content"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			badRequest(w, err)
 			return
 		}
-		if req.AuthorID == 0 || req.Title == "" || req.Content == "" {
+		if authorID == 0 || req.Title == "" || req.Content == "" {
 			badRequest(w, errors.New("author_id, title and content are required"))
 			return
 		}
-		postID, err := h.postUseCase.CreatePost(req.Title, req.Content, req.AuthorID, boardID)
+		postID, err := h.postUseCase.CreatePost(req.Title, req.Content, authorID, boardID)
 		if err != nil {
 			writeUseCaseError(w, err)
 			return
@@ -311,28 +330,30 @@ func (h *HTTPHandler) handlePostDetail(w http.ResponseWriter, r *http.Request, p
 		}
 		writeJSON(w, http.StatusOK, post)
 	case http.MethodPut:
+		authorID, err := h.requireAuthUserID(w, r)
+		if err != nil {
+			return
+		}
 		var req struct {
-			AuthorID int64  `json:"author_id"`
-			Title    string `json:"title"`
-			Content  string `json:"content"`
+			Title   string `json:"title"`
+			Content string `json:"content"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			badRequest(w, err)
 			return
 		}
-		if req.AuthorID == 0 || req.Title == "" || req.Content == "" {
+		if authorID == 0 || req.Title == "" || req.Content == "" {
 			badRequest(w, errors.New("author_id, title and content are required"))
 			return
 		}
-		if err := h.postUseCase.UpdatePost(postID, req.AuthorID, req.Title, req.Content); err != nil {
+		if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content); err != nil {
 			writeUseCaseError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodDelete:
-		authorID, err := parseInt64(r.URL.Query().Get("author_id"))
+		authorID, err := h.requireAuthUserID(w, r)
 		if err != nil {
-			badRequest(w, errors.New("invalid author_id"))
 			return
 		}
 		if err := h.postUseCase.DeletePost(postID, authorID); err != nil {
@@ -359,19 +380,22 @@ func (h *HTTPHandler) handlePostComments(w http.ResponseWriter, r *http.Request,
 		}
 		writeJSON(w, http.StatusOK, comments)
 	case http.MethodPost:
+		authorID, err := h.requireAuthUserID(w, r)
+		if err != nil {
+			return
+		}
 		var req struct {
-			AuthorID int64  `json:"author_id"`
-			Content  string `json:"content"`
+			Content string `json:"content"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			badRequest(w, err)
 			return
 		}
-		if req.AuthorID == 0 || req.Content == "" {
+		if authorID == 0 || req.Content == "" {
 			badRequest(w, errors.New("author_id and content are required"))
 			return
 		}
-		id, err := h.commentUseCase.CreateComment(req.Content, req.AuthorID, postID)
+		id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID)
 		if err != nil {
 			writeUseCaseError(w, err)
 			return
@@ -396,27 +420,29 @@ func (h *HTTPHandler) handleComments(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPut:
+		authorID, err := h.requireAuthUserID(w, r)
+		if err != nil {
+			return
+		}
 		var req struct {
-			AuthorID int64  `json:"author_id"`
-			Content  string `json:"content"`
+			Content string `json:"content"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			badRequest(w, err)
 			return
 		}
-		if req.AuthorID == 0 || req.Content == "" {
+		if authorID == 0 || req.Content == "" {
 			badRequest(w, errors.New("author_id and content are required"))
 			return
 		}
-		if err := h.commentUseCase.UpdateComment(commentID, req.AuthorID, req.Content); err != nil {
+		if err := h.commentUseCase.UpdateComment(commentID, authorID, req.Content); err != nil {
 			writeUseCaseError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodDelete:
-		authorID, err := parseInt64(r.URL.Query().Get("author_id"))
+		authorID, err := h.requireAuthUserID(w, r)
 		if err != nil {
-			badRequest(w, errors.New("invalid author_id"))
 			return
 		}
 		if err := h.commentUseCase.DeleteComment(commentID, authorID); err != nil {
@@ -449,8 +475,11 @@ func (h *HTTPHandler) handleReactions(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, reactions)
 	case http.MethodPost:
+		userID, err := h.requireAuthUserID(w, r)
+		if err != nil {
+			return
+		}
 		var req struct {
-			UserID       int64  `json:"user_id"`
 			TargetID     int64  `json:"target_id"`
 			TargetType   string `json:"target_type"`
 			ReactionType string `json:"reaction_type"`
@@ -459,11 +488,11 @@ func (h *HTTPHandler) handleReactions(w http.ResponseWriter, r *http.Request) {
 			badRequest(w, err)
 			return
 		}
-		if req.UserID == 0 || req.TargetID == 0 || req.TargetType == "" || req.ReactionType == "" {
+		if userID == 0 || req.TargetID == 0 || req.TargetType == "" || req.ReactionType == "" {
 			badRequest(w, errors.New("user_id, target_id, target_type and reaction_type are required"))
 			return
 		}
-		if err := h.reactionUseCase.AddReaction(req.UserID, req.TargetID, req.TargetType, req.ReactionType); err != nil {
+		if err := h.reactionUseCase.AddReaction(userID, req.TargetID, req.TargetType, req.ReactionType); err != nil {
 			writeUseCaseError(w, err)
 			return
 		}
@@ -489,9 +518,8 @@ func (h *HTTPHandler) handleReactionWithID(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userID, err := parseInt64(r.URL.Query().Get("user_id"))
+	userID, err := h.requireAuthUserID(w, r)
 	if err != nil {
-		badRequest(w, errors.New("invalid user_id"))
 		return
 	}
 	if err := h.reactionUseCase.RemoveReaction(userID, reactionID); err != nil {
@@ -508,6 +536,12 @@ func writeUseCaseError(w http.ResponseWriter, err error) {
 	case errors.Is(err, customError.ErrUserNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, customError.ErrInvalidCredential):
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	case errors.Is(err, customError.ErrUnauthorized):
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	case errors.Is(err, customError.ErrMissingAuthHeader):
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+	case errors.Is(err, customError.ErrInvalidToken):
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	case errors.Is(err, customError.ErrForbidden):
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})

@@ -11,6 +11,7 @@ import (
 func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret")
 
 	cfg, err := loadFromViper(v)
 	require.NoError(t, err)
@@ -22,6 +23,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 	t.Run("port_is_zero", func(t *testing.T) {
 		v := viper.New()
 		v.Set("delivery.http.port", 0)
+		v.Set("delivery.http.auth.secret", "test-secret")
 
 		cfg, err := loadFromViper(v)
 		require.Error(t, err)
@@ -31,6 +33,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 	t.Run("port_is_out_of_range", func(t *testing.T) {
 		v := viper.New()
 		v.Set("delivery.http.port", 70000)
+		v.Set("delivery.http.auth.secret", "test-secret")
 
 		cfg, err := loadFromViper(v)
 		require.Error(t, err)
@@ -41,6 +44,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 func TestLoadFromViper_UnknownField(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("delivery.http.unknown", true)
 
 	cfg, err := loadFromViper(v)

@@ -1,3 +1,5 @@
 delivery:
   http:
     port: 18577
+    auth:
+      secret: "commu-bin-secret-key"

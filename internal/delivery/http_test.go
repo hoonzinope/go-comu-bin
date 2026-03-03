@@ -12,6 +12,7 @@ import (
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -205,7 +206,7 @@ func newTestHandler(
 		CommentUseCase:  comment,
 		ReactionUseCase: reaction,
 	}
-	return NewHTTPServer(":0", uc).Handler
+	return NewHTTPServer(":0", "test-secret", uc).Handler
 }
 
 func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {
@@ -216,6 +217,24 @@ func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body
 	}
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
+}
+
+func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path string, body any, userID int64) *httptest.ResponseRecorder {
+	t.Helper()
+	var buf bytes.Buffer
+	if body != nil {
+		require.NoError(t, json.NewEncoder(&buf).Encode(body))
+	}
+	token, err := auth.NewJwtTokenProvider("test-secret").IdToToken(userID)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(method, path, &buf)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	return rr
@@ -288,11 +307,10 @@ func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, board, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodPost, "/boards", map[string]any{
-		"user_id":     2,
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards", map[string]any{
 		"name":        "free",
 		"description": "desc",
-	})
+	}, 2)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 }
 
@@ -313,11 +331,19 @@ func TestHTTP_BoardGet_BadOffset(t *testing.T) {
 func TestHTTP_BoardWithID_InvalidBoardID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodPut, "/boards/abc", map[string]any{
-		"user_id": 1,
-		"name":    "free",
-	})
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/boards/abc", map[string]any{
+		"name": "free",
+	}, 1)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHTTP_BoardWithID_UnauthorizedBeforeValidation(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPut, "/boards/abc", map[string]any{
+		"name": "free",
+	})
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHTTP_PostWithID_InvalidPostID(t *testing.T) {
@@ -331,7 +357,7 @@ func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodDelete, "/reactions/1?user_id=bad", nil)
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHTTP_ReactionList_MissingTargetType(t *testing.T) {

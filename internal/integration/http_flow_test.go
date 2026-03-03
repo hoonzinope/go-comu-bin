@@ -22,72 +22,72 @@ func TestIntegration_MainFlow(t *testing.T) {
 	server := newIntegrationServer(t)
 	defer server.Close()
 
-	adminID := mustLogin(t, server.URL, "admin", "admin")
-	boardID := mustCreateBoard(t, server.URL, adminID, "free", "general board")
+	adminToken := mustLogin(t, server.URL, "admin", "admin")
+	boardID := mustCreateBoard(t, server.URL, adminToken, "free", "general board")
 
 	mustSignUp(t, server.URL, "alice", "pw")
-	userID := mustLogin(t, server.URL, "alice", "pw")
+	aliceToken := mustLogin(t, server.URL, "alice", "pw")
 
 	mustGetBoards(t, server.URL, boardID)
 
-	postID := mustCreatePost(t, server.URL, boardID, userID, "hello", "first post")
+	postID := mustCreatePost(t, server.URL, aliceToken, boardID, "hello", "first post")
 	mustGetPost(t, server.URL, postID)
-	mustUpdatePost(t, server.URL, postID, userID, "hello-updated", "first post updated")
+	mustUpdatePost(t, server.URL, aliceToken, postID, "hello-updated", "first post updated")
 
-	commentID := mustCreateComment(t, server.URL, postID, userID, "nice")
+	commentID := mustCreateComment(t, server.URL, aliceToken, postID, "nice")
 	mustGetComments(t, server.URL, postID, commentID)
-	mustUpdateComment(t, server.URL, commentID, userID, "nice-updated")
+	mustUpdateComment(t, server.URL, aliceToken, commentID, "nice-updated")
 
-	mustAddReaction(t, server.URL, userID, commentID, "comment", "like")
+	mustAddReaction(t, server.URL, aliceToken, commentID, "comment", "like")
 	commentReactionID := mustGetFirstReactionID(t, server.URL, commentID, "comment")
-	mustDeleteReaction(t, server.URL, commentReactionID, userID)
+	mustDeleteReaction(t, server.URL, aliceToken, commentReactionID)
 	mustNoReactions(t, server.URL, commentID, "comment")
 
-	mustDeleteComment(t, server.URL, commentID, userID)
+	mustDeleteComment(t, server.URL, aliceToken, commentID)
 	mustNoComments(t, server.URL, postID)
 
-	mustAddReaction(t, server.URL, userID, postID, "post", "like")
+	mustAddReaction(t, server.URL, aliceToken, postID, "post", "like")
 	postReactionID := mustGetFirstReactionID(t, server.URL, postID, "post")
-	mustDeleteReaction(t, server.URL, postReactionID, userID)
+	mustDeleteReaction(t, server.URL, aliceToken, postReactionID)
 	mustNoReactions(t, server.URL, postID, "post")
 
-	mustDeletePost(t, server.URL, postID, userID)
+	mustDeletePost(t, server.URL, aliceToken, postID)
 	mustPostNotAccessible(t, server.URL, postID)
 
-	mustLogout(t, server.URL, "alice")
+	mustLogout(t, server.URL, adminToken)
+	mustLogout(t, server.URL, aliceToken)
 	mustQuit(t, server.URL, "alice", "pw")
-	mustLogout(t, server.URL, "admin")
 }
 
 func TestIntegration_ForbiddenScenarios(t *testing.T) {
 	server := newIntegrationServer(t)
 	defer server.Close()
 
-	adminID := mustLogin(t, server.URL, "admin", "admin")
-	boardID := mustCreateBoard(t, server.URL, adminID, "free", "general board")
+	adminToken := mustLogin(t, server.URL, "admin", "admin")
+	boardID := mustCreateBoard(t, server.URL, adminToken, "free", "general board")
 
 	mustSignUp(t, server.URL, "alice", "pw")
-	aliceID := mustLogin(t, server.URL, "alice", "pw")
+	aliceToken := mustLogin(t, server.URL, "alice", "pw")
 	mustSignUp(t, server.URL, "bob", "pw")
-	bobID := mustLogin(t, server.URL, "bob", "pw")
+	bobToken := mustLogin(t, server.URL, "bob", "pw")
 
-	postID := mustCreatePost(t, server.URL, boardID, aliceID, "hello", "first post")
-	commentID := mustCreateComment(t, server.URL, postID, aliceID, "nice")
-	mustAddReaction(t, server.URL, aliceID, commentID, "comment", "like")
+	postID := mustCreatePost(t, server.URL, aliceToken, boardID, "hello", "first post")
+	commentID := mustCreateComment(t, server.URL, aliceToken, postID, "nice")
+	mustAddReaction(t, server.URL, aliceToken, commentID, "comment", "like")
 	reactionID := mustGetFirstReactionID(t, server.URL, commentID, "comment")
 
-	assertStatus(t, server.URL, http.MethodPost, "/boards", map[string]any{
-		"user_id": bobID, "name": "blocked", "description": "blocked",
+	assertStatus(t, server.URL, bobToken, http.MethodPost, "/boards", map[string]any{
+		"name": "blocked", "description": "blocked",
 	}, http.StatusForbidden)
-	assertStatus(t, server.URL, http.MethodPut, fmt.Sprintf("/posts/%d", postID), map[string]any{
-		"author_id": bobID, "title": "hack", "content": "hack",
+	assertStatus(t, server.URL, bobToken, http.MethodPut, fmt.Sprintf("/posts/%d", postID), map[string]any{
+		"title": "hack", "content": "hack",
 	}, http.StatusForbidden)
-	assertStatus(t, server.URL, http.MethodDelete, fmt.Sprintf("/posts/%d?author_id=%d", postID, bobID), nil, http.StatusForbidden)
-	assertStatus(t, server.URL, http.MethodPut, fmt.Sprintf("/comments/%d", commentID), map[string]any{
-		"author_id": bobID, "content": "hack",
+	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/posts/%d", postID), nil, http.StatusForbidden)
+	assertStatus(t, server.URL, bobToken, http.MethodPut, fmt.Sprintf("/comments/%d", commentID), map[string]any{
+		"content": "hack",
 	}, http.StatusForbidden)
-	assertStatus(t, server.URL, http.MethodDelete, fmt.Sprintf("/comments/%d?author_id=%d", commentID, bobID), nil, http.StatusForbidden)
-	assertStatus(t, server.URL, http.MethodDelete, fmt.Sprintf("/reactions/%d?user_id=%d", reactionID, bobID), nil, http.StatusForbidden)
+	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/comments/%d", commentID), nil, http.StatusForbidden)
+	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/reactions/%d", reactionID), nil, http.StatusForbidden)
 }
 
 func newIntegrationServer(t *testing.T) *httptest.Server {
@@ -114,52 +114,49 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		ReactionUseCase: service.NewReactionService(repository),
 	}
 
-	httpServer := delivery.NewHTTPServer(":0", useCases)
+	httpServer := delivery.NewHTTPServer(":0", "test-secret", useCases)
 	return httptest.NewServer(httpServer.Handler)
 }
 
-func mustLogin(t *testing.T, baseURL, username, password string) int64 {
+func mustLogin(t *testing.T, baseURL, username, password string) string {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPost, "/users/login", map[string]any{
+	_, status, headers := requestJSON(t, baseURL, "", http.MethodPost, "/users/login", map[string]any{
 		"username": username,
 		"password": password,
 	})
-	assert.Equal(t, http.StatusOK, status, "login failed: body=%s", string(body))
-	var resp map[string]any
-	mustUnmarshal(t, body, &resp)
-	return int64(resp["user_id"].(float64))
+	assert.Equal(t, http.StatusOK, status)
+	token := headers.Get("Authorization")
+	require.NotEmpty(t, token)
+	return token
 }
 
 func mustSignUp(t *testing.T, baseURL, username, password string) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPost, "/users/signup", map[string]any{
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodPost, "/users/signup", map[string]any{
 		"username": username,
 		"password": password,
 	})
 	assert.Equal(t, http.StatusCreated, status, "signup failed: body=%s", string(body))
 }
 
-func mustLogout(t *testing.T, baseURL, username string) {
+func mustLogout(t *testing.T, baseURL, token string) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPost, "/users/logout", map[string]any{
-		"username": username,
-	})
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, "/users/logout", map[string]any{})
 	assert.Equal(t, http.StatusOK, status, "logout failed: body=%s", string(body))
 }
 
 func mustQuit(t *testing.T, baseURL, username, password string) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodDelete, "/users/quit", map[string]any{
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodDelete, "/users/quit", map[string]any{
 		"username": username,
 		"password": password,
 	})
 	assert.Equal(t, http.StatusNoContent, status, "quit failed: body=%s", string(body))
 }
 
-func mustCreateBoard(t *testing.T, baseURL string, userID int64, name, description string) int64 {
+func mustCreateBoard(t *testing.T, baseURL, token, name, description string) int64 {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPost, "/boards", map[string]any{
-		"user_id":     userID,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, "/boards", map[string]any{
 		"name":        name,
 		"description": description,
 	})
@@ -171,7 +168,7 @@ func mustCreateBoard(t *testing.T, baseURL string, userID int64, name, descripti
 
 func mustGetBoards(t *testing.T, baseURL string, expectedBoardID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodGet, "/boards", nil)
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, "/boards", nil)
 	assert.Equal(t, http.StatusOK, status, "get boards failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
@@ -181,12 +178,11 @@ func mustGetBoards(t *testing.T, baseURL string, expectedBoardID int64) {
 	assert.EqualValues(t, expectedBoardID, int64(first["id"].(float64)))
 }
 
-func mustCreatePost(t *testing.T, baseURL string, boardID, authorID int64, title, content string) int64 {
+func mustCreatePost(t *testing.T, baseURL, token string, boardID int64, title, content string) int64 {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPost, fmt.Sprintf("/boards/%d/posts", boardID), map[string]any{
-		"author_id": authorID,
-		"title":     title,
-		"content":   content,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, fmt.Sprintf("/boards/%d/posts", boardID), map[string]any{
+		"title":   title,
+		"content": content,
 	})
 	assert.Equal(t, http.StatusCreated, status, "create post failed: body=%s", string(body))
 	var resp map[string]any
@@ -196,7 +192,7 @@ func mustCreatePost(t *testing.T, baseURL string, boardID, authorID int64, title
 
 func mustGetPost(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
 	assert.Equal(t, http.StatusOK, status, "get post failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
@@ -204,27 +200,25 @@ func mustGetPost(t *testing.T, baseURL string, postID int64) {
 	assert.EqualValues(t, postID, int64(post["id"].(float64)))
 }
 
-func mustUpdatePost(t *testing.T, baseURL string, postID, authorID int64, title, content string) {
+func mustUpdatePost(t *testing.T, baseURL, token string, postID int64, title, content string) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPut, fmt.Sprintf("/posts/%d", postID), map[string]any{
-		"author_id": authorID,
-		"title":     title,
-		"content":   content,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPut, fmt.Sprintf("/posts/%d", postID), map[string]any{
+		"title":   title,
+		"content": content,
 	})
 	assert.Equal(t, http.StatusNoContent, status, "update post failed: body=%s", string(body))
 }
 
-func mustDeletePost(t *testing.T, baseURL string, postID, authorID int64) {
+func mustDeletePost(t *testing.T, baseURL, token string, postID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodDelete, fmt.Sprintf("/posts/%d?author_id=%d", postID, authorID), nil)
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodDelete, fmt.Sprintf("/posts/%d", postID), nil)
 	assert.Equal(t, http.StatusNoContent, status, "delete post failed: body=%s", string(body))
 }
 
-func mustCreateComment(t *testing.T, baseURL string, postID, authorID int64, content string) int64 {
+func mustCreateComment(t *testing.T, baseURL, token string, postID int64, content string) int64 {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPost, fmt.Sprintf("/posts/%d/comments", postID), map[string]any{
-		"author_id": authorID,
-		"content":   content,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, fmt.Sprintf("/posts/%d/comments", postID), map[string]any{
+		"content": content,
 	})
 	assert.Equal(t, http.StatusCreated, status, "create comment failed: body=%s", string(body))
 	var resp map[string]any
@@ -234,7 +228,7 @@ func mustCreateComment(t *testing.T, baseURL string, postID, authorID int64, con
 
 func mustGetComments(t *testing.T, baseURL string, postID, expectedCommentID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
 	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
@@ -244,25 +238,23 @@ func mustGetComments(t *testing.T, baseURL string, postID, expectedCommentID int
 	assert.EqualValues(t, expectedCommentID, int64(first["id"].(float64)))
 }
 
-func mustUpdateComment(t *testing.T, baseURL string, commentID, authorID int64, content string) {
+func mustUpdateComment(t *testing.T, baseURL, token string, commentID int64, content string) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPut, fmt.Sprintf("/comments/%d", commentID), map[string]any{
-		"author_id": authorID,
-		"content":   content,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPut, fmt.Sprintf("/comments/%d", commentID), map[string]any{
+		"content": content,
 	})
 	assert.Equal(t, http.StatusNoContent, status, "update comment failed: body=%s", string(body))
 }
 
-func mustDeleteComment(t *testing.T, baseURL string, commentID, authorID int64) {
+func mustDeleteComment(t *testing.T, baseURL, token string, commentID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodDelete, fmt.Sprintf("/comments/%d?author_id=%d", commentID, authorID), nil)
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodDelete, fmt.Sprintf("/comments/%d", commentID), nil)
 	assert.Equal(t, http.StatusNoContent, status, "delete comment failed: body=%s", string(body))
 }
 
-func mustAddReaction(t *testing.T, baseURL string, userID, targetID int64, targetType, reactionType string) {
+func mustAddReaction(t *testing.T, baseURL, token string, targetID int64, targetType, reactionType string) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodPost, "/reactions", map[string]any{
-		"user_id":       userID,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, "/reactions", map[string]any{
 		"target_id":     targetID,
 		"target_type":   targetType,
 		"reaction_type": reactionType,
@@ -272,7 +264,7 @@ func mustAddReaction(t *testing.T, baseURL string, userID, targetID int64, targe
 
 func mustGetFirstReactionID(t *testing.T, baseURL string, targetID int64, targetType string) int64 {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
 	assert.Equal(t, http.StatusOK, status, "get reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
@@ -280,15 +272,15 @@ func mustGetFirstReactionID(t *testing.T, baseURL string, targetID int64, target
 	return int64(resp[0]["id"].(float64))
 }
 
-func mustDeleteReaction(t *testing.T, baseURL string, reactionID, userID int64) {
+func mustDeleteReaction(t *testing.T, baseURL, token string, reactionID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodDelete, fmt.Sprintf("/reactions/%d?user_id=%d", reactionID, userID), nil)
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodDelete, fmt.Sprintf("/reactions/%d", reactionID), nil)
 	assert.Equal(t, http.StatusNoContent, status, "delete reaction failed: body=%s", string(body))
 }
 
 func mustNoComments(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
 	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
@@ -303,7 +295,7 @@ func mustNoComments(t *testing.T, baseURL string, postID int64) {
 
 func mustNoReactions(t *testing.T, baseURL string, targetID int64, targetType string) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
 	assert.Equal(t, http.StatusOK, status, "get reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
@@ -312,17 +304,17 @@ func mustNoReactions(t *testing.T, baseURL string, targetID int64, targetType st
 
 func mustPostNotAccessible(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
-	body, status := requestJSON(t, baseURL, http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
 	assert.Equal(t, http.StatusInternalServerError, status, "expected deleted post to be inaccessible(500), body=%s", string(body))
 }
 
-func assertStatus(t *testing.T, baseURL, method, path string, body any, expected int) {
+func assertStatus(t *testing.T, baseURL, token, method, path string, body any, expected int) {
 	t.Helper()
-	respBody, status := requestJSON(t, baseURL, method, path, body)
+	respBody, status, _ := requestJSON(t, baseURL, token, method, path, body)
 	assert.Equal(t, expected, status, "path=%s body=%s", path, string(respBody))
 }
 
-func requestJSON(t *testing.T, baseURL, method, path string, body any) ([]byte, int) {
+func requestJSON(t *testing.T, baseURL, token, method, path string, body any) ([]byte, int, http.Header) {
 	t.Helper()
 
 	var payload io.Reader
@@ -335,6 +327,9 @@ func requestJSON(t *testing.T, baseURL, method, path string, body any) ([]byte, 
 	req, err := http.NewRequest(method, baseURL+path, payload)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", token)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -342,7 +337,7 @@ func requestJSON(t *testing.T, baseURL, method, path string, body any) ([]byte, 
 
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	return respBody, resp.StatusCode
+	return respBody, resp.StatusCode, resp.Header
 }
 
 func mustUnmarshal(t *testing.T, body []byte, dst any) {
