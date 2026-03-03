@@ -1,20 +1,21 @@
 package entity
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestReaction_NewReactionAndUpdateReaction(t *testing.T) {
 	r := &Reaction{}
-	r.NewReaction("post", 3, "like", 7)
 
-	if r.TargetType != "post" || r.TargetID != 3 || r.Type != "like" || r.UserID != 7 {
-		t.Fatalf("unexpected reaction fields: %+v", r)
-	}
-	if r.CreatedAt.IsZero() {
-		t.Fatal("expected non-zero CreatedAt")
-	}
+	r.NewReaction("post", 3, "like", 7)
+	assert.Equal(t, "post", r.TargetType)
+	assert.EqualValues(t, 3, r.TargetID)
+	assert.Equal(t, "like", r.Type)
+	assert.EqualValues(t, 7, r.UserID)
+	assert.False(t, r.CreatedAt.IsZero())
 
 	r.UpdateReaction("dislike")
-	if r.Type != "dislike" {
-		t.Fatalf("expected dislike, got %s", r.Type)
-	}
+	assert.Equal(t, "dislike", r.Type)
 }

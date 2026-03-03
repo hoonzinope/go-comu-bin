@@ -1,20 +1,20 @@
 package entity
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestBoard_NewBoardAndUpdateBoard(t *testing.T) {
 	b := &Board{}
-	b.NewBoard("free", "desc")
 
-	if b.Name != "free" || b.Description != "desc" {
-		t.Fatalf("unexpected board fields: %+v", b)
-	}
-	if b.CreatedAt.IsZero() {
-		t.Fatal("expected non-zero CreatedAt")
-	}
+	b.NewBoard("free", "desc")
+	assert.Equal(t, "free", b.Name)
+	assert.Equal(t, "desc", b.Description)
+	assert.False(t, b.CreatedAt.IsZero())
 
 	b.UpdateBoard("notice", "updated")
-	if b.Name != "notice" || b.Description != "updated" {
-		t.Fatalf("unexpected updated board fields: %+v", b)
-	}
+	assert.Equal(t, "notice", b.Name)
+	assert.Equal(t, "updated", b.Description)
 }

@@ -261,6 +261,68 @@ curl -X POST http://localhost:18577/boards \
 
 ---
 
+## 테스트 코드 스타일 가이드
+
+이 프로젝트의 테스트 코드는 아래 글의 방향을 따릅니다.
+
+- 참고: [우리가 테스트를 하는 이유. 근데 이제 Golang을 곁들인](https://blog.banksalad.com/tech/why-we-do-test-by-golang/)
+
+앞으로 테스트를 **추가/수정**할 때도 동일 규칙을 적용해주세요.
+
+### 핵심 원칙
+
+- 가독성을 우선합니다. 테스트를 "동작 문서"처럼 읽을 수 있어야 합니다.
+- 실패 지점이 명확해야 합니다. 준비 단계 실패와 검증 실패를 분리합니다.
+- 반복되는 패턴은 헬퍼 함수로 추출하되, 테스트 본문의 의도를 숨기지 않습니다.
+
+### Assertion 규칙 (`testify`)
+
+- 기본 assertion 라이브러리는 `github.com/stretchr/testify`를 사용합니다.
+- 오류/전제조건 검증은 `require`를 사용합니다.
+  - 예: `require.NoError(t, err)`, `require.NotNil(t, got)`
+- 결과 값/상태 검증은 `assert`를 사용합니다.
+  - 예: `assert.Equal(t, want, got)`, `assert.Len(t, list, 2)`
+- 가능하면 `if ... { t.Fatalf(...) }` 패턴 대신 `require/assert`를 우선 사용합니다.
+
+### 테스트 이름/구조
+
+- 테스트 이름은 `Test<대상>_<시나리오>` 형태를 권장합니다.
+- 시나리오가 많은 경우 `t.Run("given_..._when_..._then_...")` 형태의 서브테스트를 사용합니다.
+- 한 테스트는 하나의 행동/정책을 검증하도록 유지합니다.
+
+### 작성 패턴
+
+- 테스트는 가능한 한 `given -> when -> then` 흐름으로 작성합니다.
+- `given`: 데이터/의존성 준비
+- `when`: 대상 함수 실행
+- `then`: 결과 검증
+
+예시:
+
+```go
+func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
+	repository := newTestRepository()
+	ownerID := seedUser(repository, "owner", "pw", "user")
+	otherID := seedUser(repository, "other", "pw", "user")
+	postID := seedPost(repository, ownerID, 1, "title", "content")
+	svc := NewPostService(repository)
+
+	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
+
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrForbidden))
+}
+```
+
+### PR 체크리스트 (테스트 변경 시)
+
+- 새로 추가한 테스트가 `require/assert` 스타일을 따르는가?
+- 실패 메시지 없이도 테스트 의도를 이름과 구조만으로 이해할 수 있는가?
+- 정상/오류 경로가 모두 검증되는가?
+- `go test ./...`가 통과하는가?
+
+---
+
 ## 테스트 구성
 
 현재 테스트는 아래 레벨로 구성되어 있습니다.

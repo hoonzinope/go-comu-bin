@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBoardService_CreateBoard_ForbiddenForNonAdmin(t *testing.T) {
@@ -13,9 +15,8 @@ func TestBoardService_CreateBoard_ForbiddenForNonAdmin(t *testing.T) {
 	svc := NewBoardService(repository)
 
 	_, err := svc.CreateBoard(userID, "free", "desc")
-	if !errors.Is(err, customError.ErrForbidden) {
-		t.Fatalf("expected ErrForbidden, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }
 
 func TestBoardService_CreateBoard_SuccessForAdmin(t *testing.T) {
@@ -24,12 +25,8 @@ func TestBoardService_CreateBoard_SuccessForAdmin(t *testing.T) {
 	svc := NewBoardService(repository)
 
 	boardID, err := svc.CreateBoard(adminID, "free", "desc")
-	if err != nil {
-		t.Fatalf("CreateBoard returned error: %v", err)
-	}
-	if boardID == 0 {
-		t.Fatal("expected non-zero boardID")
-	}
+	require.NoError(t, err)
+	assert.NotZero(t, boardID)
 }
 
 func TestBoardService_GetBoards_Success(t *testing.T) {
@@ -39,12 +36,8 @@ func TestBoardService_GetBoards_Success(t *testing.T) {
 	svc := NewBoardService(repository)
 
 	list, err := svc.GetBoards(10, 0)
-	if err != nil {
-		t.Fatalf("GetBoards returned error: %v", err)
-	}
-	if len(list.Boards) != 2 {
-		t.Fatalf("expected 2 boards, got %d", len(list.Boards))
-	}
+	require.NoError(t, err)
+	assert.Len(t, list.Boards, 2)
 }
 
 func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
@@ -53,10 +46,6 @@ func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
 	boardID := seedBoard(repository, "free", "desc")
 	svc := NewBoardService(repository)
 
-	if err := svc.UpdateBoard(boardID, adminID, "new", "new-desc"); err != nil {
-		t.Fatalf("UpdateBoard returned error: %v", err)
-	}
-	if err := svc.DeleteBoard(boardID, adminID); err != nil {
-		t.Fatalf("DeleteBoard returned error: %v", err)
-	}
+	require.NoError(t, svc.UpdateBoard(boardID, adminID, "new", "new-desc"))
+	require.NoError(t, svc.DeleteBoard(boardID, adminID))
 }

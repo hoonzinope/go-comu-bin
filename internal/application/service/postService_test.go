@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
@@ -16,9 +18,8 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	svc := NewPostService(repository)
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
-	if !errors.Is(err, customError.ErrForbidden) {
-		t.Fatalf("expected ErrForbidden, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }
 
 func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
@@ -29,10 +30,7 @@ func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
 	postID := seedPost(repository, ownerID, boardID, "title", "content")
 	svc := NewPostService(repository)
 
-	err := svc.UpdatePost(postID, adminID, "new-title", "new-content")
-	if err != nil {
-		t.Fatalf("UpdatePost returned error: %v", err)
-	}
+	require.NoError(t, svc.UpdatePost(postID, adminID, "new-title", "new-content"))
 }
 
 func TestPostService_CreateGetListDelete_Success(t *testing.T) {
@@ -42,30 +40,17 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	svc := NewPostService(repository)
 
 	postID, err := svc.CreatePost("title", "content", userID, boardID)
-	if err != nil {
-		t.Fatalf("CreatePost returned error: %v", err)
-	}
-	if postID == 0 {
-		t.Fatal("expected non-zero postID")
-	}
+	require.NoError(t, err)
+	assert.NotZero(t, postID)
 
 	list, err := svc.GetPostsList(boardID, 10, 0)
-	if err != nil {
-		t.Fatalf("GetPostsList returned error: %v", err)
-	}
-	if len(list.Posts) != 1 {
-		t.Fatalf("expected 1 post, got %d", len(list.Posts))
-	}
+	require.NoError(t, err)
+	assert.Len(t, list.Posts, 1)
 
 	detail, err := svc.GetPostDetail(postID)
-	if err != nil {
-		t.Fatalf("GetPostDetail returned error: %v", err)
-	}
-	if detail.Post == nil || detail.Post.ID != postID {
-		t.Fatalf("unexpected post detail: %+v", detail.Post)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, detail.Post)
+	assert.Equal(t, postID, detail.Post.ID)
 
-	if err := svc.DeletePost(postID, userID); err != nil {
-		t.Fatalf("DeletePost returned error: %v", err)
-	}
+	require.NoError(t, svc.DeletePost(postID, userID))
 }

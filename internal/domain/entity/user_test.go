@@ -1,36 +1,27 @@
 package entity
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestUser_NewUserAndIsAdmin(t *testing.T) {
 	u := &User{}
-	u.NewUser("alice", "pw")
 
-	if u.Name != "alice" || u.Password != "pw" {
-		t.Fatalf("unexpected user fields: %+v", u)
-	}
-	if u.Role != "user" {
-		t.Fatalf("expected role user, got %s", u.Role)
-	}
-	if u.IsAdmin() {
-		t.Fatal("expected non-admin user")
-	}
-	if u.CreatedAt.IsZero() {
-		t.Fatal("expected non-zero CreatedAt")
-	}
+	u.NewUser("alice", "pw")
+	assert.Equal(t, "alice", u.Name)
+	assert.Equal(t, "pw", u.Password)
+	assert.Equal(t, "user", u.Role)
+	assert.False(t, u.IsAdmin())
+	assert.False(t, u.CreatedAt.IsZero())
 }
 
 func TestUser_NewAdminAndIsAdmin(t *testing.T) {
 	u := &User{}
-	u.NewAdmin("admin", "pw")
 
-	if u.Role != "admin" {
-		t.Fatalf("expected role admin, got %s", u.Role)
-	}
-	if !u.IsAdmin() {
-		t.Fatal("expected admin user")
-	}
-	if u.CreatedAt.IsZero() {
-		t.Fatal("expected non-zero CreatedAt")
-	}
+	u.NewAdmin("admin", "pw")
+	assert.Equal(t, "admin", u.Role)
+	assert.True(t, u.IsAdmin())
+	assert.False(t, u.CreatedAt.IsZero())
 }

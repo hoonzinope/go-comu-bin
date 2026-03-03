@@ -1,58 +1,45 @@
 package inmemory
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestBoardRepository_ListPagination(t *testing.T) {
 	repo := NewBoardRepository()
-	b1 := testBoard("b1", "d1")
-	b2 := testBoard("b2", "d2")
-	b3 := testBoard("b3", "d3")
-	_, _ = repo.Save(b1)
-	_, _ = repo.Save(b2)
-	_, _ = repo.Save(b3)
+	_, _ = repo.Save(testBoard("b1", "d1"))
+	_, _ = repo.Save(testBoard("b2", "d2"))
+	_, _ = repo.Save(testBoard("b3", "d3"))
 
 	boards, err := repo.SelectBoardList(2, 1)
-	if err != nil {
-		t.Fatalf("SelectBoardList returned error: %v", err)
-	}
-	if len(boards) != 2 {
-		t.Fatalf("expected 2 boards, got %d", len(boards))
-	}
+	require.NoError(t, err)
+	assert.Len(t, boards, 2)
 }
 
 func TestBoardRepository_SaveSelectUpdateDelete(t *testing.T) {
 	repo := NewBoardRepository()
-	board := testBoard("free", "desc")
-	id, err := repo.Save(board)
-	if err != nil {
-		t.Fatalf("Save returned error: %v", err)
-	}
+	id, err := repo.Save(testBoard("free", "desc"))
+	require.NoError(t, err)
 
 	selected, err := repo.SelectBoardByID(id)
-	if err != nil {
-		t.Fatalf("SelectBoardByID returned error: %v", err)
-	}
-	if selected == nil || selected.Name != "free" {
-		t.Fatalf("unexpected board: %+v", selected)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, "free", selected.Name)
 
 	selected.UpdateBoard("new", "new-desc")
-	if err := repo.Update(selected); err != nil {
-		t.Fatalf("Update returned error: %v", err)
-	}
+	require.NoError(t, repo.Update(selected))
 
-	updated, _ := repo.SelectBoardByID(id)
-	if updated.Name != "new" {
-		t.Fatalf("expected updated name, got %s", updated.Name)
-	}
+	updated, err := repo.SelectBoardByID(id)
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.Equal(t, "new", updated.Name)
 
-	if err := repo.Delete(id); err != nil {
-		t.Fatalf("Delete returned error: %v", err)
-	}
-	deleted, _ := repo.SelectBoardByID(id)
-	if deleted != nil {
-		t.Fatalf("expected nil after delete, got %+v", deleted)
-	}
+	require.NoError(t, repo.Delete(id))
+	deleted, err := repo.SelectBoardByID(id)
+	require.NoError(t, err)
+	assert.Nil(t, deleted)
 }
 
 func TestBoardRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
@@ -61,12 +48,8 @@ func TestBoardRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
 	_, _ = repo.Save(testBoard("b2", "d2"))
 
 	boards, err := repo.SelectBoardList(10, 2)
-	if err != nil {
-		t.Fatalf("SelectBoardList returned error: %v", err)
-	}
-	if len(boards) != 0 {
-		t.Fatalf("expected empty result, got %d", len(boards))
-	}
+	require.NoError(t, err)
+	assert.Empty(t, boards)
 }
 
 func TestBoardRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
@@ -74,10 +57,6 @@ func TestBoardRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 	b := testBoard("x", "y")
 	b.ID = 999
 
-	if err := repo.Update(b); err != nil {
-		t.Fatalf("Update returned error: %v", err)
-	}
-	if err := repo.Delete(999); err != nil {
-		t.Fatalf("Delete returned error: %v", err)
-	}
+	require.NoError(t, repo.Update(b))
+	require.NoError(t, repo.Delete(999))
 }

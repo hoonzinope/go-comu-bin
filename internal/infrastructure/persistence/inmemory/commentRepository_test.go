@@ -1,6 +1,11 @@
 package inmemory
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestCommentRepository_FilterByPostAndPagination(t *testing.T) {
 	repo := NewCommentRepository()
@@ -9,47 +14,32 @@ func TestCommentRepository_FilterByPostAndPagination(t *testing.T) {
 	_, _ = repo.Save(testComment("c3", 3, 2))
 
 	comments, err := repo.SelectComments(1, 10, 0)
-	if err != nil {
-		t.Fatalf("SelectComments returned error: %v", err)
-	}
-	if len(comments) != 2 {
-		t.Fatalf("expected 2 comments for post 1, got %d", len(comments))
-	}
+	require.NoError(t, err)
+	assert.Len(t, comments, 2)
 }
 
 func TestCommentRepository_SaveSelectUpdateDelete(t *testing.T) {
 	repo := NewCommentRepository()
-	comment := testComment("hello", 1, 1)
-	id, err := repo.Save(comment)
-	if err != nil {
-		t.Fatalf("Save returned error: %v", err)
-	}
+	id, err := repo.Save(testComment("hello", 1, 1))
+	require.NoError(t, err)
 
 	selected, err := repo.SelectCommentByID(id)
-	if err != nil {
-		t.Fatalf("SelectCommentByID returned error: %v", err)
-	}
-	if selected == nil || selected.Content != "hello" {
-		t.Fatalf("unexpected comment: %+v", selected)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, "hello", selected.Content)
 
 	selected.UpdateComment("updated")
-	if err := repo.Update(selected); err != nil {
-		t.Fatalf("Update returned error: %v", err)
-	}
+	require.NoError(t, repo.Update(selected))
 
-	updated, _ := repo.SelectCommentByID(id)
-	if updated.Content != "updated" {
-		t.Fatalf("expected updated content, got %s", updated.Content)
-	}
+	updated, err := repo.SelectCommentByID(id)
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.Equal(t, "updated", updated.Content)
 
-	if err := repo.Delete(id); err != nil {
-		t.Fatalf("Delete returned error: %v", err)
-	}
-	deleted, _ := repo.SelectCommentByID(id)
-	if deleted != nil {
-		t.Fatalf("expected nil after delete, got %+v", deleted)
-	}
+	require.NoError(t, repo.Delete(id))
+	deleted, err := repo.SelectCommentByID(id)
+	require.NoError(t, err)
+	assert.Nil(t, deleted)
 }
 
 func TestCommentRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
@@ -58,12 +48,8 @@ func TestCommentRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) 
 	_, _ = repo.Save(testComment("c2", 2, 1))
 
 	comments, err := repo.SelectComments(1, 10, 2)
-	if err != nil {
-		t.Fatalf("SelectComments returned error: %v", err)
-	}
-	if len(comments) != 0 {
-		t.Fatalf("expected empty result, got %d", len(comments))
-	}
+	require.NoError(t, err)
+	assert.Empty(t, comments)
 }
 
 func TestCommentRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
@@ -71,10 +57,6 @@ func TestCommentRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 	c := testComment("x", 1, 1)
 	c.ID = 999
 
-	if err := repo.Update(c); err != nil {
-		t.Fatalf("Update returned error: %v", err)
-	}
-	if err := repo.Delete(999); err != nil {
-		t.Fatalf("Delete returned error: %v", err)
-	}
+	require.NoError(t, repo.Update(c))
+	require.NoError(t, repo.Delete(999))
 }

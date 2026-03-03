@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReactionService_RemoveReaction_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
@@ -15,18 +17,14 @@ func TestReactionService_RemoveReaction_ForbiddenForNonOwnerNonAdmin(t *testing.
 	postID := seedPost(repository, ownerID, boardID, "title", "content")
 	svc := NewReactionService(repository)
 
-	if err := svc.AddReaction(ownerID, postID, "post", "like"); err != nil {
-		t.Fatalf("AddReaction returned error: %v", err)
-	}
+	require.NoError(t, svc.AddReaction(ownerID, postID, "post", "like"))
 	reactions, err := repository.ReactionRepository.GetByTarget(postID, "post")
-	if err != nil || len(reactions) != 1 {
-		t.Fatalf("failed to prepare reaction: err=%v len=%d", err, len(reactions))
-	}
+	require.NoError(t, err)
+	require.Len(t, reactions, 1)
 
 	err = svc.RemoveReaction(otherID, reactions[0].ID)
-	if !errors.Is(err, customError.ErrForbidden) {
-		t.Fatalf("expected ErrForbidden, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }
 
 func TestReactionService_RemoveReaction_AllowedForAdmin(t *testing.T) {
@@ -37,18 +35,12 @@ func TestReactionService_RemoveReaction_AllowedForAdmin(t *testing.T) {
 	postID := seedPost(repository, ownerID, boardID, "title", "content")
 	svc := NewReactionService(repository)
 
-	if err := svc.AddReaction(ownerID, postID, "post", "like"); err != nil {
-		t.Fatalf("AddReaction returned error: %v", err)
-	}
+	require.NoError(t, svc.AddReaction(ownerID, postID, "post", "like"))
 	reactions, err := repository.ReactionRepository.GetByTarget(postID, "post")
-	if err != nil || len(reactions) != 1 {
-		t.Fatalf("failed to prepare reaction: err=%v len=%d", err, len(reactions))
-	}
+	require.NoError(t, err)
+	require.Len(t, reactions, 1)
 
-	err = svc.RemoveReaction(adminID, reactions[0].ID)
-	if err != nil {
-		t.Fatalf("RemoveReaction returned error: %v", err)
-	}
+	require.NoError(t, svc.RemoveReaction(adminID, reactions[0].ID))
 }
 
 func TestReactionService_AddReaction_InvalidTargetType(t *testing.T) {
@@ -57,9 +49,8 @@ func TestReactionService_AddReaction_InvalidTargetType(t *testing.T) {
 	svc := NewReactionService(repository)
 
 	err := svc.AddReaction(userID, 1, "invalid", "like")
-	if !errors.Is(err, customError.ErrInternalServerError) {
-		t.Fatalf("expected ErrInternalServerError, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInternalServerError))
 }
 
 func TestReactionService_GetReactionsByTarget_AndOwnerDelete(t *testing.T) {
@@ -70,18 +61,10 @@ func TestReactionService_GetReactionsByTarget_AndOwnerDelete(t *testing.T) {
 	commentID := seedComment(repository, userID, postID, "comment")
 	svc := NewReactionService(repository)
 
-	if err := svc.AddReaction(userID, commentID, "comment", "like"); err != nil {
-		t.Fatalf("AddReaction returned error: %v", err)
-	}
+	require.NoError(t, svc.AddReaction(userID, commentID, "comment", "like"))
 	reactions, err := svc.GetReactionsByTarget(commentID, "comment")
-	if err != nil {
-		t.Fatalf("GetReactionsByTarget returned error: %v", err)
-	}
-	if len(reactions) != 1 {
-		t.Fatalf("expected 1 reaction, got %d", len(reactions))
-	}
+	require.NoError(t, err)
+	require.Len(t, reactions, 1)
 
-	if err := svc.RemoveReaction(userID, reactions[0].ID); err != nil {
-		t.Fatalf("RemoveReaction returned error: %v", err)
-	}
+	require.NoError(t, svc.RemoveReaction(userID, reactions[0].ID))
 }

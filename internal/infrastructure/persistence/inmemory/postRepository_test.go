@@ -1,6 +1,11 @@
 package inmemory
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
 	repo := NewPostRepository()
@@ -9,47 +14,32 @@ func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
 	_, _ = repo.Save(testPost("p3", "c3", 2, 2))
 
 	posts, err := repo.SelectPosts(1, 10, 0)
-	if err != nil {
-		t.Fatalf("SelectPosts returned error: %v", err)
-	}
-	if len(posts) != 2 {
-		t.Fatalf("expected 2 posts for board 1, got %d", len(posts))
-	}
+	require.NoError(t, err)
+	assert.Len(t, posts, 2)
 }
 
 func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
 	repo := NewPostRepository()
-	post := testPost("title", "content", 1, 1)
-	id, err := repo.Save(post)
-	if err != nil {
-		t.Fatalf("Save returned error: %v", err)
-	}
+	id, err := repo.Save(testPost("title", "content", 1, 1))
+	require.NoError(t, err)
 
 	selected, err := repo.SelectPostByID(id)
-	if err != nil {
-		t.Fatalf("SelectPostByID returned error: %v", err)
-	}
-	if selected == nil || selected.Title != "title" {
-		t.Fatalf("unexpected post: %+v", selected)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	assert.Equal(t, "title", selected.Title)
 
 	selected.UpdatePost("new", "new-content")
-	if err := repo.Update(selected); err != nil {
-		t.Fatalf("Update returned error: %v", err)
-	}
+	require.NoError(t, repo.Update(selected))
 
-	updated, _ := repo.SelectPostByID(id)
-	if updated.Title != "new" {
-		t.Fatalf("expected updated title, got %s", updated.Title)
-	}
+	updated, err := repo.SelectPostByID(id)
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.Equal(t, "new", updated.Title)
 
-	if err := repo.Delete(id); err != nil {
-		t.Fatalf("Delete returned error: %v", err)
-	}
-	deleted, _ := repo.SelectPostByID(id)
-	if deleted != nil {
-		t.Fatalf("expected nil after delete, got %+v", deleted)
-	}
+	require.NoError(t, repo.Delete(id))
+	deleted, err := repo.SelectPostByID(id)
+	require.NoError(t, err)
+	assert.Nil(t, deleted)
 }
 
 func TestPostRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
@@ -58,12 +48,8 @@ func TestPostRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
 	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
 
 	posts, err := repo.SelectPosts(1, 10, 2)
-	if err != nil {
-		t.Fatalf("SelectPosts returned error: %v", err)
-	}
-	if len(posts) != 0 {
-		t.Fatalf("expected empty result, got %d", len(posts))
-	}
+	require.NoError(t, err)
+	assert.Empty(t, posts)
 }
 
 func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
@@ -71,10 +57,6 @@ func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 	p := testPost("x", "y", 1, 1)
 	p.ID = 999
 
-	if err := repo.Update(p); err != nil {
-		t.Fatalf("Update returned error: %v", err)
-	}
-	if err := repo.Delete(999); err != nil {
-		t.Fatalf("Delete returned error: %v", err)
-	}
+	require.NoError(t, repo.Update(p))
+	require.NoError(t, repo.Delete(999))
 }

@@ -1,24 +1,24 @@
 package entity
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestComment_NewCommentAndUpdateComment(t *testing.T) {
 	parentID := int64(9)
 	c := &Comment{}
-	c.NewComment("hello", 1, 2, &parentID)
 
-	if c.Content != "hello" || c.AuthorID != 1 || c.PostID != 2 {
-		t.Fatalf("unexpected comment fields: %+v", c)
-	}
-	if c.ParentID == nil || *c.ParentID != parentID {
-		t.Fatalf("unexpected parent id: %+v", c.ParentID)
-	}
-	if c.CreatedAt.IsZero() {
-		t.Fatal("expected non-zero CreatedAt")
-	}
+	c.NewComment("hello", 1, 2, &parentID)
+	assert.Equal(t, "hello", c.Content)
+	assert.EqualValues(t, 1, c.AuthorID)
+	assert.EqualValues(t, 2, c.PostID)
+	require.NotNil(t, c.ParentID)
+	assert.EqualValues(t, parentID, *c.ParentID)
+	assert.False(t, c.CreatedAt.IsZero())
 
 	c.UpdateComment("updated")
-	if c.Content != "updated" {
-		t.Fatalf("unexpected updated content: %s", c.Content)
-	}
+	assert.Equal(t, "updated", c.Content)
 }
