@@ -1,64 +1,39 @@
 package middleware
 
 import (
-	"context"
-	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
 
-type AuthMiddleware struct {
-	AuthUseCase application.AuthUseCase
-}
+func Auth(authUseCase application.AuthUseCase) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token, err := extractToken(c.GetHeader("Authorization"))
+		if err != nil {
+			c.AbortWithStatusJSON(401, gin.H{"error": err.Error()})
+			return
+		}
 
-type contextKey string
+		userID, err := authUseCase.ValidateTokenToId(token)
+		if err != nil {
+			c.AbortWithStatusJSON(401, gin.H{"error": customError.ErrInvalidToken.Error()})
+			return
+		}
 
-const userIDContextKey contextKey = "user_id"
-
-func NewAuthMiddleware(authUseCase application.AuthUseCase) *AuthMiddleware {
-	return &AuthMiddleware{
-		AuthUseCase: authUseCase,
+		c.Set("user_id", userID)
+		c.Next()
 	}
 }
 
-func (m *AuthMiddleware) Auth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, err := extractToken(r.Header.Get("Authorization"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := m.AuthUseCase.ValidateTokenToId(token)
-		if err != nil {
-			http.Error(w, customError.ErrInvalidToken.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		// Set user ID in context for downstream handlers
-		ctx := r.Context()
-		ctx = context.WithValue(ctx, userIDContextKey, userID)
-		r = r.WithContext(ctx)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (m *AuthMiddleware) AuthByMethods(next http.Handler, methods ...string) http.Handler {
-	protected := make(map[string]struct{}, len(methods))
-	for _, method := range methods {
-		protected[method] = struct{}{}
+func UserID(c *gin.Context) (int64, bool) {
+	v, ok := c.Get("user_id")
+	if !ok {
+		return 0, false
 	}
-	authenticated := m.Auth(next)
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := protected[r.Method]; !ok {
-			next.ServeHTTP(w, r)
-			return
-		}
-		authenticated.ServeHTTP(w, r)
-	})
+	userID, ok := v.(int64)
+	return userID, ok
 }
 
 func extractToken(raw string) (string, error) {
@@ -74,11 +49,5 @@ func extractToken(raw string) (string, error) {
 		return parts[1], nil
 	}
 
-	// Backward compatibility: allow raw token string.
 	return raw, nil
-}
-
-func UserIDFromContext(ctx context.Context) (int64, bool) {
-	userID, ok := ctx.Value(userIDContextKey).(int64)
-	return userID, ok
 }

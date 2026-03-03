@@ -19,7 +19,7 @@ Go로 작성한 single-binary 커뮤니티 엔진입니다.
 - Port: `internal/application/useCase.go`, `internal/application/repository.go`
 - Adapter: `internal/delivery/http.go`, `internal/infrastructure/persistence/inmemory/*`
 
-핵심 애플리케이션은 Port(interface)만 알고, 실제 입출력(HTTP, In-Memory 저장소)은 Adapter에서 교체 가능하도록 설계했습니다.
+핵심 애플리케이션은 Port(interface)만 알고, 실제 입출력(HTTP(gin), In-Memory 저장소)은 Adapter에서 교체 가능하도록 설계했습니다.
 
 ### 3) Domain 중심 설계
 핵심 데이터 모델(entity)과 반환 모델(dto)을 분리했습니다.
@@ -65,7 +65,9 @@ cmd/
 
 internal/
   delivery/
-    http.go                        # HTTP Adapter
+    http.go                        # HTTP Adapter (gin)
+    middleware/
+      authMiddleware.go            # 인증 middleware
 
   application/
     useCase.go                     # UseCase Port
@@ -140,6 +142,9 @@ internal/
 
 ## HTTP API
 
+인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용합니다.
+(`POST /users/login` 성공 시 응답 헤더로 토큰 반환)
+
 ### User
 - `POST /users/signup`
 - `POST /users/login`
@@ -150,25 +155,25 @@ internal/
 - `GET /boards?limit=10&offset=0`
 - `POST /boards`
 - `PUT /boards/{boardID}`
-- `DELETE /boards/{boardID}?user_id={userID}`
+- `DELETE /boards/{boardID}`
 
 ### Post
 - `GET /boards/{boardID}/posts?limit=10&offset=0`
 - `POST /boards/{boardID}/posts`
 - `GET /posts/{postID}`
 - `PUT /posts/{postID}`
-- `DELETE /posts/{postID}?author_id={userID}`
+- `DELETE /posts/{postID}`
 
 ### Comment
 - `GET /posts/{postID}/comments?limit=10&offset=0`
 - `POST /posts/{postID}/comments`
 - `PUT /comments/{commentID}`
-- `DELETE /comments/{commentID}?author_id={userID}`
+- `DELETE /comments/{commentID}`
 
 ### Reaction
 - `GET /reactions?target_id={id}&target_type={post|comment}`
 - `POST /reactions`
-- `DELETE /reactions/{reactionID}?user_id={userID}`
+- `DELETE /reactions/{reactionID}`
 
 ---
 
@@ -207,11 +212,14 @@ go run ./cmd
 delivery:
   http:
     port: 18577
+    auth:
+      secret: "commu-bin-secret-key"
 ```
 
 검증 규칙:
 
 - `delivery.http.port`는 `1..65535` 범위여야 합니다.
+- `delivery.http.auth.secret`는 비어있으면 안 됩니다.
 - 알 수 없는 설정 키가 있으면(`UnmarshalExact`) 서버 시작 시 에러를 반환합니다.
   - 예: `delivery.http.prt` 같은 오타도 실패 처리
 
