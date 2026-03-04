@@ -13,6 +13,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,7 +114,8 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		ReactionUseCase: service.NewReactionService(repository),
 	}
 
-	httpServer := delivery.NewHTTPServer(":0", "test-secret", useCases)
+	authUseCase := auth.NewJwtTokenProvider("test-secret")
+	httpServer := delivery.NewHTTPServer(":0", authUseCase, useCases)
 	return httptest.NewServer(httpServer.Handler)
 }
 

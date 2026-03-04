@@ -9,6 +9,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/config"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
 
@@ -37,7 +38,8 @@ func main() {
 		ReactionUseCase: service.NewReactionService(repository),
 	}
 
-	server := delivery.NewHTTPServer(port(cfg), jwtSecret(cfg), useCases)
+	authUseCase := auth.NewJwtTokenProvider(jwtSecret(cfg))
+	server := delivery.NewHTTPServer(port(cfg), authUseCase, useCases)
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)

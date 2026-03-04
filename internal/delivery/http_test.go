@@ -206,7 +206,8 @@ func newTestHandler(
 		CommentUseCase:  comment,
 		ReactionUseCase: reaction,
 	}
-	return NewHTTPServer(":0", "test-secret", uc).Handler
+	authUseCase := auth.NewJwtTokenProvider("test-secret")
+	return NewHTTPServer(":0", authUseCase, uc).Handler
 }
 
 func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {

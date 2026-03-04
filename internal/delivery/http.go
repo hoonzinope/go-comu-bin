@@ -10,27 +10,26 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
-	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 )
 
 type HTTPHandler struct {
-	authUseCase      application.AuthUseCase
-	userUseCase      application.UserUseCase
-	boardUseCase     application.BoardUseCase
-	postUseCase      application.PostUseCase
-	commentUseCase   application.CommentUseCase
-	reactionUseCase  application.ReactionUseCase
+	authUseCase       application.AuthUseCase
+	userUseCase       application.UserUseCase
+	boardUseCase      application.BoardUseCase
+	postUseCase       application.PostUseCase
+	commentUseCase    application.CommentUseCase
+	reactionUseCase   application.ReactionUseCase
 	authGinMiddleware gin.HandlerFunc
 }
 
 func NewHTTPHandler(useCase application.UseCase, authUseCase application.AuthUseCase) *HTTPHandler {
 	return &HTTPHandler{
-		authUseCase:      authUseCase,
-		userUseCase:      useCase.UserUseCase,
-		boardUseCase:     useCase.BoardUseCase,
-		postUseCase:      useCase.PostUseCase,
-		commentUseCase:   useCase.CommentUseCase,
-		reactionUseCase:  useCase.ReactionUseCase,
+		authUseCase:       authUseCase,
+		userUseCase:       useCase.UserUseCase,
+		boardUseCase:      useCase.BoardUseCase,
+		postUseCase:       useCase.PostUseCase,
+		commentUseCase:    useCase.CommentUseCase,
+		reactionUseCase:   useCase.ReactionUseCase,
 		authGinMiddleware: middleware.Auth(authUseCase),
 	}
 }
@@ -72,10 +71,9 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.DELETE("/reactions/:reactionID", h.authGinMiddleware, h.handleReactionWithID)
 }
 
-func NewHTTPServer(addr string, jwtSecret string, useCase application.UseCase) *http.Server {
+func NewHTTPServer(addr string, authUseCase application.AuthUseCase, useCase application.UseCase) *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	authUseCase := auth.NewJwtTokenProvider(jwtSecret)
 	handler := NewHTTPHandler(useCase, authUseCase)
 	handler.RegisterRoutes(r)
 	return &http.Server{Addr: addr, Handler: r}
