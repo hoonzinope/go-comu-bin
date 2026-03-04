@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -9,12 +10,14 @@ import (
 var _ application.ReactionUseCase = (*ReactionService)(nil)
 
 type ReactionService struct {
-	repository application.Repository
+	repository          application.Repository
+	authorizationPolicy policy.AuthorizationPolicy
 }
 
 func NewReactionService(repository application.Repository) *ReactionService {
 	return &ReactionService{
-		repository: repository,
+		repository:          repository,
+		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
 
@@ -58,8 +61,8 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	if removeReaction == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	if removeReaction.UserID != UserID && !user.IsAdmin() {
-		return customError.ErrForbidden
+	if err := s.authorizationPolicy.OwnerOrAdmin(user, removeReaction.UserID); err != nil {
+		return err
 	}
 	err = s.repository.ReactionRepository.Remove(removeReaction)
 	if err != nil {

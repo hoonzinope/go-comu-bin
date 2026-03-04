@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -10,12 +11,14 @@ import (
 var _ application.BoardUseCase = (*BoardService)(nil)
 
 type BoardService struct {
-	repository application.Repository
+	repository          application.Repository
+	authorizationPolicy policy.AuthorizationPolicy
 }
 
 func NewBoardService(repository application.Repository) *BoardService {
 	return &BoardService{
-		repository: repository,
+		repository:          repository,
+		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
 
@@ -39,8 +42,8 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if user == nil || err != nil {
 		return 0, customError.ErrUserNotFound
 	}
-	if !user.IsAdmin() {
-		return 0, customError.ErrForbidden
+	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+		return 0, err
 	}
 	newBoard := &entity.Board{}
 	newBoard.NewBoard(name, description)
@@ -57,8 +60,8 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if user == nil || err != nil {
 		return customError.ErrUserNotFound
 	}
-	if !user.IsAdmin() {
-		return customError.ErrForbidden
+	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+		return err
 	}
 	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
 	if existingBoard == nil || err != nil {
@@ -78,8 +81,8 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	if user == nil || err != nil {
 		return customError.ErrUserNotFound
 	}
-	if !user.IsAdmin() {
-		return customError.ErrForbidden
+	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+		return err
 	}
 	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
 	if existingBoard == nil || err != nil {

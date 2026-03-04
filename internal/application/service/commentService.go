@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -10,12 +11,14 @@ import (
 var _ application.CommentUseCase = (*CommentService)(nil)
 
 type CommentService struct {
-	repository application.Repository
+	repository          application.Repository
+	authorizationPolicy policy.AuthorizationPolicy
 }
 
 func NewCommentService(repository application.Repository) *CommentService {
 	return &CommentService{
-		repository: repository,
+		repository:          repository,
+		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
 
@@ -58,14 +61,12 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if comment == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	if comment.AuthorID != authorID {
-		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
-		if requester == nil || err != nil {
-			return customError.ErrUserNotFound
-		}
-		if !requester.IsAdmin() {
-			return customError.ErrForbidden
-		}
+	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	if requester == nil || err != nil {
+		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
+		return err
 	}
 	comment.UpdateComment(content)
 	err = s.repository.CommentRepository.Update(comment)
@@ -81,14 +82,12 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	if comment == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	if comment.AuthorID != authorID {
-		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
-		if requester == nil || err != nil {
-			return customError.ErrUserNotFound
-		}
-		if !requester.IsAdmin() {
-			return customError.ErrForbidden
-		}
+	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	if requester == nil || err != nil {
+		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
+		return err
 	}
 	err = s.repository.CommentRepository.Delete(comment.ID)
 	if err != nil {

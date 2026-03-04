@@ -53,6 +53,10 @@ Go로 작성한 single-binary 커뮤니티 엔진입니다.
 
 `HTTP Delivery(gin middleware) -> Auth Port(application.AuthUseCase) -> JWT Adapter`
 
+인가 흐름:
+
+`Service -> AuthorizationPolicy(application/policy) -> Role 기반 정책 판별`
+
 초기 조립(Composition Root):
 
 - `cmd/main.go`
@@ -77,6 +81,9 @@ internal/
     auth.go                        # Auth Port
     useCase.go                     # UseCase Port
     repository.go                  # Repository Port
+    policy/
+      authorization_policy.go      # Authorization Policy Port
+      role_authorization_policy.go # Role 기반 Authorization Policy 구현
     service/
       userService.go
       boardService.go
@@ -126,6 +133,8 @@ internal/
 ---
 
 ## UseCase 정책(현재 반영 기준)
+
+인가 정책은 `internal/application/policy`의 `AuthorizationPolicy`를 통해 Service에서 공통 적용합니다.
 
 - User
   - `signUp`, `login`, `logout`, `quit`
@@ -298,12 +307,12 @@ curl -X PUT http://localhost:18577/posts/1 \
 
 현재 구조는 JWT 기반 인증 미들웨어를 사용합니다.
 보호 라우트는 `Authorization: Bearer <token>`을 통해 사용자 식별을 수행하고,
-Service 레이어에서 owner/admin 정책을 검사합니다.
+Service 레이어에서 `AuthorizationPolicy`를 통해 owner/admin 정책을 검사합니다.
 
 다음 단계 권장 순서:
 
 1. 로그아웃 무효화 전략 도입 (token blacklist/refresh token/token version)
-2. 인가 정책 모듈화 (owner/admin 정책 공통화)
+2. 정책 확장 (리소스/액션 기반 정책, 예: board moderator, read/write scope)
 3. 저장소 어댑터 교체 가능성 검증 (RDB adapter 추가)
 4. 플러그인/이벤트 버스 확장 포인트 정의
 

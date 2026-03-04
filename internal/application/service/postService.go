@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -14,12 +15,14 @@ var (
 var _ application.PostUseCase = (*PostService)(nil)
 
 type PostService struct {
-	repository application.Repository
+	repository          application.Repository
+	authorizationPolicy policy.AuthorizationPolicy
 }
 
 func NewPostService(repository application.Repository) *PostService {
 	return &PostService{
-		repository: repository,
+		repository:          repository,
+		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
 
@@ -94,14 +97,12 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if post == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	if post.AuthorID != authorID {
-		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
-		if requester == nil || err != nil {
-			return customError.ErrUserNotFound
-		}
-		if !requester.IsAdmin() {
-			return customError.ErrForbidden
-		}
+	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	if requester == nil || err != nil {
+		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return err
 	}
 	post.UpdatePost(title, content)
 	err = s.repository.PostRepository.Update(post)
@@ -117,14 +118,12 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if post == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	if post.AuthorID != authorID {
-		requester, err := s.repository.UserRepository.SelectUserByID(authorID)
-		if requester == nil || err != nil {
-			return customError.ErrUserNotFound
-		}
-		if !requester.IsAdmin() {
-			return customError.ErrForbidden
-		}
+	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	if requester == nil || err != nil {
+		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return err
 	}
 	err = s.repository.PostRepository.Delete(post.ID)
 	if err != nil {
