@@ -28,7 +28,7 @@ func TestCommentRepository_SaveSelectUpdateDelete(t *testing.T) {
 	require.NotNil(t, selected)
 	assert.Equal(t, "hello", selected.Content)
 
-	selected.UpdateComment("updated")
+	selected.Update("updated")
 	require.NoError(t, repo.Update(selected))
 
 	updated, err := repo.SelectCommentByID(id)

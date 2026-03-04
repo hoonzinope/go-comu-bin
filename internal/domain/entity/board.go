@@ -9,13 +9,15 @@ type Board struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func (b *Board) NewBoard(name, description string) {
-	b.Name = name
-	b.Description = description
-	b.CreatedAt = time.Now()
+func NewBoard(name, description string) *Board {
+	return &Board{
+		Name:        name,
+		Description: description,
+		CreatedAt:   time.Now(),
+	}
 }
 
-func (b *Board) UpdateBoard(name, description string) {
+func (b *Board) Update(name, description string) {
 	b.Name = name
 	b.Description = description
 }

@@ -28,7 +28,7 @@ func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
 	require.NotNil(t, selected)
 	assert.Equal(t, "title", selected.Title)
 
-	selected.UpdatePost("new", "new-content")
+	selected.Update("new", "new-content")
 	require.NoError(t, repo.Update(selected))
 
 	updated, err := repo.SelectPostByID(id)

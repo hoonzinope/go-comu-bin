@@ -11,14 +11,16 @@ type Reaction struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-func (r *Reaction) NewReaction(targetType string, targetID int64, reactionType string, userID int64) {
-	r.TargetType = targetType
-	r.TargetID = targetID
-	r.Type = reactionType
-	r.UserID = userID
-	r.CreatedAt = time.Now()
+func NewReaction(targetType string, targetID int64, reactionType string, userID int64) *Reaction {
+	return &Reaction{
+		TargetType: targetType,
+		TargetID:   targetID,
+		Type:       reactionType,
+		UserID:     userID,
+		CreatedAt:  time.Now(),
+	}
 }
 
-func (r *Reaction) UpdateReaction(reactionType string) {
+func (r *Reaction) Update(reactionType string) {
 	r.Type = reactionType
 }

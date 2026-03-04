@@ -32,8 +32,7 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	if post == nil || err != nil {
 		return 0, customError.ErrInternalServerError
 	}
-	newComment := &entity.Comment{}
-	newComment.NewComment(content, authorID, postID, nil)
+	newComment := entity.NewComment(content, authorID, postID, nil)
 	commentID, err := s.repository.CommentRepository.Save(newComment)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
@@ -68,7 +67,7 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 		return err
 	}
-	comment.UpdateComment(content)
+	comment.Update(content)
 	err = s.repository.CommentRepository.Update(comment)
 	if err != nil {
 		return customError.ErrInternalServerError

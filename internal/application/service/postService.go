@@ -36,8 +36,7 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	if board == nil || err != nil {
 		return 0, customError.ErrInternalServerError
 	}
-	newPost := &entity.Post{}
-	newPost.NewPost(title, content, authorID, boardID)
+	newPost := entity.NewPost(title, content, authorID, boardID)
 	postID, err := s.repository.PostRepository.Save(newPost)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
@@ -104,7 +103,7 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return err
 	}
-	post.UpdatePost(title, content)
+	post.Update(title, content)
 	err = s.repository.PostRepository.Update(post)
 	if err != nil {
 		return customError.ErrInternalServerError

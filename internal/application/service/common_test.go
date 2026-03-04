@@ -17,33 +17,30 @@ func newTestRepository() application.Repository {
 }
 
 func seedUser(repository application.Repository, name, password, role string) int64 {
-	user := &entity.User{}
+	var user *entity.User
 	if role == "admin" {
-		user.NewAdmin(name, password)
+		user = entity.NewAdmin(name, password)
 	} else {
-		user.NewUser(name, password)
+		user = entity.NewUser(name, password)
 	}
 	id, _ := repository.UserRepository.Save(user)
 	return id
 }
 
 func seedBoard(repository application.Repository, name, description string) int64 {
-	board := &entity.Board{}
-	board.NewBoard(name, description)
+	board := entity.NewBoard(name, description)
 	id, _ := repository.BoardRepository.Save(board)
 	return id
 }
 
 func seedPost(repository application.Repository, authorID, boardID int64, title, content string) int64 {
-	post := &entity.Post{}
-	post.NewPost(title, content, authorID, boardID)
+	post := entity.NewPost(title, content, authorID, boardID)
 	id, _ := repository.PostRepository.Save(post)
 	return id
 }
 
 func seedComment(repository application.Repository, authorID, postID int64, content string) int64 {
-	comment := &entity.Comment{}
-	comment.NewComment(content, authorID, postID, nil)
+	comment := entity.NewComment(content, authorID, postID, nil)
 	id, _ := repository.CommentRepository.Save(comment)
 	return id
 }

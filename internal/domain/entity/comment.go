@@ -11,14 +11,16 @@ type Comment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (c *Comment) NewComment(content string, authorID, postID int64, parentID *int64) {
-	c.Content = content
-	c.AuthorID = authorID
-	c.PostID = postID
-	c.ParentID = parentID
-	c.CreatedAt = time.Now()
+func NewComment(content string, authorID, postID int64, parentID *int64) *Comment {
+	return &Comment{
+		Content:   content,
+		AuthorID:  authorID,
+		PostID:    postID,
+		ParentID:  parentID,
+		CreatedAt: time.Now(),
+	}
 }
 
-func (c *Comment) UpdateComment(content string) {
+func (c *Comment) Update(content string) {
 	c.Content = content
 }

@@ -7,9 +7,7 @@ import (
 )
 
 func TestUser_NewUserAndIsAdmin(t *testing.T) {
-	u := &User{}
-
-	u.NewUser("alice", "pw")
+	u := NewUser("alice", "pw")
 	assert.Equal(t, "alice", u.Name)
 	assert.Equal(t, "pw", u.Password)
 	assert.Equal(t, "user", u.Role)
@@ -18,9 +16,7 @@ func TestUser_NewUserAndIsAdmin(t *testing.T) {
 }
 
 func TestUser_NewAdminAndIsAdmin(t *testing.T) {
-	u := &User{}
-
-	u.NewAdmin("admin", "pw")
+	u := NewAdmin("admin", "pw")
 	assert.Equal(t, "admin", u.Role)
 	assert.True(t, u.IsAdmin())
 	assert.False(t, u.CreatedAt.IsZero())

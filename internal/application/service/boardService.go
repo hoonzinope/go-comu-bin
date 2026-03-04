@@ -45,8 +45,7 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 		return 0, err
 	}
-	newBoard := &entity.Board{}
-	newBoard.NewBoard(name, description)
+	newBoard := entity.NewBoard(name, description)
 	boardID, err := s.repository.BoardRepository.Save(newBoard)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
@@ -67,7 +66,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if existingBoard == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	existingBoard.UpdateBoard(name, description)
+	existingBoard.Update(name, description)
 	err = s.repository.BoardRepository.Update(existingBoard)
 	if err != nil {
 		return customError.ErrInternalServerError

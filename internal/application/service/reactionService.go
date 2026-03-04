@@ -27,20 +27,20 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 	if user == nil || err != nil {
 		return customError.ErrInternalServerError
 	}
-	newReaction := &entity.Reaction{}
+	var newReaction *entity.Reaction
 	switch TargetType {
 	case "post":
 		post, err := s.repository.PostRepository.SelectPostByID(TargetID) // post 존재 여부 확인
 		if post == nil || err != nil {
 			return customError.ErrInternalServerError
 		}
-		newReaction.NewReaction(TargetType, TargetID, ReactionType, UserID)
+		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
 	case "comment":
 		comment, err := s.repository.CommentRepository.SelectCommentByID(TargetID) // comment 존재 여부 확인
 		if comment == nil || err != nil {
 			return customError.ErrInternalServerError
 		}
-		newReaction.NewReaction(TargetType, TargetID, ReactionType, UserID)
+		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
 	default:
 		return customError.ErrInternalServerError
 	}

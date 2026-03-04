@@ -101,8 +101,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		ReactionRepository: inmemory.NewReactionRepository(),
 	}
 
-	admin := &entity.User{}
-	admin.NewAdmin("admin", "admin")
+	admin := entity.NewAdmin("admin", "admin")
 	_, err := repository.UserRepository.Save(admin)
 	require.NoError(t, err)
 

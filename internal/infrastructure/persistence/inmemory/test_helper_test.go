@@ -3,35 +3,24 @@ package inmemory
 import "github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 
 func testUser(name, password string, admin bool) *entity.User {
-	u := &entity.User{}
 	if admin {
-		u.NewAdmin(name, password)
-		return u
+		return entity.NewAdmin(name, password)
 	}
-	u.NewUser(name, password)
-	return u
+	return entity.NewUser(name, password)
 }
 
 func testBoard(name, description string) *entity.Board {
-	b := &entity.Board{}
-	b.NewBoard(name, description)
-	return b
+	return entity.NewBoard(name, description)
 }
 
 func testPost(title, content string, authorID, boardID int64) *entity.Post {
-	p := &entity.Post{}
-	p.NewPost(title, content, authorID, boardID)
-	return p
+	return entity.NewPost(title, content, authorID, boardID)
 }
 
 func testComment(content string, authorID, postID int64) *entity.Comment {
-	c := &entity.Comment{}
-	c.NewComment(content, authorID, postID, nil)
-	return c
+	return entity.NewComment(content, authorID, postID, nil)
 }
 
 func testReaction(targetType string, targetID int64, reactionType string, userID int64) *entity.Reaction {
-	r := &entity.Reaction{}
-	r.NewReaction(targetType, targetID, reactionType, userID)
-	return r
+	return entity.NewReaction(targetType, targetID, reactionType, userID)
 }

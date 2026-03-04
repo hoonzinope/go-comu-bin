@@ -14,16 +14,20 @@ func (u *User) IsAdmin() bool {
 	return u.Role == "admin"
 }
 
-func (u *User) NewUser(name, password string) {
-	u.Name = name
-	u.Password = password
-	u.Role = "user"
-	u.CreatedAt = time.Now()
+func NewUser(name, password string) *User {
+	return &User{
+		Name:      name,
+		Password:  password,
+		Role:      "user",
+		CreatedAt: time.Now(),
+	}
 }
 
-func (u *User) NewAdmin(name, password string) {
-	u.Name = name
-	u.Password = password
-	u.Role = "admin"
-	u.CreatedAt = time.Now()
+func NewAdmin(name, password string) *User {
+	return &User{
+		Name:      name,
+		Password:  password,
+		Role:      "admin",
+		CreatedAt: time.Now(),
+	}
 }

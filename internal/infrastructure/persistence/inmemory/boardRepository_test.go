@@ -28,7 +28,7 @@ func TestBoardRepository_SaveSelectUpdateDelete(t *testing.T) {
 	require.NotNil(t, selected)
 	assert.Equal(t, "free", selected.Name)
 
-	selected.UpdateBoard("new", "new-desc")
+	selected.Update("new", "new-desc")
 	require.NoError(t, repo.Update(selected))
 
 	updated, err := repo.SelectBoardByID(id)

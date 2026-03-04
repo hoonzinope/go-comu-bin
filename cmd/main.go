@@ -45,8 +45,7 @@ func main() {
 }
 
 func seedAdmin(repository application.Repository) {
-	admin := &entity.User{}
-	admin.NewAdmin("admin", "admin")
+	admin := entity.NewAdmin("admin", "admin")
 	_, _ = repository.UserRepository.Save(admin)
 }
 

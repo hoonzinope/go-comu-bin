@@ -8,9 +8,7 @@ import (
 )
 
 func TestPost_NewPostAndUpdatePost(t *testing.T) {
-	p := &Post{}
-
-	p.NewPost("title", "content", 10, 20)
+	p := NewPost("title", "content", 10, 20)
 	assert.Equal(t, "title", p.Title)
 	assert.Equal(t, "content", p.Content)
 	assert.EqualValues(t, 10, p.AuthorID)
@@ -20,7 +18,7 @@ func TestPost_NewPostAndUpdatePost(t *testing.T) {
 
 	before := p.UpdatedAt
 	time.Sleep(time.Millisecond)
-	p.UpdatePost("new-title", "new-content")
+	p.Update("new-title", "new-content")
 
 	assert.Equal(t, "new-title", p.Title)
 	assert.Equal(t, "new-content", p.Content)

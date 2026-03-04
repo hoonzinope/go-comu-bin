@@ -12,16 +12,19 @@ type Post struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (p *Post) NewPost(title, content string, authorID, boardID int64) {
-	p.Title = title
-	p.Content = content
-	p.AuthorID = authorID
-	p.BoardID = boardID
-	p.CreatedAt = time.Now()
-	p.UpdatedAt = time.Now()
+func NewPost(title, content string, authorID, boardID int64) *Post {
+	now := time.Now()
+	return &Post{
+		Title:     title,
+		Content:   content,
+		AuthorID:  authorID,
+		BoardID:   boardID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
 }
 
-func (p *Post) UpdatePost(title, content string) {
+func (p *Post) Update(title, content string) {
 	p.Title = title
 	p.Content = content
 	p.UpdatedAt = time.Now()

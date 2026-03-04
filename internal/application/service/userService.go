@@ -29,8 +29,7 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 		return "", customError.ErrUserAlreadyExists
 	}
 
-	newUser := &entity.User{}
-	newUser.NewUser(username, password)
+	newUser := entity.NewUser(username, password)
 
 	_, err = s.repository.UserRepository.Save(newUser)
 	if err != nil {
