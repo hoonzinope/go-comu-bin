@@ -49,6 +49,10 @@ Go로 작성한 single-binary 커뮤니티 엔진입니다.
 
 `HTTP Delivery -> UseCase Port -> Service(Application) -> Repository Port -> InMemory Adapter`
 
+인증 흐름:
+
+`HTTP Delivery(gin middleware) -> Auth Port(application.AuthUseCase) -> JWT Adapter`
+
 초기 조립(Composition Root):
 
 - `cmd/main.go`
@@ -70,6 +74,7 @@ internal/
       authMiddleware.go            # 인증 middleware
 
   application/
+    auth.go                        # Auth Port
     useCase.go                     # UseCase Port
     repository.go                  # Repository Port
     service/
@@ -94,6 +99,8 @@ internal/
       commentDetail.go
 
   infrastructure/
+    auth/
+      JwtTokenProvider.go          # JWT Adapter
     persistence/
       inmemory/
         userRepository.go
@@ -265,24 +272,37 @@ curl -X POST http://localhost:18577/users/login \
   -d '{"username":"alice","password":"pw"}'
 ```
 
-게시판 생성(admin):
+게시판 생성(admin, Bearer 토큰 사용):
 
 ```bash
+TOKEN="로그인 응답 Authorization 헤더의 Bearer 토큰"
 curl -X POST http://localhost:18577/boards \
-  -H 'Content-Type: application/json' \
-  -d '{"user_id":1,"name":"free","description":"free board"}'
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"name":"free","description":"free board"}'
+```
+
+게시글 수정(작성자 또는 admin):
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더의 Bearer 토큰"
+curl -X PUT http://localhost:18577/posts/1 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"title":"updated title","content":"updated content"}'
 ```
 
 ---
 
 ## 현재 한계와 다음 단계
 
-현재 구조는 인증/인가 미들웨어 도입 전 단계입니다.
-그래서 일부 API는 `user_id`/`author_id`를 요청 바디/쿼리로 전달받아 권한을 판단합니다.
+현재 구조는 JWT 기반 인증 미들웨어를 사용합니다.
+보호 라우트는 `Authorization: Bearer <token>`을 통해 사용자 식별을 수행하고,
+Service 레이어에서 owner/admin 정책을 검사합니다.
 
 다음 단계 권장 순서:
 
-1. 인증 미들웨어 도입 (세션/JWT)
+1. 로그아웃 무효화 전략 도입 (token blacklist/refresh token/token version)
 2. 인가 정책 모듈화 (owner/admin 정책 공통화)
 3. 저장소 어댑터 교체 가능성 검증 (RDB adapter 추가)
 4. 플러그인/이벤트 버스 확장 포인트 정의
