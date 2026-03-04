@@ -3,12 +3,12 @@ package entity
 import "time"
 
 type Reaction struct {
-	ID         int64     `json:"id"`
-	TargetType string    `json:"target_type"` // "post" or "comment"
-	TargetID   int64     `json:"target_id"`
-	Type       string    `json:"type"` // "like" or "dislike"
-	UserID     int64     `json:"user_id"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         int64
+	TargetType string // "post" or "comment"
+	TargetID   int64
+	Type       string // "like" or "dislike"
+	UserID     int64
+	CreatedAt  time.Time
 }
 
 func NewReaction(targetType string, targetID int64, reactionType string, userID int64) *Reaction {

@@ -10,6 +10,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
+	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
 )
 
 type HTTPHandler struct {
@@ -179,7 +180,7 @@ func (h *HTTPHandler) handleBoards(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, boards)
+		c.JSON(http.StatusOK, response.BoardListFromDTO(boards))
 	case http.MethodPost:
 		userID, ok := h.requireAuthUserID(c)
 		if !ok {
@@ -267,7 +268,7 @@ func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, posts)
+		c.JSON(http.StatusOK, response.PostListFromDTO(posts))
 	case http.MethodPost:
 		authorID, ok := h.requireAuthUserID(c)
 		if !ok {
@@ -308,7 +309,7 @@ func (h *HTTPHandler) handlePostDetail(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, post)
+		c.JSON(http.StatusOK, response.PostDetailFromDTO(post))
 	case http.MethodPut:
 		authorID, ok := h.requireAuthUserID(c)
 		if !ok {
@@ -362,7 +363,7 @@ func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, comments)
+		c.JSON(http.StatusOK, response.CommentListFromDTO(comments))
 	case http.MethodPost:
 		authorID, ok := h.requireAuthUserID(c)
 		if !ok {
@@ -448,7 +449,7 @@ func (h *HTTPHandler) handleReactions(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, reactions)
+		c.JSON(http.StatusOK, response.ReactionsFromEntities(reactions))
 	case http.MethodPost:
 		userID, ok := h.requireAuthUserID(c)
 		if !ok {

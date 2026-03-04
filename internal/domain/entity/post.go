@@ -3,13 +3,13 @@ package entity
 import "time"
 
 type Post struct {
-	ID        int64     `json:"id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	AuthorID  int64     `json:"author_id"`
-	BoardID   int64     `json:"board_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64
+	Title     string
+	Content   string
+	AuthorID  int64
+	BoardID   int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func NewPost(title, content string, authorID, boardID int64) *Post {

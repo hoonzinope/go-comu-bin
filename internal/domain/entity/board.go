@@ -3,10 +3,10 @@ package entity
 import "time"
 
 type Board struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          int64
+	Name        string
+	Description string
+	CreatedAt   time.Time
 }
 
 func NewBoard(name, description string) *Board {

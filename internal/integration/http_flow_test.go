@@ -179,7 +179,7 @@ func mustGetBoards(t *testing.T, baseURL string, expectedBoardID int64) {
 	assert.Equal(t, http.StatusOK, status, "get boards failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
-	boards := resp["Boards"].([]any)
+	boards := resp["boards"].([]any)
 	require.NotEmpty(t, boards)
 	first := boards[0].(map[string]any)
 	assert.EqualValues(t, expectedBoardID, int64(first["id"].(float64)))
@@ -203,7 +203,7 @@ func mustGetPost(t *testing.T, baseURL string, postID int64) {
 	assert.Equal(t, http.StatusOK, status, "get post failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
-	post := resp["Post"].(map[string]any)
+	post := resp["post"].(map[string]any)
 	assert.EqualValues(t, postID, int64(post["id"].(float64)))
 }
 
@@ -239,7 +239,7 @@ func mustGetComments(t *testing.T, baseURL string, postID, expectedCommentID int
 	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
-	comments := resp["Comments"].([]any)
+	comments := resp["comments"].([]any)
 	require.NotEmpty(t, comments)
 	first := comments[0].(map[string]any)
 	assert.EqualValues(t, expectedCommentID, int64(first["id"].(float64)))
@@ -291,7 +291,7 @@ func mustNoComments(t *testing.T, baseURL string, postID int64) {
 	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
 	var resp map[string]any
 	mustUnmarshal(t, body, &resp)
-	rawComments, exists := resp["Comments"]
+	rawComments, exists := resp["comments"]
 	if !exists || rawComments == nil {
 		return
 	}
