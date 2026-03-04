@@ -8,7 +8,7 @@ import (
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
 
-func Auth(authUseCase application.AuthUseCase) gin.HandlerFunc {
+func AuthWithCache(authUseCase application.AuthUseCase, cache application.Cache) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, err := extractToken(c.GetHeader("Authorization"))
 		if err != nil {
@@ -22,7 +22,13 @@ func Auth(authUseCase application.AuthUseCase) gin.HandlerFunc {
 			return
 		}
 
+		if _, exists := cache.Get(token); !exists {
+			c.AbortWithStatusJSON(401, gin.H{"error": customError.ErrInvalidToken.Error()})
+			return
+		}
+
 		c.Set("user_id", userID)
+		c.Set("auth_token", token)
 		c.Next()
 	}
 }
@@ -34,6 +40,15 @@ func UserID(c *gin.Context) (int64, bool) {
 	}
 	userID, ok := v.(int64)
 	return userID, ok
+}
+
+func Token(c *gin.Context) (string, bool) {
+	v, ok := c.Get("auth_token")
+	if !ok {
+		return "", false
+	}
+	token, ok := v.(string)
+	return token, ok
 }
 
 func extractToken(raw string) (string, error) {

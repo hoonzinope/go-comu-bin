@@ -14,6 +14,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
+	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,6 +58,10 @@ func TestIntegration_MainFlow(t *testing.T) {
 
 	mustLogout(t, server.URL, adminToken)
 	mustLogout(t, server.URL, aliceToken)
+	assertStatus(t, server.URL, aliceToken, http.MethodPost, "/boards", map[string]any{
+		"name":        "after-logout",
+		"description": "should fail",
+	}, http.StatusUnauthorized)
 	mustQuit(t, server.URL, "alice", "pw")
 }
 
@@ -115,7 +120,8 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	}
 
 	authUseCase := auth.NewJwtTokenProvider("test-secret")
-	httpServer := delivery.NewHTTPServer(":0", authUseCase, useCases)
+	cache := cacheInMemory.NewInMemoryCache()
+	httpServer := delivery.NewHTTPServer(":0", authUseCase, cache, useCases)
 	return httptest.NewServer(httpServer.Handler)
 }
 

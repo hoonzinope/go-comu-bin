@@ -14,6 +14,7 @@ import (
 
 type HTTPHandler struct {
 	authUseCase       application.AuthUseCase
+	cache             application.Cache
 	userUseCase       application.UserUseCase
 	boardUseCase      application.BoardUseCase
 	postUseCase       application.PostUseCase
@@ -22,15 +23,16 @@ type HTTPHandler struct {
 	authGinMiddleware gin.HandlerFunc
 }
 
-func NewHTTPHandler(useCase application.UseCase, authUseCase application.AuthUseCase) *HTTPHandler {
+func NewHTTPHandler(useCase application.UseCase, authUseCase application.AuthUseCase, cache application.Cache) *HTTPHandler {
 	return &HTTPHandler{
 		authUseCase:       authUseCase,
+		cache:             cache,
 		userUseCase:       useCase.UserUseCase,
 		boardUseCase:      useCase.BoardUseCase,
 		postUseCase:       useCase.PostUseCase,
 		commentUseCase:    useCase.CommentUseCase,
 		reactionUseCase:   useCase.ReactionUseCase,
-		authGinMiddleware: middleware.Auth(authUseCase),
+		authGinMiddleware: middleware.AuthWithCache(authUseCase, cache),
 	}
 }
 
@@ -71,10 +73,10 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.DELETE("/reactions/:reactionID", h.authGinMiddleware, h.handleReactionWithID)
 }
 
-func NewHTTPServer(addr string, authUseCase application.AuthUseCase, useCase application.UseCase) *http.Server {
+func NewHTTPServer(addr string, authUseCase application.AuthUseCase, cache application.Cache, useCase application.UseCase) *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	handler := NewHTTPHandler(useCase, authUseCase)
+	handler := NewHTTPHandler(useCase, authUseCase, cache)
 	handler.RegisterRoutes(r)
 	return &http.Server{Addr: addr, Handler: r}
 }
@@ -127,6 +129,7 @@ func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 		writeUseCaseError(c, err)
 		return
 	}
+	h.cache.Set(token, userID)
 	c.Header("Authorization", "Bearer "+token)
 	c.JSON(http.StatusOK, gin.H{"login": "ok"})
 }
@@ -135,6 +138,12 @@ func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 	if _, ok := h.requireAuthUserID(c); !ok {
 		return
 	}
+	token, ok := middleware.Token(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": customError.ErrUnauthorized.Error()})
+		return
+	}
+	h.cache.Delete(token)
 	c.JSON(http.StatusOK, gin.H{"logout": "ok"})
 }
 

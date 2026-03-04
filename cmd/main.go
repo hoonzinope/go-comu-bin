@@ -10,6 +10,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
+	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
 
@@ -39,7 +40,8 @@ func main() {
 	}
 
 	authUseCase := auth.NewJwtTokenProvider(jwtSecret(cfg))
-	server := delivery.NewHTTPServer(port(cfg), authUseCase, useCases)
+	cache := cacheInMemory.NewInMemoryCache()
+	server := delivery.NewHTTPServer(port(cfg), authUseCase, cache, useCases)
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)

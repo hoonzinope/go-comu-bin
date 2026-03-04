@@ -13,6 +13,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
+	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -171,6 +172,8 @@ type fakeReactionUseCase struct {
 	getReactionsByTarget func(targetID int64, targetType string) ([]*entity.Reaction, error)
 }
 
+var testCache application.Cache
+
 func (f *fakeReactionUseCase) AddReaction(userID, targetID int64, targetType, reactionType string) error {
 	if f.addReaction != nil {
 		return f.addReaction(userID, targetID, targetType, reactionType)
@@ -207,7 +210,8 @@ func newTestHandler(
 		ReactionUseCase: reaction,
 	}
 	authUseCase := auth.NewJwtTokenProvider("test-secret")
-	return NewHTTPServer(":0", authUseCase, uc).Handler
+	testCache = cacheInMemory.NewInMemoryCache()
+	return NewHTTPServer(":0", authUseCase, testCache, uc).Handler
 }
 
 func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {
@@ -231,6 +235,8 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 	}
 	token, err := auth.NewJwtTokenProvider("test-secret").IdToToken(userID)
 	require.NoError(t, err)
+	require.NotNil(t, testCache)
+	testCache.Set(token, userID)
 
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
