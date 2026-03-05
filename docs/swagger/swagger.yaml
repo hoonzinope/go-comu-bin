@@ -1,0 +1,1167 @@
+basePath: /api/v1
+definitions:
+  delivery.boardRequest:
+    properties:
+      description:
+        example: free board
+        type: string
+      name:
+        example: free
+        type: string
+    type: object
+  delivery.commentRequest:
+    properties:
+      content:
+        example: nice post
+        type: string
+    type: object
+  delivery.errorResponse:
+    properties:
+      error:
+        example: invalid credential
+        type: string
+    type: object
+  delivery.idResponse:
+    properties:
+      id:
+        example: 1
+        type: integer
+    type: object
+  delivery.loginResponse:
+    properties:
+      login:
+        example: ok
+        type: string
+    type: object
+  delivery.logoutResponse:
+    properties:
+      logout:
+        example: ok
+        type: string
+    type: object
+  delivery.passwordOnlyRequest:
+    properties:
+      password:
+        example: pw
+        type: string
+    type: object
+  delivery.postRequest:
+    properties:
+      content:
+        example: first post
+        type: string
+      title:
+        example: hello
+        type: string
+    type: object
+  delivery.reactionRequest:
+    properties:
+      reaction_type:
+        example: like
+        type: string
+    type: object
+  delivery.signUpResponse:
+    properties:
+      result:
+        example: ok
+        type: string
+    type: object
+  delivery.userCredentialRequest:
+    properties:
+      password:
+        example: pw
+        type: string
+      username:
+        example: alice
+        type: string
+    type: object
+  response.Board:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  response.BoardList:
+    properties:
+      boards:
+        items:
+          $ref: '#/definitions/response.Board'
+        type: array
+      has_more:
+        type: boolean
+      last_id:
+        type: integer
+      limit:
+        type: integer
+      next_last_id:
+        type: integer
+    type: object
+  response.Comment:
+    properties:
+      author_id:
+        type: integer
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      parent_id:
+        type: integer
+      post_id:
+        type: integer
+    type: object
+  response.CommentDetail:
+    properties:
+      comment:
+        $ref: '#/definitions/response.Comment'
+      reactions:
+        items:
+          $ref: '#/definitions/response.Reaction'
+        type: array
+    type: object
+  response.CommentList:
+    properties:
+      comments:
+        items:
+          $ref: '#/definitions/response.Comment'
+        type: array
+      has_more:
+        type: boolean
+      last_id:
+        type: integer
+      limit:
+        type: integer
+      next_last_id:
+        type: integer
+    type: object
+  response.Post:
+    properties:
+      author_id:
+        type: integer
+      board_id:
+        type: integer
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  response.PostDetail:
+    properties:
+      comments:
+        items:
+          $ref: '#/definitions/response.CommentDetail'
+        type: array
+      post:
+        $ref: '#/definitions/response.Post'
+      reactions:
+        items:
+          $ref: '#/definitions/response.Reaction'
+        type: array
+    type: object
+  response.PostList:
+    properties:
+      has_more:
+        type: boolean
+      last_id:
+        type: integer
+      limit:
+        type: integer
+      next_last_id:
+        type: integer
+      posts:
+        items:
+          $ref: '#/definitions/response.Post'
+        type: array
+    type: object
+  response.Reaction:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      target_id:
+        type: integer
+      target_type:
+        type: string
+      type:
+        type: string
+      user_id:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: REST API for go-comu-bin.
+  title: go-comu-bin API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return bearer token in Authorization response
+        header.
+      parameters:
+      - description: Login payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.userCredentialRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          headers:
+            Authorization:
+              description: Bearer <token>
+              type: string
+          schema:
+            $ref: '#/definitions/delivery.loginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Login
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidate current token in cache.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.logoutResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout
+      tags:
+      - Auth
+  /boards:
+    get:
+      consumes:
+      - application/json
+      description: GET returns board list with cursor pagination, POST creates a board
+        (admin only).
+      parameters:
+      - description: Page size
+        in: query
+        minimum: 0
+        name: limit
+        type: integer
+      - description: Cursor id, fetch items with id < last_id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      - description: Create board payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.boardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BoardList'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Boards or Create Board
+      tags:
+      - Board
+    post:
+      consumes:
+      - application/json
+      description: GET returns board list with cursor pagination, POST creates a board
+        (admin only).
+      parameters:
+      - description: Page size
+        in: query
+        minimum: 0
+        name: limit
+        type: integer
+      - description: Cursor id, fetch items with id < last_id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      - description: Create board payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.boardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BoardList'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Boards or Create Board
+      tags:
+      - Board
+  /boards/{boardID}:
+    delete:
+      consumes:
+      - application/json
+      description: Update/delete board by id (admin only).
+      parameters:
+      - description: Board ID
+        in: path
+        name: boardID
+        required: true
+        type: integer
+      - description: Update board payload (PUT only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.boardRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update or Delete Board
+      tags:
+      - Board
+    put:
+      consumes:
+      - application/json
+      description: Update/delete board by id (admin only).
+      parameters:
+      - description: Board ID
+        in: path
+        name: boardID
+        required: true
+        type: integer
+      - description: Update board payload (PUT only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.boardRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update or Delete Board
+      tags:
+      - Board
+  /boards/{boardID}/posts:
+    get:
+      consumes:
+      - application/json
+      description: GET returns posts in board with cursor pagination, POST creates
+        post in board.
+      parameters:
+      - description: Board ID
+        in: path
+        name: boardID
+        required: true
+        type: integer
+      - description: Page size
+        in: query
+        minimum: 0
+        name: limit
+        type: integer
+      - description: Cursor id, fetch items with id < last_id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      - description: Create post payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.postRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostList'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Posts by Board or Create Post
+      tags:
+      - Post
+    post:
+      consumes:
+      - application/json
+      description: GET returns posts in board with cursor pagination, POST creates
+        post in board.
+      parameters:
+      - description: Board ID
+        in: path
+        name: boardID
+        required: true
+        type: integer
+      - description: Page size
+        in: query
+        minimum: 0
+        name: limit
+        type: integer
+      - description: Cursor id, fetch items with id < last_id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      - description: Create post payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.postRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostList'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Posts by Board or Create Post
+      tags:
+      - Post
+  /comments/{commentID}:
+    delete:
+      consumes:
+      - application/json
+      description: Update/delete comment by id.
+      parameters:
+      - description: Comment ID
+        in: path
+        name: commentID
+        required: true
+        type: integer
+      - description: Update comment payload (PUT only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.commentRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update or Delete Comment
+      tags:
+      - Comment
+    put:
+      consumes:
+      - application/json
+      description: Update/delete comment by id.
+      parameters:
+      - description: Comment ID
+        in: path
+        name: commentID
+        required: true
+        type: integer
+      - description: Update comment payload (PUT only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.commentRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update or Delete Comment
+      tags:
+      - Comment
+  /comments/{commentID}/reactions:
+    get:
+      consumes:
+      - application/json
+      description: GET returns reactions for a comment, POST creates reaction on a
+        comment.
+      parameters:
+      - description: Comment ID
+        in: path
+        name: commentID
+        required: true
+        type: integer
+      - description: Create reaction payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.reactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.Reaction'
+            type: array
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List or Create Reactions for Comment
+      tags:
+      - Reaction
+    post:
+      consumes:
+      - application/json
+      description: GET returns reactions for a comment, POST creates reaction on a
+        comment.
+      parameters:
+      - description: Comment ID
+        in: path
+        name: commentID
+        required: true
+        type: integer
+      - description: Create reaction payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.reactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.Reaction'
+            type: array
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List or Create Reactions for Comment
+      tags:
+      - Reaction
+  /posts/{postID}:
+    delete:
+      consumes:
+      - application/json
+      description: Retrieve post detail or mutate post by id.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Update post payload (PUT only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.postRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostDetail'
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Get, Update or Delete Post
+      tags:
+      - Post
+    get:
+      consumes:
+      - application/json
+      description: Retrieve post detail or mutate post by id.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Update post payload (PUT only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.postRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostDetail'
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Get, Update or Delete Post
+      tags:
+      - Post
+    put:
+      consumes:
+      - application/json
+      description: Retrieve post detail or mutate post by id.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Update post payload (PUT only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.postRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostDetail'
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Get, Update or Delete Post
+      tags:
+      - Post
+  /posts/{postID}/comments:
+    get:
+      consumes:
+      - application/json
+      description: GET returns comments in post with cursor pagination, POST creates
+        comment.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Page size
+        in: query
+        minimum: 0
+        name: limit
+        type: integer
+      - description: Cursor id, fetch items with id < last_id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      - description: Create comment payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.commentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.CommentList'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Comments by Post or Create Comment
+      tags:
+      - Comment
+    post:
+      consumes:
+      - application/json
+      description: GET returns comments in post with cursor pagination, POST creates
+        comment.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Page size
+        in: query
+        minimum: 0
+        name: limit
+        type: integer
+      - description: Cursor id, fetch items with id < last_id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      - description: Create comment payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.commentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.CommentList'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Comments by Post or Create Comment
+      tags:
+      - Comment
+  /posts/{postID}/reactions:
+    get:
+      consumes:
+      - application/json
+      description: GET returns reactions for a post, POST creates reaction on a post.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Create reaction payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.reactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.Reaction'
+            type: array
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List or Create Reactions for Post
+      tags:
+      - Reaction
+    post:
+      consumes:
+      - application/json
+      description: GET returns reactions for a post, POST creates reaction on a post.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Create reaction payload (POST only)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/delivery.reactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/response.Reaction'
+            type: array
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List or Create Reactions for Post
+      tags:
+      - Reaction
+  /reactions/{reactionID}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete reaction by reaction id.
+      parameters:
+      - description: Reaction ID
+        in: path
+        name: reactionID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Reaction
+      tags:
+      - Reaction
+  /signup:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account.
+      parameters:
+      - description: Sign up payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.userCredentialRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.signUpResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Sign up
+      tags:
+      - Auth
+  /users/me:
+    delete:
+      consumes:
+      - application/json
+      description: Delete the authenticated user account with password confirmation.
+      parameters:
+      - description: Password confirmation
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.passwordOnlyRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete My Account
+      tags:
+      - User
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    description: Bearer <token>
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -35,6 +35,14 @@ go run ./cmd
 - 인가: `AuthorizationPolicy` 기반(role/owner)
 - 데이터 저장소: In-Memory 어댑터
 - 응답 모델: `delivery/response`에서 JSON 스키마 관리
+- API prefix: `/api/v1`
+- 인증 엔드포인트:
+  - `POST /api/v1/signup`
+  - `POST /api/v1/auth/login`
+  - `POST /api/v1/auth/logout`
+  - `DELETE /api/v1/users/me`
+- 목록 페이지네이션: `limit + last_id` 커서 기반 (`has_more`, `next_last_id` 응답 메타 제공)
+- OpenAPI 자동화: `swaggo/swag` + `gin-swagger` 기반 (`/swagger/index.html`)
 
 ## 개발 명령
 
@@ -42,5 +50,6 @@ go run ./cmd
 make help
 make build
 make run
+make swagger
 make test
 ```

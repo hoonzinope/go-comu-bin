@@ -1,9 +1,21 @@
+// Package main go-comu-bin server entrypoint
+//
+// @title go-comu-bin API
+// @version 1.0
+// @description REST API for go-comu-bin.
+// @BasePath /api/v1
+// @schemes http
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Bearer <token>
 package main
 
 import (
 	"fmt"
 	"log"
 
+	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/config"

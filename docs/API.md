@@ -3,6 +3,11 @@
 인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용합니다.
 로그인 성공 시 응답 헤더 `Authorization`에 토큰이 반환됩니다.
 
+## OpenAPI / Swagger
+
+- UI: `GET /swagger/index.html`
+- 스펙 생성: `make swagger` (`docs/swagger` 산출물 갱신)
+
 모든 엔드포인트는 `/api/v1` prefix를 사용합니다.
 
 ## User

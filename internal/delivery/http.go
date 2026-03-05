@@ -11,6 +11,8 @@ import (
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type HTTPHandler struct {
@@ -22,6 +24,53 @@ type HTTPHandler struct {
 	commentUseCase    application.CommentUseCase
 	reactionUseCase   application.ReactionUseCase
 	authGinMiddleware gin.HandlerFunc
+}
+
+type userCredentialRequest struct {
+	Username string `json:"username" example:"alice"`
+	Password string `json:"password" example:"pw"`
+}
+
+type passwordOnlyRequest struct {
+	Password string `json:"password" example:"pw"`
+}
+
+type signUpResponse struct {
+	Result string `json:"result" example:"ok"`
+}
+
+type loginResponse struct {
+	Login string `json:"login" example:"ok"`
+}
+
+type logoutResponse struct {
+	Logout string `json:"logout" example:"ok"`
+}
+
+type errorResponse struct {
+	Error string `json:"error" example:"invalid credential"`
+}
+
+type idResponse struct {
+	ID int64 `json:"id" example:"1"`
+}
+
+type boardRequest struct {
+	Name        string `json:"name" example:"free"`
+	Description string `json:"description" example:"free board"`
+}
+
+type postRequest struct {
+	Title   string `json:"title" example:"hello"`
+	Content string `json:"content" example:"first post"`
+}
+
+type commentRequest struct {
+	Content string `json:"content" example:"nice post"`
+}
+
+type reactionRequest struct {
+	ReactionType string `json:"reaction_type" example:"like"`
 }
 
 func NewHTTPHandler(useCase application.UseCase, authUseCase application.AuthUseCase, cache application.Cache) *HTTPHandler {
@@ -45,6 +94,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 	})
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	v1 := r.Group("/api/v1")
 	v1.POST("/signup", h.handleUserSignUp)
@@ -93,6 +143,18 @@ func (h *HTTPHandler) requireAuthUserID(c *gin.Context) (int64, bool) {
 	return userID, true
 }
 
+// handleUserSignUp godoc
+// @Summary Sign up
+// @Description Create a new user account.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body userCredentialRequest true "Sign up payload"
+// @Success 201 {object} signUpResponse
+// @Failure 400 {object} errorResponse
+// @Failure 409 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /signup [post]
 func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 	var req struct {
 		Username string `json:"username"`
@@ -113,6 +175,20 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"result": "ok"})
 }
 
+// handleUserLogin godoc
+// @Summary Login
+// @Description Authenticate user and return bearer token in Authorization response header.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body userCredentialRequest true "Login payload"
+// @Success 200 {object} loginResponse
+// @Header 200 {string} Authorization "Bearer <token>"
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /auth/login [post]
 func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 	var req struct {
 		Username string `json:"username"`
@@ -137,6 +213,16 @@ func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"login": "ok"})
 }
 
+// handleUserLogout godoc
+// @Summary Logout
+// @Description Invalidate current token in cache.
+// @Tags Auth
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} logoutResponse
+// @Failure 401 {object} errorResponse
+// @Router /auth/logout [post]
 func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 	if _, ok := h.requireAuthUserID(c); !ok {
 		return
@@ -150,6 +236,20 @@ func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"logout": "ok"})
 }
 
+// handleUserDeleteMe godoc
+// @Summary Delete My Account
+// @Description Delete the authenticated user account with password confirmation.
+// @Tags User
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body passwordOnlyRequest true "Password confirmation"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/me [delete]
 func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
@@ -176,6 +276,23 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// handleBoards godoc
+// @Summary List Boards or Create Board
+// @Description GET returns board list with cursor pagination, POST creates a board (admin only).
+// @Tags Board
+// @Accept json
+// @Produce json
+// @Param limit query int false "Page size" minimum(0)
+// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Param request body boardRequest false "Create board payload (POST only)"
+// @Success 200 {object} response.BoardList
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /boards [get]
+// @Router /boards [post]
 func (h *HTTPHandler) handleBoards(c *gin.Context) {
 	switch c.Request.Method {
 	case http.MethodGet:
@@ -215,6 +332,22 @@ func (h *HTTPHandler) handleBoards(c *gin.Context) {
 	}
 }
 
+// handleBoardWithID godoc
+// @Summary Update or Delete Board
+// @Description Update/delete board by id (admin only).
+// @Tags Board
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param boardID path int true "Board ID"
+// @Param request body boardRequest false "Update board payload (PUT only)"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /boards/{boardID} [put]
+// @Router /boards/{boardID} [delete]
 func (h *HTTPHandler) handleBoardWithID(c *gin.Context) {
 	boardID, err := parseInt64(c.Param("boardID"))
 	if err != nil {
@@ -258,6 +391,23 @@ func (h *HTTPHandler) handleBoardWithID(c *gin.Context) {
 	}
 }
 
+// handleBoardPosts godoc
+// @Summary List Posts by Board or Create Post
+// @Description GET returns posts in board with cursor pagination, POST creates post in board.
+// @Tags Post
+// @Accept json
+// @Produce json
+// @Param boardID path int true "Board ID"
+// @Param limit query int false "Page size" minimum(0)
+// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Param request body postRequest false "Create post payload (POST only)"
+// @Success 200 {object} response.PostList
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /boards/{boardID}/posts [get]
+// @Router /boards/{boardID}/posts [post]
 func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 	boardID, err := parseInt64(c.Param("boardID"))
 	if err != nil {
@@ -303,6 +453,23 @@ func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 	}
 }
 
+// handlePostDetail godoc
+// @Summary Get, Update or Delete Post
+// @Description Retrieve post detail or mutate post by id.
+// @Tags Post
+// @Accept json
+// @Produce json
+// @Param postID path int true "Post ID"
+// @Param request body postRequest false "Update post payload (PUT only)"
+// @Success 200 {object} response.PostDetail
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID} [get]
+// @Router /posts/{postID} [put]
+// @Router /posts/{postID} [delete]
 func (h *HTTPHandler) handlePostDetail(c *gin.Context) {
 	postID, err := parseInt64(c.Param("postID"))
 	if err != nil {
@@ -353,6 +520,23 @@ func (h *HTTPHandler) handlePostDetail(c *gin.Context) {
 	}
 }
 
+// handlePostComments godoc
+// @Summary List Comments by Post or Create Comment
+// @Description GET returns comments in post with cursor pagination, POST creates comment.
+// @Tags Comment
+// @Accept json
+// @Produce json
+// @Param postID path int true "Post ID"
+// @Param limit query int false "Page size" minimum(0)
+// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Param request body commentRequest false "Create comment payload (POST only)"
+// @Success 200 {object} response.CommentList
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/comments [get]
+// @Router /posts/{postID}/comments [post]
 func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 	postID, err := parseInt64(c.Param("postID"))
 	if err != nil {
@@ -397,6 +581,22 @@ func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 	}
 }
 
+// handleComments godoc
+// @Summary Update or Delete Comment
+// @Description Update/delete comment by id.
+// @Tags Comment
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param commentID path int true "Comment ID"
+// @Param request body commentRequest false "Update comment payload (PUT only)"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /comments/{commentID} [put]
+// @Router /comments/{commentID} [delete]
 func (h *HTTPHandler) handleComments(c *gin.Context) {
 	commentID, err := parseInt64(c.Param("commentID"))
 	if err != nil {
@@ -439,6 +639,21 @@ func (h *HTTPHandler) handleComments(c *gin.Context) {
 	}
 }
 
+// handlePostReactions godoc
+// @Summary List or Create Reactions for Post
+// @Description GET returns reactions for a post, POST creates reaction on a post.
+// @Tags Reaction
+// @Accept json
+// @Produce json
+// @Param postID path int true "Post ID"
+// @Param request body reactionRequest false "Create reaction payload (POST only)"
+// @Success 200 {array} response.Reaction
+// @Success 201
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/reactions [get]
+// @Router /posts/{postID}/reactions [post]
 func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
 	postID, err := parseInt64(c.Param("postID"))
 	if err != nil {
@@ -448,6 +663,21 @@ func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
 	h.handleReactionsByTarget(c, postID, "post")
 }
 
+// handleCommentReactions godoc
+// @Summary List or Create Reactions for Comment
+// @Description GET returns reactions for a comment, POST creates reaction on a comment.
+// @Tags Reaction
+// @Accept json
+// @Produce json
+// @Param commentID path int true "Comment ID"
+// @Param request body reactionRequest false "Create reaction payload (POST only)"
+// @Success 200 {array} response.Reaction
+// @Success 201
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /comments/{commentID}/reactions [get]
+// @Router /comments/{commentID}/reactions [post]
 func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 	commentID, err := parseInt64(c.Param("commentID"))
 	if err != nil {
@@ -490,6 +720,20 @@ func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, ta
 	}
 }
 
+// handleReactionWithID godoc
+// @Summary Delete Reaction
+// @Description Delete reaction by reaction id.
+// @Tags Reaction
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param reactionID path int true "Reaction ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /reactions/{reactionID} [delete]
 func (h *HTTPHandler) handleReactionWithID(c *gin.Context) {
 	reactionID, err := parseInt64(c.Param("reactionID"))
 	if err != nil {
