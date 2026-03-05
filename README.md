@@ -34,6 +34,8 @@ go run ./cmd
 - 인증: JWT + middleware + token cache 검증
 - 인가: `AuthorizationPolicy` 기반(role/owner)
 - 데이터 저장소: In-Memory 어댑터
+- 조회 캐시: 서비스 레이어 정책 + 캐시 포트(`GetOrSetWithTTL`, `DeleteByPrefix`)
+- 페이지네이션: `limit + last_id` 커서 기반
 - API 규칙/스펙/운영 가이드는 `docs/` 문서를 단일 기준으로 관리
 
 ## 개발 명령

@@ -74,3 +74,10 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
   - `internal/delivery`
 - Integration
   - `internal/integration`
+
+## 캐시 정책 회귀 테스트 기준
+
+- 별도 `cache_behavior_test` 파일로 분리하지 않고, 각 서비스 테스트 파일에 정책 검증을 포함한다.
+  - 예: 게시글 상세 캐시 hit/miss, 쓰기 후 목록/상세 무효화
+- 공통 테스트 더블은 `internal/application/cache/testutil`에 둔다.
+  - `SpyCache`: `GetOrSetWithTTL` 로더 호출 횟수, `DeleteByPrefix` 무효화 여부 검증

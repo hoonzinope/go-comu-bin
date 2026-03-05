@@ -10,6 +10,10 @@
 ## 예시
 
 ```yaml
+cache:
+  listTTLSeconds: 30
+  detailTTLSeconds: 30
+
 delivery:
   http:
     port: 18577
@@ -21,6 +25,8 @@ delivery:
 
 - `delivery.http.port`: `1..65535`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
+- `cache.listTTLSeconds`: `> 0`
+- `cache.detailTTLSeconds`: `> 0`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
 
@@ -28,3 +34,4 @@ delivery:
 
 - 포트: `cmd/main.go` -> `cfg.Delivery.HTTP.Port`
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
+- 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`

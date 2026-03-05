@@ -41,6 +41,37 @@
 
 주의: 캐시 정책(TTL, 키 규칙, 무효화 범위)은 Delivery가 아니라 Service 레이어에서 관리하는 것을 기본 원칙으로 한다.
 
+## 캐시 구성 기준
+
+- `internal/application/cache.go`
+  - 캐시 포트(interface) 정의
+- `internal/application/cache/policy.go`
+  - 서비스에서 사용하는 캐시 TTL 정책 모델
+- `internal/application/cache/key/keys.go`
+  - 캐시 키 생성 규칙
+- `internal/application/cache/testutil/spy_cache.go`
+  - 서비스 정책 회귀 검증용 테스트 유틸
+- `internal/infrastructure/cache/inmemory`
+  - 실사용 캐시 어댑터
+- `internal/infrastructure/cache/noop`
+  - 테스트/폴백용 noop 어댑터
+
+`cache/interface` 같은 별도 폴더 분리 대신, 포트는 `application`에 두고 구현체는 `infrastructure`에 둔다.
+
+## 페이징/캐시 정책 위치
+
+- 목록 조회는 커서 기반(`limit`, `last_id`)을 기본으로 한다.
+- 조회 핸들러가 아닌 서비스가 아래를 수행한다.
+  - 조회 캐시 적중/미스 처리(`GetOrSetWithTTL`)
+  - 쓰기 이후 관련 캐시 무효화(`Delete`, `DeleteByPrefix`)
+
+## In-Memory 저장소 동시성
+
+- `internal/infrastructure/persistence/inmemory/*Repository`는 `sync.RWMutex`로 보호한다.
+- 목적
+  - API 통합 테스트/실행 중 동시 접근 시 데이터 경합 방지
+  - 읽기(`RLock`)와 쓰기(`Lock`) 구분으로 기본 성능/안전 확보
+
 ## 구성 루트 (Composition Root)
 
 - 파일: `cmd/main.go`
@@ -68,6 +99,12 @@ internal/
   application/
     authentication.go
     cache.go
+    cache/
+      policy.go
+      key/
+        keys.go
+      testutil/
+        spy_cache.go
     useCase.go
     repository.go
     policy/
@@ -88,6 +125,8 @@ internal/
     cache/
       inmemory/
         in_memory_cache.go
+      noop/
+        noop_cache.go
     persistence/
       inmemory/
         *.go
