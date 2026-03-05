@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
@@ -12,46 +14,59 @@ var _ application.BoardUseCase = (*BoardService)(nil)
 
 type BoardService struct {
 	repository          application.Repository
+	cache               application.Cache
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewBoardService(repository application.Repository) *BoardService {
+func NewBoardService(repository application.Repository, caches ...application.Cache) *BoardService {
 	return &BoardService{
 		repository:          repository,
+		cache:               resolveCache(caches),
 		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
 
 func (s *BoardService) GetBoards(limit int, lastID int64) (*dto.BoardList, error) {
-	// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
-	fetchLimit := limit
-	if limit > 0 {
-		fetchLimit = limit + 1
-	}
+	cacheKey := fmt.Sprintf("boards:list:limit:%d:last:%d", limit, lastID)
+	value, err := s.cache.GetOrSetWithTTL(cacheKey, listCacheTTLSeconds, func() (interface{}, error) {
+		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
+		fetchLimit := limit
+		if limit > 0 {
+			fetchLimit = limit + 1
+		}
 
-	boards, err := s.repository.BoardRepository.SelectBoardList(fetchLimit, lastID)
+		boards, err := s.repository.BoardRepository.SelectBoardList(fetchLimit, lastID)
+		if err != nil {
+			return nil, customError.ErrInternalServerError
+		}
+
+		hasMore := false
+		var nextLastID *int64
+		if limit >= 0 && len(boards) > limit {
+			hasMore = true
+			boards = boards[:limit]
+		}
+		if hasMore && len(boards) > 0 {
+			next := boards[len(boards)-1].ID
+			nextLastID = &next
+		}
+
+		return &dto.BoardList{
+			Boards:     boards,
+			Limit:      limit,
+			LastID:     lastID,
+			HasMore:    hasMore,
+			NextLastID: nextLastID,
+		}, nil
+	})
 	if err != nil {
+		return nil, err
+	}
+	list, ok := value.(*dto.BoardList)
+	if !ok {
 		return nil, customError.ErrInternalServerError
 	}
-
-	hasMore := false
-	var nextLastID *int64
-	if limit >= 0 && len(boards) > limit {
-		hasMore = true
-		boards = boards[:limit]
-	}
-	if hasMore && len(boards) > 0 {
-		next := boards[len(boards)-1].ID
-		nextLastID = &next
-	}
-
-	return &dto.BoardList{
-		Boards:     boards,
-		Limit:      limit,
-		LastID:     lastID,
-		HasMore:    hasMore,
-		NextLastID: nextLastID,
-	}, nil
+	return list, nil
 }
 
 func (s *BoardService) CreateBoard(userID int64, name, description string) (int64, error) {
@@ -68,6 +83,7 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
+	s.cache.DeleteByPrefix("boards:list:")
 	return boardID, nil
 }
 
@@ -89,6 +105,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
+	s.cache.DeleteByPrefix("boards:list:")
 	return nil
 }
 
@@ -109,5 +126,6 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
+	s.cache.DeleteByPrefix("boards:list:")
 	return nil
 }

@@ -42,17 +42,17 @@ func main() {
 	}
 
 	seedAdmin(repository)
+	cache := cacheInMemory.NewInMemoryCache()
 
 	useCases := application.UseCase{
 		UserUseCase:     service.NewUserService(repository),
-		BoardUseCase:    service.NewBoardService(repository),
-		PostUseCase:     service.NewPostService(repository),
-		CommentUseCase:  service.NewCommentService(repository),
-		ReactionUseCase: service.NewReactionService(repository),
+		BoardUseCase:    service.NewBoardService(repository, cache),
+		PostUseCase:     service.NewPostService(repository, cache),
+		CommentUseCase:  service.NewCommentService(repository, cache),
+		ReactionUseCase: service.NewReactionService(repository, cache),
 	}
 
 	authUseCase := auth.NewJwtTokenProvider(jwtSecret(cfg))
-	cache := cacheInMemory.NewInMemoryCache()
 	server := delivery.NewHTTPServer(port(cfg), authUseCase, cache, useCases)
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
@@ -16,12 +18,14 @@ var _ application.PostUseCase = (*PostService)(nil)
 
 type PostService struct {
 	repository          application.Repository
+	cache               application.Cache
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewPostService(repository application.Repository) *PostService {
+func NewPostService(repository application.Repository, caches ...application.Cache) *PostService {
 	return &PostService{
 		repository:          repository,
+		cache:               resolveCache(caches),
 		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
@@ -41,71 +45,94 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
+	s.cache.DeleteByPrefix(fmt.Sprintf("posts:list:board:%d:", boardID))
 	return postID, nil
 }
 
 func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto.PostList, error) {
-	// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
-	fetchLimit := limit
-	if limit > 0 {
-		fetchLimit = limit + 1
-	}
+	cacheKey := fmt.Sprintf("posts:list:board:%d:limit:%d:last:%d", boardID, limit, lastID)
+	value, err := s.cache.GetOrSetWithTTL(cacheKey, listCacheTTLSeconds, func() (interface{}, error) {
+		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
+		fetchLimit := limit
+		if limit > 0 {
+			fetchLimit = limit + 1
+		}
 
-	posts, err := s.repository.PostRepository.SelectPosts(boardID, fetchLimit, lastID)
-	if err != nil {
-		return nil, customError.ErrInternalServerError
-	}
-
-	hasMore := false
-	var nextLastID *int64
-	if limit >= 0 && len(posts) > limit {
-		hasMore = true
-		posts = posts[:limit]
-	}
-	if hasMore && len(posts) > 0 {
-		next := posts[len(posts)-1].ID
-		nextLastID = &next
-	}
-
-	return &dto.PostList{
-		Posts:      posts,
-		Limit:      limit,
-		LastID:     lastID,
-		HasMore:    hasMore,
-		NextLastID: nextLastID,
-	}, nil
-}
-
-func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
-	post, err := s.repository.PostRepository.SelectPostByID(id)
-	if post == nil || err != nil {
-		return nil, customError.ErrInternalServerError
-	}
-	reactions, err := s.repository.ReactionRepository.GetByTarget(post.ID, "post")
-	if err != nil {
-		return nil, customError.ErrInternalServerError
-	}
-	comments, err := s.repository.CommentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
-	commentDetails := make([]*dto.CommentDetail, len(comments))
-	if err != nil {
-		return nil, customError.ErrInternalServerError
-	}
-	for i, comment := range comments {
-		commentReactions, err := s.repository.ReactionRepository.GetByTarget(comment.ID, "comment")
+		posts, err := s.repository.PostRepository.SelectPosts(boardID, fetchLimit, lastID)
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
-		commentDetails[i] = &dto.CommentDetail{
-			Comment:   comment,
-			Reactions: commentReactions,
+
+		hasMore := false
+		var nextLastID *int64
+		if limit >= 0 && len(posts) > limit {
+			hasMore = true
+			posts = posts[:limit]
 		}
+		if hasMore && len(posts) > 0 {
+			next := posts[len(posts)-1].ID
+			nextLastID = &next
+		}
+
+		return &dto.PostList{
+			Posts:      posts,
+			Limit:      limit,
+			LastID:     lastID,
+			HasMore:    hasMore,
+			NextLastID: nextLastID,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	postDetail := &dto.PostDetail{
-		Post:      post,
-		Comments:  commentDetails,
-		Reactions: reactions,
+	list, ok := value.(*dto.PostList)
+	if !ok {
+		return nil, customError.ErrInternalServerError
 	}
-	return postDetail, nil
+	return list, nil
+}
+
+func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
+	cacheKey := fmt.Sprintf("posts:detail:%d", id)
+	value, err := s.cache.GetOrSetWithTTL(cacheKey, detailCacheTTLSeconds, func() (interface{}, error) {
+		post, err := s.repository.PostRepository.SelectPostByID(id)
+		if post == nil || err != nil {
+			return nil, customError.ErrInternalServerError
+		}
+		reactions, err := s.repository.ReactionRepository.GetByTarget(post.ID, "post")
+		if err != nil {
+			return nil, customError.ErrInternalServerError
+		}
+		comments, err := s.repository.CommentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
+		commentDetails := make([]*dto.CommentDetail, len(comments))
+		if err != nil {
+			return nil, customError.ErrInternalServerError
+		}
+		for i, comment := range comments {
+			commentReactions, err := s.repository.ReactionRepository.GetByTarget(comment.ID, "comment")
+			if err != nil {
+				return nil, customError.ErrInternalServerError
+			}
+			commentDetails[i] = &dto.CommentDetail{
+				Comment:   comment,
+				Reactions: commentReactions,
+			}
+		}
+		postDetail := &dto.PostDetail{
+			Post:      post,
+			Comments:  commentDetails,
+			Reactions: reactions,
+		}
+		return postDetail, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	detail, ok := value.(*dto.PostDetail)
+	if !ok {
+		return nil, customError.ErrInternalServerError
+	}
+	return detail, nil
 }
 
 func (s *PostService) UpdatePost(id, authorID int64, title, content string) error {
@@ -126,6 +153,8 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
+	s.cache.Delete(fmt.Sprintf("posts:detail:%d", post.ID))
+	s.cache.DeleteByPrefix(fmt.Sprintf("posts:list:board:%d:", post.BoardID))
 	return nil
 }
 
@@ -146,5 +175,9 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
+	s.cache.Delete(fmt.Sprintf("posts:detail:%d", post.ID))
+	s.cache.DeleteByPrefix(fmt.Sprintf("posts:list:board:%d:", post.BoardID))
+	s.cache.DeleteByPrefix(fmt.Sprintf("comments:list:post:%d:", post.ID))
+	s.cache.Delete(fmt.Sprintf("reactions:list:post:%d", post.ID))
 	return nil
 }
