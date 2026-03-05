@@ -13,6 +13,10 @@ var (
 	// User 관련 에러 정의
 	ErrUserAlreadyExists = errors.New("user already exists")
 	ErrUserNotFound      = errors.New("user not found")
+	ErrBoardNotFound     = errors.New("board not found")
+	ErrPostNotFound      = errors.New("post not found")
+	ErrCommentNotFound   = errors.New("comment not found")
+	ErrReactionNotFound  = errors.New("reaction not found")
 	ErrSaveUserFailed    = errors.New("failed to save user")
 	ErrDeleteUserFailed  = errors.New("failed to delete user")
 )

@@ -369,6 +369,16 @@ func TestHTTP_PostWithID_InvalidPostID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
+func TestHTTP_PostWithID_NonPositivePostID(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/0", nil)
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+	rr = doJSONRequest(t, handler, http.MethodGet, "/posts/-1", nil)
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
 func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
@@ -407,6 +417,18 @@ func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestHTTP_PostDetail_NotFound(t *testing.T) {
+	post := &fakePostUseCase{
+		getPostDetail: func(postID int64) (*dto.PostDetail, error) {
+			return nil, customError.ErrPostNotFound
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
+	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func TestHTTP_NotFound(t *testing.T) {

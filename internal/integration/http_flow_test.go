@@ -345,7 +345,7 @@ func mustNoCommentReactions(t *testing.T, baseURL string, commentID int64) {
 func mustPostNotAccessible(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
 	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
-	assert.Equal(t, http.StatusInternalServerError, status, "expected deleted post to be inaccessible(500), body=%s", string(body))
+	assert.Equal(t, http.StatusNotFound, status, "expected deleted post to be inaccessible(404), body=%s", string(body))
 }
 
 func assertStatus(t *testing.T, baseURL, token, method, path string, body any, expected int) {

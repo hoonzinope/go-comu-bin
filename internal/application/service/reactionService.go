@@ -30,21 +30,30 @@ func NewReactionService(repository application.Repository, cache application.Cac
 func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string, ReactionType string) error {
 	// 리액션 추가 로직 구현
 	user, err := s.repository.UserRepository.SelectUserByID(UserID) // user 존재 여부 확인
-	if user == nil || err != nil {
+	if err != nil {
 		return customError.ErrInternalServerError
+	}
+	if user == nil {
+		return customError.ErrUserNotFound
 	}
 	var newReaction *entity.Reaction
 	switch TargetType {
 	case "post":
 		post, err := s.repository.PostRepository.SelectPostByID(TargetID) // post 존재 여부 확인
-		if post == nil || err != nil {
+		if err != nil {
 			return customError.ErrInternalServerError
+		}
+		if post == nil {
+			return customError.ErrPostNotFound
 		}
 		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
 	case "comment":
 		comment, err := s.repository.CommentRepository.SelectCommentByID(TargetID) // comment 존재 여부 확인
-		if comment == nil || err != nil {
+		if err != nil {
 			return customError.ErrInternalServerError
+		}
+		if comment == nil {
+			return customError.ErrCommentNotFound
 		}
 		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
 		s.cache.Delete(key.PostDetail(comment.PostID))
@@ -65,12 +74,18 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	// 리액션 제거 로직 구현
 	user, err := s.repository.UserRepository.SelectUserByID(UserID) // user 존재 여부 확인
-	if user == nil || err != nil {
+	if err != nil {
 		return customError.ErrInternalServerError
 	}
+	if user == nil {
+		return customError.ErrUserNotFound
+	}
 	removeReaction, err := s.repository.ReactionRepository.GetByID(ID)
-	if removeReaction == nil || err != nil {
+	if err != nil {
 		return customError.ErrInternalServerError
+	}
+	if removeReaction == nil {
+		return customError.ErrReactionNotFound
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(user, removeReaction.UserID); err != nil {
 		return err

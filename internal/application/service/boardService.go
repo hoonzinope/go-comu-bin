@@ -99,8 +99,11 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 		return err
 	}
 	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
-	if existingBoard == nil || err != nil {
+	if err != nil {
 		return customError.ErrInternalServerError
+	}
+	if existingBoard == nil {
+		return customError.ErrBoardNotFound
 	}
 	existingBoard.Update(name, description)
 	err = s.repository.BoardRepository.Update(existingBoard)
@@ -121,8 +124,11 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 		return err
 	}
 	existingBoard, err := s.repository.BoardRepository.SelectBoardByID(id) // board 존재 여부 확인
-	if existingBoard == nil || err != nil {
+	if err != nil {
 		return customError.ErrInternalServerError
+	}
+	if existingBoard == nil {
+		return customError.ErrBoardNotFound
 	}
 	err = s.repository.BoardRepository.Delete(existingBoard.ID)
 	if err != nil {

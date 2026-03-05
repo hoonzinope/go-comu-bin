@@ -757,6 +757,14 @@ func writeUseCaseError(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, customError.ErrUserNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, customError.ErrBoardNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, customError.ErrPostNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, customError.ErrCommentNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, customError.ErrReactionNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, customError.ErrInvalidCredential):
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 	case errors.Is(err, customError.ErrUnauthorized):
@@ -804,7 +812,14 @@ func parseInt64(raw string) (int64, error) {
 	if raw == "" {
 		return 0, errors.New("value is required")
 	}
-	return strconv.ParseInt(raw, 10, 64)
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	if v < 1 {
+		return 0, errors.New("value must be >= 1")
+	}
+	return v, nil
 }
 
 func decodeJSON(c *gin.Context, dst any) error {

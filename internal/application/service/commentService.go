@@ -31,12 +31,18 @@ func NewCommentService(repository application.Repository, cache application.Cach
 func (s *CommentService) CreateComment(content string, authorID, postID int64) (int64, error) {
 	// 댓글 생성 로직 구현
 	user, err := s.repository.UserRepository.SelectUserByID(authorID) // user 존재 여부 확인
-	if user == nil || err != nil {
+	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
+	if user == nil {
+		return 0, customError.ErrUserNotFound
+	}
 	post, err := s.repository.PostRepository.SelectPostByID(postID) // post 존재 여부 확인
-	if post == nil || err != nil {
+	if err != nil {
 		return 0, customError.ErrInternalServerError
+	}
+	if post == nil {
+		return 0, customError.ErrPostNotFound
 	}
 	newComment := entity.NewComment(content, authorID, postID, nil)
 	commentID, err := s.repository.CommentRepository.Save(newComment)
@@ -94,8 +100,11 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 func (s *CommentService) UpdateComment(id, authorID int64, content string) error {
 	// 댓글 수정 로직 구현
 	comment, err := s.repository.CommentRepository.SelectCommentByID(id) // comment 존재 여부 확인
-	if comment == nil || err != nil {
+	if err != nil {
 		return customError.ErrInternalServerError
+	}
+	if comment == nil {
+		return customError.ErrCommentNotFound
 	}
 	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
 	if requester == nil || err != nil {
@@ -117,8 +126,11 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 func (s *CommentService) DeleteComment(id, authorID int64) error {
 	// 댓글 삭제 로직 구현
 	comment, err := s.repository.CommentRepository.SelectCommentByID(id) // comment 존재 여부 확인
-	if comment == nil || err != nil {
+	if err != nil {
 		return customError.ErrInternalServerError
+	}
+	if comment == nil {
+		return customError.ErrCommentNotFound
 	}
 	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
 	if requester == nil || err != nil {
