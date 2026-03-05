@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +17,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	otherID := seedUser(repository, "other", "pw", "user")
 	boardID := seedBoard(repository, "free", "desc")
 	postID := seedPost(repository, ownerID, boardID, "title", "content")
-	svc := NewPostService(repository)
+	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
 	require.Error(t, err)
@@ -28,7 +30,7 @@ func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
 	adminID := seedUser(repository, "admin", "pw", "admin")
 	boardID := seedBoard(repository, "free", "desc")
 	postID := seedPost(repository, ownerID, boardID, "title", "content")
-	svc := NewPostService(repository)
+	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
 
 	require.NoError(t, svc.UpdatePost(postID, adminID, "new-title", "new-content"))
 }
@@ -37,7 +39,7 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	repository := newTestRepository()
 	userID := seedUser(repository, "user", "pw", "user")
 	boardID := seedBoard(repository, "free", "desc")
-	svc := NewPostService(repository)
+	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
 
 	postID, err := svc.CreatePost("title", "content", userID, boardID)
 	require.NoError(t, err)
@@ -62,7 +64,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	seedPost(repository, userID, boardID, "title1", "content1")
 	seedPost(repository, userID, boardID, "title2", "content2")
 	seedPost(repository, userID, boardID, "title3", "content3")
-	svc := NewPostService(repository)
+	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
 
 	list, err := svc.GetPostsList(boardID, 2, 0)
 	require.NoError(t, err)
@@ -70,4 +72,48 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	assert.True(t, list.HasMore)
 	require.NotNil(t, list.NextLastID)
 	assert.Equal(t, list.Posts[len(list.Posts)-1].ID, *list.NextLastID)
+}
+
+func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
+	repo := newTestRepository()
+	cache := testutil.NewSpyCache()
+	postSvc := NewPostService(repo, cache, newTestCachePolicy())
+
+	userID := seedUser(repo, "alice", "pw", "user")
+	boardID := seedBoard(repo, "free", "desc")
+	postID := seedPost(repo, userID, boardID, "title", "content")
+
+	detail1, err := postSvc.GetPostDetail(postID)
+	require.NoError(t, err)
+	require.NotNil(t, detail1.Post)
+	assert.Equal(t, "title", detail1.Post.Title)
+
+	detail2, err := postSvc.GetPostDetail(postID)
+	require.NoError(t, err)
+	require.NotNil(t, detail2.Post)
+	assert.Equal(t, "title", detail2.Post.Title)
+
+	assert.Equal(t, 1, cache.LoadCount(key.PostDetail(postID)))
+}
+
+func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
+	repo := newTestRepository()
+	cache := testutil.NewSpyCache()
+	postSvc := NewPostService(repo, cache, newTestCachePolicy())
+
+	userID := seedUser(repo, "alice", "pw", "user")
+	boardID := seedBoard(repo, "free", "desc")
+	postID := seedPost(repo, userID, boardID, "title", "content")
+
+	_, err := postSvc.GetPostDetail(postID)
+	require.NoError(t, err)
+	_, err = postSvc.GetPostsList(boardID, 10, 0)
+	require.NoError(t, err)
+
+	require.NoError(t, postSvc.UpdatePost(postID, userID, "new", "new-content"))
+
+	_, ok := cache.Get(key.PostDetail(postID))
+	assert.False(t, ok)
+	_, ok = cache.Get(key.PostList(boardID, 10, 0))
+	assert.False(t, ok)
 }

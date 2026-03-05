@@ -1,9 +1,9 @@
 package service
 
 import (
-	"fmt"
-
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -14,13 +14,15 @@ var _ application.ReactionUseCase = (*ReactionService)(nil)
 type ReactionService struct {
 	repository          application.Repository
 	cache               application.Cache
+	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewReactionService(repository application.Repository, caches ...application.Cache) *ReactionService {
+func NewReactionService(repository application.Repository, cache application.Cache, cachePolicy appcache.Policy) *ReactionService {
 	return &ReactionService{
 		repository:          repository,
-		cache:               resolveCache(caches),
+		cache:               cache,
+		cachePolicy:         cachePolicy,
 		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
@@ -45,7 +47,7 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 			return customError.ErrInternalServerError
 		}
 		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
-		s.cache.Delete(fmt.Sprintf("posts:detail:%d", comment.PostID))
+		s.cache.Delete(key.PostDetail(comment.PostID))
 	default:
 		return customError.ErrInternalServerError
 	}
@@ -53,9 +55,9 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.Delete(fmt.Sprintf("reactions:list:%s:%d", TargetType, TargetID))
+	s.cache.Delete(key.ReactionList(TargetType, TargetID))
 	if TargetType == "post" {
-		s.cache.Delete(fmt.Sprintf("posts:detail:%d", TargetID))
+		s.cache.Delete(key.PostDetail(TargetID))
 	}
 	return nil
 }
@@ -77,22 +79,22 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.Delete(fmt.Sprintf("reactions:list:%s:%d", removeReaction.TargetType, removeReaction.TargetID))
+	s.cache.Delete(key.ReactionList(removeReaction.TargetType, removeReaction.TargetID))
 	if removeReaction.TargetType == "post" {
-		s.cache.Delete(fmt.Sprintf("posts:detail:%d", removeReaction.TargetID))
+		s.cache.Delete(key.PostDetail(removeReaction.TargetID))
 	}
 	if removeReaction.TargetType == "comment" {
 		comment, err := s.repository.CommentRepository.SelectCommentByID(removeReaction.TargetID)
 		if err == nil && comment != nil {
-			s.cache.Delete(fmt.Sprintf("posts:detail:%d", comment.PostID))
+			s.cache.Delete(key.PostDetail(comment.PostID))
 		}
 	}
 	return nil
 }
 
 func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string) ([]*entity.Reaction, error) {
-	cacheKey := fmt.Sprintf("reactions:list:%s:%d", targetType, targetID)
-	value, err := s.cache.GetOrSetWithTTL(cacheKey, listCacheTTLSeconds, func() (interface{}, error) {
+	cacheKey := key.ReactionList(targetType, targetID)
+	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		reactions, err := s.repository.ReactionRepository.GetByTarget(targetID, targetType)
 		if err != nil {
 			return nil, customError.ErrInternalServerError

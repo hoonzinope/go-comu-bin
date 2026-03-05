@@ -17,6 +17,7 @@ import (
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/config"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
@@ -46,10 +47,10 @@ func main() {
 
 	useCases := application.UseCase{
 		UserUseCase:     service.NewUserService(repository),
-		BoardUseCase:    service.NewBoardService(repository, cache),
-		PostUseCase:     service.NewPostService(repository, cache),
-		CommentUseCase:  service.NewCommentService(repository, cache),
-		ReactionUseCase: service.NewReactionService(repository, cache),
+		BoardUseCase:    service.NewBoardService(repository, cache, cachePolicy(cfg)),
+		PostUseCase:     service.NewPostService(repository, cache, cachePolicy(cfg)),
+		CommentUseCase:  service.NewCommentService(repository, cache, cachePolicy(cfg)),
+		ReactionUseCase: service.NewReactionService(repository, cache, cachePolicy(cfg)),
 	}
 
 	authUseCase := auth.NewJwtTokenProvider(jwtSecret(cfg))
@@ -71,4 +72,11 @@ func port(cfg *config.Config) string {
 
 func jwtSecret(cfg *config.Config) string {
 	return cfg.Delivery.HTTP.Auth.Secret
+}
+
+func cachePolicy(cfg *config.Config) appcache.Policy {
+	return appcache.Policy{
+		ListTTLSeconds:   cfg.Cache.ListTTLSeconds,
+		DetailTTLSeconds: cfg.Cache.DetailTTLSeconds,
+	}
 }

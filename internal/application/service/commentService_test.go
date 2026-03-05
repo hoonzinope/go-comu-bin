@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +17,7 @@ func TestCommentService_UpdateComment_ForbiddenForNonOwnerNonAdmin(t *testing.T)
 	otherID := seedUser(repository, "other", "pw", "user")
 	boardID := seedBoard(repository, "free", "desc")
 	postID := seedPost(repository, ownerID, boardID, "title", "content")
-	svc := NewCommentService(repository)
+	svc := NewCommentService(repository, newTestCache(), newTestCachePolicy())
 	commentID, err := svc.CreateComment("comment", ownerID, postID)
 	require.NoError(t, err)
 
@@ -30,7 +32,7 @@ func TestCommentService_UpdateComment_AllowedForAdmin(t *testing.T) {
 	adminID := seedUser(repository, "admin", "pw", "admin")
 	boardID := seedBoard(repository, "free", "desc")
 	postID := seedPost(repository, ownerID, boardID, "title", "content")
-	svc := NewCommentService(repository)
+	svc := NewCommentService(repository, newTestCache(), newTestCachePolicy())
 	commentID, err := svc.CreateComment("comment", ownerID, postID)
 	require.NoError(t, err)
 
@@ -42,7 +44,7 @@ func TestCommentService_CreateGetDelete_Success(t *testing.T) {
 	userID := seedUser(repository, "user", "pw", "user")
 	boardID := seedBoard(repository, "free", "desc")
 	postID := seedPost(repository, userID, boardID, "title", "content")
-	svc := NewCommentService(repository)
+	svc := NewCommentService(repository, newTestCache(), newTestCachePolicy())
 
 	commentID, err := svc.CreateComment("comment", userID, postID)
 	require.NoError(t, err)
@@ -63,7 +65,7 @@ func TestCommentService_GetCommentsByPost_HasMoreAndNextCursor(t *testing.T) {
 	seedComment(repository, userID, postID, "c1")
 	seedComment(repository, userID, postID, "c2")
 	seedComment(repository, userID, postID, "c3")
-	svc := NewCommentService(repository)
+	svc := NewCommentService(repository, newTestCache(), newTestCachePolicy())
 
 	list, err := svc.GetCommentsByPost(postID, 2, 0)
 	require.NoError(t, err)
@@ -71,4 +73,28 @@ func TestCommentService_GetCommentsByPost_HasMoreAndNextCursor(t *testing.T) {
 	assert.True(t, list.HasMore)
 	require.NotNil(t, list.NextLastID)
 	assert.Equal(t, list.Comments[len(list.Comments)-1].ID, *list.NextLastID)
+}
+
+func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
+	repo := newTestRepository()
+	cache := testutil.NewSpyCache()
+	commentSvc := NewCommentService(repo, cache, newTestCachePolicy())
+	postSvc := NewPostService(repo, cache, newTestCachePolicy())
+
+	userID := seedUser(repo, "alice", "pw", "user")
+	boardID := seedBoard(repo, "free", "desc")
+	postID := seedPost(repo, userID, boardID, "title", "content")
+
+	_, err := postSvc.GetPostDetail(postID)
+	require.NoError(t, err)
+	_, err = commentSvc.GetCommentsByPost(postID, 10, 0)
+	require.NoError(t, err)
+
+	_, err = commentSvc.CreateComment("new-comment", userID, postID)
+	require.NoError(t, err)
+
+	_, ok := cache.Get(key.PostDetail(postID))
+	assert.False(t, ok)
+	_, ok = cache.Get(key.CommentList(postID, 10, 0))
+	assert.False(t, ok)
 }

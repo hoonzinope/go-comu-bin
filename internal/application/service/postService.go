@@ -1,9 +1,9 @@
 package service
 
 import (
-	"fmt"
-
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
@@ -19,13 +19,15 @@ var _ application.PostUseCase = (*PostService)(nil)
 type PostService struct {
 	repository          application.Repository
 	cache               application.Cache
+	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewPostService(repository application.Repository, caches ...application.Cache) *PostService {
+func NewPostService(repository application.Repository, cache application.Cache, cachePolicy appcache.Policy) *PostService {
 	return &PostService{
 		repository:          repository,
-		cache:               resolveCache(caches),
+		cache:               cache,
+		cachePolicy:         cachePolicy,
 		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
@@ -45,13 +47,13 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
-	s.cache.DeleteByPrefix(fmt.Sprintf("posts:list:board:%d:", boardID))
+	s.cache.DeleteByPrefix(key.PostListPrefix(boardID))
 	return postID, nil
 }
 
 func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto.PostList, error) {
-	cacheKey := fmt.Sprintf("posts:list:board:%d:limit:%d:last:%d", boardID, limit, lastID)
-	value, err := s.cache.GetOrSetWithTTL(cacheKey, listCacheTTLSeconds, func() (interface{}, error) {
+	cacheKey := key.PostList(boardID, limit, lastID)
+	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
 		fetchLimit := limit
 		if limit > 0 {
@@ -93,8 +95,8 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto
 }
 
 func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
-	cacheKey := fmt.Sprintf("posts:detail:%d", id)
-	value, err := s.cache.GetOrSetWithTTL(cacheKey, detailCacheTTLSeconds, func() (interface{}, error) {
+	cacheKey := key.PostDetail(id)
+	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.DetailTTLSeconds, func() (interface{}, error) {
 		post, err := s.repository.PostRepository.SelectPostByID(id)
 		if post == nil || err != nil {
 			return nil, customError.ErrInternalServerError
@@ -153,8 +155,8 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.Delete(fmt.Sprintf("posts:detail:%d", post.ID))
-	s.cache.DeleteByPrefix(fmt.Sprintf("posts:list:board:%d:", post.BoardID))
+	s.cache.Delete(key.PostDetail(post.ID))
+	s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID))
 	return nil
 }
 
@@ -175,9 +177,9 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.Delete(fmt.Sprintf("posts:detail:%d", post.ID))
-	s.cache.DeleteByPrefix(fmt.Sprintf("posts:list:board:%d:", post.BoardID))
-	s.cache.DeleteByPrefix(fmt.Sprintf("comments:list:post:%d:", post.ID))
-	s.cache.Delete(fmt.Sprintf("reactions:list:post:%d", post.ID))
+	s.cache.Delete(key.PostDetail(post.ID))
+	s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID))
+	s.cache.DeleteByPrefix(key.CommentListPrefix(post.ID))
+	s.cache.Delete(key.ReactionList("post", post.ID))
 	return nil
 }

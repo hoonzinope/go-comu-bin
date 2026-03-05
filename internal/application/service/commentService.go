@@ -1,9 +1,9 @@
 package service
 
 import (
-	"fmt"
-
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
@@ -15,13 +15,15 @@ var _ application.CommentUseCase = (*CommentService)(nil)
 type CommentService struct {
 	repository          application.Repository
 	cache               application.Cache
+	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewCommentService(repository application.Repository, caches ...application.Cache) *CommentService {
+func NewCommentService(repository application.Repository, cache application.Cache, cachePolicy appcache.Policy) *CommentService {
 	return &CommentService{
 		repository:          repository,
-		cache:               resolveCache(caches),
+		cache:               cache,
+		cachePolicy:         cachePolicy,
 		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
 	}
 }
@@ -41,14 +43,14 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
-	s.cache.DeleteByPrefix(fmt.Sprintf("comments:list:post:%d:", postID))
-	s.cache.Delete(fmt.Sprintf("posts:detail:%d", postID))
+	s.cache.DeleteByPrefix(key.CommentListPrefix(postID))
+	s.cache.Delete(key.PostDetail(postID))
 	return commentID, nil
 }
 
 func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64) (*dto.CommentList, error) {
-	cacheKey := fmt.Sprintf("comments:list:post:%d:limit:%d:last:%d", postID, limit, lastID)
-	value, err := s.cache.GetOrSetWithTTL(cacheKey, listCacheTTLSeconds, func() (interface{}, error) {
+	cacheKey := key.CommentList(postID, limit, lastID)
+	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
 		fetchLimit := limit
 		if limit > 0 {
@@ -107,8 +109,8 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.DeleteByPrefix(fmt.Sprintf("comments:list:post:%d:", comment.PostID))
-	s.cache.Delete(fmt.Sprintf("posts:detail:%d", comment.PostID))
+	s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID))
+	s.cache.Delete(key.PostDetail(comment.PostID))
 	return nil
 }
 
@@ -129,8 +131,8 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.DeleteByPrefix(fmt.Sprintf("comments:list:post:%d:", comment.PostID))
-	s.cache.Delete(fmt.Sprintf("posts:detail:%d", comment.PostID))
-	s.cache.Delete(fmt.Sprintf("reactions:list:comment:%d", comment.ID))
+	s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID))
+	s.cache.Delete(key.PostDetail(comment.PostID))
+	s.cache.Delete(key.ReactionList("comment", comment.ID))
 	return nil
 }

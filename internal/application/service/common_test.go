@@ -2,7 +2,9 @@ package service
 
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
 
@@ -13,6 +15,17 @@ func newTestRepository() application.Repository {
 		PostRepository:     inmemory.NewPostRepository(),
 		CommentRepository:  inmemory.NewCommentRepository(),
 		ReactionRepository: inmemory.NewReactionRepository(),
+	}
+}
+
+func newTestCache() application.Cache {
+	return noopCache.NewNoopCache()
+}
+
+func newTestCachePolicy() appcache.Policy {
+	return appcache.Policy{
+		ListTTLSeconds:   30,
+		DetailTTLSeconds: 30,
 	}
 }
 

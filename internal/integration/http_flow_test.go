@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -111,19 +112,26 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	admin := entity.NewAdmin("admin", "admin")
 	_, err := repository.UserRepository.Save(admin)
 	require.NoError(t, err)
+	cache := cacheInMemory.NewInMemoryCache()
 
 	useCases := application.UseCase{
 		UserUseCase:     service.NewUserService(repository),
-		BoardUseCase:    service.NewBoardService(repository),
-		PostUseCase:     service.NewPostService(repository),
-		CommentUseCase:  service.NewCommentService(repository),
-		ReactionUseCase: service.NewReactionService(repository),
+		BoardUseCase:    service.NewBoardService(repository, cache, testCachePolicy()),
+		PostUseCase:     service.NewPostService(repository, cache, testCachePolicy()),
+		CommentUseCase:  service.NewCommentService(repository, cache, testCachePolicy()),
+		ReactionUseCase: service.NewReactionService(repository, cache, testCachePolicy()),
 	}
 
 	authUseCase := auth.NewJwtTokenProvider("test-secret")
-	cache := cacheInMemory.NewInMemoryCache()
 	httpServer := delivery.NewHTTPServer(":0", authUseCase, cache, useCases)
 	return httptest.NewServer(httpServer.Handler)
+}
+
+func testCachePolicy() appcache.Policy {
+	return appcache.Policy{
+		ListTTLSeconds:   30,
+		DetailTTLSeconds: 30,
+	}
 }
 
 func mustLogin(t *testing.T, baseURL, username, password string) string {

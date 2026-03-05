@@ -1,3 +1,7 @@
+cache:
+  listTTLSeconds: 30
+  detailTTLSeconds: 30
+
 delivery:
   http:
     port: 18577
