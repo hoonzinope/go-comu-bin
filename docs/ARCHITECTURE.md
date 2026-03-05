@@ -27,6 +27,20 @@
 - protected route: JWT 검증 + cache 확인
 - logout: cache에서 토큰 삭제(무효화)
 
+## 캐시 포트 확장
+
+- `application.Cache`는 인증 캐시와 조회 캐시를 단일 포트로 관리
+- 기본 연산
+  - `Get`, `Set`, `SetWithTTL`, `Delete`
+- 조회 캐시 확장 연산
+  - `DeleteByPrefix(prefix)`: 쓰기 이벤트 후 관련 캐시 일괄 무효화
+  - `GetOrSetWithTTL(key, ttl, loader)`: 캐시 미스 시 로더 실행 후 저장
+- In-Memory 구현 세부
+  - 만료(`TTL`) 지원
+  - `singleflight` 기반 동시성 중복 로더 호출 방지
+
+주의: 캐시 정책(TTL, 키 규칙, 무효화 범위)은 Delivery가 아니라 Service 레이어에서 관리하는 것을 기본 원칙으로 한다.
+
 ## 구성 루트 (Composition Root)
 
 - 파일: `cmd/main.go`
