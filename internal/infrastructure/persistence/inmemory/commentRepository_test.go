@@ -16,6 +16,8 @@ func TestCommentRepository_FilterByPostAndPagination(t *testing.T) {
 	comments, err := repo.SelectComments(1, 10, 0)
 	require.NoError(t, err)
 	assert.Len(t, comments, 2)
+	assert.Equal(t, int64(2), comments[0].ID)
+	assert.Equal(t, int64(1), comments[1].ID)
 }
 
 func TestCommentRepository_SaveSelectUpdateDelete(t *testing.T) {
@@ -42,14 +44,27 @@ func TestCommentRepository_SaveSelectUpdateDelete(t *testing.T) {
 	assert.Nil(t, deleted)
 }
 
-func TestCommentRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
+func TestCommentRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
 	repo := NewCommentRepository()
 	_, _ = repo.Save(testComment("c1", 1, 1))
 	_, _ = repo.Save(testComment("c2", 2, 1))
 
-	comments, err := repo.SelectComments(1, 10, 2)
+	comments, err := repo.SelectComments(1, 10, 1)
 	require.NoError(t, err)
 	assert.Empty(t, comments)
+}
+
+func TestCommentRepository_PaginationWithCursor_ReturnsNextChunk(t *testing.T) {
+	repo := NewCommentRepository()
+	_, _ = repo.Save(testComment("c1", 1, 1))
+	_, _ = repo.Save(testComment("c2", 2, 1))
+	_, _ = repo.Save(testComment("c3", 3, 1))
+
+	comments, err := repo.SelectComments(1, 10, 3)
+	require.NoError(t, err)
+	require.Len(t, comments, 2)
+	assert.Equal(t, int64(2), comments[0].ID)
+	assert.Equal(t, int64(1), comments[1].ID)
 }
 
 func TestCommentRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {

@@ -10,9 +10,11 @@ type Board struct {
 }
 
 type BoardList struct {
-	Boards []Board `json:"boards"`
-	Limit  int     `json:"limit"`
-	Offset int     `json:"offset"`
+	Boards     []Board `json:"boards"`
+	Limit      int     `json:"limit"`
+	LastID     int64   `json:"last_id"`
+	HasMore    bool    `json:"has_more"`
+	NextLastID *int64  `json:"next_last_id,omitempty"`
 }
 
 type Post struct {
@@ -26,9 +28,11 @@ type Post struct {
 }
 
 type PostList struct {
-	Posts  []Post `json:"posts"`
-	Limit  int    `json:"limit"`
-	Offset int    `json:"offset"`
+	Posts      []Post `json:"posts"`
+	Limit      int    `json:"limit"`
+	LastID     int64  `json:"last_id"`
+	HasMore    bool   `json:"has_more"`
+	NextLastID *int64 `json:"next_last_id,omitempty"`
 }
 
 type PostDetail struct {
@@ -47,9 +51,11 @@ type Comment struct {
 }
 
 type CommentList struct {
-	Comments []Comment `json:"comments"`
-	Limit    int       `json:"limit"`
-	Offset   int       `json:"offset"`
+	Comments   []Comment `json:"comments"`
+	Limit      int       `json:"limit"`
+	LastID     int64     `json:"last_id"`
+	HasMore    bool      `json:"has_more"`
+	NextLastID *int64    `json:"next_last_id,omitempty"`
 }
 
 type CommentDetail struct {

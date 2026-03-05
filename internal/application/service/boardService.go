@@ -22,17 +22,35 @@ func NewBoardService(repository application.Repository) *BoardService {
 	}
 }
 
-func (s *BoardService) GetBoards(limit, offset int) (*dto.BoardList, error) {
-	// 게시판 목록 조회 로직 구현
-	boards, err := s.repository.BoardRepository.SelectBoardList(limit, offset)
+func (s *BoardService) GetBoards(limit int, lastID int64) (*dto.BoardList, error) {
+	// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
+	fetchLimit := limit
+	if limit > 0 {
+		fetchLimit = limit + 1
+	}
+
+	boards, err := s.repository.BoardRepository.SelectBoardList(fetchLimit, lastID)
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
 
+	hasMore := false
+	var nextLastID *int64
+	if limit >= 0 && len(boards) > limit {
+		hasMore = true
+		boards = boards[:limit]
+	}
+	if hasMore && len(boards) > 0 {
+		next := boards[len(boards)-1].ID
+		nextLastID = &next
+	}
+
 	return &dto.BoardList{
-		Boards: boards,
-		Limit:  limit,
-		Offset: offset,
+		Boards:     boards,
+		Limit:      limit,
+		LastID:     lastID,
+		HasMore:    hasMore,
+		NextLastID: nextLastID,
 	}, nil
 }
 

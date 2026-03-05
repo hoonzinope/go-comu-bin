@@ -16,6 +16,8 @@ func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
 	posts, err := repo.SelectPosts(1, 10, 0)
 	require.NoError(t, err)
 	assert.Len(t, posts, 2)
+	assert.Equal(t, int64(2), posts[0].ID)
+	assert.Equal(t, int64(1), posts[1].ID)
 }
 
 func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
@@ -42,14 +44,27 @@ func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
 	assert.Nil(t, deleted)
 }
 
-func TestPostRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
+func TestPostRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
 	repo := NewPostRepository()
 	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
 	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
 
-	posts, err := repo.SelectPosts(1, 10, 2)
+	posts, err := repo.SelectPosts(1, 10, 1)
 	require.NoError(t, err)
 	assert.Empty(t, posts)
+}
+
+func TestPostRepository_PaginationWithCursor_ReturnsNextChunk(t *testing.T) {
+	repo := NewPostRepository()
+	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
+	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
+	_, _ = repo.Save(testPost("p3", "c3", 1, 1))
+
+	posts, err := repo.SelectPosts(1, 10, 3)
+	require.NoError(t, err)
+	require.Len(t, posts, 2)
+	assert.Equal(t, int64(2), posts[0].ID)
+	assert.Equal(t, int64(1), posts[1].ID)
 }
 
 func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {

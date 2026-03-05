@@ -54,3 +54,21 @@ func TestCommentService_CreateGetDelete_Success(t *testing.T) {
 
 	require.NoError(t, svc.DeleteComment(commentID, userID))
 }
+
+func TestCommentService_GetCommentsByPost_HasMoreAndNextCursor(t *testing.T) {
+	repository := newTestRepository()
+	userID := seedUser(repository, "user", "pw", "user")
+	boardID := seedBoard(repository, "free", "desc")
+	postID := seedPost(repository, userID, boardID, "title", "content")
+	seedComment(repository, userID, postID, "c1")
+	seedComment(repository, userID, postID, "c2")
+	seedComment(repository, userID, postID, "c3")
+	svc := NewCommentService(repository)
+
+	list, err := svc.GetCommentsByPost(postID, 2, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Comments, 2)
+	assert.True(t, list.HasMore)
+	require.NotNil(t, list.NextLastID)
+	assert.Equal(t, list.Comments[len(list.Comments)-1].ID, *list.NextLastID)
+}

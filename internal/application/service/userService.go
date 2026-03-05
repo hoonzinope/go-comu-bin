@@ -59,6 +59,25 @@ func (s *UserService) Quit(username, password string) error {
 	return nil
 }
 
+func (s *UserService) DeleteMe(userID int64, password string) error {
+	existingUser, err := s.repository.UserRepository.SelectUserByID(userID)
+	if err != nil {
+		return customError.ErrInternalServerError
+	}
+	if existingUser == nil {
+		return customError.ErrUserNotFound
+	}
+	if existingUser.Password != password {
+		return customError.ErrInvalidCredential
+	}
+
+	err = s.repository.UserRepository.Delete(existingUser.ID)
+	if err != nil {
+		return customError.ErrInternalServerError
+	}
+	return nil
+}
+
 func (s *UserService) Login(username, password string) (int64, error) {
 	// 로그인 로직 구현
 	// user 존재 여부 확인

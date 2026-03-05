@@ -54,3 +54,20 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 
 	require.NoError(t, svc.DeletePost(postID, userID))
 }
+
+func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
+	repository := newTestRepository()
+	userID := seedUser(repository, "user", "pw", "user")
+	boardID := seedBoard(repository, "free", "desc")
+	seedPost(repository, userID, boardID, "title1", "content1")
+	seedPost(repository, userID, boardID, "title2", "content2")
+	seedPost(repository, userID, boardID, "title3", "content3")
+	svc := NewPostService(repository)
+
+	list, err := svc.GetPostsList(boardID, 2, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Posts, 2)
+	assert.True(t, list.HasMore)
+	require.NotNil(t, list.NextLastID)
+	assert.Equal(t, list.Posts[len(list.Posts)-1].ID, *list.NextLastID)
+}

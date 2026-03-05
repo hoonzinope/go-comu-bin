@@ -46,32 +46,34 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 	})
 
-	r.POST("/users/signup", h.handleUserSignUp)
-	r.POST("/users/login", h.handleUserLogin)
-	r.POST("/users/logout", h.authGinMiddleware, h.handleUserLogout)
-	r.DELETE("/users/quit", h.handleUserQuit)
+	v1 := r.Group("/api/v1")
+	v1.POST("/signup", h.handleUserSignUp)
+	v1.POST("/auth/login", h.handleUserLogin)
+	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
+	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
 
-	r.GET("/boards", h.handleBoards)
-	r.POST("/boards", h.authGinMiddleware, h.handleBoards)
-	r.PUT("/boards/:boardID", h.authGinMiddleware, h.handleBoardWithID)
-	r.DELETE("/boards/:boardID", h.authGinMiddleware, h.handleBoardWithID)
+	v1.GET("/boards", h.handleBoards)
+	v1.POST("/boards", h.authGinMiddleware, h.handleBoards)
+	v1.PUT("/boards/:boardID", h.authGinMiddleware, h.handleBoardWithID)
+	v1.DELETE("/boards/:boardID", h.authGinMiddleware, h.handleBoardWithID)
 
-	r.GET("/boards/:boardID/posts", h.handleBoardPosts)
-	r.POST("/boards/:boardID/posts", h.authGinMiddleware, h.handleBoardPosts)
+	v1.GET("/boards/:boardID/posts", h.handleBoardPosts)
+	v1.POST("/boards/:boardID/posts", h.authGinMiddleware, h.handleBoardPosts)
 
-	r.GET("/posts/:postID", h.handlePostDetail)
-	r.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetail)
-	r.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetail)
+	v1.GET("/posts/:postID", h.handlePostDetail)
+	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetail)
+	v1.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetail)
 
-	r.GET("/posts/:postID/comments", h.handlePostComments)
-	r.POST("/posts/:postID/comments", h.authGinMiddleware, h.handlePostComments)
+	v1.GET("/posts/:postID/comments", h.handlePostComments)
+	v1.POST("/posts/:postID/comments", h.authGinMiddleware, h.handlePostComments)
+	v1.GET("/posts/:postID/reactions", h.handlePostReactions)
+	v1.POST("/posts/:postID/reactions", h.authGinMiddleware, h.handlePostReactions)
 
-	r.PUT("/comments/:commentID", h.authGinMiddleware, h.handleComments)
-	r.DELETE("/comments/:commentID", h.authGinMiddleware, h.handleComments)
-
-	r.GET("/reactions", h.handleReactions)
-	r.POST("/reactions", h.authGinMiddleware, h.handleReactions)
-	r.DELETE("/reactions/:reactionID", h.authGinMiddleware, h.handleReactionWithID)
+	v1.PUT("/comments/:commentID", h.authGinMiddleware, h.handleComments)
+	v1.DELETE("/comments/:commentID", h.authGinMiddleware, h.handleComments)
+	v1.GET("/comments/:commentID/reactions", h.handleCommentReactions)
+	v1.POST("/comments/:commentID/reactions", h.authGinMiddleware, h.handleCommentReactions)
+	v1.DELETE("/reactions/:reactionID", h.authGinMiddleware, h.handleReactionWithID)
 }
 
 func NewHTTPServer(addr string, authUseCase application.AuthUseCase, cache application.Cache, useCase application.UseCase) *http.Server {
@@ -148,22 +150,28 @@ func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"logout": "ok"})
 }
 
-func (h *HTTPHandler) handleUserQuit(c *gin.Context) {
+func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
 	var req struct {
-		Username string `json:"username"`
 		Password string `json:"password"`
 	}
 	if err := decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
-	if req.Username == "" || req.Password == "" {
-		badRequest(c, errors.New("username and password are required"))
+	if req.Password == "" {
+		badRequest(c, errors.New("password is required"))
 		return
 	}
-	if err := h.userUseCase.Quit(req.Username, req.Password); err != nil {
+	if err := h.userUseCase.DeleteMe(userID, req.Password); err != nil {
 		writeUseCaseError(c, err)
 		return
+	}
+	if token, exists := middleware.Token(c); exists {
+		h.cache.Delete(token)
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -171,11 +179,11 @@ func (h *HTTPHandler) handleUserQuit(c *gin.Context) {
 func (h *HTTPHandler) handleBoards(c *gin.Context) {
 	switch c.Request.Method {
 	case http.MethodGet:
-		limit, offset, ok := parseLimitOffset(c)
+		limit, lastID, ok := parseLimitLastID(c)
 		if !ok {
 			return
 		}
-		boards, err := h.boardUseCase.GetBoards(limit, offset)
+		boards, err := h.boardUseCase.GetBoards(limit, lastID)
 		if err != nil {
 			writeUseCaseError(c, err)
 			return
@@ -259,11 +267,11 @@ func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 
 	switch c.Request.Method {
 	case http.MethodGet:
-		limit, offset, ok := parseLimitOffset(c)
+		limit, lastID, ok := parseLimitLastID(c)
 		if !ok {
 			return
 		}
-		posts, err := h.postUseCase.GetPostsList(boardID, limit, offset)
+		posts, err := h.postUseCase.GetPostsList(boardID, limit, lastID)
 		if err != nil {
 			writeUseCaseError(c, err)
 			return
@@ -354,11 +362,11 @@ func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 
 	switch c.Request.Method {
 	case http.MethodGet:
-		limit, offset, ok := parseLimitOffset(c)
+		limit, lastID, ok := parseLimitLastID(c)
 		if !ok {
 			return
 		}
-		comments, err := h.commentUseCase.GetCommentsByPost(postID, limit, offset)
+		comments, err := h.commentUseCase.GetCommentsByPost(postID, limit, lastID)
 		if err != nil {
 			writeUseCaseError(c, err)
 			return
@@ -431,19 +439,27 @@ func (h *HTTPHandler) handleComments(c *gin.Context) {
 	}
 }
 
-func (h *HTTPHandler) handleReactions(c *gin.Context) {
+func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
+	postID, err := parseInt64(c.Param("postID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid post id"))
+		return
+	}
+	h.handleReactionsByTarget(c, postID, "post")
+}
+
+func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
+	commentID, err := parseInt64(c.Param("commentID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid comment id"))
+		return
+	}
+	h.handleReactionsByTarget(c, commentID, "comment")
+}
+
+func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, targetType string) {
 	switch c.Request.Method {
 	case http.MethodGet:
-		targetID, err := parseInt64(c.Query("target_id"))
-		if err != nil {
-			badRequest(c, errors.New("invalid target_id"))
-			return
-		}
-		targetType := c.Query("target_type")
-		if targetType == "" {
-			badRequest(c, errors.New("target_type is required"))
-			return
-		}
 		reactions, err := h.reactionUseCase.GetReactionsByTarget(targetID, targetType)
 		if err != nil {
 			writeUseCaseError(c, err)
@@ -456,19 +472,17 @@ func (h *HTTPHandler) handleReactions(c *gin.Context) {
 			return
 		}
 		var req struct {
-			TargetID     int64  `json:"target_id"`
-			TargetType   string `json:"target_type"`
 			ReactionType string `json:"reaction_type"`
 		}
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
 		}
-		if userID == 0 || req.TargetID == 0 || req.TargetType == "" || req.ReactionType == "" {
-			badRequest(c, errors.New("user_id, target_id, target_type and reaction_type are required"))
+		if userID == 0 || req.ReactionType == "" {
+			badRequest(c, errors.New("user_id and reaction_type are required"))
 			return
 		}
-		if err := h.reactionUseCase.AddReaction(userID, req.TargetID, req.TargetType, req.ReactionType); err != nil {
+		if err := h.reactionUseCase.AddReaction(userID, targetID, targetType, req.ReactionType); err != nil {
 			writeUseCaseError(c, err)
 			return
 		}
@@ -514,12 +528,12 @@ func writeUseCaseError(c *gin.Context, err error) {
 	}
 }
 
-func parseLimitOffset(c *gin.Context) (int, int, bool) {
+func parseLimitLastID(c *gin.Context) (int, int64, bool) {
 	limitStr := c.Query("limit")
-	offsetStr := c.Query("offset")
+	lastIDStr := c.Query("last_id")
 
 	limit := 10
-	offset := 0
+	var lastID int64
 
 	if limitStr != "" {
 		v, err := strconv.Atoi(limitStr)
@@ -530,16 +544,16 @@ func parseLimitOffset(c *gin.Context) (int, int, bool) {
 		limit = v
 	}
 
-	if offsetStr != "" {
-		v, err := strconv.Atoi(offsetStr)
+	if lastIDStr != "" {
+		v, err := strconv.ParseInt(lastIDStr, 10, 64)
 		if err != nil || v < 0 {
-			badRequest(c, errors.New("invalid offset"))
+			badRequest(c, errors.New("invalid last_id"))
 			return 0, 0, false
 		}
-		offset = v
+		lastID = v
 	}
 
-	return limit, offset, true
+	return limit, lastID, true
 }
 
 func parseInt64(raw string) (int64, error) {

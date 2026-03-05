@@ -1,6 +1,8 @@
 package inmemory
 
 import (
+	"sort"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -40,21 +42,28 @@ func (r *CommentRepository) SelectCommentByID(id int64) (*entity.Comment, error)
 	return nil, nil
 }
 
-func (r *CommentRepository) SelectComments(postID int64, limit, offset int) ([]*entity.Comment, error) {
+func (r *CommentRepository) SelectComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	if limit <= 0 {
+		return []*entity.Comment{}, nil
+	}
+
 	var comments []*entity.Comment
 	for _, comment := range r.commentDB.Data {
 		if comment.PostID == postID {
+			if lastID > 0 && comment.ID >= lastID {
+				continue
+			}
 			comments = append(comments, comment)
 		}
 	}
-	if offset > len(comments) {
-		return []*entity.Comment{}, nil
+	sort.Slice(comments, func(i, j int) bool {
+		return comments[i].ID > comments[j].ID
+	})
+
+	if len(comments) > limit {
+		comments = comments[:limit]
 	}
-	end := offset + limit
-	if end > len(comments) {
-		end = len(comments)
-	}
-	return comments[offset:end], nil
+	return comments, nil
 }
 
 func (r *CommentRepository) Update(comment *entity.Comment) error {

@@ -13,9 +13,11 @@ func TestBoardRepository_ListPagination(t *testing.T) {
 	_, _ = repo.Save(testBoard("b2", "d2"))
 	_, _ = repo.Save(testBoard("b3", "d3"))
 
-	boards, err := repo.SelectBoardList(2, 1)
+	boards, err := repo.SelectBoardList(2, 0)
 	require.NoError(t, err)
 	assert.Len(t, boards, 2)
+	assert.Equal(t, int64(3), boards[0].ID)
+	assert.Equal(t, int64(2), boards[1].ID)
 }
 
 func TestBoardRepository_SaveSelectUpdateDelete(t *testing.T) {
@@ -42,14 +44,27 @@ func TestBoardRepository_SaveSelectUpdateDelete(t *testing.T) {
 	assert.Nil(t, deleted)
 }
 
-func TestBoardRepository_PaginationOffsetEqualsLen_ReturnsEmpty(t *testing.T) {
+func TestBoardRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
 	repo := NewBoardRepository()
 	_, _ = repo.Save(testBoard("b1", "d1"))
 	_, _ = repo.Save(testBoard("b2", "d2"))
 
-	boards, err := repo.SelectBoardList(10, 2)
+	boards, err := repo.SelectBoardList(10, 1)
 	require.NoError(t, err)
 	assert.Empty(t, boards)
+}
+
+func TestBoardRepository_PaginationWithCursor_ReturnsNextChunk(t *testing.T) {
+	repo := NewBoardRepository()
+	_, _ = repo.Save(testBoard("b1", "d1"))
+	_, _ = repo.Save(testBoard("b2", "d2"))
+	_, _ = repo.Save(testBoard("b3", "d3"))
+
+	boards, err := repo.SelectBoardList(10, 3)
+	require.NoError(t, err)
+	require.Len(t, boards, 2)
+	assert.Equal(t, int64(2), boards[0].ID)
+	assert.Equal(t, int64(1), boards[1].ID)
 }
 
 func TestBoardRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {

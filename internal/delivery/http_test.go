@@ -18,11 +18,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const apiV1Prefix = "/api/v1"
+
 type fakeUserUseCase struct {
-	signUp func(username, password string) (string, error)
-	quit   func(username, password string) error
-	login  func(username, password string) (int64, error)
-	logout func(username string) error
+	signUp   func(username, password string) (string, error)
+	quit     func(username, password string) error
+	deleteMe func(userID int64, password string) error
+	login    func(username, password string) (int64, error)
+	logout   func(username string) error
 }
 
 func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
@@ -35,6 +38,13 @@ func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
 func (f *fakeUserUseCase) Quit(username, password string) error {
 	if f.quit != nil {
 		return f.quit(username, password)
+	}
+	return nil
+}
+
+func (f *fakeUserUseCase) DeleteMe(userID int64, password string) error {
+	if f.deleteMe != nil {
+		return f.deleteMe(userID, password)
 	}
 	return nil
 }
@@ -54,15 +64,15 @@ func (f *fakeUserUseCase) Logout(username string) error {
 }
 
 type fakeBoardUseCase struct {
-	getBoards   func(limit, offset int) (*dto.BoardList, error)
+	getBoards   func(limit int, lastID int64) (*dto.BoardList, error)
 	createBoard func(userID int64, name, description string) (int64, error)
 	updateBoard func(id, userID int64, name, description string) error
 	deleteBoard func(id, userID int64) error
 }
 
-func (f *fakeBoardUseCase) GetBoards(limit, offset int) (*dto.BoardList, error) {
+func (f *fakeBoardUseCase) GetBoards(limit int, lastID int64) (*dto.BoardList, error) {
 	if f.getBoards != nil {
-		return f.getBoards(limit, offset)
+		return f.getBoards(limit, lastID)
 	}
 	return &dto.BoardList{}, nil
 }
@@ -90,7 +100,7 @@ func (f *fakeBoardUseCase) DeleteBoard(id, userID int64) error {
 
 type fakePostUseCase struct {
 	createPost    func(title, content string, authorID, boardID int64) (int64, error)
-	getPostsList  func(boardID int64, limit, offset int) (*dto.PostList, error)
+	getPostsList  func(boardID int64, limit int, lastID int64) (*dto.PostList, error)
 	getPostDetail func(postID int64) (*dto.PostDetail, error)
 	updatePost    func(id, authorID int64, title, content string) error
 	deletePost    func(id, authorID int64) error
@@ -103,9 +113,9 @@ func (f *fakePostUseCase) CreatePost(title, content string, authorID, boardID in
 	return 1, nil
 }
 
-func (f *fakePostUseCase) GetPostsList(boardID int64, limit, offset int) (*dto.PostList, error) {
+func (f *fakePostUseCase) GetPostsList(boardID int64, limit int, lastID int64) (*dto.PostList, error) {
 	if f.getPostsList != nil {
-		return f.getPostsList(boardID, limit, offset)
+		return f.getPostsList(boardID, limit, lastID)
 	}
 	return &dto.PostList{}, nil
 }
@@ -133,7 +143,7 @@ func (f *fakePostUseCase) DeletePost(id, authorID int64) error {
 
 type fakeCommentUseCase struct {
 	createComment     func(content string, authorID, postID int64) (int64, error)
-	getCommentsByPost func(postID int64, limit, offset int) (*dto.CommentList, error)
+	getCommentsByPost func(postID int64, limit int, lastID int64) (*dto.CommentList, error)
 	updateComment     func(id, authorID int64, content string) error
 	deleteComment     func(id, authorID int64) error
 }
@@ -145,9 +155,9 @@ func (f *fakeCommentUseCase) CreateComment(content string, authorID, postID int6
 	return 1, nil
 }
 
-func (f *fakeCommentUseCase) GetCommentsByPost(postID int64, limit, offset int) (*dto.CommentList, error) {
+func (f *fakeCommentUseCase) GetCommentsByPost(postID int64, limit int, lastID int64) (*dto.CommentList, error) {
 	if f.getCommentsByPost != nil {
-		return f.getCommentsByPost(postID, limit, offset)
+		return f.getCommentsByPost(postID, limit, lastID)
 	}
 	return &dto.CommentList{}, nil
 }
@@ -220,7 +230,7 @@ func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body
 	if body != nil {
 		require.NoError(t, json.NewEncoder(&buf).Encode(body))
 	}
-	req := httptest.NewRequest(method, path, &buf)
+	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -238,7 +248,7 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 	require.NotNil(t, testCache)
 	testCache.Set(token, userID)
 
-	req := httptest.NewRequest(method, path, &buf)
+	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -250,7 +260,7 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/users/signup", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/signup", nil)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
 
@@ -262,7 +272,7 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 	}
 	handler := newTestHandler(user, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodPost, "/users/signup", map[string]string{
+	rr := doJSONRequest(t, handler, http.MethodPost, "/signup", map[string]string{
 		"username": "alice",
 		"password": "pw",
 	})
@@ -272,7 +282,7 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	req := httptest.NewRequest(http.MethodPost, "/users/signup", bytes.NewBufferString("{invalid"))
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString("{invalid"))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -283,7 +293,7 @@ func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
 func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodPost, "/users/signup", map[string]any{
+	rr := doJSONRequest(t, handler, http.MethodPost, "/signup", map[string]any{
 		"username": "alice",
 		"password": "pw",
 		"extra":    "unknown",
@@ -291,18 +301,17 @@ func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
-func TestHTTP_UserQuit_Unauthorized(t *testing.T) {
+func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 	user := &fakeUserUseCase{
-		quit: func(username, password string) error {
+		deleteMe: func(userID int64, password string) error {
 			return customError.ErrInvalidCredential
 		},
 	}
 	handler := newTestHandler(user, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodDelete, "/users/quit", map[string]string{
-		"username": "alice",
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/me", map[string]string{
 		"password": "wrong",
-	})
+	}, 1)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
@@ -331,7 +340,7 @@ func TestHTTP_BoardGet_BadLimit(t *testing.T) {
 func TestHTTP_BoardGet_BadOffset(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?offset=bad", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?last_id=bad", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
@@ -367,17 +376,17 @@ func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
-func TestHTTP_ReactionList_MissingTargetType(t *testing.T) {
+func TestHTTP_PostReactionList_InvalidPostID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions?target_id=1", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/abc/reactions", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
-func TestHTTP_ReactionList_MissingTargetID(t *testing.T) {
+func TestHTTP_CommentReactionList_InvalidCommentID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions?target_type=post", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/comments/abc/reactions", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 

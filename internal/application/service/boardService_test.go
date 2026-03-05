@@ -40,6 +40,21 @@ func TestBoardService_GetBoards_Success(t *testing.T) {
 	assert.Len(t, list.Boards, 2)
 }
 
+func TestBoardService_GetBoards_HasMoreAndNextCursor(t *testing.T) {
+	repository := newTestRepository()
+	seedBoard(repository, "b1", "d1")
+	seedBoard(repository, "b2", "d2")
+	seedBoard(repository, "b3", "d3")
+	svc := NewBoardService(repository)
+
+	list, err := svc.GetBoards(2, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Boards, 2)
+	assert.True(t, list.HasMore)
+	require.NotNil(t, list.NextLastID)
+	assert.Equal(t, list.Boards[len(list.Boards)-1].ID, *list.NextLastID)
+}
+
 func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
 	repository := newTestRepository()
 	adminID := seedUser(repository, "admin", "pw", "admin")

@@ -1,6 +1,8 @@
 package inmemory
 
 import (
+	"sort"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -33,19 +35,26 @@ func (r *BoardRepository) SelectBoardByID(id int64) (*entity.Board, error) {
 	return nil, nil
 }
 
-func (r *BoardRepository) SelectBoardList(limit, offset int) ([]*entity.Board, error) {
-	var boards []*entity.Board
-	for _, board := range r.boardDB.Data {
-		boards = append(boards, board)
-	}
-	if offset > len(boards) {
+func (r *BoardRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Board, error) {
+	if limit <= 0 {
 		return []*entity.Board{}, nil
 	}
-	end := offset + limit
-	if end > len(boards) {
-		end = len(boards)
+
+	var boards []*entity.Board
+	for _, board := range r.boardDB.Data {
+		if lastID > 0 && board.ID >= lastID {
+			continue
+		}
+		boards = append(boards, board)
 	}
-	return boards[offset:end], nil
+	sort.Slice(boards, func(i, j int) bool {
+		return boards[i].ID > boards[j].ID
+	})
+
+	if len(boards) > limit {
+		boards = boards[:limit]
+	}
+	return boards, nil
 }
 
 func (r *BoardRepository) Save(board *entity.Board) (int64, error) {

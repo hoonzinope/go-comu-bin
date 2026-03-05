@@ -1,6 +1,8 @@
 package inmemory
 
 import (
+	"sort"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -40,21 +42,28 @@ func (r *PostRepository) SelectPostByID(id int64) (*entity.Post, error) {
 	return nil, nil
 }
 
-func (r *PostRepository) SelectPosts(boardID int64, limit, offset int) ([]*entity.Post, error) {
+func (r *PostRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	if limit <= 0 {
+		return []*entity.Post{}, nil
+	}
+
 	var posts []*entity.Post
 	for _, post := range r.postDB.Data {
 		if post.BoardID == boardID {
+			if lastID > 0 && post.ID >= lastID {
+				continue
+			}
 			posts = append(posts, post)
 		}
 	}
-	if offset > len(posts) {
-		return []*entity.Post{}, nil
+	sort.Slice(posts, func(i, j int) bool {
+		return posts[i].ID > posts[j].ID
+	})
+
+	if len(posts) > limit {
+		posts = posts[:limit]
 	}
-	end := offset + limit
-	if end > len(posts) {
-		end = len(posts)
-	}
-	return posts[offset:end], nil
+	return posts, nil
 }
 
 func (r *PostRepository) Update(post *entity.Post) error {

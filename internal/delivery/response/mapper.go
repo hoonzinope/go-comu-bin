@@ -16,9 +16,11 @@ func BoardListFromDTO(list *dto.BoardList) *BoardList {
 	}
 
 	return &BoardList{
-		Boards: boards,
-		Limit:  list.Limit,
-		Offset: list.Offset,
+		Boards:     boards,
+		Limit:      list.Limit,
+		LastID:     list.LastID,
+		HasMore:    list.HasMore,
+		NextLastID: list.NextLastID,
 	}
 }
 
@@ -33,9 +35,11 @@ func PostListFromDTO(list *dto.PostList) *PostList {
 	}
 
 	return &PostList{
-		Posts:  posts,
-		Limit:  list.Limit,
-		Offset: list.Offset,
+		Posts:      posts,
+		Limit:      list.Limit,
+		LastID:     list.LastID,
+		HasMore:    list.HasMore,
+		NextLastID: list.NextLastID,
 	}
 }
 
@@ -72,9 +76,11 @@ func CommentListFromDTO(list *dto.CommentList) *CommentList {
 	}
 
 	return &CommentList{
-		Comments: comments,
-		Limit:    list.Limit,
-		Offset:   list.Offset,
+		Comments:   comments,
+		Limit:      list.Limit,
+		LastID:     list.LastID,
+		HasMore:    list.HasMore,
+		NextLastID: list.NextLastID,
 	}
 }
 

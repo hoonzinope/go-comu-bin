@@ -20,6 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const apiV1Prefix = "/api/v1"
+
 func TestIntegration_MainFlow(t *testing.T) {
 	server := newIntegrationServer(t)
 	defer server.Close()
@@ -40,29 +42,28 @@ func TestIntegration_MainFlow(t *testing.T) {
 	mustGetComments(t, server.URL, postID, commentID)
 	mustUpdateComment(t, server.URL, aliceToken, commentID, "nice-updated")
 
-	mustAddReaction(t, server.URL, aliceToken, commentID, "comment", "like")
-	commentReactionID := mustGetFirstReactionID(t, server.URL, commentID, "comment")
+	mustAddCommentReaction(t, server.URL, aliceToken, commentID, "like")
+	commentReactionID := mustGetFirstCommentReactionID(t, server.URL, commentID)
 	mustDeleteReaction(t, server.URL, aliceToken, commentReactionID)
-	mustNoReactions(t, server.URL, commentID, "comment")
+	mustNoCommentReactions(t, server.URL, commentID)
 
 	mustDeleteComment(t, server.URL, aliceToken, commentID)
 	mustNoComments(t, server.URL, postID)
 
-	mustAddReaction(t, server.URL, aliceToken, postID, "post", "like")
-	postReactionID := mustGetFirstReactionID(t, server.URL, postID, "post")
+	mustAddPostReaction(t, server.URL, aliceToken, postID, "like")
+	postReactionID := mustGetFirstPostReactionID(t, server.URL, postID)
 	mustDeleteReaction(t, server.URL, aliceToken, postReactionID)
-	mustNoReactions(t, server.URL, postID, "post")
+	mustNoPostReactions(t, server.URL, postID)
 
 	mustDeletePost(t, server.URL, aliceToken, postID)
 	mustPostNotAccessible(t, server.URL, postID)
 
+	mustDeleteMe(t, server.URL, aliceToken, "pw")
 	mustLogout(t, server.URL, adminToken)
-	mustLogout(t, server.URL, aliceToken)
 	assertStatus(t, server.URL, aliceToken, http.MethodPost, "/boards", map[string]any{
 		"name":        "after-logout",
 		"description": "should fail",
 	}, http.StatusUnauthorized)
-	mustQuit(t, server.URL, "alice", "pw")
 }
 
 func TestIntegration_ForbiddenScenarios(t *testing.T) {
@@ -79,8 +80,8 @@ func TestIntegration_ForbiddenScenarios(t *testing.T) {
 
 	postID := mustCreatePost(t, server.URL, aliceToken, boardID, "hello", "first post")
 	commentID := mustCreateComment(t, server.URL, aliceToken, postID, "nice")
-	mustAddReaction(t, server.URL, aliceToken, commentID, "comment", "like")
-	reactionID := mustGetFirstReactionID(t, server.URL, commentID, "comment")
+	mustAddCommentReaction(t, server.URL, aliceToken, commentID, "like")
+	reactionID := mustGetFirstCommentReactionID(t, server.URL, commentID)
 
 	assertStatus(t, server.URL, bobToken, http.MethodPost, "/boards", map[string]any{
 		"name": "blocked", "description": "blocked",
@@ -127,7 +128,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 
 func mustLogin(t *testing.T, baseURL, username, password string) string {
 	t.Helper()
-	_, status, headers := requestJSON(t, baseURL, "", http.MethodPost, "/users/login", map[string]any{
+	_, status, headers := requestJSON(t, baseURL, "", http.MethodPost, "/auth/login", map[string]any{
 		"username": username,
 		"password": password,
 	})
@@ -139,7 +140,7 @@ func mustLogin(t *testing.T, baseURL, username, password string) string {
 
 func mustSignUp(t *testing.T, baseURL, username, password string) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodPost, "/users/signup", map[string]any{
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodPost, "/signup", map[string]any{
 		"username": username,
 		"password": password,
 	})
@@ -148,17 +149,16 @@ func mustSignUp(t *testing.T, baseURL, username, password string) {
 
 func mustLogout(t *testing.T, baseURL, token string) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, "/users/logout", map[string]any{})
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, "/auth/logout", map[string]any{})
 	assert.Equal(t, http.StatusOK, status, "logout failed: body=%s", string(body))
 }
 
-func mustQuit(t *testing.T, baseURL, username, password string) {
+func mustDeleteMe(t *testing.T, baseURL, token, password string) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodDelete, "/users/quit", map[string]any{
-		"username": username,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodDelete, "/users/me", map[string]any{
 		"password": password,
 	})
-	assert.Equal(t, http.StatusNoContent, status, "quit failed: body=%s", string(body))
+	assert.Equal(t, http.StatusNoContent, status, "delete me failed: body=%s", string(body))
 }
 
 func mustCreateBoard(t *testing.T, baseURL, token, name, description string) int64 {
@@ -259,20 +259,36 @@ func mustDeleteComment(t *testing.T, baseURL, token string, commentID int64) {
 	assert.Equal(t, http.StatusNoContent, status, "delete comment failed: body=%s", string(body))
 }
 
-func mustAddReaction(t *testing.T, baseURL, token string, targetID int64, targetType, reactionType string) {
+func mustAddPostReaction(t *testing.T, baseURL, token string, postID int64, reactionType string) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, "/reactions", map[string]any{
-		"target_id":     targetID,
-		"target_type":   targetType,
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, fmt.Sprintf("/posts/%d/reactions", postID), map[string]any{
 		"reaction_type": reactionType,
 	})
-	assert.Equal(t, http.StatusCreated, status, "add reaction failed: body=%s", string(body))
+	assert.Equal(t, http.StatusCreated, status, "add post reaction failed: body=%s", string(body))
 }
 
-func mustGetFirstReactionID(t *testing.T, baseURL string, targetID int64, targetType string) int64 {
+func mustAddCommentReaction(t *testing.T, baseURL, token string, commentID int64, reactionType string) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
-	assert.Equal(t, http.StatusOK, status, "get reactions failed: body=%s", string(body))
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, fmt.Sprintf("/comments/%d/reactions", commentID), map[string]any{
+		"reaction_type": reactionType,
+	})
+	assert.Equal(t, http.StatusCreated, status, "add comment reaction failed: body=%s", string(body))
+}
+
+func mustGetFirstPostReactionID(t *testing.T, baseURL string, postID int64) int64 {
+	t.Helper()
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/reactions", postID), nil)
+	assert.Equal(t, http.StatusOK, status, "get post reactions failed: body=%s", string(body))
+	var resp []map[string]any
+	mustUnmarshal(t, body, &resp)
+	require.NotEmpty(t, resp)
+	return int64(resp[0]["id"].(float64))
+}
+
+func mustGetFirstCommentReactionID(t *testing.T, baseURL string, commentID int64) int64 {
+	t.Helper()
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/comments/%d/reactions", commentID), nil)
+	assert.Equal(t, http.StatusOK, status, "get comment reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
 	require.NotEmpty(t, resp)
@@ -300,10 +316,19 @@ func mustNoComments(t *testing.T, baseURL string, postID int64) {
 	assert.Empty(t, comments)
 }
 
-func mustNoReactions(t *testing.T, baseURL string, targetID int64, targetType string) {
+func mustNoPostReactions(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/reactions?target_id=%d&target_type=%s", targetID, targetType), nil)
-	assert.Equal(t, http.StatusOK, status, "get reactions failed: body=%s", string(body))
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/reactions", postID), nil)
+	assert.Equal(t, http.StatusOK, status, "get post reactions failed: body=%s", string(body))
+	var resp []map[string]any
+	mustUnmarshal(t, body, &resp)
+	assert.Empty(t, resp)
+}
+
+func mustNoCommentReactions(t *testing.T, baseURL string, commentID int64) {
+	t.Helper()
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/comments/%d/reactions", commentID), nil)
+	assert.Equal(t, http.StatusOK, status, "get comment reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
 	assert.Empty(t, resp)
@@ -331,7 +356,7 @@ func requestJSON(t *testing.T, baseURL, token, method, path string, body any) ([
 		payload = buf
 	}
 
-	req, err := http.NewRequest(method, baseURL+path, payload)
+	req, err := http.NewRequest(method, baseURL+apiV1Prefix+path, payload)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {

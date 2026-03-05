@@ -40,17 +40,35 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	return commentID, nil
 }
 
-func (s *CommentService) GetCommentsByPost(postID int64, limit, offset int) (*dto.CommentList, error) {
-	// 댓글 목록 조회 로직 구현
-	comments, err := s.repository.CommentRepository.SelectComments(postID, limit, offset)
+func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64) (*dto.CommentList, error) {
+	// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
+	fetchLimit := limit
+	if limit > 0 {
+		fetchLimit = limit + 1
+	}
+
+	comments, err := s.repository.CommentRepository.SelectComments(postID, fetchLimit, lastID)
 	if err != nil {
 		return nil, customError.ErrInternalServerError
 	}
 
+	hasMore := false
+	var nextLastID *int64
+	if limit >= 0 && len(comments) > limit {
+		hasMore = true
+		comments = comments[:limit]
+	}
+	if hasMore && len(comments) > 0 {
+		next := comments[len(comments)-1].ID
+		nextLastID = &next
+	}
+
 	return &dto.CommentList{
-		Comments: comments,
-		Limit:    limit,
-		Offset:   offset,
+		Comments:   comments,
+		Limit:      limit,
+		LastID:     lastID,
+		HasMore:    hasMore,
+		NextLastID: nextLastID,
 	}, nil
 }
 
