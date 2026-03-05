@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -10,6 +11,7 @@ import (
 var _ application.BoardRepository = (*BoardRepository)(nil)
 
 type BoardRepository struct {
+	mu      sync.RWMutex
 	boardDB struct {
 		ID   int64
 		Data map[int64]*entity.Board
@@ -29,6 +31,9 @@ func NewBoardRepository() *BoardRepository {
 }
 
 func (r *BoardRepository) SelectBoardByID(id int64) (*entity.Board, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if board, exists := r.boardDB.Data[id]; exists {
 		return board, nil
 	}
@@ -36,6 +41,9 @@ func (r *BoardRepository) SelectBoardByID(id int64) (*entity.Board, error) {
 }
 
 func (r *BoardRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Board, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if limit <= 0 {
 		return []*entity.Board{}, nil
 	}
@@ -58,6 +66,9 @@ func (r *BoardRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Bo
 }
 
 func (r *BoardRepository) Save(board *entity.Board) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.boardDB.ID++
 	board.ID = r.boardDB.ID
 	r.boardDB.Data[board.ID] = board
@@ -65,6 +76,9 @@ func (r *BoardRepository) Save(board *entity.Board) (int64, error) {
 }
 
 func (r *BoardRepository) Update(board *entity.Board) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if _, exists := r.boardDB.Data[board.ID]; exists {
 		r.boardDB.Data[board.ID] = board
 		return nil
@@ -73,6 +87,9 @@ func (r *BoardRepository) Update(board *entity.Board) error {
 }
 
 func (r *BoardRepository) Delete(id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	delete(r.boardDB.Data, id)
 	return nil
 }

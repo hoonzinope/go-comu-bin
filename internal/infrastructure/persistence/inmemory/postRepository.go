@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -10,6 +11,7 @@ import (
 var _ application.PostRepository = (*PostRepository)(nil)
 
 type PostRepository struct {
+	mu     sync.RWMutex
 	postDB struct {
 		ID   int64
 		Data map[int64]*entity.Post
@@ -29,6 +31,9 @@ func NewPostRepository() *PostRepository {
 }
 
 func (r *PostRepository) Save(post *entity.Post) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.postDB.ID++
 	post.ID = r.postDB.ID
 	r.postDB.Data[post.ID] = post
@@ -36,6 +41,9 @@ func (r *PostRepository) Save(post *entity.Post) (int64, error) {
 }
 
 func (r *PostRepository) SelectPostByID(id int64) (*entity.Post, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if post, exists := r.postDB.Data[id]; exists {
 		return post, nil
 	}
@@ -43,6 +51,9 @@ func (r *PostRepository) SelectPostByID(id int64) (*entity.Post, error) {
 }
 
 func (r *PostRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if limit <= 0 {
 		return []*entity.Post{}, nil
 	}
@@ -67,6 +78,9 @@ func (r *PostRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]
 }
 
 func (r *PostRepository) Update(post *entity.Post) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if _, exists := r.postDB.Data[post.ID]; exists {
 		r.postDB.Data[post.ID] = post
 		return nil
@@ -75,6 +89,9 @@ func (r *PostRepository) Update(post *entity.Post) error {
 }
 
 func (r *PostRepository) Delete(id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	delete(r.postDB.Data, id)
 	return nil
 }

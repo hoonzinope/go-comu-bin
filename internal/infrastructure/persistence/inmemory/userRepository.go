@@ -1,6 +1,8 @@
 package inmemory
 
 import (
+	"sync"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -8,6 +10,7 @@ import (
 var _ application.UserRepository = (*UserRepository)(nil)
 
 type UserRepository struct {
+	mu     sync.RWMutex
 	userDB struct {
 		ID   int64
 		Data map[int64]*entity.User
@@ -27,6 +30,9 @@ func NewUserRepository() *UserRepository {
 }
 
 func (r *UserRepository) Save(user *entity.User) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.userDB.ID++
 	user.ID = r.userDB.ID
 	r.userDB.Data[user.ID] = user
@@ -34,6 +40,9 @@ func (r *UserRepository) Save(user *entity.User) (int64, error) {
 }
 
 func (r *UserRepository) SelectUserByUsername(username string) (*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	for _, user := range r.userDB.Data {
 		if user.Name == username {
 			return user, nil
@@ -43,6 +52,9 @@ func (r *UserRepository) SelectUserByUsername(username string) (*entity.User, er
 }
 
 func (r *UserRepository) SelectUserByID(id int64) (*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if user, exists := r.userDB.Data[id]; exists {
 		return user, nil
 	}
@@ -50,6 +62,9 @@ func (r *UserRepository) SelectUserByID(id int64) (*entity.User, error) {
 }
 
 func (r *UserRepository) Delete(id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	delete(r.userDB.Data, id)
 	return nil
 }

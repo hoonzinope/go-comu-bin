@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -10,6 +11,7 @@ import (
 var _ application.CommentRepository = (*CommentRepository)(nil)
 
 type CommentRepository struct {
+	mu        sync.RWMutex
 	commentDB struct {
 		ID   int64
 		Data map[int64]*entity.Comment
@@ -29,6 +31,9 @@ func NewCommentRepository() *CommentRepository {
 }
 
 func (r *CommentRepository) Save(comment *entity.Comment) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.commentDB.ID++
 	comment.ID = r.commentDB.ID
 	r.commentDB.Data[comment.ID] = comment
@@ -36,6 +41,9 @@ func (r *CommentRepository) Save(comment *entity.Comment) (int64, error) {
 }
 
 func (r *CommentRepository) SelectCommentByID(id int64) (*entity.Comment, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if comment, exists := r.commentDB.Data[id]; exists {
 		return comment, nil
 	}
@@ -43,6 +51,9 @@ func (r *CommentRepository) SelectCommentByID(id int64) (*entity.Comment, error)
 }
 
 func (r *CommentRepository) SelectComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if limit <= 0 {
 		return []*entity.Comment{}, nil
 	}
@@ -67,6 +78,9 @@ func (r *CommentRepository) SelectComments(postID int64, limit int, lastID int64
 }
 
 func (r *CommentRepository) Update(comment *entity.Comment) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if _, exists := r.commentDB.Data[comment.ID]; exists {
 		r.commentDB.Data[comment.ID] = comment
 		return nil
@@ -75,6 +89,9 @@ func (r *CommentRepository) Update(comment *entity.Comment) error {
 }
 
 func (r *CommentRepository) Delete(id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	delete(r.commentDB.Data, id)
 	return nil
 }
