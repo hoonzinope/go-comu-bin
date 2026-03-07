@@ -198,3 +198,14 @@ func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testi
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
+
+func TestReactionService_GetReactionsByTarget_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, &errorCache{
+		getOrSetWithTTLErr: newCacheFailure(nil),
+	}, newTestCachePolicy())
+
+	_, err := svc.GetReactionsByTarget(1, entity.ReactionTargetPost)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+}

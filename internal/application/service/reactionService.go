@@ -90,7 +90,7 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 		return mapper.ReactionsFromEntities(reactions), nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, normalizeCacheLoadError("load reaction list cache", err)
 	}
 	reactions, ok := value.([]model.Reaction)
 	if !ok {

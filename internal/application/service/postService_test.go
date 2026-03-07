@@ -130,3 +130,14 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
+
+func TestPostService_GetPostDetail_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, &errorCache{
+		getOrSetWithTTLErr: newCacheFailure(nil),
+	}, newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.GetPostDetail(1)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+}

@@ -67,7 +67,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 		}, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, normalizeCacheLoadError("load board list cache", err)
 	}
 	list, ok := value.(*model.BoardList)
 	if !ok {

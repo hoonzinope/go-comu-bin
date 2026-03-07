@@ -112,3 +112,14 @@ func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
+
+func TestCommentService_GetCommentsByPost_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, &errorCache{
+		getOrSetWithTTLErr: newCacheFailure(nil),
+	}, newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.GetCommentsByPost(1, 10, 0)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+}

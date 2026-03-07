@@ -110,3 +110,14 @@ func TestBoardService_CreateBoard_ReturnsCacheFailure_WhenInvalidationFails(t *t
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
 }
+
+func TestBoardService_GetBoards_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewBoardService(repositories.user, repositories.board, &errorCache{
+		getOrSetWithTTLErr: newCacheFailure(nil),
+	}, newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.GetBoards(10, 0)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+}

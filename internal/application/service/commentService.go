@@ -102,7 +102,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 		}, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, normalizeCacheLoadError("load comment list cache", err)
 	}
 	list, ok := value.(*model.CommentList)
 	if !ok {

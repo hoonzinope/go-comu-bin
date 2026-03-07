@@ -107,7 +107,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*mod
 		}, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, normalizeCacheLoadError("load post list cache", err)
 	}
 	list, ok := value.(*model.PostList)
 	if !ok {
@@ -153,7 +153,7 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 		return postDetail, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, normalizeCacheLoadError("load post detail cache", err)
 	}
 	detail, ok := value.(*model.PostDetail)
 	if !ok {

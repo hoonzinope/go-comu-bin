@@ -6,6 +6,7 @@ import (
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
@@ -115,10 +116,10 @@ func (c *errorCache) DeleteByPrefix(prefix string) (int, error) {
 
 func (c *errorCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
 	if c.getOrSetWithTTLErr != nil {
-		return nil, c.getOrSetWithTTLErr
+		return nil, customError.WrapCache("get or set cache", c.getOrSetWithTTLErr)
 	}
 	if c.getErr != nil {
-		return nil, c.getErr
+		return nil, customError.WrapCache("get cache", c.getErr)
 	}
 	return loader()
 }
@@ -128,4 +129,14 @@ func newCacheFailure(err error) error {
 		return err
 	}
 	return errors.New("cache unavailable")
+}
+
+func assertCacheFailure(t interface {
+	Errorf(format string, args ...interface{})
+	Helper()
+}, err error) {
+	t.Helper()
+	if !errors.Is(err, customError.ErrCacheFailure) {
+		t.Errorf("expected cache failure, got %v", err)
+	}
 }
