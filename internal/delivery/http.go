@@ -64,26 +64,26 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
 
-	v1.GET("/boards", h.handleBoards)
-	v1.POST("/boards", h.authGinMiddleware, h.handleBoards)
-	v1.PUT("/boards/:boardID", h.authGinMiddleware, h.handleBoardWithID)
-	v1.DELETE("/boards/:boardID", h.authGinMiddleware, h.handleBoardWithID)
+	v1.GET("/boards", h.handleBoardsGet)
+	v1.POST("/boards", h.authGinMiddleware, h.handleBoardsPost)
+	v1.PUT("/boards/:boardID", h.authGinMiddleware, h.handleBoardPut)
+	v1.DELETE("/boards/:boardID", h.authGinMiddleware, h.handleBoardDelete)
 
-	v1.GET("/boards/:boardID/posts", h.handleBoardPosts)
-	v1.POST("/boards/:boardID/posts", h.authGinMiddleware, h.handleBoardPosts)
+	v1.GET("/boards/:boardID/posts", h.handleBoardPostsGet)
+	v1.POST("/boards/:boardID/posts", h.authGinMiddleware, h.handleBoardPostsPost)
 
-	v1.GET("/posts/:postID", h.handlePostDetail)
-	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetail)
-	v1.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetail)
+	v1.GET("/posts/:postID", h.handlePostDetailGet)
+	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetailPut)
+	v1.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetailDelete)
 
-	v1.GET("/posts/:postID/comments", h.handlePostComments)
-	v1.POST("/posts/:postID/comments", h.authGinMiddleware, h.handlePostComments)
+	v1.GET("/posts/:postID/comments", h.handlePostCommentsGet)
+	v1.POST("/posts/:postID/comments", h.authGinMiddleware, h.handlePostCommentsPost)
 	v1.GET("/posts/:postID/reactions", h.handlePostReactions)
 	v1.PUT("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionPut)
 	v1.DELETE("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionDelete)
 
-	v1.PUT("/comments/:commentID", h.authGinMiddleware, h.handleComments)
-	v1.DELETE("/comments/:commentID", h.authGinMiddleware, h.handleComments)
+	v1.PUT("/comments/:commentID", h.authGinMiddleware, h.handleCommentPut)
+	v1.DELETE("/comments/:commentID", h.authGinMiddleware, h.handleCommentDelete)
 	v1.GET("/comments/:commentID/reactions", h.handleCommentReactions)
 	v1.PUT("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionPut)
 	v1.DELETE("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionDelete)
@@ -229,7 +229,7 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// handleBoards godoc
+// handleBoardsGet godoc
 // @Summary List Boards or Create Board
 // @Description GET returns board list with cursor pagination, POST creates a board (admin only).
 // @Tags Board
@@ -245,44 +245,55 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards [get]
-// @Router /boards [post]
-func (h *HTTPHandler) handleBoards(c *gin.Context) {
-	switch c.Request.Method {
-	case http.MethodGet:
-		limit, lastID, ok := parseLimitLastID(c)
-		if !ok {
-			return
-		}
-		boards, err := h.boardUseCase.GetBoards(limit, lastID)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, response.BoardListFromDTO(boards))
-	case http.MethodPost:
-		userID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		var req boardRequest
-		if err := decodeJSON(c, &req); err != nil {
-			badRequest(c, err)
-			return
-		}
-		if req.Name == "" {
-			badRequest(c, errors.New("name is required"))
-			return
-		}
-		id, err := h.boardUseCase.CreateBoard(userID, req.Name, req.Description)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusCreated, idResponse{ID: id})
+func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
+	limit, lastID, ok := parseLimitLastID(c)
+	if !ok {
+		return
 	}
+	boards, err := h.boardUseCase.GetBoards(limit, lastID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.BoardListFromDTO(boards))
 }
 
-// handleBoardWithID godoc
+// handleBoardsPost godoc
+// @Summary List Boards or Create Board
+// @Description GET returns board list with cursor pagination, POST creates a board (admin only).
+// @Tags Board
+// @Accept json
+// @Produce json
+// @Param request body boardRequest false "Create board payload (POST only)"
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /boards [post]
+func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req boardRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if req.Name == "" {
+		badRequest(c, errors.New("name is required"))
+		return
+	}
+	id, err := h.boardUseCase.CreateBoard(userID, req.Name, req.Description)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, idResponse{ID: id})
+}
+
+// handleBoardPut godoc
 // @Summary Update or Delete Board
 // @Description Update/delete board by id (admin only).
 // @Tags Board
@@ -297,48 +308,65 @@ func (h *HTTPHandler) handleBoards(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID} [put]
-// @Router /boards/{boardID} [delete]
-func (h *HTTPHandler) handleBoardWithID(c *gin.Context) {
+func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 	boardID, err := parseInt64(c.Param("boardID"))
 	if err != nil {
 		badRequest(c, errors.New("invalid board id"))
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodPut:
-		var req boardRequest
-		if err := decodeJSON(c, &req); err != nil {
-			badRequest(c, err)
-			return
-		}
-		userID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		if req.Name == "" {
-			badRequest(c, errors.New("name is required"))
-			return
-		}
-		if err := h.boardUseCase.UpdateBoard(boardID, userID, req.Name, req.Description); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.Status(http.StatusNoContent)
-	case http.MethodDelete:
-		userID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		if err := h.boardUseCase.DeleteBoard(boardID, userID); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.Status(http.StatusNoContent)
+	var req boardRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
 	}
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if req.Name == "" {
+		badRequest(c, errors.New("name is required"))
+		return
+	}
+	if err := h.boardUseCase.UpdateBoard(boardID, userID, req.Name, req.Description); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
-// handleBoardPosts godoc
+// handleBoardDelete godoc
+// @Summary Update or Delete Board
+// @Description Update/delete board by id (admin only).
+// @Tags Board
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param boardID path int true "Board ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /boards/{boardID} [delete]
+func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
+	boardID, err := parseInt64(c.Param("boardID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid board id"))
+		return
+	}
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.boardUseCase.DeleteBoard(boardID, userID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleBoardPostsGet godoc
 // @Summary List Posts by Board or Create Post
 // @Description GET returns posts in board with cursor pagination, POST creates post in board.
 // @Tags Post
@@ -354,50 +382,66 @@ func (h *HTTPHandler) handleBoardWithID(c *gin.Context) {
 // @Failure 401 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID}/posts [get]
-// @Router /boards/{boardID}/posts [post]
-func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
+func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
 	boardID, err := parseInt64(c.Param("boardID"))
 	if err != nil {
 		badRequest(c, errors.New("invalid board id"))
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodGet:
-		limit, lastID, ok := parseLimitLastID(c)
-		if !ok {
-			return
-		}
-		posts, err := h.postUseCase.GetPostsList(boardID, limit, lastID)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, response.PostListFromDTO(posts))
-	case http.MethodPost:
-		authorID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		var req postRequest
-		if err := decodeJSON(c, &req); err != nil {
-			badRequest(c, err)
-			return
-		}
-		if req.Title == "" || req.Content == "" {
-			badRequest(c, errors.New("title and content are required"))
-			return
-		}
-		postID, err := h.postUseCase.CreatePost(req.Title, req.Content, authorID, boardID)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusCreated, idResponse{ID: postID})
+	limit, lastID, ok := parseLimitLastID(c)
+	if !ok {
+		return
 	}
+	posts, err := h.postUseCase.GetPostsList(boardID, limit, lastID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.PostListFromDTO(posts))
 }
 
-// handlePostDetail godoc
+// handleBoardPostsPost godoc
+// @Summary List Posts by Board or Create Post
+// @Description GET returns posts in board with cursor pagination, POST creates post in board.
+// @Tags Post
+// @Accept json
+// @Produce json
+// @Param boardID path int true "Board ID"
+// @Param request body postRequest false "Create post payload (POST only)"
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /boards/{boardID}/posts [post]
+func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
+	boardID, err := parseInt64(c.Param("boardID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid board id"))
+		return
+	}
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req postRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if req.Title == "" || req.Content == "" {
+		badRequest(c, errors.New("title and content are required"))
+		return
+	}
+	postID, err := h.postUseCase.CreatePost(req.Title, req.Content, authorID, boardID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, idResponse{ID: postID})
+}
+
+// handlePostDetailGet godoc
 // @Summary Get, Update or Delete Post
 // @Description Retrieve post detail or mutate post by id.
 // @Tags Post
@@ -412,56 +456,94 @@ func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID} [get]
-// @Router /posts/{postID} [put]
-// @Router /posts/{postID} [delete]
-func (h *HTTPHandler) handlePostDetail(c *gin.Context) {
+func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 	postID, err := parseInt64(c.Param("postID"))
 	if err != nil {
 		badRequest(c, errors.New("invalid post id"))
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodGet:
-		post, err := h.postUseCase.GetPostDetail(postID)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, response.PostDetailFromDTO(post))
-	case http.MethodPut:
-		authorID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		var req postRequest
-		if err := decodeJSON(c, &req); err != nil {
-			badRequest(c, err)
-			return
-		}
-		if req.Title == "" || req.Content == "" {
-			badRequest(c, errors.New("title and content are required"))
-			return
-		}
-		if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.Status(http.StatusNoContent)
-	case http.MethodDelete:
-		authorID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		if err := h.postUseCase.DeletePost(postID, authorID); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.Status(http.StatusNoContent)
+	post, err := h.postUseCase.GetPostDetail(postID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
 	}
+	c.JSON(http.StatusOK, response.PostDetailFromDTO(post))
 }
 
-// handlePostComments godoc
+// handlePostDetailPut godoc
+// @Summary Get, Update or Delete Post
+// @Description Retrieve post detail or mutate post by id.
+// @Tags Post
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Param request body postRequest false "Update post payload (PUT only)"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID} [put]
+func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
+	postID, err := parseInt64(c.Param("postID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid post id"))
+		return
+	}
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req postRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if req.Title == "" || req.Content == "" {
+		badRequest(c, errors.New("title and content are required"))
+		return
+	}
+	if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handlePostDetailDelete godoc
+// @Summary Get, Update or Delete Post
+// @Description Retrieve post detail or mutate post by id.
+// @Tags Post
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID} [delete]
+func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
+	postID, err := parseInt64(c.Param("postID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid post id"))
+		return
+	}
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.postUseCase.DeletePost(postID, authorID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handlePostCommentsGet godoc
 // @Summary List Comments by Post or Create Comment
 // @Description GET returns comments in post with cursor pagination, POST creates comment.
 // @Tags Comment
@@ -477,50 +559,67 @@ func (h *HTTPHandler) handlePostDetail(c *gin.Context) {
 // @Failure 401 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/comments [get]
-// @Router /posts/{postID}/comments [post]
-func (h *HTTPHandler) handlePostComments(c *gin.Context) {
+func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
 	postID, err := parseInt64(c.Param("postID"))
 	if err != nil {
 		badRequest(c, errors.New("invalid post id"))
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodGet:
-		limit, lastID, ok := parseLimitLastID(c)
-		if !ok {
-			return
-		}
-		comments, err := h.commentUseCase.GetCommentsByPost(postID, limit, lastID)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, response.CommentListFromDTO(comments))
-	case http.MethodPost:
-		authorID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		var req commentRequest
-		if err := decodeJSON(c, &req); err != nil {
-			badRequest(c, err)
-			return
-		}
-		if req.Content == "" {
-			badRequest(c, errors.New("content is required"))
-			return
-		}
-		id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusCreated, idResponse{ID: id})
+	limit, lastID, ok := parseLimitLastID(c)
+	if !ok {
+		return
 	}
+	comments, err := h.commentUseCase.GetCommentsByPost(postID, limit, lastID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.CommentListFromDTO(comments))
 }
 
-// handleComments godoc
+// handlePostCommentsPost godoc
+// @Summary List Comments by Post or Create Comment
+// @Description GET returns comments in post with cursor pagination, POST creates comment.
+// @Tags Comment
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Param request body commentRequest false "Create comment payload (POST only)"
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/comments [post]
+func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
+	postID, err := parseInt64(c.Param("postID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid post id"))
+		return
+	}
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req commentRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if req.Content == "" {
+		badRequest(c, errors.New("content is required"))
+		return
+	}
+	id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, idResponse{ID: id})
+}
+
+// handleCommentPut godoc
 // @Summary Update or Delete Comment
 // @Description Update/delete comment by id.
 // @Tags Comment
@@ -535,45 +634,62 @@ func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID} [put]
-// @Router /comments/{commentID} [delete]
-func (h *HTTPHandler) handleComments(c *gin.Context) {
+func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 	commentID, err := parseInt64(c.Param("commentID"))
 	if err != nil {
 		badRequest(c, errors.New("invalid comment id"))
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodPut:
-		authorID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		var req commentRequest
-		if err := decodeJSON(c, &req); err != nil {
-			badRequest(c, err)
-			return
-		}
-		if req.Content == "" {
-			badRequest(c, errors.New("content is required"))
-			return
-		}
-		if err := h.commentUseCase.UpdateComment(commentID, authorID, req.Content); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.Status(http.StatusNoContent)
-	case http.MethodDelete:
-		authorID, ok := h.requireAuthUserID(c)
-		if !ok {
-			return
-		}
-		if err := h.commentUseCase.DeleteComment(commentID, authorID); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.Status(http.StatusNoContent)
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
 	}
+	var req commentRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if req.Content == "" {
+		badRequest(c, errors.New("content is required"))
+		return
+	}
+	if err := h.commentUseCase.UpdateComment(commentID, authorID, req.Content); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleCommentDelete godoc
+// @Summary Update or Delete Comment
+// @Description Update/delete comment by id.
+// @Tags Comment
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param commentID path int true "Comment ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /comments/{commentID} [delete]
+func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {
+	commentID, err := parseInt64(c.Param("commentID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid comment id"))
+		return
+	}
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.commentUseCase.DeleteComment(commentID, authorID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // handlePostReactions godoc
