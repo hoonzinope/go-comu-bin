@@ -10,6 +10,7 @@ var (
 	ErrInternalServerError = errors.New("internal server error")
 	ErrForbidden           = errors.New("forbidden")
 	ErrUnauthorized        = errors.New("unauthorized")
+	ErrInvalidInput        = errors.New("invalid input")
 	ErrInvalidCredential   = errors.New("invalid credential")
 	ErrMissingAuthHeader   = errors.New("missing Authorization header")
 	ErrInvalidToken        = errors.New("invalid token")
@@ -67,6 +68,8 @@ func Public(err error) error {
 		return ErrReactionNotFound
 	case errors.Is(err, ErrInvalidCredential):
 		return ErrInvalidCredential
+	case errors.Is(err, ErrInvalidInput):
+		return ErrInvalidInput
 	case errors.Is(err, ErrUnauthorized):
 		return ErrUnauthorized
 	case errors.Is(err, ErrMissingAuthHeader):

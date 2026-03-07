@@ -1,6 +1,8 @@
 package service
 
 import (
+	"strings"
+
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
@@ -43,6 +45,9 @@ func NewPostService(userRepository port.UserRepository, boardRepository port.Boa
 
 func (s *PostService) CreatePost(title, content string, authorID, boardID int64) (int64, error) {
 	// 게시글 생성 로직 구현
+	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
+		return 0, customError.ErrInvalidInput
+	}
 	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
 	if err != nil {
 		return 0, customError.WrapRepository("select user by id for create post", err)
@@ -157,6 +162,9 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 
 func (s *PostService) UpdatePost(id, authorID int64, title, content string) error {
 	// 게시글 수정 로직 구현
+	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
+		return customError.ErrInvalidInput
+	}
 	post, err := s.postRepository.SelectPostByID(id) // post 존재 여부 확인
 	if err != nil {
 		return customError.WrapRepository("select post by id for update post", err)

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
@@ -26,6 +27,9 @@ func NewUserService(userRepository port.UserRepository, passwordHasher port.Pass
 func (s *UserService) SignUp(username, password string) (string, error) {
 	// 회원가입 로직 구현
 	// duplicate username check
+	if strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
+		return "", customError.ErrInvalidInput
+	}
 	existingUser, err := s.userRepository.SelectUserByUsername(username)
 	if err != nil {
 		return "", customError.WrapRepository("select user by username for signup", err)

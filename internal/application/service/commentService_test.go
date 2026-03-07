@@ -57,6 +57,18 @@ func TestCommentService_CreateGetDelete_Success(t *testing.T) {
 	require.NoError(t, svc.DeleteComment(commentID, userID))
 }
 
+func TestCommentService_CreateComment_InvalidInput(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.CreateComment(" ", userID, postID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
 func TestCommentService_GetCommentsByPost_HasMoreAndNextCursor(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")

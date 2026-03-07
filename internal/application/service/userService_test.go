@@ -28,6 +28,15 @@ func TestUserService_SignUp_Duplicate(t *testing.T) {
 	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
 }
 
+func TestUserService_SignUp_InvalidInput(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
+
+	_, err := svc.SignUp(" ", "pw")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
 func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher())

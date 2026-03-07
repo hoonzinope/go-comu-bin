@@ -1,6 +1,8 @@
 package service
 
 import (
+	"strings"
+
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
@@ -35,6 +37,9 @@ func NewCommentService(userRepository port.UserRepository, postRepository port.P
 
 func (s *CommentService) CreateComment(content string, authorID, postID int64) (int64, error) {
 	// 댓글 생성 로직 구현
+	if strings.TrimSpace(content) == "" {
+		return 0, customError.ErrInvalidInput
+	}
 	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
 	if err != nil {
 		return 0, customError.WrapRepository("select user by id for create comment", err)
@@ -104,6 +109,9 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 
 func (s *CommentService) UpdateComment(id, authorID int64, content string) error {
 	// 댓글 수정 로직 구현
+	if strings.TrimSpace(content) == "" {
+		return customError.ErrInvalidInput
+	}
 	comment, err := s.commentRepository.SelectCommentByID(id) // comment 존재 여부 확인
 	if err != nil {
 		return customError.WrapRepository("select comment by id for update comment", err)

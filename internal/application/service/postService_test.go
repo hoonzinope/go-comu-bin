@@ -57,6 +57,17 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	require.NoError(t, svc.DeletePost(postID, userID))
 }
 
+func TestPostService_CreatePost_InvalidInput(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.CreatePost(" ", "content", userID, boardID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
 func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")

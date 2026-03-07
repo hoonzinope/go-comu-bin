@@ -1,6 +1,8 @@
 package service
 
 import (
+	"strings"
+
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
@@ -76,6 +78,9 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 
 func (s *BoardService) CreateBoard(userID int64, name, description string) (int64, error) {
 	// 게시판 생성 로직 구현
+	if strings.TrimSpace(name) == "" {
+		return 0, customError.ErrInvalidInput
+	}
 	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
 	if err != nil {
 		return 0, customError.WrapRepository("select user by id for create board", err)
@@ -97,6 +102,9 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 
 func (s *BoardService) UpdateBoard(id, userID int64, name, description string) error {
 	// 게시판 수정 로직 구현
+	if strings.TrimSpace(name) == "" {
+		return customError.ErrInvalidInput
+	}
 	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
 	if err != nil {
 		return customError.WrapRepository("select user by id for update board", err)

@@ -31,6 +31,16 @@ func TestBoardService_CreateBoard_SuccessForAdmin(t *testing.T) {
 	assert.NotZero(t, boardID)
 }
 
+func TestBoardService_CreateBoard_InvalidInput(t *testing.T) {
+	repositories := newTestRepositories()
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.CreateBoard(adminID, " ", "desc")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
 func TestBoardService_GetBoards_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	seedBoard(repositories.board, "b1", "d1")
