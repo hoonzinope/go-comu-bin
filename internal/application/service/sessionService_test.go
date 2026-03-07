@@ -115,3 +115,44 @@ func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrRepositoryFailure))
 }
+
+func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	_, err := userService.SignUp("alice", "pw")
+	require.NoError(t, err)
+
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	userID, err := userService.VerifyCredentials("alice", "pw")
+	require.NoError(t, err)
+	token, err := tokenProvider.IdToToken(userID)
+	require.NoError(t, err)
+
+	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
+		deleteErr: newCacheFailure(nil),
+	})
+	svc := NewSessionService(userService, tokenProvider, sessionRepository)
+
+	err = svc.Logout(token)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrRepositoryFailure))
+}
+
+func TestSessionService_InvalidateUserSessions_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	_, err := userService.SignUp("alice", "pw")
+	require.NoError(t, err)
+
+	userID, err := userService.VerifyCredentials("alice", "pw")
+	require.NoError(t, err)
+
+	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
+		deleteByPrefixErr: newCacheFailure(nil),
+	})
+	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+
+	err = svc.InvalidateUserSessions(userID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrRepositoryFailure))
+}

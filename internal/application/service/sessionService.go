@@ -43,11 +43,17 @@ func (s *SessionService) Logout(token string) error {
 	if err != nil {
 		return nil
 	}
-	return s.sessionRepository.Delete(userID, token)
+	if err := s.sessionRepository.Delete(userID, token); err != nil {
+		return customError.WrapRepository("delete session", err)
+	}
+	return nil
 }
 
 func (s *SessionService) InvalidateUserSessions(userID int64) error {
-	return s.sessionRepository.DeleteByUser(userID)
+	if err := s.sessionRepository.DeleteByUser(userID); err != nil {
+		return customError.WrapRepository("delete user sessions", err)
+	}
+	return nil
 }
 
 func (s *SessionService) ValidateTokenToId(token string) (int64, error) {
