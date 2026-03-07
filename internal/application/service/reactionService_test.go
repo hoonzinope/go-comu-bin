@@ -12,70 +12,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReactionService_RemoveReaction_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
-	repositories := newTestRepositories()
-	ownerID := seedUser(repositories.user, "owner", "pw", "user")
-	otherID := seedUser(repositories.user, "other", "pw", "user")
-	boardID := seedBoard(repositories.board, "free", "desc")
-	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
-
-	require.NoError(t, svc.AddReaction(ownerID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike))
-	reactions, err := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
-	require.NoError(t, err)
-	require.Len(t, reactions, 1)
-
-	err = svc.RemoveReaction(otherID, reactions[0].ID)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
-}
-
-func TestReactionService_RemoveReaction_AllowedForAdmin(t *testing.T) {
-	repositories := newTestRepositories()
-	ownerID := seedUser(repositories.user, "owner", "pw", "user")
-	adminID := seedUser(repositories.user, "admin", "pw", "admin")
-	boardID := seedBoard(repositories.board, "free", "desc")
-	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
-
-	require.NoError(t, svc.AddReaction(ownerID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike))
-	reactions, err := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
-	require.NoError(t, err)
-	require.Len(t, reactions, 1)
-
-	require.NoError(t, svc.RemoveReaction(adminID, reactions[0].ID))
-}
-
-func TestReactionService_AddReaction_InvalidTargetType(t *testing.T) {
+func TestReactionService_SetReaction_InvalidTargetType(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
 
-	err := svc.AddReaction(userID, 1, entity.ReactionTargetType("invalid"), entity.ReactionTypeLike)
+	_, err := svc.SetReaction(userID, 1, entity.ReactionTargetType("invalid"), entity.ReactionTypeLike)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInternalServerError))
 }
 
-func TestReactionService_GetReactionsByTarget_AndOwnerDelete(t *testing.T) {
+func TestReactionService_GetReactionsByTarget_AndDeleteByOwner(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	commentID := seedComment(repositories.comment, userID, postID, "comment")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
 
-	require.NoError(t, svc.AddReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike))
+	created, err := svc.SetReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+
 	reactions, err := svc.GetReactionsByTarget(commentID, entity.ReactionTargetComment)
 	require.NoError(t, err)
 	require.Len(t, reactions, 1)
 
-	require.NoError(t, svc.RemoveReaction(userID, reactions[0].ID))
+	require.NoError(t, svc.DeleteReaction(userID, commentID, entity.ReactionTargetComment))
+
+	reactions, err = svc.GetReactionsByTarget(commentID, entity.ReactionTargetComment)
+	require.NoError(t, err)
+	assert.Empty(t, reactions)
 }
 
-func TestReactionService_AddReaction_InvalidatesReactionListCache(t *testing.T) {
+func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -86,8 +59,138 @@ func TestReactionService_AddReaction_InvalidatesReactionListCache(t *testing.T) 
 	_, ok := cache.Get(key.ReactionList("post", postID))
 	require.True(t, ok)
 
-	require.NoError(t, reactionSvc.AddReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike))
+	created, err := reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
 
 	_, ok = cache.Get(key.ReactionList("post", postID))
+	assert.False(t, ok)
+
+	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	require.NoError(t, repoErr)
+	require.Len(t, reactions, 1)
+	assert.Equal(t, entity.ReactionTypeLike, reactions[0].Type)
+}
+
+func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
+	repositories := newTestRepositories()
+	cache := testutil.NewSpyCache()
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
+
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+
+	created, err := reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	created, err = reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeDislike)
+	require.NoError(t, err)
+	assert.False(t, created)
+
+	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	require.NoError(t, repoErr)
+	require.Len(t, reactions, 1)
+	assert.Equal(t, entity.ReactionTypeDislike, reactions[0].Type)
+}
+
+func TestReactionService_SetReaction_NoOpWhenSameType(t *testing.T) {
+	repositories := newTestRepositories()
+	cache := testutil.NewSpyCache()
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
+
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+
+	created, err := reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	created, err = reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.False(t, created)
+
+	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	require.NoError(t, repoErr)
+	require.Len(t, reactions, 1)
+	assert.Equal(t, entity.ReactionTypeLike, reactions[0].Type)
+}
+
+func TestReactionService_DeleteReaction_NoOpWhenMissing(t *testing.T) {
+	repositories := newTestRepositories()
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+
+	require.NoError(t, reactionSvc.DeleteReaction(userID, postID, entity.ReactionTargetPost))
+}
+
+func TestReactionService_DeleteReaction_RemovesOwnedReaction(t *testing.T) {
+	repositories := newTestRepositories()
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+
+	created, err := reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	require.NoError(t, reactionSvc.DeleteReaction(userID, postID, entity.ReactionTargetPost))
+
+	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	require.NoError(t, repoErr)
+	assert.Empty(t, reactions)
+}
+
+func TestReactionService_DeleteReaction_DoesNotRemoveOtherUsersReaction(t *testing.T) {
+	repositories := newTestRepositories()
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+
+	ownerID := seedUser(repositories.user, "owner", "pw", "user")
+	otherID := seedUser(repositories.user, "other", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
+
+	created, err := reactionSvc.SetReaction(ownerID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	require.NoError(t, reactionSvc.DeleteReaction(otherID, postID, entity.ReactionTargetPost))
+
+	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	require.NoError(t, repoErr)
+	require.Len(t, reactions, 1)
+	assert.Equal(t, ownerID, reactions[0].UserID)
+}
+
+func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testing.T) {
+	repositories := newTestRepositories()
+	cache := testutil.NewSpyCache()
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
+
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	commentID := seedComment(repositories.comment, userID, postID, "comment")
+
+	created, err := reactionSvc.SetReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	_, err = reactionSvc.GetReactionsByTarget(commentID, entity.ReactionTargetComment)
+	require.NoError(t, err)
+	cache.Set(key.PostDetail(postID), "cached-post-detail")
+
+	require.NoError(t, reactionSvc.DeleteReaction(userID, commentID, entity.ReactionTargetComment))
+
+	_, ok := cache.Get(key.ReactionList("comment", commentID))
+	assert.False(t, ok)
+	_, ok = cache.Get(key.PostDetail(postID))
 	assert.False(t, ok)
 }

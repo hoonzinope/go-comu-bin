@@ -43,17 +43,19 @@ func TestIntegration_MainFlow(t *testing.T) {
 	mustGetComments(t, server.URL, postID, commentID)
 	mustUpdateComment(t, server.URL, aliceToken, commentID, "nice-updated")
 
-	mustAddCommentReaction(t, server.URL, aliceToken, commentID, "like")
-	commentReactionID := mustGetFirstCommentReactionID(t, server.URL, commentID)
-	mustDeleteReaction(t, server.URL, aliceToken, commentReactionID)
+	mustSetCommentReaction(t, server.URL, aliceToken, commentID, "like", http.StatusCreated)
+	mustSetCommentReaction(t, server.URL, aliceToken, commentID, "dislike", http.StatusNoContent)
+	mustHaveFirstCommentReactionType(t, server.URL, commentID, "dislike")
+	mustDeleteCommentReaction(t, server.URL, aliceToken, commentID)
 	mustNoCommentReactions(t, server.URL, commentID)
 
 	mustDeleteComment(t, server.URL, aliceToken, commentID)
 	mustNoComments(t, server.URL, postID)
 
-	mustAddPostReaction(t, server.URL, aliceToken, postID, "like")
-	postReactionID := mustGetFirstPostReactionID(t, server.URL, postID)
-	mustDeleteReaction(t, server.URL, aliceToken, postReactionID)
+	mustSetPostReaction(t, server.URL, aliceToken, postID, "like", http.StatusCreated)
+	mustSetPostReaction(t, server.URL, aliceToken, postID, "dislike", http.StatusNoContent)
+	mustHaveFirstPostReactionType(t, server.URL, postID, "dislike")
+	mustDeletePostReaction(t, server.URL, aliceToken, postID)
 	mustNoPostReactions(t, server.URL, postID)
 
 	mustDeletePost(t, server.URL, aliceToken, postID)
@@ -81,8 +83,7 @@ func TestIntegration_ForbiddenScenarios(t *testing.T) {
 
 	postID := mustCreatePost(t, server.URL, aliceToken, boardID, "hello", "first post")
 	commentID := mustCreateComment(t, server.URL, aliceToken, postID, "nice")
-	mustAddCommentReaction(t, server.URL, aliceToken, commentID, "like")
-	reactionID := mustGetFirstCommentReactionID(t, server.URL, commentID)
+	mustSetCommentReaction(t, server.URL, aliceToken, commentID, "like", http.StatusCreated)
 
 	assertStatus(t, server.URL, bobToken, http.MethodPost, "/boards", map[string]any{
 		"name": "blocked", "description": "blocked",
@@ -95,7 +96,7 @@ func TestIntegration_ForbiddenScenarios(t *testing.T) {
 		"content": "hack",
 	}, http.StatusForbidden)
 	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/comments/%d", commentID), nil, http.StatusForbidden)
-	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/reactions/%d", reactionID), nil, http.StatusForbidden)
+	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/comments/%d/reactions/me", commentID), nil, http.StatusNoContent)
 }
 
 func newIntegrationServer(t *testing.T) *httptest.Server {
@@ -117,7 +118,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, testCachePolicy(), authorizationPolicy)
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy(), authorizationPolicy)
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)
@@ -272,46 +273,52 @@ func mustDeleteComment(t *testing.T, baseURL, token string, commentID int64) {
 	assert.Equal(t, http.StatusNoContent, status, "delete comment failed: body=%s", string(body))
 }
 
-func mustAddPostReaction(t *testing.T, baseURL, token string, postID int64, reactionType string) {
+func mustSetPostReaction(t *testing.T, baseURL, token string, postID int64, reactionType string, expectedStatus int) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, fmt.Sprintf("/posts/%d/reactions", postID), map[string]any{
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPut, fmt.Sprintf("/posts/%d/reactions/me", postID), map[string]any{
 		"reaction_type": reactionType,
 	})
-	assert.Equal(t, http.StatusCreated, status, "add post reaction failed: body=%s", string(body))
+	assert.Equal(t, expectedStatus, status, "set post reaction failed: body=%s", string(body))
 }
 
-func mustAddCommentReaction(t *testing.T, baseURL, token string, commentID int64, reactionType string) {
+func mustSetCommentReaction(t *testing.T, baseURL, token string, commentID int64, reactionType string, expectedStatus int) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, fmt.Sprintf("/comments/%d/reactions", commentID), map[string]any{
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPut, fmt.Sprintf("/comments/%d/reactions/me", commentID), map[string]any{
 		"reaction_type": reactionType,
 	})
-	assert.Equal(t, http.StatusCreated, status, "add comment reaction failed: body=%s", string(body))
+	assert.Equal(t, expectedStatus, status, "set comment reaction failed: body=%s", string(body))
 }
 
-func mustGetFirstPostReactionID(t *testing.T, baseURL string, postID int64) int64 {
+func mustHaveFirstPostReactionType(t *testing.T, baseURL string, postID int64, expectedType string) {
 	t.Helper()
 	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/reactions", postID), nil)
 	assert.Equal(t, http.StatusOK, status, "get post reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
 	require.NotEmpty(t, resp)
-	return int64(resp[0]["id"].(float64))
+	assert.Equal(t, expectedType, resp[0]["type"])
 }
 
-func mustGetFirstCommentReactionID(t *testing.T, baseURL string, commentID int64) int64 {
+func mustHaveFirstCommentReactionType(t *testing.T, baseURL string, commentID int64, expectedType string) {
 	t.Helper()
 	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/comments/%d/reactions", commentID), nil)
 	assert.Equal(t, http.StatusOK, status, "get comment reactions failed: body=%s", string(body))
 	var resp []map[string]any
 	mustUnmarshal(t, body, &resp)
 	require.NotEmpty(t, resp)
-	return int64(resp[0]["id"].(float64))
+	assert.Equal(t, expectedType, resp[0]["type"])
 }
 
-func mustDeleteReaction(t *testing.T, baseURL, token string, reactionID int64) {
+func mustDeletePostReaction(t *testing.T, baseURL, token string, postID int64) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, token, http.MethodDelete, fmt.Sprintf("/reactions/%d", reactionID), nil)
-	assert.Equal(t, http.StatusNoContent, status, "delete reaction failed: body=%s", string(body))
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodDelete, fmt.Sprintf("/posts/%d/reactions/me", postID), nil)
+	assert.Equal(t, http.StatusNoContent, status, "delete post reaction failed: body=%s", string(body))
+}
+
+func mustDeleteCommentReaction(t *testing.T, baseURL, token string, commentID int64) {
+	t.Helper()
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodDelete, fmt.Sprintf("/comments/%d/reactions/me", commentID), nil)
+	assert.Equal(t, http.StatusNoContent, status, "delete comment reaction failed: body=%s", string(body))
 }
 
 func mustNoComments(t *testing.T, baseURL string, postID int64) {

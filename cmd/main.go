@@ -49,7 +49,7 @@ func main() {
 	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg), authorizationPolicy)
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)

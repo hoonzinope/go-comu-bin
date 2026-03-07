@@ -681,7 +681,7 @@ const docTemplate = `{
         },
         "/comments/{commentID}/reactions": {
             "get": {
-                "description": "GET returns reactions for a comment, POST creates reaction on a comment.",
+                "description": "GET returns reactions for a comment.",
                 "consumes": [
                     "application/json"
                 ],
@@ -691,7 +691,7 @@ const docTemplate = `{
                 "tags": [
                     "Reaction"
                 ],
-                "summary": "List or Create Reactions for Comment",
+                "summary": "List Reactions for Comment",
                 "parameters": [
                     {
                         "type": "integer",
@@ -699,14 +699,6 @@ const docTemplate = `{
                         "name": "commentID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Create reaction payload (POST only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.reactionRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -719,8 +711,63 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/comments/{commentID}/reactions/me": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "PUT creates or updates the current user's reaction on a comment.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reaction"
+                ],
+                "summary": "Set My Reaction for Comment",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Comment ID",
+                        "name": "commentID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Set reaction payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/delivery.reactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
                     "201": {
                         "description": "Created"
+                    },
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -742,8 +789,13 @@ const docTemplate = `{
                     }
                 }
             },
-            "post": {
-                "description": "GET returns reactions for a comment, POST creates reaction on a comment.",
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "PUT creates or updates the current user's reaction on a comment.",
                 "consumes": [
                     "application/json"
                 ],
@@ -753,7 +805,7 @@ const docTemplate = `{
                 "tags": [
                     "Reaction"
                 ],
-                "summary": "List or Create Reactions for Comment",
+                "summary": "Set My Reaction for Comment",
                 "parameters": [
                     {
                         "type": "integer",
@@ -763,26 +815,21 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Create reaction payload (POST only)",
+                        "description": "Set reaction payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.reactionRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/response.Reaction"
-                            }
-                        }
-                    },
                     "201": {
                         "description": "Created"
+                    },
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -1158,7 +1205,7 @@ const docTemplate = `{
         },
         "/posts/{postID}/reactions": {
             "get": {
-                "description": "GET returns reactions for a post, POST creates reaction on a post.",
+                "description": "GET returns reactions for a post.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1168,7 +1215,7 @@ const docTemplate = `{
                 "tags": [
                     "Reaction"
                 ],
-                "summary": "List or Create Reactions for Post",
+                "summary": "List Reactions for Post",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1176,14 +1223,6 @@ const docTemplate = `{
                         "name": "postID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Create reaction payload (POST only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.reactionRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -1196,8 +1235,63 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/posts/{postID}/reactions/me": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "PUT creates or updates the current user's reaction on a post.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reaction"
+                ],
+                "summary": "Set My Reaction for Post",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Post ID",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Set reaction payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/delivery.reactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
                     "201": {
                         "description": "Created"
+                    },
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -1219,8 +1313,13 @@ const docTemplate = `{
                     }
                 }
             },
-            "post": {
-                "description": "GET returns reactions for a post, POST creates reaction on a post.",
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "PUT creates or updates the current user's reaction on a post.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1230,7 +1329,7 @@ const docTemplate = `{
                 "tags": [
                     "Reaction"
                 ],
-                "summary": "List or Create Reactions for Post",
+                "summary": "Set My Reaction for Post",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1240,76 +1339,19 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Create reaction payload (POST only)",
+                        "description": "Set reaction payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.reactionRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/response.Reaction"
-                            }
-                        }
-                    },
                     "201": {
                         "description": "Created"
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/reactions/{reactionID}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Delete reaction by reaction id.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Reaction"
-                ],
-                "summary": "Delete Reaction",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Reaction ID",
-                        "name": "reactionID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
                     "204": {
                         "description": "No Content"
                     },
@@ -1321,12 +1363,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }

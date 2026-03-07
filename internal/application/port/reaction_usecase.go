@@ -6,7 +6,7 @@ import (
 )
 
 type ReactionUseCase interface {
-	AddReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) error
-	RemoveReaction(userID, id int64) error
+	SetReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
+	DeleteReaction(userID, targetID int64, targetType entity.ReactionTargetType) error
 	GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }

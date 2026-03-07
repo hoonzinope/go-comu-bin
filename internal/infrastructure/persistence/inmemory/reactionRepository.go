@@ -39,6 +39,14 @@ func (r *ReactionRepository) Add(reaction *entity.Reaction) error {
 	return nil
 }
 
+func (r *ReactionRepository) Update(reaction *entity.Reaction) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.reactionDB.Data[reaction.ID] = reaction
+	return nil
+}
+
 func (r *ReactionRepository) Remove(reaction *entity.Reaction) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

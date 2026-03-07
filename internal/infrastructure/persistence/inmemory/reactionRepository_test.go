@@ -37,3 +37,17 @@ func TestReactionRepository_GetMissing_ReturnsNil(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, r)
 }
+
+func TestReactionRepository_Update(t *testing.T) {
+	repo := NewReactionRepository()
+	reaction := testReaction(entity.ReactionTargetPost, 10, entity.ReactionTypeLike, 1)
+
+	require.NoError(t, repo.Add(reaction))
+	reaction.Update(entity.ReactionTypeDislike)
+	require.NoError(t, repo.Update(reaction))
+
+	updated, err := repo.GetByID(reaction.ID)
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.Equal(t, entity.ReactionTypeDislike, updated.Type)
+}

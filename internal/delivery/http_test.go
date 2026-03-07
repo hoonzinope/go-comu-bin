@@ -162,8 +162,8 @@ func (f *fakeCommentUseCase) DeleteComment(id, authorID int64) error {
 }
 
 type fakeReactionUseCase struct {
-	addReaction          func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) error
-	removeReaction       func(userID, id int64) error
+	setReaction          func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
+	deleteReaction       func(userID, targetID int64, targetType entity.ReactionTargetType) error
 	getReactionsByTarget func(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }
 
@@ -174,16 +174,16 @@ type authUserPort interface {
 	port.CredentialVerifier
 }
 
-func (f *fakeReactionUseCase) AddReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) error {
-	if f.addReaction != nil {
-		return f.addReaction(userID, targetID, targetType, reactionType)
+func (f *fakeReactionUseCase) SetReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+	if f.setReaction != nil {
+		return f.setReaction(userID, targetID, targetType, reactionType)
 	}
-	return nil
+	return false, nil
 }
 
-func (f *fakeReactionUseCase) RemoveReaction(userID, id int64) error {
-	if f.removeReaction != nil {
-		return f.removeReaction(userID, id)
+func (f *fakeReactionUseCase) DeleteReaction(userID, targetID int64, targetType entity.ReactionTargetType) error {
+	if f.deleteReaction != nil {
+		return f.deleteReaction(userID, targetID, targetType)
 	}
 	return nil
 }
@@ -268,6 +268,46 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 		"password": "pw",
 	})
 	assert.Equal(t, http.StatusConflict, rr.Code)
+}
+
+func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
+	reaction := &fakeReactionUseCase{
+		setReaction: func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+			return true, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/posts/1/reactions/me", map[string]string{
+		"reaction_type": "like",
+	}, 1)
+	assert.Equal(t, http.StatusCreated, rr.Code)
+}
+
+func TestHTTP_CommentReactionMeUpdate_NoContent(t *testing.T) {
+	reaction := &fakeReactionUseCase{
+		setReaction: func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+			return false, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/comments/1/reactions/me", map[string]string{
+		"reaction_type": "dislike",
+	}, 1)
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_PostReactionMeDelete_NoContent(t *testing.T) {
+	reaction := &fakeReactionUseCase{
+		deleteReaction: func(userID, targetID int64, targetType entity.ReactionTargetType) error {
+			return nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/1/reactions/me", nil, 1)
+	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
@@ -373,7 +413,7 @@ func TestHTTP_PostWithID_NonPositivePostID(t *testing.T) {
 func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodDelete, "/reactions/1?user_id=bad", nil)
+	rr := doJSONRequest(t, handler, http.MethodDelete, "/posts/1/reactions/me", nil)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
@@ -394,7 +434,7 @@ func TestHTTP_CommentReactionList_InvalidCommentID(t *testing.T) {
 func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/reactions/1", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/1/reactions/me", nil)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
 

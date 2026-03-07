@@ -648,19 +648,13 @@ paths:
     get:
       consumes:
       - application/json
-      description: GET returns reactions for a comment, POST creates reaction on a
-        comment.
+      description: GET returns reactions for a comment.
       parameters:
       - description: Comment ID
         in: path
         name: commentID
         required: true
         type: integer
-      - description: Create reaction payload (POST only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.reactionRequest'
       produces:
       - application/json
       responses:
@@ -670,50 +664,41 @@ paths:
             items:
               $ref: '#/definitions/response.Reaction'
             type: array
-        "201":
-          description: Created
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List or Create Reactions for Comment
+      summary: List Reactions for Comment
       tags:
       - Reaction
-    post:
+  /comments/{commentID}/reactions/me:
+    delete:
       consumes:
       - application/json
-      description: GET returns reactions for a comment, POST creates reaction on a
-        comment.
+      description: PUT creates or updates the current user's reaction on a comment.
       parameters:
       - description: Comment ID
         in: path
         name: commentID
         required: true
         type: integer
-      - description: Create reaction payload (POST only)
+      - description: Set reaction payload
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/delivery.reactionRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/response.Reaction'
-            type: array
         "201":
           description: Created
+        "204":
+          description: No Content
         "400":
           description: Bad Request
           schema:
@@ -726,7 +711,49 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List or Create Reactions for Comment
+      security:
+      - BearerAuth: []
+      summary: Set My Reaction for Comment
+      tags:
+      - Reaction
+    put:
+      consumes:
+      - application/json
+      description: PUT creates or updates the current user's reaction on a comment.
+      parameters:
+      - description: Comment ID
+        in: path
+        name: commentID
+        required: true
+        type: integer
+      - description: Set reaction payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.reactionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set My Reaction for Comment
       tags:
       - Reaction
   /posts/{postID}:
@@ -968,18 +995,13 @@ paths:
     get:
       consumes:
       - application/json
-      description: GET returns reactions for a post, POST creates reaction on a post.
+      description: GET returns reactions for a post.
       parameters:
       - description: Post ID
         in: path
         name: postID
         required: true
         type: integer
-      - description: Create reaction payload (POST only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.reactionRequest'
       produces:
       - application/json
       responses:
@@ -989,78 +1011,39 @@ paths:
             items:
               $ref: '#/definitions/response.Reaction'
             type: array
-        "201":
-          description: Created
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List or Create Reactions for Post
+      summary: List Reactions for Post
       tags:
       - Reaction
-    post:
-      consumes:
-      - application/json
-      description: GET returns reactions for a post, POST creates reaction on a post.
-      parameters:
-      - description: Post ID
-        in: path
-        name: postID
-        required: true
-        type: integer
-      - description: Create reaction payload (POST only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.reactionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/response.Reaction'
-            type: array
-        "201":
-          description: Created
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-      summary: List or Create Reactions for Post
-      tags:
-      - Reaction
-  /reactions/{reactionID}:
+  /posts/{postID}/reactions/me:
     delete:
       consumes:
       - application/json
-      description: Delete reaction by reaction id.
+      description: PUT creates or updates the current user's reaction on a post.
       parameters:
-      - description: Reaction ID
+      - description: Post ID
         in: path
-        name: reactionID
+        name: postID
         required: true
         type: integer
+      - description: Set reaction payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.reactionRequest'
       produces:
       - application/json
       responses:
+        "201":
+          description: Created
         "204":
           description: No Content
         "400":
@@ -1071,8 +1054,44 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-        "403":
-          description: Forbidden
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set My Reaction for Post
+      tags:
+      - Reaction
+    put:
+      consumes:
+      - application/json
+      description: PUT creates or updates the current user's reaction on a post.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Set reaction payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.reactionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
@@ -1081,7 +1100,7 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
       security:
       - BearerAuth: []
-      summary: Delete Reaction
+      summary: Set My Reaction for Post
       tags:
       - Reaction
   /signup:

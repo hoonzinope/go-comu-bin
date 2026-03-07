@@ -5,7 +5,6 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
-	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -20,10 +19,9 @@ type ReactionService struct {
 	reactionRepository  port.ReactionRepository
 	cache               port.Cache
 	cachePolicy         appcache.Policy
-	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *ReactionService {
+func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *ReactionService {
 	return &ReactionService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
@@ -31,87 +29,72 @@ func NewReactionService(userRepository port.UserRepository, postRepository port.
 		reactionRepository:  reactionRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
-		authorizationPolicy: authorizationPolicy,
 	}
 }
 
-func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) error {
-	// 리액션 추가 로직 구현
-	user, err := s.userRepository.SelectUserByID(UserID) // user 존재 여부 확인
+func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
+	user, err := s.userRepository.SelectUserByID(UserID)
+	if err != nil {
+		return false, customError.ErrInternalServerError
+	}
+	if user == nil {
+		return false, customError.ErrUserNotFound
+	}
+
+	if err := s.ensureTargetExists(TargetID, TargetType); err != nil {
+		return false, err
+	}
+
+	existingReactions, err := s.reactionRepository.GetByTarget(TargetID, TargetType)
+	if err != nil {
+		return false, customError.ErrInternalServerError
+	}
+	existingReaction := s.findUserReaction(existingReactions, UserID)
+	if existingReaction == nil {
+		newReaction := entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
+		if err := s.reactionRepository.Add(newReaction); err != nil {
+			return false, customError.ErrInternalServerError
+		}
+		s.invalidateReactionCaches(TargetID, TargetType)
+		return true, nil
+	}
+	if existingReaction.Type == ReactionType {
+		return false, nil
+	}
+
+	existingReaction.Update(ReactionType)
+	if err := s.reactionRepository.Update(existingReaction); err != nil {
+		return false, customError.ErrInternalServerError
+	}
+	s.invalidateReactionCaches(TargetID, TargetType)
+	return false, nil
+}
+
+func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType) error {
+	user, err := s.userRepository.SelectUserByID(UserID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
 	if user == nil {
 		return customError.ErrUserNotFound
 	}
-	var newReaction *entity.Reaction
-	switch TargetType {
-	case entity.ReactionTargetPost:
-		post, err := s.postRepository.SelectPostByID(TargetID) // post 존재 여부 확인
-		if err != nil {
-			return customError.ErrInternalServerError
-		}
-		if post == nil {
-			return customError.ErrPostNotFound
-		}
-		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
-	case entity.ReactionTargetComment:
-		comment, err := s.commentRepository.SelectCommentByID(TargetID) // comment 존재 여부 확인
-		if err != nil {
-			return customError.ErrInternalServerError
-		}
-		if comment == nil {
-			return customError.ErrCommentNotFound
-		}
-		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
-		s.cache.Delete(key.PostDetail(comment.PostID))
-	default:
-		return customError.ErrInternalServerError
-	}
-	err = s.reactionRepository.Add(newReaction)
-	if err != nil {
-		return customError.ErrInternalServerError
-	}
-	s.cache.Delete(key.ReactionList(string(TargetType), TargetID))
-	if TargetType == entity.ReactionTargetPost {
-		s.cache.Delete(key.PostDetail(TargetID))
-	}
-	return nil
-}
-
-func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
-	// 리액션 제거 로직 구현
-	user, err := s.userRepository.SelectUserByID(UserID) // user 존재 여부 확인
-	if err != nil {
-		return customError.ErrInternalServerError
-	}
-	if user == nil {
-		return customError.ErrUserNotFound
-	}
-	removeReaction, err := s.reactionRepository.GetByID(ID)
-	if err != nil {
-		return customError.ErrInternalServerError
-	}
-	if removeReaction == nil {
-		return customError.ErrReactionNotFound
-	}
-	if err := s.authorizationPolicy.OwnerOrAdmin(user, removeReaction.UserID); err != nil {
+	if err := s.ensureTargetExists(TargetID, TargetType); err != nil {
 		return err
 	}
-	err = s.reactionRepository.Remove(removeReaction)
+
+	existingReactions, err := s.reactionRepository.GetByTarget(TargetID, TargetType)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.Delete(key.ReactionList(string(removeReaction.TargetType), removeReaction.TargetID))
-	if removeReaction.TargetType == entity.ReactionTargetPost {
-		s.cache.Delete(key.PostDetail(removeReaction.TargetID))
+	existingReaction := s.findUserReaction(existingReactions, UserID)
+	if existingReaction == nil {
+		return nil
 	}
-	if removeReaction.TargetType == entity.ReactionTargetComment {
-		comment, err := s.commentRepository.SelectCommentByID(removeReaction.TargetID)
-		if err == nil && comment != nil {
-			s.cache.Delete(key.PostDetail(comment.PostID))
-		}
+	err = s.reactionRepository.Remove(existingReaction)
+	if err != nil {
+		return customError.ErrInternalServerError
 	}
+	s.invalidateReactionCaches(TargetID, TargetType)
 	return nil
 }
 
@@ -132,4 +115,51 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 		return nil, customError.ErrInternalServerError
 	}
 	return reactions, nil
+}
+
+func (s *ReactionService) findUserReaction(reactions []*entity.Reaction, userID int64) *entity.Reaction {
+	for _, reaction := range reactions {
+		if reaction.UserID == userID {
+			return reaction
+		}
+	}
+	return nil
+}
+
+func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType) {
+	s.cache.Delete(key.ReactionList(string(targetType), targetID))
+	if targetType == entity.ReactionTargetPost {
+		s.cache.Delete(key.PostDetail(targetID))
+	}
+	if targetType == entity.ReactionTargetComment {
+		comment, err := s.commentRepository.SelectCommentByID(targetID)
+		if err == nil && comment != nil {
+			s.cache.Delete(key.PostDetail(comment.PostID))
+		}
+	}
+}
+
+func (s *ReactionService) ensureTargetExists(targetID int64, targetType entity.ReactionTargetType) error {
+	switch targetType {
+	case entity.ReactionTargetPost:
+		post, err := s.postRepository.SelectPostByID(targetID)
+		if err != nil {
+			return customError.ErrInternalServerError
+		}
+		if post == nil {
+			return customError.ErrPostNotFound
+		}
+		return nil
+	case entity.ReactionTargetComment:
+		comment, err := s.commentRepository.SelectCommentByID(targetID)
+		if err != nil {
+			return customError.ErrInternalServerError
+		}
+		if comment == nil {
+			return customError.ErrCommentNotFound
+		}
+		return nil
+	default:
+		return customError.ErrInternalServerError
+	}
 }

@@ -45,10 +45,19 @@
 ## Reaction
 
 - `GET /api/v1/posts/{postID}/reactions`
-- `POST /api/v1/posts/{postID}/reactions` (인증 필요)
+- `PUT /api/v1/posts/{postID}/reactions/me` (인증 필요)
+  - 내 리액션 생성 또는 변경
+  - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
+- `DELETE /api/v1/posts/{postID}/reactions/me` (인증 필요)
+  - 내 리액션 삭제
+  - 리액션이 없어도 `204`
 - `GET /api/v1/comments/{commentID}/reactions`
-- `POST /api/v1/comments/{commentID}/reactions` (인증 필요)
-- `DELETE /api/v1/reactions/{reactionID}` (인증 필요, 작성자 또는 admin)
+- `PUT /api/v1/comments/{commentID}/reactions/me` (인증 필요)
+  - 내 리액션 생성 또는 변경
+  - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
+- `DELETE /api/v1/comments/{commentID}/reactions/me` (인증 필요)
+  - 내 리액션 삭제
+  - 리액션이 없어도 `204`
 
 `reaction_type` 요청 값은 현재 `like`, `dislike` 를 지원합니다.
 
@@ -80,12 +89,30 @@ curl -X POST http://localhost:18577/api/v1/boards \
   -d '{"name":"free","description":"free board"}'
 ```
 
-### 게시글 리액션 추가
+### 게시글 내 리액션 생성
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X POST http://localhost:18577/api/v1/posts/1/reactions \
+curl -X PUT http://localhost:18577/api/v1/posts/1/reactions/me \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
   -d '{"reaction_type":"like"}'
+```
+
+### 게시글 내 리액션 변경
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X PUT http://localhost:18577/api/v1/posts/1/reactions/me \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"reaction_type":"dislike"}'
+```
+
+### 게시글 내 리액션 삭제
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X DELETE http://localhost:18577/api/v1/posts/1/reactions/me \
+  -H "Authorization: $TOKEN"
 ```
