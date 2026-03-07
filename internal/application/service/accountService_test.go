@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
 
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
@@ -93,4 +95,31 @@ func TestAccountService_DeleteMyAccount_StopsOnDeleteFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 	assert.False(t, calledInvalidate)
+}
+
+func TestAccountService_DeleteMyAccount_IgnoresSessionInvalidationFailure(t *testing.T) {
+	originalLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(originalLogger)
+	})
+
+	calledInvalidate := false
+	svc := NewAccountService(
+		&stubUserUseCase{
+			deleteMe: func(userID int64, password string) error {
+				return nil
+			},
+		},
+		&stubSessionUseCase{
+			invalidateUserSessions: func(userID int64) error {
+				calledInvalidate = true
+				return customError.WrapRepository("delete sessions", errors.New("cache unavailable"))
+			},
+		},
+	)
+
+	err := svc.DeleteMyAccount(10, "pw")
+	require.NoError(t, err)
+	assert.True(t, calledInvalidate)
 }
