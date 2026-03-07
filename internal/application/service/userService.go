@@ -73,7 +73,3 @@ func (s *UserService) VerifyCredentials(username, password string) (int64, error
 	}
 	return existingUser.ID, nil
 }
-
-func (s *UserService) Login(username, password string) (int64, error) {
-	return s.VerifyCredentials(username, password)
-}

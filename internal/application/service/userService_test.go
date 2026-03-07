@@ -61,21 +61,21 @@ func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
 }
 
-func TestUserService_Login_UserNotFound(t *testing.T) {
+func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user)
 
-	_, err := svc.Login("nope", "pw")
+	_, err := svc.VerifyCredentials("nope", "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
 }
 
-func TestUserService_Login_WrongPassword(t *testing.T) {
+func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user)
 	_, _ = svc.SignUp("alice", "pw")
 
-	_, err := svc.Login("alice", "wrong")
+	_, err := svc.VerifyCredentials("alice", "wrong")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
 }
