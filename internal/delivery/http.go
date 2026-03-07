@@ -146,7 +146,6 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 // @Header 200 {string} Authorization "Bearer <token>"
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
-// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /auth/login [post]
 func (h *HTTPHandler) handleUserLogin(c *gin.Context) {

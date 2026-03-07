@@ -79,7 +79,7 @@ func (s *UserService) VerifyCredentials(username, password string) (int64, error
 		return 0, customError.WrapRepository("select user by username for verify credentials", err)
 	}
 	if existingUser == nil {
-		return 0, customError.ErrUserNotFound
+		return 0, customError.ErrInvalidCredential
 	}
 
 	matched, err := s.passwordHasher.Matches(existingUser.Password, password)

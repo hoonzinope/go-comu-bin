@@ -16,7 +16,7 @@
 - `POST /api/v1/signup`
   - `username`은 유니크해야 하며, 중복 시 `409 Conflict`
 - `POST /api/v1/auth/login`
-  - 사용자 미존재 또는 비밀번호 불일치 시 `401 Unauthorized`
+  - 사용자 미존재 또는 비밀번호 불일치 시 동일하게 `401 Unauthorized`
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)
   - 탈퇴 성공 시 해당 사용자의 활성 세션이 모두 무효화됩니다.

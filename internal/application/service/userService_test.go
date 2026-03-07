@@ -67,7 +67,7 @@ func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 
 	_, err := svc.VerifyCredentials("nope", "pw")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
+	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }
 
 func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
