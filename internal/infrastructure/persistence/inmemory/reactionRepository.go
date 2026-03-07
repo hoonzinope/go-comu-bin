@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"strconv"
 	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -15,6 +16,7 @@ type ReactionRepository struct {
 		ID   int64
 		Data map[int64]*entity.Reaction
 	}
+	userTargetIndex map[string]int64
 }
 
 func NewReactionRepository() *ReactionRepository {
@@ -26,33 +28,56 @@ func NewReactionRepository() *ReactionRepository {
 			ID:   0,
 			Data: make(map[int64]*entity.Reaction),
 		},
+		userTargetIndex: make(map[string]int64),
 	}
 }
 
-func (r *ReactionRepository) Add(reaction *entity.Reaction) error {
+func (r *ReactionRepository) SetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (*entity.Reaction, bool, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	indexKey := userTargetKey(userID, targetID, targetType)
+	if reactionID, exists := r.userTargetIndex[indexKey]; exists {
+		reaction := r.reactionDB.Data[reactionID]
+		if reaction.Type == reactionType {
+			return reaction, false, false, nil
+		}
+		reaction.Update(reactionType)
+		return reaction, false, true, nil
+	}
+
+	reaction := entity.NewReaction(targetType, targetID, reactionType, userID)
 	r.reactionDB.ID++
 	reaction.ID = r.reactionDB.ID
 	r.reactionDB.Data[reaction.ID] = reaction
-	return nil
+	r.userTargetIndex[indexKey] = reaction.ID
+	return reaction, true, true, nil
 }
 
-func (r *ReactionRepository) Update(reaction *entity.Reaction) error {
+func (r *ReactionRepository) DeleteUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.reactionDB.Data[reaction.ID] = reaction
-	return nil
+	indexKey := userTargetKey(userID, targetID, targetType)
+	reactionID, exists := r.userTargetIndex[indexKey]
+	if !exists {
+		return false, nil
+	}
+
+	delete(r.userTargetIndex, indexKey)
+	delete(r.reactionDB.Data, reactionID)
+	return true, nil
 }
 
-func (r *ReactionRepository) Remove(reaction *entity.Reaction) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *ReactionRepository) GetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-	delete(r.reactionDB.Data, reaction.ID)
-	return nil
+	reactionID, exists := r.userTargetIndex[userTargetKey(userID, targetID, targetType)]
+	if !exists {
+		return nil, nil
+	}
+	return r.reactionDB.Data[reactionID], nil
 }
 
 func (r *ReactionRepository) GetByTarget(targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error) {
@@ -68,12 +93,6 @@ func (r *ReactionRepository) GetByTarget(targetID int64, targetType entity.React
 	return reactions, nil
 }
 
-func (r *ReactionRepository) GetByID(id int64) (*entity.Reaction, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if reaction, exists := r.reactionDB.Data[id]; exists {
-		return reaction, nil
-	}
-	return nil, nil
+func userTargetKey(userID, targetID int64, targetType entity.ReactionTargetType) string {
+	return string(targetType) + ":" + strconv.FormatInt(targetID, 10) + ":" + strconv.FormatInt(userID, 10)
 }

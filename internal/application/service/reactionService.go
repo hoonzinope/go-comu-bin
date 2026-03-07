@@ -45,29 +45,15 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 		return false, err
 	}
 
-	existingReactions, err := s.reactionRepository.GetByTarget(TargetID, TargetType)
+	_, created, changed, err := s.reactionRepository.SetUserTargetReaction(UserID, TargetID, TargetType, ReactionType)
 	if err != nil {
 		return false, customError.ErrInternalServerError
 	}
-	existingReaction := s.findUserReaction(existingReactions, UserID)
-	if existingReaction == nil {
-		newReaction := entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
-		if err := s.reactionRepository.Add(newReaction); err != nil {
-			return false, customError.ErrInternalServerError
-		}
-		s.invalidateReactionCaches(TargetID, TargetType)
-		return true, nil
-	}
-	if existingReaction.Type == ReactionType {
+	if !created && !changed {
 		return false, nil
 	}
-
-	existingReaction.Update(ReactionType)
-	if err := s.reactionRepository.Update(existingReaction); err != nil {
-		return false, customError.ErrInternalServerError
-	}
 	s.invalidateReactionCaches(TargetID, TargetType)
-	return false, nil
+	return created, nil
 }
 
 func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType) error {
@@ -82,17 +68,12 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 		return err
 	}
 
-	existingReactions, err := s.reactionRepository.GetByTarget(TargetID, TargetType)
+	deleted, err := s.reactionRepository.DeleteUserTargetReaction(UserID, TargetID, TargetType)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	existingReaction := s.findUserReaction(existingReactions, UserID)
-	if existingReaction == nil {
+	if !deleted {
 		return nil
-	}
-	err = s.reactionRepository.Remove(existingReaction)
-	if err != nil {
-		return customError.ErrInternalServerError
 	}
 	s.invalidateReactionCaches(TargetID, TargetType)
 	return nil
@@ -115,15 +96,6 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 		return nil, customError.ErrInternalServerError
 	}
 	return reactions, nil
-}
-
-func (s *ReactionService) findUserReaction(reactions []*entity.Reaction, userID int64) *entity.Reaction {
-	for _, reaction := range reactions {
-		if reaction.UserID == userID {
-			return reaction
-		}
-	}
-	return nil
 }
 
 func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType) {
