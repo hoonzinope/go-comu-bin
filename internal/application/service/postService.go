@@ -17,15 +17,23 @@ var (
 var _ application.PostUseCase = (*PostService)(nil)
 
 type PostService struct {
-	repository          application.Repository
+	userRepository      application.UserRepository
+	boardRepository     application.BoardRepository
+	postRepository      application.PostRepository
+	commentRepository   application.CommentRepository
+	reactionRepository  application.ReactionRepository
 	cache               application.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewPostService(repository application.Repository, cache application.Cache, cachePolicy appcache.Policy) *PostService {
+func NewPostService(userRepository application.UserRepository, boardRepository application.BoardRepository, postRepository application.PostRepository, commentRepository application.CommentRepository, reactionRepository application.ReactionRepository, cache application.Cache, cachePolicy appcache.Policy) *PostService {
 	return &PostService{
-		repository:          repository,
+		userRepository:      userRepository,
+		boardRepository:     boardRepository,
+		postRepository:      postRepository,
+		commentRepository:   commentRepository,
+		reactionRepository:  reactionRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
@@ -34,14 +42,14 @@ func NewPostService(repository application.Repository, cache application.Cache, 
 
 func (s *PostService) CreatePost(title, content string, authorID, boardID int64) (int64, error) {
 	// 게시글 생성 로직 구현
-	user, err := s.repository.UserRepository.SelectUserByID(authorID) // user 존재 여부 확인
+	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
 	if user == nil {
 		return 0, customError.ErrUserNotFound
 	}
-	board, err := s.repository.BoardRepository.SelectBoardByID(boardID) // board 존재 여부 확인
+	board, err := s.boardRepository.SelectBoardByID(boardID) // board 존재 여부 확인
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -49,7 +57,7 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 		return 0, customError.ErrBoardNotFound
 	}
 	newPost := entity.NewPost(title, content, authorID, boardID)
-	postID, err := s.repository.PostRepository.Save(newPost)
+	postID, err := s.postRepository.Save(newPost)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -66,7 +74,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto
 			fetchLimit = limit + 1
 		}
 
-		posts, err := s.repository.PostRepository.SelectPosts(boardID, fetchLimit, lastID)
+		posts, err := s.postRepository.SelectPosts(boardID, fetchLimit, lastID)
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
@@ -103,24 +111,24 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto
 func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 	cacheKey := key.PostDetail(id)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.DetailTTLSeconds, func() (interface{}, error) {
-		post, err := s.repository.PostRepository.SelectPostByID(id)
+		post, err := s.postRepository.SelectPostByID(id)
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
 		if post == nil {
 			return nil, customError.ErrPostNotFound
 		}
-		reactions, err := s.repository.ReactionRepository.GetByTarget(post.ID, "post")
+		reactions, err := s.reactionRepository.GetByTarget(post.ID, "post")
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
-		comments, err := s.repository.CommentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
+		comments, err := s.commentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
 		commentDetails := make([]*dto.CommentDetail, len(comments))
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
 		for i, comment := range comments {
-			commentReactions, err := s.repository.ReactionRepository.GetByTarget(comment.ID, "comment")
+			commentReactions, err := s.reactionRepository.GetByTarget(comment.ID, "comment")
 			if err != nil {
 				return nil, customError.ErrInternalServerError
 			}
@@ -148,14 +156,14 @@ func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 
 func (s *PostService) UpdatePost(id, authorID int64, title, content string) error {
 	// 게시글 수정 로직 구현
-	post, err := s.repository.PostRepository.SelectPostByID(id) // post 존재 여부 확인
+	post, err := s.postRepository.SelectPostByID(id) // post 존재 여부 확인
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
 	if post == nil {
 		return customError.ErrPostNotFound
 	}
-	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	requester, err := s.userRepository.SelectUserByID(authorID)
 	if requester == nil || err != nil {
 		return customError.ErrUserNotFound
 	}
@@ -163,7 +171,7 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 		return err
 	}
 	post.Update(title, content)
-	err = s.repository.PostRepository.Update(post)
+	err = s.postRepository.Update(post)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
@@ -174,21 +182,21 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 
 func (s *PostService) DeletePost(id, authorID int64) error {
 	// 게시글 삭제 로직 구현
-	post, err := s.repository.PostRepository.SelectPostByID(id) // post 존재 여부 확인
+	post, err := s.postRepository.SelectPostByID(id) // post 존재 여부 확인
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
 	if post == nil {
 		return customError.ErrPostNotFound
 	}
-	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	requester, err := s.userRepository.SelectUserByID(authorID)
 	if requester == nil || err != nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return err
 	}
-	err = s.repository.PostRepository.Delete(post.ID)
+	err = s.postRepository.Delete(post.ID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}

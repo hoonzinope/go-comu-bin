@@ -13,8 +13,8 @@ import (
 )
 
 func TestSessionService_Login_Success(t *testing.T) {
-	repository := newTestRepository()
-	userService := NewUserService(repository)
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user)
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
@@ -30,8 +30,8 @@ func TestSessionService_Login_Success(t *testing.T) {
 }
 
 func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
-	repository := newTestRepository()
-	userService := NewUserService(repository)
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user)
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
@@ -48,9 +48,9 @@ func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 }
 
 func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
-	repository := newTestRepository()
-	userID := seedUser(repository, "alice", "pw", "user")
-	userService := NewUserService(repository)
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	userService := NewUserService(repositories.user)
 
 	cache := cacheInMemory.NewInMemoryCache()
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")

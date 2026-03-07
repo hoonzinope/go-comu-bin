@@ -10,8 +10,8 @@ import (
 )
 
 func TestUserService_SignUp_Success(t *testing.T) {
-	repository := newTestRepository()
-	svc := NewUserService(repository)
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user)
 
 	result, err := svc.SignUp("alice", "pw")
 	require.NoError(t, err)
@@ -19,8 +19,8 @@ func TestUserService_SignUp_Success(t *testing.T) {
 }
 
 func TestUserService_SignUp_Duplicate(t *testing.T) {
-	repository := newTestRepository()
-	svc := NewUserService(repository)
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user)
 	_, _ = svc.SignUp("alice", "pw")
 
 	_, err := svc.SignUp("alice", "pw2")
@@ -28,36 +28,42 @@ func TestUserService_SignUp_Duplicate(t *testing.T) {
 	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
 }
 
-func TestUserService_Quit_InvalidCredential(t *testing.T) {
-	repository := newTestRepository()
-	svc := NewUserService(repository)
+func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user)
 	_, _ = svc.SignUp("alice", "pw")
+	user, err := repositories.user.SelectUserByUsername("alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
 
-	err := svc.Quit("alice", "wrong")
+	err = svc.DeleteMe(user.ID, "wrong")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }
 
-func TestUserService_Quit_Success(t *testing.T) {
-	repository := newTestRepository()
-	svc := NewUserService(repository)
+func TestUserService_DeleteMe_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user)
 	_, _ = svc.SignUp("alice", "pw")
+	user, err := repositories.user.SelectUserByUsername("alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
 
-	require.NoError(t, svc.Quit("alice", "pw"))
+	require.NoError(t, svc.DeleteMe(user.ID, "pw"))
 }
 
-func TestUserService_Quit_UserNotFound(t *testing.T) {
-	repository := newTestRepository()
-	svc := NewUserService(repository)
+func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user)
 
-	err := svc.Quit("nope", "pw")
+	err := svc.DeleteMe(999, "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
 }
 
 func TestUserService_Login_UserNotFound(t *testing.T) {
-	repository := newTestRepository()
-	svc := NewUserService(repository)
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user)
 
 	_, err := svc.Login("nope", "pw")
 	require.Error(t, err)
@@ -65,8 +71,8 @@ func TestUserService_Login_UserNotFound(t *testing.T) {
 }
 
 func TestUserService_Login_WrongPassword(t *testing.T) {
-	repository := newTestRepository()
-	svc := NewUserService(repository)
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user)
 	_, _ = svc.SignUp("alice", "pw")
 
 	_, err := svc.Login("alice", "wrong")

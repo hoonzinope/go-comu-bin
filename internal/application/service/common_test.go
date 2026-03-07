@@ -8,13 +8,21 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
 
-func newTestRepository() application.Repository {
-	return application.Repository{
-		UserRepository:     inmemory.NewUserRepository(),
-		BoardRepository:    inmemory.NewBoardRepository(),
-		PostRepository:     inmemory.NewPostRepository(),
-		CommentRepository:  inmemory.NewCommentRepository(),
-		ReactionRepository: inmemory.NewReactionRepository(),
+type testRepositories struct {
+	user     application.UserRepository
+	board    application.BoardRepository
+	post     application.PostRepository
+	comment  application.CommentRepository
+	reaction application.ReactionRepository
+}
+
+func newTestRepositories() testRepositories {
+	return testRepositories{
+		user:     inmemory.NewUserRepository(),
+		board:    inmemory.NewBoardRepository(),
+		post:     inmemory.NewPostRepository(),
+		comment:  inmemory.NewCommentRepository(),
+		reaction: inmemory.NewReactionRepository(),
 	}
 }
 
@@ -29,31 +37,31 @@ func newTestCachePolicy() appcache.Policy {
 	}
 }
 
-func seedUser(repository application.Repository, name, password, role string) int64 {
+func seedUser(userRepository application.UserRepository, name, password, role string) int64 {
 	var user *entity.User
 	if role == "admin" {
 		user = entity.NewAdmin(name, password)
 	} else {
 		user = entity.NewUser(name, password)
 	}
-	id, _ := repository.UserRepository.Save(user)
+	id, _ := userRepository.Save(user)
 	return id
 }
 
-func seedBoard(repository application.Repository, name, description string) int64 {
+func seedBoard(boardRepository application.BoardRepository, name, description string) int64 {
 	board := entity.NewBoard(name, description)
-	id, _ := repository.BoardRepository.Save(board)
+	id, _ := boardRepository.Save(board)
 	return id
 }
 
-func seedPost(repository application.Repository, authorID, boardID int64, title, content string) int64 {
+func seedPost(postRepository application.PostRepository, authorID, boardID int64, title, content string) int64 {
 	post := entity.NewPost(title, content, authorID, boardID)
-	id, _ := repository.PostRepository.Save(post)
+	id, _ := postRepository.Save(post)
 	return id
 }
 
-func seedComment(repository application.Repository, authorID, postID int64, content string) int64 {
+func seedComment(commentRepository application.CommentRepository, authorID, postID int64, content string) int64 {
 	comment := entity.NewComment(content, authorID, postID, nil)
-	id, _ := repository.CommentRepository.Save(comment)
+	id, _ := commentRepository.Save(comment)
 	return id
 }

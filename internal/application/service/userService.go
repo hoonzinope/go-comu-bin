@@ -9,19 +9,19 @@ import (
 var _ application.UserUseCase = (*UserService)(nil)
 
 type UserService struct {
-	repository application.Repository
+	userRepository application.UserRepository
 }
 
-func NewUserService(repository application.Repository) *UserService {
+func NewUserService(userRepository application.UserRepository) *UserService {
 	return &UserService{
-		repository: repository,
+		userRepository: userRepository,
 	}
 }
 
 func (s *UserService) SignUp(username, password string) (string, error) {
 	// 회원가입 로직 구현
 	// duplicate username check
-	existingUser, err := s.repository.UserRepository.SelectUserByUsername(username)
+	existingUser, err := s.userRepository.SelectUserByUsername(username)
 	if err != nil {
 		return "", customError.ErrInternalServerError
 	}
@@ -31,36 +31,15 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 
 	newUser := entity.NewUser(username, password)
 
-	_, err = s.repository.UserRepository.Save(newUser)
+	_, err = s.userRepository.Save(newUser)
 	if err != nil {
 		return "", customError.ErrInternalServerError
 	}
 	return "ok", nil
 }
 
-func (s *UserService) Quit(username, password string) error {
-	// 회원탈퇴 로직 구현
-	// user 존재 여부 확인
-	existingUser, err := s.repository.UserRepository.SelectUserByUsername(username)
-	if err != nil {
-		return customError.ErrInternalServerError
-	}
-	if existingUser == nil {
-		return customError.ErrUserNotFound
-	}
-	if existingUser.Password != password {
-		return customError.ErrInvalidCredential
-	}
-
-	err = s.repository.UserRepository.Delete(existingUser.ID)
-	if err != nil {
-		return customError.ErrInternalServerError
-	}
-	return nil
-}
-
 func (s *UserService) DeleteMe(userID int64, password string) error {
-	existingUser, err := s.repository.UserRepository.SelectUserByID(userID)
+	existingUser, err := s.userRepository.SelectUserByID(userID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
@@ -71,7 +50,7 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 		return customError.ErrInvalidCredential
 	}
 
-	err = s.repository.UserRepository.Delete(existingUser.ID)
+	err = s.userRepository.Delete(existingUser.ID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
@@ -81,7 +60,7 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 func (s *UserService) Login(username, password string) (int64, error) {
 	// 로그인 로직 구현
 	// user 존재 여부 확인
-	existingUser, err := s.repository.UserRepository.SelectUserByUsername(username)
+	existingUser, err := s.userRepository.SelectUserByUsername(username)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -94,10 +73,4 @@ func (s *UserService) Login(username, password string) (int64, error) {
 		return 0, customError.ErrUserNotFound
 	}
 	return existingUser.ID, nil
-}
-
-func (s *UserService) Logout(username string) error {
-	// 로그아웃 로직 구현
-	// 실제 구현에서는 세션 관리 필요
-	return nil
 }

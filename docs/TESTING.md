@@ -51,11 +51,19 @@ go test ./internal/integration -v
 
 ```go
 func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
-	repository := newTestRepository()
-	ownerID := seedUser(repository, "owner", "pw", "user")
-	otherID := seedUser(repository, "other", "pw", "user")
-	postID := seedPost(repository, ownerID, 1, "title", "content")
-	svc := NewPostService(repository)
+	repositories := newTestRepositories()
+	ownerID := seedUser(repositories.user, "owner", "pw", "user")
+	otherID := seedUser(repositories.user, "other", "pw", "user")
+	postID := seedPost(repositories.post, ownerID, 1, "title", "content")
+	svc := NewPostService(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		repositories.comment,
+		repositories.reaction,
+		newTestCache(),
+		newTestCachePolicy(),
+	)
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
 

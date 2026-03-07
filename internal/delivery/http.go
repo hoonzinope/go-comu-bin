@@ -25,14 +25,21 @@ type HTTPHandler struct {
 	authGinMiddleware gin.HandlerFunc
 }
 
-func NewHTTPHandler(useCase application.UseCase, sessionUseCase application.SessionUseCase) *HTTPHandler {
+func NewHTTPHandler(
+	sessionUseCase application.SessionUseCase,
+	userUseCase application.UserUseCase,
+	boardUseCase application.BoardUseCase,
+	postUseCase application.PostUseCase,
+	commentUseCase application.CommentUseCase,
+	reactionUseCase application.ReactionUseCase,
+) *HTTPHandler {
 	return &HTTPHandler{
 		sessionUseCase:    sessionUseCase,
-		userUseCase:       useCase.UserUseCase,
-		boardUseCase:      useCase.BoardUseCase,
-		postUseCase:       useCase.PostUseCase,
-		commentUseCase:    useCase.CommentUseCase,
-		reactionUseCase:   useCase.ReactionUseCase,
+		userUseCase:       userUseCase,
+		boardUseCase:      boardUseCase,
+		postUseCase:       postUseCase,
+		commentUseCase:    commentUseCase,
+		reactionUseCase:   reactionUseCase,
 		authGinMiddleware: middleware.AuthWithSession(sessionUseCase),
 	}
 }
@@ -77,10 +84,18 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.DELETE("/reactions/:reactionID", h.authGinMiddleware, h.handleReactionWithID)
 }
 
-func NewHTTPServer(addr string, sessionUseCase application.SessionUseCase, useCase application.UseCase) *http.Server {
+func NewHTTPServer(
+	addr string,
+	sessionUseCase application.SessionUseCase,
+	userUseCase application.UserUseCase,
+	boardUseCase application.BoardUseCase,
+	postUseCase application.PostUseCase,
+	commentUseCase application.CommentUseCase,
+	reactionUseCase application.ReactionUseCase,
+) *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	handler := NewHTTPHandler(useCase, sessionUseCase)
+	handler := NewHTTPHandler(sessionUseCase, userUseCase, boardUseCase, postUseCase, commentUseCase, reactionUseCase)
 	handler.RegisterRoutes(r)
 	return &http.Server{Addr: addr, Handler: r}
 }

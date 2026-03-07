@@ -23,10 +23,8 @@ const apiV1Prefix = "/api/v1"
 
 type fakeUserUseCase struct {
 	signUp   func(username, password string) (string, error)
-	quit     func(username, password string) error
 	deleteMe func(userID int64, password string) error
 	login    func(username, password string) (int64, error)
-	logout   func(username string) error
 }
 
 func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
@@ -34,13 +32,6 @@ func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
 		return f.signUp(username, password)
 	}
 	return "ok", nil
-}
-
-func (f *fakeUserUseCase) Quit(username, password string) error {
-	if f.quit != nil {
-		return f.quit(username, password)
-	}
-	return nil
 }
 
 func (f *fakeUserUseCase) DeleteMe(userID int64, password string) error {
@@ -55,13 +46,6 @@ func (f *fakeUserUseCase) Login(username, password string) (int64, error) {
 		return f.login(username, password)
 	}
 	return 1, nil
-}
-
-func (f *fakeUserUseCase) Logout(username string) error {
-	if f.logout != nil {
-		return f.logout(username)
-	}
-	return nil
 }
 
 type fakeBoardUseCase struct {
@@ -213,17 +197,10 @@ func newTestHandler(
 	comment application.CommentUseCase,
 	reaction application.ReactionUseCase,
 ) http.Handler {
-	uc := application.UseCase{
-		UserUseCase:     user,
-		BoardUseCase:    board,
-		PostUseCase:     post,
-		CommentUseCase:  comment,
-		ReactionUseCase: reaction,
-	}
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testCache = cacheInMemory.NewInMemoryCache()
 	sessionUseCase := service.NewSessionService(user, tokenProvider, testCache)
-	return NewHTTPServer(":0", sessionUseCase, uc).Handler
+	return NewHTTPServer(":0", sessionUseCase, user, board, post, comment, reaction).Handler
 }
 
 func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {

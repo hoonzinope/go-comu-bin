@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
@@ -101,30 +100,26 @@ func TestIntegration_ForbiddenScenarios(t *testing.T) {
 func newIntegrationServer(t *testing.T) *httptest.Server {
 	t.Helper()
 
-	repository := application.Repository{
-		UserRepository:     inmemory.NewUserRepository(),
-		BoardRepository:    inmemory.NewBoardRepository(),
-		PostRepository:     inmemory.NewPostRepository(),
-		CommentRepository:  inmemory.NewCommentRepository(),
-		ReactionRepository: inmemory.NewReactionRepository(),
-	}
+	userRepository := inmemory.NewUserRepository()
+	boardRepository := inmemory.NewBoardRepository()
+	postRepository := inmemory.NewPostRepository()
+	commentRepository := inmemory.NewCommentRepository()
+	reactionRepository := inmemory.NewReactionRepository()
 
 	admin := entity.NewAdmin("admin", "admin")
-	_, err := repository.UserRepository.Save(admin)
+	_, err := userRepository.Save(admin)
 	require.NoError(t, err)
 	cache := cacheInMemory.NewInMemoryCache()
 
-	useCases := application.UseCase{
-		UserUseCase:     service.NewUserService(repository),
-		BoardUseCase:    service.NewBoardService(repository, cache, testCachePolicy()),
-		PostUseCase:     service.NewPostService(repository, cache, testCachePolicy()),
-		CommentUseCase:  service.NewCommentService(repository, cache, testCachePolicy()),
-		ReactionUseCase: service.NewReactionService(repository, cache, testCachePolicy()),
-	}
+	userUseCase := service.NewUserService(userRepository)
+	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, testCachePolicy())
+	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
+	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy())
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
-	sessionUseCase := service.NewSessionService(useCases.UserUseCase, tokenProvider, cache)
-	httpServer := delivery.NewHTTPServer(":0", sessionUseCase, useCases)
+	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)
+	httpServer := delivery.NewHTTPServer(":0", sessionUseCase, userUseCase, boardUseCase, postUseCase, commentUseCase, reactionUseCase)
 	return httptest.NewServer(httpServer.Handler)
 }
 

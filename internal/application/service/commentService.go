@@ -13,15 +13,19 @@ import (
 var _ application.CommentUseCase = (*CommentService)(nil)
 
 type CommentService struct {
-	repository          application.Repository
+	userRepository      application.UserRepository
+	postRepository      application.PostRepository
+	commentRepository   application.CommentRepository
 	cache               application.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewCommentService(repository application.Repository, cache application.Cache, cachePolicy appcache.Policy) *CommentService {
+func NewCommentService(userRepository application.UserRepository, postRepository application.PostRepository, commentRepository application.CommentRepository, cache application.Cache, cachePolicy appcache.Policy) *CommentService {
 	return &CommentService{
-		repository:          repository,
+		userRepository:      userRepository,
+		postRepository:      postRepository,
+		commentRepository:   commentRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
@@ -30,14 +34,14 @@ func NewCommentService(repository application.Repository, cache application.Cach
 
 func (s *CommentService) CreateComment(content string, authorID, postID int64) (int64, error) {
 	// 댓글 생성 로직 구현
-	user, err := s.repository.UserRepository.SelectUserByID(authorID) // user 존재 여부 확인
+	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
 	if user == nil {
 		return 0, customError.ErrUserNotFound
 	}
-	post, err := s.repository.PostRepository.SelectPostByID(postID) // post 존재 여부 확인
+	post, err := s.postRepository.SelectPostByID(postID) // post 존재 여부 확인
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -45,7 +49,7 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 		return 0, customError.ErrPostNotFound
 	}
 	newComment := entity.NewComment(content, authorID, postID, nil)
-	commentID, err := s.repository.CommentRepository.Save(newComment)
+	commentID, err := s.commentRepository.Save(newComment)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
 	}
@@ -63,7 +67,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 			fetchLimit = limit + 1
 		}
 
-		comments, err := s.repository.CommentRepository.SelectComments(postID, fetchLimit, lastID)
+		comments, err := s.commentRepository.SelectComments(postID, fetchLimit, lastID)
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
@@ -99,14 +103,14 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 
 func (s *CommentService) UpdateComment(id, authorID int64, content string) error {
 	// 댓글 수정 로직 구현
-	comment, err := s.repository.CommentRepository.SelectCommentByID(id) // comment 존재 여부 확인
+	comment, err := s.commentRepository.SelectCommentByID(id) // comment 존재 여부 확인
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
 	if comment == nil {
 		return customError.ErrCommentNotFound
 	}
-	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	requester, err := s.userRepository.SelectUserByID(authorID)
 	if requester == nil || err != nil {
 		return customError.ErrUserNotFound
 	}
@@ -114,7 +118,7 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 		return err
 	}
 	comment.Update(content)
-	err = s.repository.CommentRepository.Update(comment)
+	err = s.commentRepository.Update(comment)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
@@ -125,21 +129,21 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 
 func (s *CommentService) DeleteComment(id, authorID int64) error {
 	// 댓글 삭제 로직 구현
-	comment, err := s.repository.CommentRepository.SelectCommentByID(id) // comment 존재 여부 확인
+	comment, err := s.commentRepository.SelectCommentByID(id) // comment 존재 여부 확인
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
 	if comment == nil {
 		return customError.ErrCommentNotFound
 	}
-	requester, err := s.repository.UserRepository.SelectUserByID(authorID)
+	requester, err := s.userRepository.SelectUserByID(authorID)
 	if requester == nil || err != nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 		return err
 	}
-	err = s.repository.CommentRepository.Delete(comment.ID)
+	err = s.commentRepository.Delete(comment.ID)
 	if err != nil {
 		return customError.ErrInternalServerError
 	}

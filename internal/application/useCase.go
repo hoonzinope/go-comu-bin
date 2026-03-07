@@ -8,10 +8,8 @@ import (
 type UserUseCase interface {
 	// User 관련 UseCase 메서드 정의
 	SignUp(username, password string) (string, error)
-	Quit(username, password string) error
 	DeleteMe(userID int64, password string) error
 	Login(username, password string) (int64, error)
-	Logout(username string) error
 }
 
 type BoardUseCase interface {
@@ -46,12 +44,4 @@ type ReactionUseCase interface {
 	AddReaction(userID, targetID int64, targetType, reactionType string) error
 	RemoveReaction(userID, id int64) error
 	GetReactionsByTarget(targetID int64, targetType string) ([]*entity.Reaction, error)
-}
-
-type UseCase struct {
-	UserUseCase     UserUseCase
-	BoardUseCase    BoardUseCase
-	PostUseCase     PostUseCase
-	CommentUseCase  CommentUseCase
-	ReactionUseCase ReactionUseCase
 }

@@ -34,37 +34,33 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	repository := application.Repository{
-		UserRepository:     inmemory.NewUserRepository(),
-		BoardRepository:    inmemory.NewBoardRepository(),
-		PostRepository:     inmemory.NewPostRepository(),
-		CommentRepository:  inmemory.NewCommentRepository(),
-		ReactionRepository: inmemory.NewReactionRepository(),
-	}
+	userRepository := inmemory.NewUserRepository()
+	boardRepository := inmemory.NewBoardRepository()
+	postRepository := inmemory.NewPostRepository()
+	commentRepository := inmemory.NewCommentRepository()
+	reactionRepository := inmemory.NewReactionRepository()
 
-	seedAdmin(repository)
+	seedAdmin(userRepository)
 	cache := cacheInMemory.NewInMemoryCache()
 
-	useCases := application.UseCase{
-		UserUseCase:     service.NewUserService(repository),
-		BoardUseCase:    service.NewBoardService(repository, cache, cachePolicy(cfg)),
-		PostUseCase:     service.NewPostService(repository, cache, cachePolicy(cfg)),
-		CommentUseCase:  service.NewCommentService(repository, cache, cachePolicy(cfg)),
-		ReactionUseCase: service.NewReactionService(repository, cache, cachePolicy(cfg)),
-	}
+	userUseCase := service.NewUserService(userRepository)
+	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, cachePolicy(cfg))
+	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
+	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg))
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
-	sessionUseCase := service.NewSessionService(useCases.UserUseCase, tokenProvider, cache)
-	server := delivery.NewHTTPServer(port(cfg), sessionUseCase, useCases)
+	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)
+	server := delivery.NewHTTPServer(port(cfg), sessionUseCase, userUseCase, boardUseCase, postUseCase, commentUseCase, reactionUseCase)
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func seedAdmin(repository application.Repository) {
+func seedAdmin(userRepository application.UserRepository) {
 	admin := entity.NewAdmin("admin", "admin")
-	_, _ = repository.UserRepository.Save(admin)
+	_, _ = userRepository.Save(admin)
 }
 
 func port(cfg *config.Config) string {

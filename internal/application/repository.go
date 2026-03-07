@@ -46,11 +46,3 @@ type ReactionRepository interface {
 	GetByTarget(targetID int64, targetType string) ([]*entity.Reaction, error)
 	GetByID(id int64) (*entity.Reaction, error)
 }
-
-type Repository struct {
-	UserRepository     UserRepository
-	BoardRepository    BoardRepository
-	PostRepository     PostRepository
-	CommentRepository  CommentRepository
-	ReactionRepository ReactionRepository
-}

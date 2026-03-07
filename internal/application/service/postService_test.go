@@ -12,12 +12,12 @@ import (
 )
 
 func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
-	repository := newTestRepository()
-	ownerID := seedUser(repository, "owner", "pw", "user")
-	otherID := seedUser(repository, "other", "pw", "user")
-	boardID := seedBoard(repository, "free", "desc")
-	postID := seedPost(repository, ownerID, boardID, "title", "content")
-	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
+	repositories := newTestRepositories()
+	ownerID := seedUser(repositories.user, "owner", "pw", "user")
+	otherID := seedUser(repositories.user, "other", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
 	require.Error(t, err)
@@ -25,21 +25,21 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 }
 
 func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
-	repository := newTestRepository()
-	ownerID := seedUser(repository, "owner", "pw", "user")
-	adminID := seedUser(repository, "admin", "pw", "admin")
-	boardID := seedBoard(repository, "free", "desc")
-	postID := seedPost(repository, ownerID, boardID, "title", "content")
-	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
+	repositories := newTestRepositories()
+	ownerID := seedUser(repositories.user, "owner", "pw", "user")
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
 
 	require.NoError(t, svc.UpdatePost(postID, adminID, "new-title", "new-content"))
 }
 
 func TestPostService_CreateGetListDelete_Success(t *testing.T) {
-	repository := newTestRepository()
-	userID := seedUser(repository, "user", "pw", "user")
-	boardID := seedBoard(repository, "free", "desc")
-	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
 
 	postID, err := svc.CreatePost("title", "content", userID, boardID)
 	require.NoError(t, err)
@@ -58,13 +58,13 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 }
 
 func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
-	repository := newTestRepository()
-	userID := seedUser(repository, "user", "pw", "user")
-	boardID := seedBoard(repository, "free", "desc")
-	seedPost(repository, userID, boardID, "title1", "content1")
-	seedPost(repository, userID, boardID, "title2", "content2")
-	seedPost(repository, userID, boardID, "title3", "content3")
-	svc := NewPostService(repository, newTestCache(), newTestCachePolicy())
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	seedPost(repositories.post, userID, boardID, "title1", "content1")
+	seedPost(repositories.post, userID, boardID, "title2", "content2")
+	seedPost(repositories.post, userID, boardID, "title3", "content3")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
 
 	list, err := svc.GetPostsList(boardID, 2, 0)
 	require.NoError(t, err)
@@ -75,13 +75,13 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 }
 
 func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
-	repo := newTestRepository()
+	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := NewPostService(repo, cache, newTestCachePolicy())
+	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
 
-	userID := seedUser(repo, "alice", "pw", "user")
-	boardID := seedBoard(repo, "free", "desc")
-	postID := seedPost(repo, userID, boardID, "title", "content")
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
 	detail1, err := postSvc.GetPostDetail(postID)
 	require.NoError(t, err)
@@ -97,13 +97,13 @@ func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 }
 
 func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
-	repo := newTestRepository()
+	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := NewPostService(repo, cache, newTestCachePolicy())
+	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
 
-	userID := seedUser(repo, "alice", "pw", "user")
-	boardID := seedBoard(repo, "free", "desc")
-	postID := seedPost(repo, userID, boardID, "title", "content")
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
 	_, err := postSvc.GetPostDetail(postID)
 	require.NoError(t, err)
