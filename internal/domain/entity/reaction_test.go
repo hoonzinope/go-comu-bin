@@ -7,13 +7,13 @@ import (
 )
 
 func TestReaction_NewReactionAndUpdateReaction(t *testing.T) {
-	r := NewReaction("post", 3, "like", 7)
-	assert.Equal(t, "post", r.TargetType)
+	r := NewReaction(ReactionTargetPost, 3, ReactionTypeLike, 7)
+	assert.Equal(t, ReactionTargetPost, r.TargetType)
 	assert.EqualValues(t, 3, r.TargetID)
-	assert.Equal(t, "like", r.Type)
+	assert.Equal(t, ReactionTypeLike, r.Type)
 	assert.EqualValues(t, 7, r.UserID)
 	assert.False(t, r.CreatedAt.IsZero())
 
-	r.Update("dislike")
-	assert.Equal(t, "dislike", r.Type)
+	r.Update(ReactionTypeDislike)
+	assert.Equal(t, ReactionTypeDislike, r.Type)
 }

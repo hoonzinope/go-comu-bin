@@ -150,6 +150,6 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	}
 	s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID))
 	s.cache.Delete(key.PostDetail(comment.PostID))
-	s.cache.Delete(key.ReactionList("comment", comment.ID))
+	s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID))
 	return nil
 }

@@ -47,7 +47,7 @@ func (r *ReactionRepository) Remove(reaction *entity.Reaction) error {
 	return nil
 }
 
-func (r *ReactionRepository) GetByTarget(targetID int64, targetType string) ([]*entity.Reaction, error) {
+func (r *ReactionRepository) GetByTarget(targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

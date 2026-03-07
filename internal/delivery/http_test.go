@@ -12,6 +12,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/stretchr/testify/assert"
@@ -161,9 +162,9 @@ func (f *fakeCommentUseCase) DeleteComment(id, authorID int64) error {
 }
 
 type fakeReactionUseCase struct {
-	addReaction          func(userID, targetID int64, targetType, reactionType string) error
+	addReaction          func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) error
 	removeReaction       func(userID, id int64) error
-	getReactionsByTarget func(targetID int64, targetType string) ([]model.Reaction, error)
+	getReactionsByTarget func(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }
 
 var testCache port.Cache
@@ -173,7 +174,7 @@ type authUserPort interface {
 	port.CredentialVerifier
 }
 
-func (f *fakeReactionUseCase) AddReaction(userID, targetID int64, targetType, reactionType string) error {
+func (f *fakeReactionUseCase) AddReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) error {
 	if f.addReaction != nil {
 		return f.addReaction(userID, targetID, targetType, reactionType)
 	}
@@ -187,7 +188,7 @@ func (f *fakeReactionUseCase) RemoveReaction(userID, id int64) error {
 	return nil
 }
 
-func (f *fakeReactionUseCase) GetReactionsByTarget(targetID int64, targetType string) ([]model.Reaction, error) {
+func (f *fakeReactionUseCase) GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
 	if f.getReactionsByTarget != nil {
 		return f.getReactionsByTarget(targetID, targetType)
 	}

@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+)
 
 type Board struct {
 	ID          int64
@@ -30,9 +34,9 @@ type Comment struct {
 
 type Reaction struct {
 	ID         int64
-	TargetType string
+	TargetType entity.ReactionTargetType
 	TargetID   int64
-	Type       string
+	Type       entity.ReactionType
 	UserID     int64
 	CreatedAt  time.Time
 }

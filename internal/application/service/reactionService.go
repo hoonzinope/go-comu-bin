@@ -35,7 +35,7 @@ func NewReactionService(userRepository port.UserRepository, postRepository port.
 	}
 }
 
-func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string, ReactionType string) error {
+func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) error {
 	// 리액션 추가 로직 구현
 	user, err := s.userRepository.SelectUserByID(UserID) // user 존재 여부 확인
 	if err != nil {
@@ -46,7 +46,7 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 	}
 	var newReaction *entity.Reaction
 	switch TargetType {
-	case "post":
+	case entity.ReactionTargetPost:
 		post, err := s.postRepository.SelectPostByID(TargetID) // post 존재 여부 확인
 		if err != nil {
 			return customError.ErrInternalServerError
@@ -55,7 +55,7 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 			return customError.ErrPostNotFound
 		}
 		newReaction = entity.NewReaction(TargetType, TargetID, ReactionType, UserID)
-	case "comment":
+	case entity.ReactionTargetComment:
 		comment, err := s.commentRepository.SelectCommentByID(TargetID) // comment 존재 여부 확인
 		if err != nil {
 			return customError.ErrInternalServerError
@@ -72,8 +72,8 @@ func (s *ReactionService) AddReaction(UserID, TargetID int64, TargetType string,
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.Delete(key.ReactionList(TargetType, TargetID))
-	if TargetType == "post" {
+	s.cache.Delete(key.ReactionList(string(TargetType), TargetID))
+	if TargetType == entity.ReactionTargetPost {
 		s.cache.Delete(key.PostDetail(TargetID))
 	}
 	return nil
@@ -102,11 +102,11 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	if err != nil {
 		return customError.ErrInternalServerError
 	}
-	s.cache.Delete(key.ReactionList(removeReaction.TargetType, removeReaction.TargetID))
-	if removeReaction.TargetType == "post" {
+	s.cache.Delete(key.ReactionList(string(removeReaction.TargetType), removeReaction.TargetID))
+	if removeReaction.TargetType == entity.ReactionTargetPost {
 		s.cache.Delete(key.PostDetail(removeReaction.TargetID))
 	}
-	if removeReaction.TargetType == "comment" {
+	if removeReaction.TargetType == entity.ReactionTargetComment {
 		comment, err := s.commentRepository.SelectCommentByID(removeReaction.TargetID)
 		if err == nil && comment != nil {
 			s.cache.Delete(key.PostDetail(comment.PostID))
@@ -115,8 +115,8 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	return nil
 }
 
-func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string) ([]model.Reaction, error) {
-	cacheKey := key.ReactionList(targetType, targetID)
+func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
+	cacheKey := key.ReactionList(string(targetType), targetID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		reactions, err := s.reactionRepository.GetByTarget(targetID, targetType)
 		if err != nil {

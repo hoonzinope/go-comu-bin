@@ -7,6 +7,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,8 +20,8 @@ func TestReactionService_RemoveReaction_ForbiddenForNonOwnerNonAdmin(t *testing.
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	require.NoError(t, svc.AddReaction(ownerID, postID, "post", "like"))
-	reactions, err := repositories.reaction.GetByTarget(postID, "post")
+	require.NoError(t, svc.AddReaction(ownerID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike))
+	reactions, err := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	require.Len(t, reactions, 1)
 
@@ -37,8 +38,8 @@ func TestReactionService_RemoveReaction_AllowedForAdmin(t *testing.T) {
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	require.NoError(t, svc.AddReaction(ownerID, postID, "post", "like"))
-	reactions, err := repositories.reaction.GetByTarget(postID, "post")
+	require.NoError(t, svc.AddReaction(ownerID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike))
+	reactions, err := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	require.Len(t, reactions, 1)
 
@@ -50,7 +51,7 @@ func TestReactionService_AddReaction_InvalidTargetType(t *testing.T) {
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	err := svc.AddReaction(userID, 1, "invalid", "like")
+	err := svc.AddReaction(userID, 1, entity.ReactionTargetType("invalid"), entity.ReactionTypeLike)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInternalServerError))
 }
@@ -63,8 +64,8 @@ func TestReactionService_GetReactionsByTarget_AndOwnerDelete(t *testing.T) {
 	commentID := seedComment(repositories.comment, userID, postID, "comment")
 	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	require.NoError(t, svc.AddReaction(userID, commentID, "comment", "like"))
-	reactions, err := svc.GetReactionsByTarget(commentID, "comment")
+	require.NoError(t, svc.AddReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike))
+	reactions, err := svc.GetReactionsByTarget(commentID, entity.ReactionTargetComment)
 	require.NoError(t, err)
 	require.Len(t, reactions, 1)
 
@@ -80,12 +81,12 @@ func TestReactionService_AddReaction_InvalidatesReactionListCache(t *testing.T) 
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	_, err := reactionSvc.GetReactionsByTarget(postID, "post")
+	_, err := reactionSvc.GetReactionsByTarget(postID, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	_, ok := cache.Get(key.ReactionList("post", postID))
 	require.True(t, ok)
 
-	require.NoError(t, reactionSvc.AddReaction(userID, postID, "post", "like"))
+	require.NoError(t, reactionSvc.AddReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike))
 
 	_, ok = cache.Get(key.ReactionList("post", postID))
 	assert.False(t, ok)

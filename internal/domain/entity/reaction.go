@@ -2,16 +2,30 @@ package entity
 
 import "time"
 
+type ReactionTargetType string
+
+const (
+	ReactionTargetPost    ReactionTargetType = "post"
+	ReactionTargetComment ReactionTargetType = "comment"
+)
+
+type ReactionType string
+
+const (
+	ReactionTypeLike    ReactionType = "like"
+	ReactionTypeDislike ReactionType = "dislike"
+)
+
 type Reaction struct {
 	ID         int64
-	TargetType string // "post" or "comment"
+	TargetType ReactionTargetType
 	TargetID   int64
-	Type       string // "like" or "dislike"
+	Type       ReactionType
 	UserID     int64
 	CreatedAt  time.Time
 }
 
-func NewReaction(targetType string, targetID int64, reactionType string, userID int64) *Reaction {
+func NewReaction(targetType ReactionTargetType, targetID int64, reactionType ReactionType, userID int64) *Reaction {
 	return &Reaction{
 		TargetType: targetType,
 		TargetID:   targetID,
@@ -21,6 +35,24 @@ func NewReaction(targetType string, targetID int64, reactionType string, userID 
 	}
 }
 
-func (r *Reaction) Update(reactionType string) {
+func (r *Reaction) Update(reactionType ReactionType) {
 	r.Type = reactionType
+}
+
+func ParseReactionTargetType(raw string) (ReactionTargetType, bool) {
+	switch ReactionTargetType(raw) {
+	case ReactionTargetPost, ReactionTargetComment:
+		return ReactionTargetType(raw), true
+	default:
+		return "", false
+	}
+}
+
+func ParseReactionType(raw string) (ReactionType, bool) {
+	switch ReactionType(raw) {
+	case ReactionTypeLike, ReactionTypeDislike:
+		return ReactionType(raw), true
+	default:
+		return "", false
+	}
 }

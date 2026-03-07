@@ -21,6 +21,6 @@ func testComment(content string, authorID, postID int64) *entity.Comment {
 	return entity.NewComment(content, authorID, postID, nil)
 }
 
-func testReaction(targetType string, targetID int64, reactionType string, userID int64) *entity.Reaction {
+func testReaction(targetType entity.ReactionTargetType, targetID int64, reactionType entity.ReactionType, userID int64) *entity.Reaction {
 	return entity.NewReaction(targetType, targetID, reactionType, userID)
 }

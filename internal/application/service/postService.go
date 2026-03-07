@@ -119,7 +119,7 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 		if post == nil {
 			return nil, customError.ErrPostNotFound
 		}
-		reactions, err := s.reactionRepository.GetByTarget(post.ID, "post")
+		reactions, err := s.reactionRepository.GetByTarget(post.ID, entity.ReactionTargetPost)
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
@@ -129,7 +129,7 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 			return nil, customError.ErrInternalServerError
 		}
 		for i, comment := range comments {
-			commentReactions, err := s.reactionRepository.GetByTarget(comment.ID, "comment")
+			commentReactions, err := s.reactionRepository.GetByTarget(comment.ID, entity.ReactionTargetComment)
 			if err != nil {
 				return nil, customError.ErrInternalServerError
 			}
@@ -204,6 +204,6 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	s.cache.Delete(key.PostDetail(post.ID))
 	s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID))
 	s.cache.DeleteByPrefix(key.CommentListPrefix(post.ID))
-	s.cache.Delete(key.ReactionList("post", post.ID))
+	s.cache.Delete(key.ReactionList(string(entity.ReactionTargetPost), post.ID))
 	return nil
 }

@@ -3,13 +3,14 @@ package inmemory
 import (
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestReactionRepository_AddGetRemove(t *testing.T) {
 	repo := NewReactionRepository()
-	reaction := testReaction("post", 10, "like", 1)
+	reaction := testReaction(entity.ReactionTargetPost, 10, entity.ReactionTypeLike, 1)
 
 	require.NoError(t, repo.Add(reaction))
 	assert.NotZero(t, reaction.ID)
@@ -17,9 +18,9 @@ func TestReactionRepository_AddGetRemove(t *testing.T) {
 	byID, err := repo.GetByID(reaction.ID)
 	require.NoError(t, err)
 	require.NotNil(t, byID)
-	assert.Equal(t, "like", byID.Type)
+	assert.Equal(t, entity.ReactionTypeLike, byID.Type)
 
-	list, err := repo.GetByTarget(10, "post")
+	list, err := repo.GetByTarget(10, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 

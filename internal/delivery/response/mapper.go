@@ -156,9 +156,9 @@ func commentDetailFromDTO(detail *model.CommentDetail) CommentDetail {
 func reactionFromDTO(reaction model.Reaction) Reaction {
 	return Reaction{
 		ID:         reaction.ID,
-		TargetType: reaction.TargetType,
+		TargetType: string(reaction.TargetType),
 		TargetID:   reaction.TargetID,
-		Type:       reaction.Type,
+		Type:       string(reaction.Type),
 		UserID:     reaction.UserID,
 		CreatedAt:  reaction.CreatedAt,
 	}

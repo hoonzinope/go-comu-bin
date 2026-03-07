@@ -11,6 +11,7 @@ import (
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -596,7 +597,7 @@ func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
 		badRequest(c, errors.New("invalid post id"))
 		return
 	}
-	h.handleReactionsByTarget(c, postID, "post")
+	h.handleReactionsByTarget(c, postID, entity.ReactionTargetPost)
 }
 
 // handleCommentReactions godoc
@@ -620,10 +621,10 @@ func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 		badRequest(c, errors.New("invalid comment id"))
 		return
 	}
-	h.handleReactionsByTarget(c, commentID, "comment")
+	h.handleReactionsByTarget(c, commentID, entity.ReactionTargetComment)
 }
 
-func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, targetType string) {
+func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
 	switch c.Request.Method {
 	case http.MethodGet:
 		reactions, err := h.reactionUseCase.GetReactionsByTarget(targetID, targetType)
@@ -646,7 +647,12 @@ func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, ta
 			badRequest(c, errors.New("user_id and reaction_type are required"))
 			return
 		}
-		if err := h.reactionUseCase.AddReaction(userID, targetID, targetType, req.ReactionType); err != nil {
+		reactionType, ok := entity.ParseReactionType(req.ReactionType)
+		if !ok {
+			badRequest(c, errors.New("invalid reaction_type"))
+			return
+		}
+		if err := h.reactionUseCase.AddReaction(userID, targetID, targetType, reactionType); err != nil {
 			writeUseCaseError(c, err)
 			return
 		}
