@@ -16,8 +16,7 @@ import (
 )
 
 type HTTPHandler struct {
-	authUseCase       application.AuthUseCase
-	cache             application.Cache
+	sessionUseCase    application.SessionUseCase
 	userUseCase       application.UserUseCase
 	boardUseCase      application.BoardUseCase
 	postUseCase       application.PostUseCase
@@ -26,73 +25,25 @@ type HTTPHandler struct {
 	authGinMiddleware gin.HandlerFunc
 }
 
-type userCredentialRequest struct {
-	Username string `json:"username" example:"alice"`
-	Password string `json:"password" example:"pw"`
-}
-
-type passwordOnlyRequest struct {
-	Password string `json:"password" example:"pw"`
-}
-
-type signUpResponse struct {
-	Result string `json:"result" example:"ok"`
-}
-
-type loginResponse struct {
-	Login string `json:"login" example:"ok"`
-}
-
-type logoutResponse struct {
-	Logout string `json:"logout" example:"ok"`
-}
-
-type errorResponse struct {
-	Error string `json:"error" example:"invalid credential"`
-}
-
-type idResponse struct {
-	ID int64 `json:"id" example:"1"`
-}
-
-type boardRequest struct {
-	Name        string `json:"name" example:"free"`
-	Description string `json:"description" example:"free board"`
-}
-
-type postRequest struct {
-	Title   string `json:"title" example:"hello"`
-	Content string `json:"content" example:"first post"`
-}
-
-type commentRequest struct {
-	Content string `json:"content" example:"nice post"`
-}
-
-type reactionRequest struct {
-	ReactionType string `json:"reaction_type" example:"like"`
-}
-
-func NewHTTPHandler(useCase application.UseCase, authUseCase application.AuthUseCase, cache application.Cache) *HTTPHandler {
+func NewHTTPHandler(useCase application.UseCase, sessionUseCase application.SessionUseCase) *HTTPHandler {
 	return &HTTPHandler{
-		authUseCase:       authUseCase,
-		cache:             cache,
+		sessionUseCase:    sessionUseCase,
 		userUseCase:       useCase.UserUseCase,
 		boardUseCase:      useCase.BoardUseCase,
 		postUseCase:       useCase.PostUseCase,
 		commentUseCase:    useCase.CommentUseCase,
 		reactionUseCase:   useCase.ReactionUseCase,
-		authGinMiddleware: middleware.AuthWithCache(authUseCase, cache),
+		authGinMiddleware: middleware.AuthWithSession(sessionUseCase),
 	}
 }
 
 func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.HandleMethodNotAllowed = true
 	r.NoMethod(func(c *gin.Context) {
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
+		c.JSON(http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
 	})
 	r.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, errorResponse{Error: "not found"})
 	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -126,10 +77,10 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.DELETE("/reactions/:reactionID", h.authGinMiddleware, h.handleReactionWithID)
 }
 
-func NewHTTPServer(addr string, authUseCase application.AuthUseCase, cache application.Cache, useCase application.UseCase) *http.Server {
+func NewHTTPServer(addr string, sessionUseCase application.SessionUseCase, useCase application.UseCase) *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	handler := NewHTTPHandler(useCase, authUseCase, cache)
+	handler := NewHTTPHandler(useCase, sessionUseCase)
 	handler.RegisterRoutes(r)
 	return &http.Server{Addr: addr, Handler: r}
 }
@@ -137,7 +88,7 @@ func NewHTTPServer(addr string, authUseCase application.AuthUseCase, cache appli
 func (h *HTTPHandler) requireAuthUserID(c *gin.Context) (int64, bool) {
 	userID, ok := middleware.UserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": customError.ErrUnauthorized.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: customError.ErrUnauthorized.Error()})
 		return 0, false
 	}
 	return userID, true
@@ -156,10 +107,7 @@ func (h *HTTPHandler) requireAuthUserID(c *gin.Context) (int64, bool) {
 // @Failure 500 {object} errorResponse
 // @Router /signup [post]
 func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+	var req userCredentialRequest
 	if err := decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
@@ -172,7 +120,7 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 		writeUseCaseError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"result": "ok"})
+	c.JSON(http.StatusCreated, signUpResponse{Result: "ok"})
 }
 
 // handleUserLogin godoc
@@ -190,27 +138,18 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /auth/login [post]
 func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+	var req userCredentialRequest
 	if err := decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
-	userID, err := h.userUseCase.Login(req.Username, req.Password)
+	token, err := h.sessionUseCase.Login(req.Username, req.Password)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
-	token, err := h.authUseCase.IdToToken(userID)
-	if err != nil {
-		writeUseCaseError(c, err)
-		return
-	}
-	h.cache.Set(token, userID)
 	c.Header("Authorization", "Bearer "+token)
-	c.JSON(http.StatusOK, gin.H{"login": "ok"})
+	c.JSON(http.StatusOK, loginResponse{Login: "ok"})
 }
 
 // handleUserLogout godoc
@@ -229,11 +168,14 @@ func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 	}
 	token, ok := middleware.Token(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": customError.ErrUnauthorized.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: customError.ErrUnauthorized.Error()})
 		return
 	}
-	h.cache.Delete(token)
-	c.JSON(http.StatusOK, gin.H{"logout": "ok"})
+	if err := h.sessionUseCase.Logout(token); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, logoutResponse{Logout: "ok"})
 }
 
 // handleUserDeleteMe godoc
@@ -255,9 +197,7 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Password string `json:"password"`
-	}
+	var req passwordOnlyRequest
 	if err := decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
@@ -271,7 +211,10 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		return
 	}
 	if token, exists := middleware.Token(c); exists {
-		h.cache.Delete(token)
+		if err := h.sessionUseCase.Logout(token); err != nil {
+			writeUseCaseError(c, err)
+			return
+		}
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -311,10 +254,7 @@ func (h *HTTPHandler) handleBoards(c *gin.Context) {
 		if !ok {
 			return
 		}
-		var req struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-		}
+		var req boardRequest
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
@@ -328,7 +268,7 @@ func (h *HTTPHandler) handleBoards(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, map[string]int64{"id": id})
+		c.JSON(http.StatusCreated, idResponse{ID: id})
 	}
 }
 
@@ -357,10 +297,7 @@ func (h *HTTPHandler) handleBoardWithID(c *gin.Context) {
 
 	switch c.Request.Method {
 	case http.MethodPut:
-		var req struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-		}
+		var req boardRequest
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
@@ -432,10 +369,7 @@ func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 		if !ok {
 			return
 		}
-		var req struct {
-			Title   string `json:"title"`
-			Content string `json:"content"`
-		}
+		var req postRequest
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
@@ -449,7 +383,7 @@ func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, map[string]int64{"id": postID})
+		c.JSON(http.StatusCreated, idResponse{ID: postID})
 	}
 }
 
@@ -490,10 +424,7 @@ func (h *HTTPHandler) handlePostDetail(c *gin.Context) {
 		if !ok {
 			return
 		}
-		var req struct {
-			Title   string `json:"title"`
-			Content string `json:"content"`
-		}
+		var req postRequest
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
@@ -561,9 +492,7 @@ func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 		if !ok {
 			return
 		}
-		var req struct {
-			Content string `json:"content"`
-		}
+		var req commentRequest
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
@@ -577,7 +506,7 @@ func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, map[string]int64{"id": id})
+		c.JSON(http.StatusCreated, idResponse{ID: id})
 	}
 }
 
@@ -610,9 +539,7 @@ func (h *HTTPHandler) handleComments(c *gin.Context) {
 		if !ok {
 			return
 		}
-		var req struct {
-			Content string `json:"content"`
-		}
+		var req commentRequest
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
@@ -701,9 +628,7 @@ func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, ta
 		if !ok {
 			return
 		}
-		var req struct {
-			ReactionType string `json:"reaction_type"`
-		}
+		var req reactionRequest
 		if err := decodeJSON(c, &req); err != nil {
 			badRequest(c, err)
 			return
@@ -754,29 +679,29 @@ func (h *HTTPHandler) handleReactionWithID(c *gin.Context) {
 func writeUseCaseError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, customError.ErrUserAlreadyExists):
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		c.JSON(http.StatusConflict, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrUserNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrBoardNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrPostNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrCommentNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrReactionNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrInvalidCredential):
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrUnauthorized):
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrMissingAuthHeader):
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrInvalidToken):
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
 	case errors.Is(err, customError.ErrForbidden):
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		c.JSON(http.StatusForbidden, errorResponse{Error: err.Error()})
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
 	}
 }
 
@@ -833,5 +758,5 @@ func decodeJSON(c *gin.Context, dst any) error {
 }
 
 func badRequest(c *gin.Context, err error) {
-	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	c.JSON(http.StatusBadRequest, errorResponse{Error: err.Error()})
 }

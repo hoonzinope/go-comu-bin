@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -219,9 +220,10 @@ func newTestHandler(
 		CommentUseCase:  comment,
 		ReactionUseCase: reaction,
 	}
-	authUseCase := auth.NewJwtTokenProvider("test-secret")
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testCache = cacheInMemory.NewInMemoryCache()
-	return NewHTTPServer(":0", authUseCase, testCache, uc).Handler
+	sessionUseCase := service.NewSessionService(user, tokenProvider, testCache)
+	return NewHTTPServer(":0", sessionUseCase, uc).Handler
 }
 
 func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {

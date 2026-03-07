@@ -53,8 +53,9 @@ func main() {
 		ReactionUseCase: service.NewReactionService(repository, cache, cachePolicy(cfg)),
 	}
 
-	authUseCase := auth.NewJwtTokenProvider(jwtSecret(cfg))
-	server := delivery.NewHTTPServer(port(cfg), authUseCase, cache, useCases)
+	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
+	sessionUseCase := service.NewSessionService(useCases.UserUseCase, tokenProvider, cache)
+	server := delivery.NewHTTPServer(port(cfg), sessionUseCase, useCases)
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)

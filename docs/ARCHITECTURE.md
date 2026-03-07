@@ -15,17 +15,17 @@
 
 - 인증
   - `gin` middleware가 `Authorization` 헤더에서 토큰 추출
-  - JWT 검증 후 `context.user_id` 주입
-  - token cache 조회로 유효 세션 확인
+  - `SessionUseCase`가 JWT 검증 + 세션 cache 확인 수행
+  - 검증 성공 후 `context.user_id` 주입
 - 인가
   - Service 레이어에서 `AuthorizationPolicy`로 권한 판정
   - 기본 정책: `AdminOnly`, `OwnerOrAdmin`
 
 ## 세션 유효성 흐름
 
-- login: 토큰 발급 후 cache 저장
-- protected route: JWT 검증 + cache 확인
-- logout: cache에서 토큰 삭제(무효화)
+- login: `SessionUseCase`가 사용자 인증 후 토큰 발급 + cache 저장
+- protected route: middleware가 `SessionUseCase`로 세션 검증
+- logout: `SessionUseCase`가 cache에서 토큰 삭제(무효화)
 
 ## 캐시 포트 확장
 
@@ -97,7 +97,8 @@ internal/
       mapper.go
 
   application/
-    authentication.go
+    token_provider.go
+    session_usecase.go
     cache.go
     cache/
       policy.go

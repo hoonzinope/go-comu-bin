@@ -122,8 +122,9 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		ReactionUseCase: service.NewReactionService(repository, cache, testCachePolicy()),
 	}
 
-	authUseCase := auth.NewJwtTokenProvider("test-secret")
-	httpServer := delivery.NewHTTPServer(":0", authUseCase, cache, useCases)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	sessionUseCase := service.NewSessionService(useCases.UserUseCase, tokenProvider, cache)
+	httpServer := delivery.NewHTTPServer(":0", sessionUseCase, useCases)
 	return httptest.NewServer(httpServer.Handler)
 }
 
