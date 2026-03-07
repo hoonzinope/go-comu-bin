@@ -1,8 +1,8 @@
 package noop
 
-import "github.com/hoonzinope/go-comu-bin/internal/application"
+import "github.com/hoonzinope/go-comu-bin/internal/application/port"
 
-var _ application.Cache = (*NoopCache)(nil)
+var _ port.Cache = (*NoopCache)(nil)
 
 type NoopCache struct{}
 

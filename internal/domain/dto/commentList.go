@@ -1,9 +1,7 @@
 package dto
 
-import "github.com/hoonzinope/go-comu-bin/internal/domain/entity"
-
 type CommentList struct {
-	Comments   []*entity.Comment
+	Comments   []Comment
 	Limit      int
 	LastID     int64
 	HasMore    bool

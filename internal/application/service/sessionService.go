@@ -1,19 +1,19 @@
 package service
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
 
-var _ application.SessionUseCase = (*SessionService)(nil)
+var _ port.SessionUseCase = (*SessionService)(nil)
 
 type SessionService struct {
-	userUseCase application.UserUseCase
-	tokenPort   application.TokenProvider
-	cache       application.Cache
+	userUseCase port.UserUseCase
+	tokenPort   port.TokenProvider
+	cache       port.Cache
 }
 
-func NewSessionService(userUseCase application.UserUseCase, tokenPort application.TokenProvider, cache application.Cache) *SessionService {
+func NewSessionService(userUseCase port.UserUseCase, tokenPort port.TokenProvider, cache port.Cache) *SessionService {
 	return &SessionService{
 		userUseCase: userUseCase,
 		tokenPort:   tokenPort,

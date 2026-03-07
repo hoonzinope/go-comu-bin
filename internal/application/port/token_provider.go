@@ -1,4 +1,4 @@
-package application
+package port
 
 type TokenProvider interface {
 	IdToToken(userID int64) (string, error)

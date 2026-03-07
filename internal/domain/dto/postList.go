@@ -1,9 +1,7 @@
 package dto
 
-import "github.com/hoonzinope/go-comu-bin/internal/domain/entity"
-
 type PostList struct {
-	Posts      []*entity.Post
+	Posts      []Post
 	Limit      int
 	LastID     int64
 	HasMore    bool

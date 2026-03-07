@@ -4,11 +4,11 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-var _ application.CommentRepository = (*CommentRepository)(nil)
+var _ port.CommentRepository = (*CommentRepository)(nil)
 
 type CommentRepository struct {
 	mu        sync.RWMutex

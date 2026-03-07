@@ -1,11 +1,7 @@
 package dto
 
-import (
-	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
-)
-
 type PostDetail struct {
-	Post      *entity.Post
+	Post      *Post
 	Comments  []*CommentDetail
-	Reactions []*entity.Reaction
+	Reactions []Reaction
 }

@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
@@ -16,22 +16,22 @@ import (
 )
 
 type HTTPHandler struct {
-	sessionUseCase    application.SessionUseCase
-	userUseCase       application.UserUseCase
-	boardUseCase      application.BoardUseCase
-	postUseCase       application.PostUseCase
-	commentUseCase    application.CommentUseCase
-	reactionUseCase   application.ReactionUseCase
+	sessionUseCase    port.SessionUseCase
+	userUseCase       port.UserUseCase
+	boardUseCase      port.BoardUseCase
+	postUseCase       port.PostUseCase
+	commentUseCase    port.CommentUseCase
+	reactionUseCase   port.ReactionUseCase
 	authGinMiddleware gin.HandlerFunc
 }
 
 func NewHTTPHandler(
-	sessionUseCase application.SessionUseCase,
-	userUseCase application.UserUseCase,
-	boardUseCase application.BoardUseCase,
-	postUseCase application.PostUseCase,
-	commentUseCase application.CommentUseCase,
-	reactionUseCase application.ReactionUseCase,
+	sessionUseCase port.SessionUseCase,
+	userUseCase port.UserUseCase,
+	boardUseCase port.BoardUseCase,
+	postUseCase port.PostUseCase,
+	commentUseCase port.CommentUseCase,
+	reactionUseCase port.ReactionUseCase,
 ) *HTTPHandler {
 	return &HTTPHandler{
 		sessionUseCase:    sessionUseCase,
@@ -86,12 +86,12 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 
 func NewHTTPServer(
 	addr string,
-	sessionUseCase application.SessionUseCase,
-	userUseCase application.UserUseCase,
-	boardUseCase application.BoardUseCase,
-	postUseCase application.PostUseCase,
-	commentUseCase application.CommentUseCase,
-	reactionUseCase application.ReactionUseCase,
+	sessionUseCase port.SessionUseCase,
+	userUseCase port.UserUseCase,
+	boardUseCase port.BoardUseCase,
+	postUseCase port.PostUseCase,
+	commentUseCase port.CommentUseCase,
+	reactionUseCase port.ReactionUseCase,
 ) *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -637,7 +637,7 @@ func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, ta
 			writeUseCaseError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, response.ReactionsFromEntities(reactions))
+		c.JSON(http.StatusOK, response.ReactionsFromDTO(reactions))
 	case http.MethodPost:
 		userID, ok := h.requireAuthUserID(c)
 		if !ok {

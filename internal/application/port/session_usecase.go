@@ -1,4 +1,4 @@
-package application
+package port
 
 type SessionUseCase interface {
 	Login(username, password string) (string, error)

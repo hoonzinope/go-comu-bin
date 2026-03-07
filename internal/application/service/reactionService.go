@@ -5,23 +5,25 @@ import (
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-var _ application.ReactionUseCase = (*ReactionService)(nil)
+var _ port.ReactionUseCase = (*ReactionService)(nil)
 
 type ReactionService struct {
-	userRepository      application.UserRepository
-	postRepository      application.PostRepository
-	commentRepository   application.CommentRepository
-	reactionRepository  application.ReactionRepository
-	cache               application.Cache
+	userRepository      port.UserRepository
+	postRepository      port.PostRepository
+	commentRepository   port.CommentRepository
+	reactionRepository  port.ReactionRepository
+	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewReactionService(userRepository application.UserRepository, postRepository application.PostRepository, commentRepository application.CommentRepository, reactionRepository application.ReactionRepository, cache application.Cache, cachePolicy appcache.Policy) *ReactionService {
+func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *ReactionService {
 	return &ReactionService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
@@ -113,19 +115,19 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	return nil
 }
 
-func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string) ([]*entity.Reaction, error) {
+func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string) ([]dto.Reaction, error) {
 	cacheKey := key.ReactionList(targetType, targetID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		reactions, err := s.reactionRepository.GetByTarget(targetID, targetType)
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
-		return reactions, nil
+		return application.ReactionsDTOFromEntities(reactions), nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	reactions, ok := value.([]*entity.Reaction)
+	reactions, ok := value.([]dto.Reaction)
 	if !ok {
 		return nil, customError.ErrInternalServerError
 	}

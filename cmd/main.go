@@ -16,8 +16,8 @@ import (
 	"log"
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
-	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/config"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
@@ -51,19 +51,19 @@ func main() {
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)
-	server := delivery.NewHTTPServer(port(cfg), sessionUseCase, userUseCase, boardUseCase, postUseCase, commentUseCase, reactionUseCase)
+	server := delivery.NewHTTPServer(httpAddr(cfg), sessionUseCase, userUseCase, boardUseCase, postUseCase, commentUseCase, reactionUseCase)
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func seedAdmin(userRepository application.UserRepository) {
+func seedAdmin(userRepository port.UserRepository) {
 	admin := entity.NewAdmin("admin", "admin")
 	_, _ = userRepository.Save(admin)
 }
 
-func port(cfg *config.Config) string {
+func httpAddr(cfg *config.Config) string {
 	return fmt.Sprintf(":%d", cfg.Delivery.HTTP.Port)
 }
 

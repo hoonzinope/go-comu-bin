@@ -5,6 +5,7 @@ import (
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -14,20 +15,20 @@ var (
 	commentDefaultLimit = 10
 )
 
-var _ application.PostUseCase = (*PostService)(nil)
+var _ port.PostUseCase = (*PostService)(nil)
 
 type PostService struct {
-	userRepository      application.UserRepository
-	boardRepository     application.BoardRepository
-	postRepository      application.PostRepository
-	commentRepository   application.CommentRepository
-	reactionRepository  application.ReactionRepository
-	cache               application.Cache
+	userRepository      port.UserRepository
+	boardRepository     port.BoardRepository
+	postRepository      port.PostRepository
+	commentRepository   port.CommentRepository
+	reactionRepository  port.ReactionRepository
+	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewPostService(userRepository application.UserRepository, boardRepository application.BoardRepository, postRepository application.PostRepository, commentRepository application.CommentRepository, reactionRepository application.ReactionRepository, cache application.Cache, cachePolicy appcache.Policy) *PostService {
+func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *PostService {
 	return &PostService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
@@ -91,7 +92,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto
 		}
 
 		return &dto.PostList{
-			Posts:      posts,
+			Posts:      application.PostsDTOFromEntities(posts),
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,
@@ -133,14 +134,14 @@ func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 				return nil, customError.ErrInternalServerError
 			}
 			commentDetails[i] = &dto.CommentDetail{
-				Comment:   comment,
-				Reactions: commentReactions,
+				Comment:   application.CommentPtrDTOFromEntity(comment),
+				Reactions: application.ReactionsDTOFromEntities(commentReactions),
 			}
 		}
 		postDetail := &dto.PostDetail{
-			Post:      post,
+			Post:      application.PostPtrDTOFromEntity(post),
 			Comments:  commentDetails,
-			Reactions: reactions,
+			Reactions: application.ReactionsDTOFromEntities(reactions),
 		}
 		return postDetail, nil
 	})

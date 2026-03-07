@@ -5,22 +5,23 @@ import (
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-var _ application.BoardUseCase = (*BoardService)(nil)
+var _ port.BoardUseCase = (*BoardService)(nil)
 
 type BoardService struct {
-	userRepository      application.UserRepository
-	boardRepository     application.BoardRepository
-	cache               application.Cache
+	userRepository      port.UserRepository
+	boardRepository     port.BoardRepository
+	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewBoardService(userRepository application.UserRepository, boardRepository application.BoardRepository, cache application.Cache, cachePolicy appcache.Policy) *BoardService {
+func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, cache port.Cache, cachePolicy appcache.Policy) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
@@ -56,7 +57,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*dto.BoardList, error
 		}
 
 		return &dto.BoardList{
-			Boards:     boards,
+			Boards:     application.BoardsDTOFromEntities(boards),
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,

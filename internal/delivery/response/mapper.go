@@ -2,7 +2,6 @@ package response
 
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 func BoardListFromDTO(list *dto.BoardList) *BoardList {
@@ -12,7 +11,7 @@ func BoardListFromDTO(list *dto.BoardList) *BoardList {
 
 	boards := make([]Board, 0, len(list.Boards))
 	for _, board := range list.Boards {
-		boards = append(boards, boardFromEntity(board))
+		boards = append(boards, boardFromDTO(board))
 	}
 
 	return &BoardList{
@@ -31,7 +30,7 @@ func PostListFromDTO(list *dto.PostList) *PostList {
 
 	posts := make([]Post, 0, len(list.Posts))
 	for _, post := range list.Posts {
-		posts = append(posts, postFromEntity(post))
+		posts = append(posts, postFromDTO(post))
 	}
 
 	return &PostList{
@@ -55,11 +54,11 @@ func PostDetailFromDTO(detail *dto.PostDetail) *PostDetail {
 
 	reactions := make([]Reaction, 0, len(detail.Reactions))
 	for _, reaction := range detail.Reactions {
-		reactions = append(reactions, reactionFromEntity(reaction))
+		reactions = append(reactions, reactionFromDTO(reaction))
 	}
 
 	return &PostDetail{
-		Post:      postPtrFromEntity(detail.Post),
+		Post:      postPtrFromDTO(detail.Post),
 		Comments:  comments,
 		Reactions: reactions,
 	}
@@ -72,7 +71,7 @@ func CommentListFromDTO(list *dto.CommentList) *CommentList {
 
 	comments := make([]Comment, 0, len(list.Comments))
 	for _, comment := range list.Comments {
-		comments = append(comments, commentFromEntity(comment))
+		comments = append(comments, commentFromDTO(comment))
 	}
 
 	return &CommentList{
@@ -84,18 +83,15 @@ func CommentListFromDTO(list *dto.CommentList) *CommentList {
 	}
 }
 
-func ReactionsFromEntities(items []*entity.Reaction) []Reaction {
+func ReactionsFromDTO(items []dto.Reaction) []Reaction {
 	out := make([]Reaction, 0, len(items))
-	for _, reaction := range items {
-		out = append(out, reactionFromEntity(reaction))
+	for _, item := range items {
+		out = append(out, reactionFromDTO(item))
 	}
 	return out
 }
 
-func boardFromEntity(board *entity.Board) Board {
-	if board == nil {
-		return Board{}
-	}
+func boardFromDTO(board dto.Board) Board {
 	return Board{
 		ID:          board.ID,
 		Name:        board.Name,
@@ -104,10 +100,7 @@ func boardFromEntity(board *entity.Board) Board {
 	}
 }
 
-func postFromEntity(post *entity.Post) Post {
-	if post == nil {
-		return Post{}
-	}
+func postFromDTO(post dto.Post) Post {
 	return Post{
 		ID:        post.ID,
 		Title:     post.Title,
@@ -119,18 +112,15 @@ func postFromEntity(post *entity.Post) Post {
 	}
 }
 
-func postPtrFromEntity(post *entity.Post) *Post {
+func postPtrFromDTO(post *dto.Post) *Post {
 	if post == nil {
 		return nil
 	}
-	out := postFromEntity(post)
+	out := postFromDTO(*post)
 	return &out
 }
 
-func commentFromEntity(comment *entity.Comment) Comment {
-	if comment == nil {
-		return Comment{}
-	}
+func commentFromDTO(comment dto.Comment) Comment {
 	return Comment{
 		ID:        comment.ID,
 		Content:   comment.Content,
@@ -141,11 +131,11 @@ func commentFromEntity(comment *entity.Comment) Comment {
 	}
 }
 
-func commentPtrFromEntity(comment *entity.Comment) *Comment {
+func commentPtrFromDTO(comment *dto.Comment) *Comment {
 	if comment == nil {
 		return nil
 	}
-	out := commentFromEntity(comment)
+	out := commentFromDTO(*comment)
 	return &out
 }
 
@@ -155,18 +145,15 @@ func commentDetailFromDTO(detail *dto.CommentDetail) CommentDetail {
 	}
 	reactions := make([]Reaction, 0, len(detail.Reactions))
 	for _, reaction := range detail.Reactions {
-		reactions = append(reactions, reactionFromEntity(reaction))
+		reactions = append(reactions, reactionFromDTO(reaction))
 	}
 	return CommentDetail{
-		Comment:   commentPtrFromEntity(detail.Comment),
+		Comment:   commentPtrFromDTO(detail.Comment),
 		Reactions: reactions,
 	}
 }
 
-func reactionFromEntity(reaction *entity.Reaction) Reaction {
-	if reaction == nil {
-		return Reaction{}
-	}
+func reactionFromDTO(reaction dto.Reaction) Reaction {
 	return Reaction{
 		ID:         reaction.ID,
 		TargetType: reaction.TargetType,

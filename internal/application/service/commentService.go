@@ -5,23 +5,24 @@ import (
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-var _ application.CommentUseCase = (*CommentService)(nil)
+var _ port.CommentUseCase = (*CommentService)(nil)
 
 type CommentService struct {
-	userRepository      application.UserRepository
-	postRepository      application.PostRepository
-	commentRepository   application.CommentRepository
-	cache               application.Cache
+	userRepository      port.UserRepository
+	postRepository      port.PostRepository
+	commentRepository   port.CommentRepository
+	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewCommentService(userRepository application.UserRepository, postRepository application.PostRepository, commentRepository application.CommentRepository, cache application.Cache, cachePolicy appcache.Policy) *CommentService {
+func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, cache port.Cache, cachePolicy appcache.Policy) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
@@ -84,7 +85,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 		}
 
 		return &dto.CommentList{
-			Comments:   comments,
+			Comments:   application.CommentsDTOFromEntities(comments),
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,

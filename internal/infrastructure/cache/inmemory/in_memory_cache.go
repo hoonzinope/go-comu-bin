@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"golang.org/x/sync/singleflight"
 )
 
-var _ application.Cache = (*InMemoryCache)(nil)
+var _ port.Cache = (*InMemoryCache)(nil)
 
 type InMemoryCache struct {
 	store sync.Map

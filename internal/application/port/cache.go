@@ -1,4 +1,4 @@
-package application
+package port
 
 type Cache interface {
 	Get(key string) (interface{}, bool)

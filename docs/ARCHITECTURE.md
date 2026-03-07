@@ -43,7 +43,7 @@
 
 ## 캐시 구성 기준
 
-- `internal/application/cache.go`
+- `internal/application/port/cache.go`
   - 캐시 포트(interface) 정의
 - `internal/application/cache/policy.go`
   - 서비스에서 사용하는 캐시 TTL 정책 모델
@@ -56,7 +56,7 @@
 - `internal/infrastructure/cache/noop`
   - 테스트/폴백용 noop 어댑터
 
-`cache/interface` 같은 별도 폴더 분리 대신, 포트는 `application`에 두고 구현체는 `infrastructure`에 둔다.
+포트는 `internal/application/port` 아래에 두고 구현체는 `infrastructure`에 둔다.
 
 ## 페이징/캐시 정책 위치
 
@@ -97,17 +97,27 @@ internal/
       mapper.go
 
   application/
-    token_provider.go
-    session_usecase.go
-    cache.go
+    dto_mapper.go
+    port/
+      cache.go
+      token_provider.go
+      session_usecase.go
+      user_usecase.go
+      board_usecase.go
+      post_usecase.go
+      comment_usecase.go
+      reaction_usecase.go
+      user_repository.go
+      board_repository.go
+      post_repository.go
+      comment_repository.go
+      reaction_repository.go
     cache/
       policy.go
       key/
         keys.go
       testutil/
         spy_cache.go
-    useCase.go
-    repository.go
     policy/
       authorization_policy.go
       role_authorization_policy.go
@@ -139,7 +149,7 @@ internal/
 ## 모델 분리 원칙
 
 - `domain/entity`: 비즈니스 모델(직렬화 관심사 없음)
-- `domain/dto`: 유스케이스 반환 모델
+- `domain/dto`: 유스케이스 반환 모델(entity 비노출 projection)
 - `delivery/response`: HTTP 응답 스키마(JSON 태그 정의)
 
-도메인 엔티티에는 `json` 태그를 두지 않고, 전달 계층에서 응답 모델로 매핑합니다.
+도메인 엔티티에는 `json` 태그를 두지 않고, 서비스가 entity를 dto로 변환한 뒤 전달 계층에서 HTTP 응답 모델로 다시 매핑합니다.

@@ -3,11 +3,11 @@ package inmemory
 import (
 	"sync"
 
-	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-var _ application.UserRepository = (*UserRepository)(nil)
+var _ port.UserRepository = (*UserRepository)(nil)
 
 type UserRepository struct {
 	mu     sync.RWMutex

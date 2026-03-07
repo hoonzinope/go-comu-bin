@@ -1,18 +1,18 @@
 package service
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-var _ application.UserUseCase = (*UserService)(nil)
+var _ port.UserUseCase = (*UserService)(nil)
 
 type UserService struct {
-	userRepository application.UserRepository
+	userRepository port.UserRepository
 }
 
-func NewUserService(userRepository application.UserRepository) *UserService {
+func NewUserService(userRepository port.UserRepository) *UserService {
 	return &UserService{
 		userRepository: userRepository,
 	}

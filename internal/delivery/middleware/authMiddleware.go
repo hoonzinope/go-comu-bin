@@ -4,11 +4,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hoonzinope/go-comu-bin/internal/application"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
 
-func AuthWithSession(sessionUseCase application.SessionUseCase) gin.HandlerFunc {
+func AuthWithSession(sessionUseCase port.SessionUseCase) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, err := extractToken(c.GetHeader("Authorization"))
 		if err != nil {
