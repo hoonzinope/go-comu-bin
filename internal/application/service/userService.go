@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -34,6 +36,9 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 
 	_, err = s.userRepository.Save(newUser)
 	if err != nil {
+		if errors.Is(err, customError.ErrUserAlreadyExists) {
+			return "", customError.ErrUserAlreadyExists
+		}
 		return "", customError.ErrInternalServerError
 	}
 	return "ok", nil

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -33,6 +34,11 @@ func (r *UserRepository) Save(user *entity.User) (int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	for _, existingUser := range r.userDB.Data {
+		if existingUser.Name == user.Name {
+			return 0, customError.ErrUserAlreadyExists
+		}
+	}
 	r.userDB.ID++
 	user.ID = r.userDB.ID
 	r.userDB.Data[user.ID] = user

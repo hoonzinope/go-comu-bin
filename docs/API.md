@@ -13,6 +13,7 @@
 ## User
 
 - `POST /api/v1/signup`
+  - `username`은 유니크해야 하며, 중복 시 `409 Conflict`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)

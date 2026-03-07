@@ -79,10 +79,25 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
   - `internal/domain/entity`
   - `internal/infrastructure/cache/inmemory`
   - `internal/infrastructure/persistence/inmemory`
+  - `internal/application/porttest`
   - `internal/application/service`
   - `internal/delivery`
 - Integration
   - `internal/integration`
+
+## 저장소 Contract Test 기준
+
+- 인터페이스 구현 여부만으로는 의미 계약을 보장할 수 없으므로, 저장소별 공통 contract test를 둔다.
+- 위치
+  - `internal/application/porttest`
+- 구현체 테스트는 각 저장소 테스트 파일에서 contract runner를 호출한다.
+  - 예: `UserRepository`
+  - 예: `BoardRepository`
+  - 예: `ReactionRepository`
+- contract test가 필요한 경우
+  - 유니크 제약이 저장소 의미에 포함될 때
+  - cursor pagination/정렬/no-op 같은 규약을 서비스가 기대할 때
+  - 동시성 상황에서도 동일 의미를 유지해야 할 때
 
 ## 캐시 정책 회귀 테스트 기준
 
