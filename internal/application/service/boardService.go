@@ -21,13 +21,13 @@ type BoardService struct {
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, cache port.Cache, cachePolicy appcache.Policy) *BoardService {
+func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
-		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
+		authorizationPolicy: authorizationPolicy,
 	}
 }
 

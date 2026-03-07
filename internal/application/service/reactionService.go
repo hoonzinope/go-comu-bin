@@ -23,7 +23,7 @@ type ReactionService struct {
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *ReactionService {
+func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *ReactionService {
 	return &ReactionService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
@@ -31,7 +31,7 @@ func NewReactionService(userRepository port.UserRepository, postRepository port.
 		reactionRepository:  reactionRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
-		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
+		authorizationPolicy: authorizationPolicy,
 	}
 }
 

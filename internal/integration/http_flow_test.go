@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -110,12 +111,13 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	_, err := userRepository.Save(admin)
 	require.NoError(t, err)
 	cache := cacheInMemory.NewInMemoryCache()
+	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 
 	userUseCase := service.NewUserService(userRepository)
-	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, testCachePolicy())
-	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
-	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy())
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
+	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, testCachePolicy(), authorizationPolicy)
+	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
+	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy(), authorizationPolicy)
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)

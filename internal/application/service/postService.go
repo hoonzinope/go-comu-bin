@@ -28,7 +28,7 @@ type PostService struct {
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *PostService {
+func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *PostService {
 	return &PostService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
@@ -37,7 +37,7 @@ func NewPostService(userRepository port.UserRepository, boardRepository port.Boa
 		reactionRepository:  reactionRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
-		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
+		authorizationPolicy: authorizationPolicy,
 	}
 }
 

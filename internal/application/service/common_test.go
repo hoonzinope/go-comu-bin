@@ -2,6 +2,7 @@ package service
 
 import (
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
@@ -35,6 +36,10 @@ func newTestCachePolicy() appcache.Policy {
 		ListTTLSeconds:   30,
 		DetailTTLSeconds: 30,
 	}
+}
+
+func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
+	return policy.NewRoleAuthorizationPolicy()
 }
 
 func seedUser(userRepository port.UserRepository, name, password, role string) int64 {

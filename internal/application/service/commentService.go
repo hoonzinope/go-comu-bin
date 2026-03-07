@@ -22,14 +22,14 @@ type CommentService struct {
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, cache port.Cache, cachePolicy appcache.Policy) *CommentService {
+func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
 		commentRepository:   commentRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
-		authorizationPolicy: policy.NewRoleAuthorizationPolicy(),
+		authorizationPolicy: authorizationPolicy,
 	}
 }
 

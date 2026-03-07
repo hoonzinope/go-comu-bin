@@ -17,6 +17,7 @@ import (
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/config"
@@ -42,12 +43,13 @@ func main() {
 
 	seedAdmin(userRepository)
 	cache := cacheInMemory.NewInMemoryCache()
+	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 
 	userUseCase := service.NewUserService(userRepository)
-	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, cachePolicy(cfg))
-	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
-	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg))
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
+	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, cachePolicy(cfg), authorizationPolicy)
+	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
+	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg), authorizationPolicy)
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)

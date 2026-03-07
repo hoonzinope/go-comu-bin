@@ -17,7 +17,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	otherID := seedUser(repositories.user, "other", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
 	require.Error(t, err)
@@ -30,7 +30,7 @@ func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	require.NoError(t, svc.UpdatePost(postID, adminID, "new-title", "new-content"))
 }
@@ -39,7 +39,7 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	postID, err := svc.CreatePost("title", "content", userID, boardID)
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	seedPost(repositories.post, userID, boardID, "title1", "content1")
 	seedPost(repositories.post, userID, boardID, "title2", "content2")
 	seedPost(repositories.post, userID, boardID, "title3", "content3")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	list, err := svc.GetPostsList(boardID, 2, 0)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
+	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -99,7 +99,7 @@ func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
+	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")

@@ -17,7 +17,7 @@ func TestReactionService_RemoveReaction_ForbiddenForNonOwnerNonAdmin(t *testing.
 	otherID := seedUser(repositories.user, "other", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	require.NoError(t, svc.AddReaction(ownerID, postID, "post", "like"))
 	reactions, err := repositories.reaction.GetByTarget(postID, "post")
@@ -35,7 +35,7 @@ func TestReactionService_RemoveReaction_AllowedForAdmin(t *testing.T) {
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	require.NoError(t, svc.AddReaction(ownerID, postID, "post", "like"))
 	reactions, err := repositories.reaction.GetByTarget(postID, "post")
@@ -48,7 +48,7 @@ func TestReactionService_RemoveReaction_AllowedForAdmin(t *testing.T) {
 func TestReactionService_AddReaction_InvalidTargetType(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	err := svc.AddReaction(userID, 1, "invalid", "like")
 	require.Error(t, err)
@@ -61,7 +61,7 @@ func TestReactionService_GetReactionsByTarget_AndOwnerDelete(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	commentID := seedComment(repositories.comment, userID, postID, "comment")
-	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	require.NoError(t, svc.AddReaction(userID, commentID, "comment", "like"))
 	reactions, err := svc.GetReactionsByTarget(commentID, "comment")
@@ -74,7 +74,7 @@ func TestReactionService_GetReactionsByTarget_AndOwnerDelete(t *testing.T) {
 func TestReactionService_AddReaction_InvalidatesReactionListCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy())
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")

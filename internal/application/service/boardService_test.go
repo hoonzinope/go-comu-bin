@@ -14,7 +14,7 @@ import (
 func TestBoardService_CreateBoard_ForbiddenForNonAdmin(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
-	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy())
+	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	_, err := svc.CreateBoard(userID, "free", "desc")
 	require.Error(t, err)
@@ -24,7 +24,7 @@ func TestBoardService_CreateBoard_ForbiddenForNonAdmin(t *testing.T) {
 func TestBoardService_CreateBoard_SuccessForAdmin(t *testing.T) {
 	repositories := newTestRepositories()
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
-	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy())
+	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	boardID, err := svc.CreateBoard(adminID, "free", "desc")
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestBoardService_GetBoards_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	seedBoard(repositories.board, "b1", "d1")
 	seedBoard(repositories.board, "b2", "d2")
-	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy())
+	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	list, err := svc.GetBoards(10, 0)
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestBoardService_GetBoards_HasMoreAndNextCursor(t *testing.T) {
 	seedBoard(repositories.board, "b1", "d1")
 	seedBoard(repositories.board, "b2", "d2")
 	seedBoard(repositories.board, "b3", "d3")
-	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy())
+	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	list, err := svc.GetBoards(2, 0)
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
 	repositories := newTestRepositories()
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy())
+	svc := NewBoardService(repositories.user, repositories.board, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	require.NoError(t, svc.UpdateBoard(boardID, adminID, "new", "new-desc"))
 	require.NoError(t, svc.DeleteBoard(boardID, adminID))
@@ -70,7 +70,7 @@ func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
 func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	svc := NewBoardService(repositories.user, repositories.board, cache, newTestCachePolicy())
+	svc := NewBoardService(repositories.user, repositories.board, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	seedBoard(repositories.board, "b1", "d1")
