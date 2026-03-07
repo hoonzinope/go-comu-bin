@@ -97,7 +97,10 @@ internal/
       mapper.go
 
   application/
-    dto_mapper.go
+    mapper/
+      dto_mapper.go
+    model/
+      *.go
     port/
       cache.go
       token_provider.go
@@ -127,8 +130,6 @@ internal/
   domain/
     entity/
       *.go
-    dto/
-      *.go
 
   infrastructure/
     auth/
@@ -152,4 +153,4 @@ internal/
 - `application/model`: 유스케이스 반환 모델(entity 비노출 projection)
 - `delivery/response`: HTTP 응답 스키마(JSON 태그 정의)
 
-도메인 엔티티에는 `json` 태그를 두지 않고, 서비스가 entity를 dto로 변환한 뒤 전달 계층에서 HTTP 응답 모델로 다시 매핑합니다.
+도메인 엔티티에는 `json` 태그를 두지 않고, 서비스가 entity를 application model로 변환한 뒤 전달 계층에서 HTTP 응답 모델로 다시 매핑합니다.

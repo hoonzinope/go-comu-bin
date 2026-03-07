@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -57,7 +57,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 		}
 
 		return &model.BoardList{
-			Boards:     application.BoardsDTOFromEntities(boards),
+			Boards:     mapper.BoardsFromEntities(boards),
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,

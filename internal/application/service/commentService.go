@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -85,7 +85,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 		}
 
 		return &model.CommentList{
-			Comments:   application.CommentsDTOFromEntities(comments),
+			Comments:   mapper.CommentsFromEntities(comments),
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,

@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -122,7 +122,7 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
-		return application.ReactionsDTOFromEntities(reactions), nil
+		return mapper.ReactionsFromEntities(reactions), nil
 	})
 	if err != nil {
 		return nil, err

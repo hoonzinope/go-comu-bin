@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -92,7 +92,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*mod
 		}
 
 		return &model.PostList{
-			Posts:      application.PostsDTOFromEntities(posts),
+			Posts:      mapper.PostsFromEntities(posts),
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,
@@ -134,14 +134,14 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 				return nil, customError.ErrInternalServerError
 			}
 			commentDetails[i] = &model.CommentDetail{
-				Comment:   application.CommentPtrDTOFromEntity(comment),
-				Reactions: application.ReactionsDTOFromEntities(commentReactions),
+				Comment:   mapper.CommentPtrFromEntity(comment),
+				Reactions: mapper.ReactionsFromEntities(commentReactions),
 			}
 		}
 		postDetail := &model.PostDetail{
-			Post:      application.PostPtrDTOFromEntity(post),
+			Post:      mapper.PostPtrFromEntity(post),
 			Comments:  commentDetails,
-			Reactions: application.ReactionsDTOFromEntities(reactions),
+			Reactions: mapper.ReactionsFromEntities(reactions),
 		}
 		return postDetail, nil
 	})
