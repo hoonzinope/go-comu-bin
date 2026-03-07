@@ -46,7 +46,10 @@ func main() {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 
-	seedAdmin(userRepository)
+	if err := seedAdmin(userRepository); err != nil {
+		slog.Error("failed to seed admin user", "error", err)
+		os.Exit(1)
+	}
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
@@ -77,15 +80,15 @@ func main() {
 	}
 }
 
-func seedAdmin(userRepository port.UserRepository) {
+func seedAdmin(userRepository port.UserRepository) error {
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	hashedPassword, err := passwordHasher.Hash("admin")
 	if err != nil {
-		slog.Error("failed to hash seed admin password", "error", err)
-		os.Exit(1)
+		return err
 	}
 	admin := entity.NewAdmin("admin", hashedPassword)
-	_, _ = userRepository.Save(admin)
+	_, err = userRepository.Save(admin)
+	return err
 }
 
 func httpAddr(cfg *config.Config) string {
