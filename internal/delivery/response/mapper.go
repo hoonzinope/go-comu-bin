@@ -1,10 +1,10 @@
 package response
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 )
 
-func BoardListFromDTO(list *dto.BoardList) *BoardList {
+func BoardListFromDTO(list *model.BoardList) *BoardList {
 	if list == nil {
 		return &BoardList{}
 	}
@@ -23,7 +23,7 @@ func BoardListFromDTO(list *dto.BoardList) *BoardList {
 	}
 }
 
-func PostListFromDTO(list *dto.PostList) *PostList {
+func PostListFromDTO(list *model.PostList) *PostList {
 	if list == nil {
 		return &PostList{}
 	}
@@ -42,7 +42,7 @@ func PostListFromDTO(list *dto.PostList) *PostList {
 	}
 }
 
-func PostDetailFromDTO(detail *dto.PostDetail) *PostDetail {
+func PostDetailFromDTO(detail *model.PostDetail) *PostDetail {
 	if detail == nil {
 		return &PostDetail{}
 	}
@@ -64,7 +64,7 @@ func PostDetailFromDTO(detail *dto.PostDetail) *PostDetail {
 	}
 }
 
-func CommentListFromDTO(list *dto.CommentList) *CommentList {
+func CommentListFromDTO(list *model.CommentList) *CommentList {
 	if list == nil {
 		return &CommentList{}
 	}
@@ -83,7 +83,7 @@ func CommentListFromDTO(list *dto.CommentList) *CommentList {
 	}
 }
 
-func ReactionsFromDTO(items []dto.Reaction) []Reaction {
+func ReactionsFromDTO(items []model.Reaction) []Reaction {
 	out := make([]Reaction, 0, len(items))
 	for _, item := range items {
 		out = append(out, reactionFromDTO(item))
@@ -91,7 +91,7 @@ func ReactionsFromDTO(items []dto.Reaction) []Reaction {
 	return out
 }
 
-func boardFromDTO(board dto.Board) Board {
+func boardFromDTO(board model.Board) Board {
 	return Board{
 		ID:          board.ID,
 		Name:        board.Name,
@@ -100,7 +100,7 @@ func boardFromDTO(board dto.Board) Board {
 	}
 }
 
-func postFromDTO(post dto.Post) Post {
+func postFromDTO(post model.Post) Post {
 	return Post{
 		ID:        post.ID,
 		Title:     post.Title,
@@ -112,7 +112,7 @@ func postFromDTO(post dto.Post) Post {
 	}
 }
 
-func postPtrFromDTO(post *dto.Post) *Post {
+func postPtrFromDTO(post *model.Post) *Post {
 	if post == nil {
 		return nil
 	}
@@ -120,7 +120,7 @@ func postPtrFromDTO(post *dto.Post) *Post {
 	return &out
 }
 
-func commentFromDTO(comment dto.Comment) Comment {
+func commentFromDTO(comment model.Comment) Comment {
 	return Comment{
 		ID:        comment.ID,
 		Content:   comment.Content,
@@ -131,7 +131,7 @@ func commentFromDTO(comment dto.Comment) Comment {
 	}
 }
 
-func commentPtrFromDTO(comment *dto.Comment) *Comment {
+func commentPtrFromDTO(comment *model.Comment) *Comment {
 	if comment == nil {
 		return nil
 	}
@@ -139,7 +139,7 @@ func commentPtrFromDTO(comment *dto.Comment) *Comment {
 	return &out
 }
 
-func commentDetailFromDTO(detail *dto.CommentDetail) CommentDetail {
+func commentDetailFromDTO(detail *model.CommentDetail) CommentDetail {
 	if detail == nil {
 		return CommentDetail{}
 	}
@@ -153,7 +153,7 @@ func commentDetailFromDTO(detail *dto.CommentDetail) CommentDetail {
 	}
 }
 
-func reactionFromDTO(reaction dto.Reaction) Reaction {
+func reactionFromDTO(reaction model.Reaction) Reaction {
 	return Reaction{
 		ID:         reaction.ID,
 		TargetType: reaction.TargetType,

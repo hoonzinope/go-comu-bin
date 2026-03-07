@@ -4,10 +4,10 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -31,7 +31,7 @@ func NewBoardService(userRepository port.UserRepository, boardRepository port.Bo
 	}
 }
 
-func (s *BoardService) GetBoards(limit int, lastID int64) (*dto.BoardList, error) {
+func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, error) {
 	cacheKey := key.BoardList(limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
@@ -56,7 +56,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*dto.BoardList, error
 			nextLastID = &next
 		}
 
-		return &dto.BoardList{
+		return &model.BoardList{
 			Boards:     application.BoardsDTOFromEntities(boards),
 			Limit:      limit,
 			LastID:     lastID,
@@ -67,7 +67,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*dto.BoardList, error
 	if err != nil {
 		return nil, err
 	}
-	list, ok := value.(*dto.BoardList)
+	list, ok := value.(*model.BoardList)
 	if !ok {
 		return nil, customError.ErrInternalServerError
 	}

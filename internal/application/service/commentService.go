@@ -4,10 +4,10 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -59,7 +59,7 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	return commentID, nil
 }
 
-func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64) (*dto.CommentList, error) {
+func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64) (*model.CommentList, error) {
 	cacheKey := key.CommentList(postID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
@@ -84,7 +84,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 			nextLastID = &next
 		}
 
-		return &dto.CommentList{
+		return &model.CommentList{
 			Comments:   application.CommentsDTOFromEntities(comments),
 			Limit:      limit,
 			LastID:     lastID,
@@ -95,7 +95,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 	if err != nil {
 		return nil, err
 	}
-	list, ok := value.(*dto.CommentList)
+	list, ok := value.(*model.CommentList)
 	if !ok {
 		return nil, customError.ErrInternalServerError
 	}

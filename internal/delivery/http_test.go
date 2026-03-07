@@ -8,10 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/stretchr/testify/assert"
@@ -48,17 +48,17 @@ func (f *fakeUserUseCase) Login(username, password string) (int64, error) {
 }
 
 type fakeBoardUseCase struct {
-	getBoards   func(limit int, lastID int64) (*dto.BoardList, error)
+	getBoards   func(limit int, lastID int64) (*model.BoardList, error)
 	createBoard func(userID int64, name, description string) (int64, error)
 	updateBoard func(id, userID int64, name, description string) error
 	deleteBoard func(id, userID int64) error
 }
 
-func (f *fakeBoardUseCase) GetBoards(limit int, lastID int64) (*dto.BoardList, error) {
+func (f *fakeBoardUseCase) GetBoards(limit int, lastID int64) (*model.BoardList, error) {
 	if f.getBoards != nil {
 		return f.getBoards(limit, lastID)
 	}
-	return &dto.BoardList{}, nil
+	return &model.BoardList{}, nil
 }
 
 func (f *fakeBoardUseCase) CreateBoard(userID int64, name, description string) (int64, error) {
@@ -84,8 +84,8 @@ func (f *fakeBoardUseCase) DeleteBoard(id, userID int64) error {
 
 type fakePostUseCase struct {
 	createPost    func(title, content string, authorID, boardID int64) (int64, error)
-	getPostsList  func(boardID int64, limit int, lastID int64) (*dto.PostList, error)
-	getPostDetail func(postID int64) (*dto.PostDetail, error)
+	getPostsList  func(boardID int64, limit int, lastID int64) (*model.PostList, error)
+	getPostDetail func(postID int64) (*model.PostDetail, error)
 	updatePost    func(id, authorID int64, title, content string) error
 	deletePost    func(id, authorID int64) error
 }
@@ -97,18 +97,18 @@ func (f *fakePostUseCase) CreatePost(title, content string, authorID, boardID in
 	return 1, nil
 }
 
-func (f *fakePostUseCase) GetPostsList(boardID int64, limit int, lastID int64) (*dto.PostList, error) {
+func (f *fakePostUseCase) GetPostsList(boardID int64, limit int, lastID int64) (*model.PostList, error) {
 	if f.getPostsList != nil {
 		return f.getPostsList(boardID, limit, lastID)
 	}
-	return &dto.PostList{}, nil
+	return &model.PostList{}, nil
 }
 
-func (f *fakePostUseCase) GetPostDetail(postID int64) (*dto.PostDetail, error) {
+func (f *fakePostUseCase) GetPostDetail(postID int64) (*model.PostDetail, error) {
 	if f.getPostDetail != nil {
 		return f.getPostDetail(postID)
 	}
-	return &dto.PostDetail{}, nil
+	return &model.PostDetail{}, nil
 }
 
 func (f *fakePostUseCase) UpdatePost(id, authorID int64, title, content string) error {
@@ -127,7 +127,7 @@ func (f *fakePostUseCase) DeletePost(id, authorID int64) error {
 
 type fakeCommentUseCase struct {
 	createComment     func(content string, authorID, postID int64) (int64, error)
-	getCommentsByPost func(postID int64, limit int, lastID int64) (*dto.CommentList, error)
+	getCommentsByPost func(postID int64, limit int, lastID int64) (*model.CommentList, error)
 	updateComment     func(id, authorID int64, content string) error
 	deleteComment     func(id, authorID int64) error
 }
@@ -139,11 +139,11 @@ func (f *fakeCommentUseCase) CreateComment(content string, authorID, postID int6
 	return 1, nil
 }
 
-func (f *fakeCommentUseCase) GetCommentsByPost(postID int64, limit int, lastID int64) (*dto.CommentList, error) {
+func (f *fakeCommentUseCase) GetCommentsByPost(postID int64, limit int, lastID int64) (*model.CommentList, error) {
 	if f.getCommentsByPost != nil {
 		return f.getCommentsByPost(postID, limit, lastID)
 	}
-	return &dto.CommentList{}, nil
+	return &model.CommentList{}, nil
 }
 
 func (f *fakeCommentUseCase) UpdateComment(id, authorID int64, content string) error {
@@ -163,7 +163,7 @@ func (f *fakeCommentUseCase) DeleteComment(id, authorID int64) error {
 type fakeReactionUseCase struct {
 	addReaction          func(userID, targetID int64, targetType, reactionType string) error
 	removeReaction       func(userID, id int64) error
-	getReactionsByTarget func(targetID int64, targetType string) ([]dto.Reaction, error)
+	getReactionsByTarget func(targetID int64, targetType string) ([]model.Reaction, error)
 }
 
 var testCache port.Cache
@@ -182,11 +182,11 @@ func (f *fakeReactionUseCase) RemoveReaction(userID, id int64) error {
 	return nil
 }
 
-func (f *fakeReactionUseCase) GetReactionsByTarget(targetID int64, targetType string) ([]dto.Reaction, error) {
+func (f *fakeReactionUseCase) GetReactionsByTarget(targetID int64, targetType string) ([]model.Reaction, error) {
 	if f.getReactionsByTarget != nil {
 		return f.getReactionsByTarget(targetID, targetType)
 	}
-	return []dto.Reaction{}, nil
+	return []model.Reaction{}, nil
 }
 
 func newTestHandler(
@@ -387,7 +387,7 @@ func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
 
 func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(postID int64) (*dto.PostDetail, error) {
+		getPostDetail: func(postID int64) (*model.PostDetail, error) {
 			return nil, errors.New("unexpected")
 		},
 	}
@@ -399,7 +399,7 @@ func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 
 func TestHTTP_PostDetail_NotFound(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(postID int64) (*dto.PostDetail, error) {
+		getPostDetail: func(postID int64) (*model.PostDetail, error) {
 			return nil, customError.ErrPostNotFound
 		},
 	}

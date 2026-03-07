@@ -4,10 +4,10 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -66,7 +66,7 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	return postID, nil
 }
 
-func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto.PostList, error) {
+func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*model.PostList, error) {
 	cacheKey := key.PostList(boardID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
@@ -91,7 +91,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto
 			nextLastID = &next
 		}
 
-		return &dto.PostList{
+		return &model.PostList{
 			Posts:      application.PostsDTOFromEntities(posts),
 			Limit:      limit,
 			LastID:     lastID,
@@ -102,14 +102,14 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*dto
 	if err != nil {
 		return nil, err
 	}
-	list, ok := value.(*dto.PostList)
+	list, ok := value.(*model.PostList)
 	if !ok {
 		return nil, customError.ErrInternalServerError
 	}
 	return list, nil
 }
 
-func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
+func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 	cacheKey := key.PostDetail(id)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.DetailTTLSeconds, func() (interface{}, error) {
 		post, err := s.postRepository.SelectPostByID(id)
@@ -124,7 +124,7 @@ func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 			return nil, customError.ErrInternalServerError
 		}
 		comments, err := s.commentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
-		commentDetails := make([]*dto.CommentDetail, len(comments))
+		commentDetails := make([]*model.CommentDetail, len(comments))
 		if err != nil {
 			return nil, customError.ErrInternalServerError
 		}
@@ -133,12 +133,12 @@ func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 			if err != nil {
 				return nil, customError.ErrInternalServerError
 			}
-			commentDetails[i] = &dto.CommentDetail{
+			commentDetails[i] = &model.CommentDetail{
 				Comment:   application.CommentPtrDTOFromEntity(comment),
 				Reactions: application.ReactionsDTOFromEntities(commentReactions),
 			}
 		}
-		postDetail := &dto.PostDetail{
+		postDetail := &model.PostDetail{
 			Post:      application.PostPtrDTOFromEntity(post),
 			Comments:  commentDetails,
 			Reactions: application.ReactionsDTOFromEntities(reactions),
@@ -148,7 +148,7 @@ func (s *PostService) GetPostDetail(id int64) (*dto.PostDetail, error) {
 	if err != nil {
 		return nil, err
 	}
-	detail, ok := value.(*dto.PostDetail)
+	detail, ok := value.(*model.PostDetail)
 	if !ok {
 		return nil, customError.ErrInternalServerError
 	}

@@ -149,7 +149,7 @@ internal/
 ## 모델 분리 원칙
 
 - `domain/entity`: 비즈니스 모델(직렬화 관심사 없음)
-- `domain/dto`: 유스케이스 반환 모델(entity 비노출 projection)
+- `application/model`: 유스케이스 반환 모델(entity 비노출 projection)
 - `delivery/response`: HTTP 응답 스키마(JSON 태그 정의)
 
 도메인 엔티티에는 `json` 태그를 두지 않고, 서비스가 entity를 dto로 변환한 뒤 전달 계층에서 HTTP 응답 모델로 다시 매핑합니다.

@@ -1,7 +1,7 @@
-package dto
+package model
 
-type BoardList struct {
-	Boards     []Board
+type PostList struct {
+	Posts      []Post
 	Limit      int
 	LastID     int64
 	HasMore    bool

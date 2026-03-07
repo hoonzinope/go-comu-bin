@@ -1,12 +1,12 @@
 package application
 
 import (
-	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-func BoardDTOFromEntity(board *entity.Board) dto.Board {
-	return dto.Board{
+func BoardDTOFromEntity(board *entity.Board) model.Board {
+	return model.Board{
 		ID:          board.ID,
 		Name:        board.Name,
 		Description: board.Description,
@@ -14,16 +14,16 @@ func BoardDTOFromEntity(board *entity.Board) dto.Board {
 	}
 }
 
-func BoardsDTOFromEntities(items []*entity.Board) []dto.Board {
-	out := make([]dto.Board, 0, len(items))
+func BoardsDTOFromEntities(items []*entity.Board) []model.Board {
+	out := make([]model.Board, 0, len(items))
 	for _, item := range items {
 		out = append(out, BoardDTOFromEntity(item))
 	}
 	return out
 }
 
-func PostDTOFromEntity(post *entity.Post) dto.Post {
-	return dto.Post{
+func PostDTOFromEntity(post *entity.Post) model.Post {
+	return model.Post{
 		ID:        post.ID,
 		Title:     post.Title,
 		Content:   post.Content,
@@ -34,7 +34,7 @@ func PostDTOFromEntity(post *entity.Post) dto.Post {
 	}
 }
 
-func PostPtrDTOFromEntity(post *entity.Post) *dto.Post {
+func PostPtrDTOFromEntity(post *entity.Post) *model.Post {
 	if post == nil {
 		return nil
 	}
@@ -42,16 +42,16 @@ func PostPtrDTOFromEntity(post *entity.Post) *dto.Post {
 	return &out
 }
 
-func PostsDTOFromEntities(items []*entity.Post) []dto.Post {
-	out := make([]dto.Post, 0, len(items))
+func PostsDTOFromEntities(items []*entity.Post) []model.Post {
+	out := make([]model.Post, 0, len(items))
 	for _, item := range items {
 		out = append(out, PostDTOFromEntity(item))
 	}
 	return out
 }
 
-func CommentDTOFromEntity(comment *entity.Comment) dto.Comment {
-	return dto.Comment{
+func CommentDTOFromEntity(comment *entity.Comment) model.Comment {
+	return model.Comment{
 		ID:        comment.ID,
 		Content:   comment.Content,
 		AuthorID:  comment.AuthorID,
@@ -61,7 +61,7 @@ func CommentDTOFromEntity(comment *entity.Comment) dto.Comment {
 	}
 }
 
-func CommentPtrDTOFromEntity(comment *entity.Comment) *dto.Comment {
+func CommentPtrDTOFromEntity(comment *entity.Comment) *model.Comment {
 	if comment == nil {
 		return nil
 	}
@@ -69,16 +69,16 @@ func CommentPtrDTOFromEntity(comment *entity.Comment) *dto.Comment {
 	return &out
 }
 
-func CommentsDTOFromEntities(items []*entity.Comment) []dto.Comment {
-	out := make([]dto.Comment, 0, len(items))
+func CommentsDTOFromEntities(items []*entity.Comment) []model.Comment {
+	out := make([]model.Comment, 0, len(items))
 	for _, item := range items {
 		out = append(out, CommentDTOFromEntity(item))
 	}
 	return out
 }
 
-func ReactionDTOFromEntity(reaction *entity.Reaction) dto.Reaction {
-	return dto.Reaction{
+func ReactionDTOFromEntity(reaction *entity.Reaction) model.Reaction {
+	return model.Reaction{
 		ID:         reaction.ID,
 		TargetType: reaction.TargetType,
 		TargetID:   reaction.TargetID,
@@ -88,8 +88,8 @@ func ReactionDTOFromEntity(reaction *entity.Reaction) dto.Reaction {
 	}
 }
 
-func ReactionsDTOFromEntities(items []*entity.Reaction) []dto.Reaction {
-	out := make([]dto.Reaction, 0, len(items))
+func ReactionsDTOFromEntities(items []*entity.Reaction) []model.Reaction {
+	out := make([]model.Reaction, 0, len(items))
 	for _, item := range items {
 		out = append(out, ReactionDTOFromEntity(item))
 	}

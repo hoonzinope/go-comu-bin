@@ -4,10 +4,10 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/dto"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -115,7 +115,7 @@ func (s *ReactionService) RemoveReaction(UserID, ID int64) error {
 	return nil
 }
 
-func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string) ([]dto.Reaction, error) {
+func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string) ([]model.Reaction, error) {
 	cacheKey := key.ReactionList(targetType, targetID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		reactions, err := s.reactionRepository.GetByTarget(targetID, targetType)
@@ -127,7 +127,7 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType string
 	if err != nil {
 		return nil, err
 	}
-	reactions, ok := value.([]dto.Reaction)
+	reactions, ok := value.([]model.Reaction)
 	if !ok {
 		return nil, customError.ErrInternalServerError
 	}
