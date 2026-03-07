@@ -54,7 +54,7 @@ func main() {
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 
-	userUseCase := service.NewUserService(userRepository, passwordHasher)
+	userUseCase := service.NewUserService(userRepository, postRepository, commentRepository, reactionRepository, passwordHasher)
 	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg), authorizationPolicy)

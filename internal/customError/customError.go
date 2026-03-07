@@ -16,12 +16,13 @@ var (
 	ErrInvalidToken        = errors.New("invalid token")
 
 	// Public/resource
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrBoardNotFound     = errors.New("board not found")
-	ErrPostNotFound      = errors.New("post not found")
-	ErrCommentNotFound   = errors.New("comment not found")
-	ErrReactionNotFound  = errors.New("reaction not found")
+	ErrUserAlreadyExists   = errors.New("user already exists")
+	ErrUserNotFound        = errors.New("user not found")
+	ErrUserDeletionBlocked = errors.New("user deletion blocked")
+	ErrBoardNotFound       = errors.New("board not found")
+	ErrPostNotFound        = errors.New("post not found")
+	ErrCommentNotFound     = errors.New("comment not found")
+	ErrReactionNotFound    = errors.New("reaction not found")
 
 	// Internal categories
 	ErrRepositoryFailure = errors.New("repository failure")
@@ -58,6 +59,8 @@ func Public(err error) error {
 		return ErrUserAlreadyExists
 	case errors.Is(err, ErrUserNotFound):
 		return ErrUserNotFound
+	case errors.Is(err, ErrUserDeletionBlocked):
+		return ErrUserDeletionBlocked
 	case errors.Is(err, ErrBoardNotFound):
 		return ErrBoardNotFound
 	case errors.Is(err, ErrPostNotFound):

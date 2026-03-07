@@ -7,4 +7,5 @@ type ReactionRepository interface {
 	DeleteUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (bool, error)
 	GetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error)
 	GetByTarget(targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error)
+	ExistsByUser(userID int64) (bool, error)
 }

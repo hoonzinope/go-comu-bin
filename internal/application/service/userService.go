@@ -13,14 +13,20 @@ var _ port.UserUseCase = (*UserService)(nil)
 var _ port.CredentialVerifier = (*UserService)(nil)
 
 type UserService struct {
-	userRepository port.UserRepository
-	passwordHasher port.PasswordHasher
+	userRepository     port.UserRepository
+	postRepository     port.PostRepository
+	commentRepository  port.CommentRepository
+	reactionRepository port.ReactionRepository
+	passwordHasher     port.PasswordHasher
 }
 
-func NewUserService(userRepository port.UserRepository, passwordHasher port.PasswordHasher) *UserService {
+func NewUserService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, passwordHasher port.PasswordHasher) *UserService {
 	return &UserService{
-		userRepository: userRepository,
-		passwordHasher: passwordHasher,
+		userRepository:     userRepository,
+		postRepository:     postRepository,
+		commentRepository:  commentRepository,
+		reactionRepository: reactionRepository,
+		passwordHasher:     passwordHasher,
 	}
 }
 
@@ -68,6 +74,27 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 	}
 	if !matched {
 		return customError.ErrInvalidCredential
+	}
+	hasPosts, err := s.postRepository.ExistsByAuthor(existingUser.ID)
+	if err != nil {
+		return customError.WrapRepository("check posts by author for delete me", err)
+	}
+	if hasPosts {
+		return customError.ErrUserDeletionBlocked
+	}
+	hasComments, err := s.commentRepository.ExistsByAuthor(existingUser.ID)
+	if err != nil {
+		return customError.WrapRepository("check comments by author for delete me", err)
+	}
+	if hasComments {
+		return customError.ErrUserDeletionBlocked
+	}
+	hasReactions, err := s.reactionRepository.ExistsByUser(existingUser.ID)
+	if err != nil {
+		return customError.WrapRepository("check reactions by user for delete me", err)
+	}
+	if hasReactions {
+		return customError.ErrUserDeletionBlocked
 	}
 
 	err = s.userRepository.Delete(existingUser.ID)

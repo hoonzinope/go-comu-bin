@@ -14,7 +14,7 @@ import (
 
 func TestSessionService_Login_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	userService := NewUserService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestPasswordHasher())
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
@@ -36,7 +36,7 @@ func TestSessionService_Login_Success(t *testing.T) {
 
 func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 	repositories := newTestRepositories()
-	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	userService := NewUserService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestPasswordHasher())
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
@@ -56,7 +56,7 @@ func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
-	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	userService := NewUserService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestPasswordHasher())
 
 	cache := cacheInMemory.NewInMemoryCache()
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
@@ -74,7 +74,7 @@ func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
 
 func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 	repositories := newTestRepositories()
-	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	userService := NewUserService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestPasswordHasher())
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
@@ -102,7 +102,7 @@ func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 
 func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails(t *testing.T) {
 	repositories := newTestRepositories()
-	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	userService := NewUserService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestPasswordHasher())
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
@@ -118,7 +118,7 @@ func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails
 
 func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
 	repositories := newTestRepositories()
-	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	userService := NewUserService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestPasswordHasher())
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
@@ -140,7 +140,7 @@ func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t
 
 func TestSessionService_InvalidateUserSessions_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
 	repositories := newTestRepositories()
-	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	userService := NewUserService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestPasswordHasher())
 	_, err := userService.SignUp("alice", "pw")
 	require.NoError(t, err)
 
