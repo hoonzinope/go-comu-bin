@@ -126,9 +126,11 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, sessionRepository)
+	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
 		SessionUseCase:  sessionUseCase,
 		UserUseCase:     userUseCase,
+		AccountUseCase:  accountUseCase,
 		BoardUseCase:    boardUseCase,
 		PostUseCase:     postUseCase,
 		CommentUseCase:  commentUseCase,

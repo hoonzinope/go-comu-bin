@@ -60,9 +60,11 @@ func main() {
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, sessionRepository)
+	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
 		SessionUseCase:  sessionUseCase,
 		UserUseCase:     userUseCase,
+		AccountUseCase:  accountUseCase,
 		BoardUseCase:    boardUseCase,
 		PostUseCase:     postUseCase,
 		CommentUseCase:  commentUseCase,

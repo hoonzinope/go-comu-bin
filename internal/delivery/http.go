@@ -20,6 +20,7 @@ import (
 type HTTPHandler struct {
 	sessionUseCase    port.SessionUseCase
 	userUseCase       port.UserUseCase
+	accountUseCase    port.AccountUseCase
 	boardUseCase      port.BoardUseCase
 	postUseCase       port.PostUseCase
 	commentUseCase    port.CommentUseCase
@@ -30,6 +31,7 @@ type HTTPHandler struct {
 type HTTPDependencies struct {
 	SessionUseCase  port.SessionUseCase
 	UserUseCase     port.UserUseCase
+	AccountUseCase  port.AccountUseCase
 	BoardUseCase    port.BoardUseCase
 	PostUseCase     port.PostUseCase
 	CommentUseCase  port.CommentUseCase
@@ -40,6 +42,7 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 	return &HTTPHandler{
 		sessionUseCase:    deps.SessionUseCase,
 		userUseCase:       deps.UserUseCase,
+		accountUseCase:    deps.AccountUseCase,
 		boardUseCase:      deps.BoardUseCase,
 		postUseCase:       deps.PostUseCase,
 		commentUseCase:    deps.CommentUseCase,
@@ -217,11 +220,7 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.userUseCase.DeleteMe(userID, req.Password); err != nil {
-		writeUseCaseError(c, err)
-		return
-	}
-	if err := h.sessionUseCase.InvalidateUserSessions(userID); err != nil {
+	if err := h.accountUseCase.DeleteMyAccount(userID, req.Password); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
