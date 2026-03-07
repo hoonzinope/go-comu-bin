@@ -13,11 +13,13 @@ var _ port.CredentialVerifier = (*UserService)(nil)
 
 type UserService struct {
 	userRepository port.UserRepository
+	passwordHasher port.PasswordHasher
 }
 
-func NewUserService(userRepository port.UserRepository) *UserService {
+func NewUserService(userRepository port.UserRepository, passwordHasher port.PasswordHasher) *UserService {
 	return &UserService{
 		userRepository: userRepository,
+		passwordHasher: passwordHasher,
 	}
 }
 
@@ -32,7 +34,11 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 		return "", customError.ErrUserAlreadyExists
 	}
 
-	newUser := entity.NewUser(username, password)
+	hashedPassword, err := s.passwordHasher.Hash(password)
+	if err != nil {
+		return "", customError.Wrap(customError.ErrInternalServerError, "hash password for signup", err)
+	}
+	newUser := entity.NewUser(username, hashedPassword)
 
 	_, err = s.userRepository.Save(newUser)
 	if err != nil {
@@ -52,7 +58,11 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 	if existingUser == nil {
 		return customError.ErrUserNotFound
 	}
-	if existingUser.Password != password {
+	matched, err := s.passwordHasher.Matches(existingUser.Password, password)
+	if err != nil {
+		return customError.Wrap(customError.ErrInternalServerError, "compare password for delete me", err)
+	}
+	if !matched {
 		return customError.ErrInvalidCredential
 	}
 
@@ -72,9 +82,12 @@ func (s *UserService) VerifyCredentials(username, password string) (int64, error
 		return 0, customError.ErrUserNotFound
 	}
 
-	// password check (실제 구현에서는 해시된 비밀번호 비교 필요)
-	if existingUser.Password != password {
-		return 0, customError.ErrUserNotFound
+	matched, err := s.passwordHasher.Matches(existingUser.Password, password)
+	if err != nil {
+		return 0, customError.Wrap(customError.ErrInternalServerError, "compare password for verify credentials", err)
+	}
+	if !matched {
+		return 0, customError.ErrInvalidCredential
 	}
 	return existingUser.ID, nil
 }

@@ -49,8 +49,9 @@ func main() {
 	seedAdmin(userRepository)
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
+	passwordHasher := auth.NewBcryptPasswordHasher(0)
 
-	userUseCase := service.NewUserService(userRepository)
+	userUseCase := service.NewUserService(userRepository, passwordHasher)
 	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg), authorizationPolicy)
@@ -74,7 +75,13 @@ func main() {
 }
 
 func seedAdmin(userRepository port.UserRepository) {
-	admin := entity.NewAdmin("admin", "admin")
+	passwordHasher := auth.NewBcryptPasswordHasher(0)
+	hashedPassword, err := passwordHasher.Hash("admin")
+	if err != nil {
+		slog.Error("failed to hash seed admin password", "error", err)
+		os.Exit(1)
+	}
+	admin := entity.NewAdmin("admin", hashedPassword)
 	_, _ = userRepository.Save(admin)
 }
 

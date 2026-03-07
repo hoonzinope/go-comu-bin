@@ -10,10 +10,14 @@ import (
 
 type JwtTokenProvider struct {
 	secretKey string
+	ttl       time.Duration
 }
 
 func NewJwtTokenProvider(secretKey string) *JwtTokenProvider {
-	return &JwtTokenProvider{secretKey: secretKey}
+	return &JwtTokenProvider{
+		secretKey: secretKey,
+		ttl:       24 * time.Hour,
+	}
 }
 
 func (p *JwtTokenProvider) IdToToken(userID int64) (string, error) {
@@ -21,13 +25,17 @@ func (p *JwtTokenProvider) IdToToken(userID int64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": userID,
 		"iat":     now.Unix(),
-		"exp":     now.Add(24 * time.Hour).Unix(),
+		"exp":     now.Add(p.ttl).Unix(),
 	})
 	signed, err := token.SignedString([]byte(p.secretKey))
 	if err != nil {
 		return "", customError.WrapToken("sign jwt", err)
 	}
 	return signed, nil
+}
+
+func (p *JwtTokenProvider) TTLSeconds() int {
+	return int(p.ttl / time.Second)
 }
 
 func (p *JwtTokenProvider) ValidateTokenToId(token string) (int64, error) {

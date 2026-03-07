@@ -52,12 +52,8 @@ func extractToken(raw string) (string, error) {
 	}
 
 	parts := strings.Fields(raw)
-	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-		if parts[1] == "" {
-			return "", customError.ErrInvalidToken
-		}
-		return parts[1], nil
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", customError.ErrInvalidToken
 	}
-
-	return raw, nil
+	return parts[1], nil
 }

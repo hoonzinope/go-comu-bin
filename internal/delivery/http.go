@@ -222,11 +222,9 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		writeUseCaseError(c, err)
 		return
 	}
-	if token, exists := middleware.Token(c); exists {
-		if err := h.sessionUseCase.Logout(token); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
+	if err := h.sessionUseCase.InvalidateUserSessions(userID); err != nil {
+		writeUseCaseError(c, err)
+		return
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -271,8 +269,8 @@ func (h *HTTPHandler) handleBoards(c *gin.Context) {
 			badRequest(c, err)
 			return
 		}
-		if userID == 0 || req.Name == "" {
-			badRequest(c, errors.New("user_id and name are required"))
+		if req.Name == "" {
+			badRequest(c, errors.New("name is required"))
 			return
 		}
 		id, err := h.boardUseCase.CreateBoard(userID, req.Name, req.Description)
@@ -318,8 +316,8 @@ func (h *HTTPHandler) handleBoardWithID(c *gin.Context) {
 		if !ok {
 			return
 		}
-		if userID == 0 || req.Name == "" {
-			badRequest(c, errors.New("user_id and name are required"))
+		if req.Name == "" {
+			badRequest(c, errors.New("name is required"))
 			return
 		}
 		if err := h.boardUseCase.UpdateBoard(boardID, userID, req.Name, req.Description); err != nil {
@@ -386,8 +384,8 @@ func (h *HTTPHandler) handleBoardPosts(c *gin.Context) {
 			badRequest(c, err)
 			return
 		}
-		if authorID == 0 || req.Title == "" || req.Content == "" {
-			badRequest(c, errors.New("author_id, title and content are required"))
+		if req.Title == "" || req.Content == "" {
+			badRequest(c, errors.New("title and content are required"))
 			return
 		}
 		postID, err := h.postUseCase.CreatePost(req.Title, req.Content, authorID, boardID)
@@ -441,8 +439,8 @@ func (h *HTTPHandler) handlePostDetail(c *gin.Context) {
 			badRequest(c, err)
 			return
 		}
-		if authorID == 0 || req.Title == "" || req.Content == "" {
-			badRequest(c, errors.New("author_id, title and content are required"))
+		if req.Title == "" || req.Content == "" {
+			badRequest(c, errors.New("title and content are required"))
 			return
 		}
 		if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content); err != nil {
@@ -509,8 +507,8 @@ func (h *HTTPHandler) handlePostComments(c *gin.Context) {
 			badRequest(c, err)
 			return
 		}
-		if authorID == 0 || req.Content == "" {
-			badRequest(c, errors.New("author_id and content are required"))
+		if req.Content == "" {
+			badRequest(c, errors.New("content is required"))
 			return
 		}
 		id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID)
@@ -556,8 +554,8 @@ func (h *HTTPHandler) handleComments(c *gin.Context) {
 			badRequest(c, err)
 			return
 		}
-		if authorID == 0 || req.Content == "" {
-			badRequest(c, errors.New("author_id and content are required"))
+		if req.Content == "" {
+			badRequest(c, errors.New("content is required"))
 			return
 		}
 		if err := h.commentUseCase.UpdateComment(commentID, authorID, req.Content); err != nil {
@@ -738,8 +736,8 @@ func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, target
 		badRequest(c, err)
 		return
 	}
-	if userID == 0 || req.ReactionType == "" {
-		badRequest(c, errors.New("user_id and reaction_type are required"))
+	if req.ReactionType == "" {
+		badRequest(c, errors.New("reaction_type is required"))
 		return
 	}
 	reactionType, ok := entity.ParseReactionType(req.ReactionType)

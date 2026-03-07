@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
@@ -234,10 +235,11 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 	if body != nil {
 		require.NoError(t, json.NewEncoder(&buf).Encode(body))
 	}
-	token, err := auth.NewJwtTokenProvider("test-secret").IdToToken(userID)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
 	require.NotNil(t, testCache)
-	testCache.Set(token, userID)
+	testCache.SetWithTTL("session:user:"+strconv.FormatInt(userID, 10)+":"+token, userID, tokenProvider.TTLSeconds())
 
 	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
 	req.Header.Set("Content-Type", "application/json")
@@ -344,6 +346,20 @@ func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 		"password": "wrong",
 	}, 1)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func TestHTTP_ProtectedRoute_InvalidAuthorizationScheme(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/auth/logout", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "token-only")
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.JSONEq(t, `{"error":"invalid token"}`, rr.Body.String())
 }
 
 func TestHTTP_BoardCreate_Forbidden(t *testing.T) {

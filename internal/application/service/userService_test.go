@@ -11,7 +11,7 @@ import (
 
 func TestUserService_SignUp_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user)
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
 
 	result, err := svc.SignUp("alice", "pw")
 	require.NoError(t, err)
@@ -20,7 +20,7 @@ func TestUserService_SignUp_Success(t *testing.T) {
 
 func TestUserService_SignUp_Duplicate(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user)
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	_, _ = svc.SignUp("alice", "pw")
 
 	_, err := svc.SignUp("alice", "pw2")
@@ -30,7 +30,7 @@ func TestUserService_SignUp_Duplicate(t *testing.T) {
 
 func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user)
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	_, _ = svc.SignUp("alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 
 func TestUserService_DeleteMe_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user)
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	_, _ = svc.SignUp("alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestUserService_DeleteMe_Success(t *testing.T) {
 
 func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user)
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
 
 	err := svc.DeleteMe(999, "pw")
 	require.Error(t, err)
@@ -63,7 +63,7 @@ func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 
 func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user)
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
 
 	_, err := svc.VerifyCredentials("nope", "pw")
 	require.Error(t, err)
@@ -72,10 +72,10 @@ func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 
 func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user)
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	_, _ = svc.SignUp("alice", "pw")
 
 	_, err := svc.VerifyCredentials("alice", "wrong")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
+	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
@@ -40,6 +41,10 @@ func newTestCachePolicy() appcache.Policy {
 
 func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
 	return policy.NewRoleAuthorizationPolicy()
+}
+
+func newTestPasswordHasher() port.PasswordHasher {
+	return auth.NewBcryptPasswordHasher(4)
 }
 
 func seedUser(userRepository port.UserRepository, name, password, role string) int64 {

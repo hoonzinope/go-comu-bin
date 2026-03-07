@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
@@ -32,12 +34,21 @@ func (s *SessionService) Login(username, password string) (string, error) {
 		return "", customError.WrapToken("issue login token", err)
 	}
 
-	s.cache.Set(token, userID)
+	s.cache.SetWithTTL(sessionCacheKey(userID, token), userID, s.tokenPort.TTLSeconds())
 	return token, nil
 }
 
 func (s *SessionService) Logout(token string) error {
-	s.cache.Delete(token)
+	userID, err := s.tokenPort.ValidateTokenToId(token)
+	if err != nil {
+		return nil
+	}
+	s.cache.Delete(sessionCacheKey(userID, token))
+	return nil
+}
+
+func (s *SessionService) InvalidateUserSessions(userID int64) error {
+	s.cache.DeleteByPrefix(sessionCachePrefix(userID))
 	return nil
 }
 
@@ -47,9 +58,17 @@ func (s *SessionService) ValidateTokenToId(token string) (int64, error) {
 		return 0, err
 	}
 
-	if _, exists := s.cache.Get(token); !exists {
+	if _, exists := s.cache.Get(sessionCacheKey(userID, token)); !exists {
 		return 0, customError.ErrInvalidToken
 	}
 
 	return userID, nil
+}
+
+func sessionCachePrefix(userID int64) string {
+	return fmt.Sprintf("session:user:%d:", userID)
+}
+
+func sessionCacheKey(userID int64, token string) string {
+	return sessionCachePrefix(userID) + token
 }
