@@ -78,6 +78,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 - Unit
   - `internal/domain/entity`
   - `internal/infrastructure/cache/inmemory`
+  - `internal/infrastructure/auth`
   - `internal/infrastructure/persistence/inmemory`
   - `internal/application/porttest`
   - `internal/application/service`

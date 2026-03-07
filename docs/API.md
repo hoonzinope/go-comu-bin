@@ -1,7 +1,8 @@
 # HTTP API
 
 인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용합니다.
-로그인 성공 시 응답 헤더 `Authorization`에 토큰이 반환됩니다.
+로그인 성공 시 응답 헤더 `Authorization`에 `Bearer <token>` 형식으로 토큰이 반환됩니다.
+`Bearer` 스킴이 아니면 인증 실패(`401`)로 처리합니다.
 
 ## OpenAPI / Swagger
 
@@ -15,8 +16,10 @@
 - `POST /api/v1/signup`
   - `username`은 유니크해야 하며, 중복 시 `409 Conflict`
 - `POST /api/v1/auth/login`
+  - 사용자 미존재 또는 비밀번호 불일치 시 `401 Unauthorized`
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)
+  - 탈퇴 성공 시 해당 사용자의 활성 세션이 모두 무효화됩니다.
 
 ## Board
 

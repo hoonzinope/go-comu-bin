@@ -33,8 +33,9 @@ Swagger UI는 서버 실행 후 [http://localhost:18577/swagger/index.html](http
 ## 현재 구현 요약
 
 - Delivery: `gin` 기반 HTTP 어댑터
-- 인증: `SessionUseCase` 기반 JWT + 세션 cache 검증
+- 인증: `SessionUseCase` 기반 JWT + `SessionRepository` 세션 검증
 - 인가: 주입 가능한 `AuthorizationPolicy` 기반(role/owner)
+- 비밀번호: `PasswordHasher` 포트 기반 bcrypt 해시 저장/비교
 - 데이터 저장소: In-Memory 어댑터
 - 조회 캐시: 서비스 레이어 정책 + 캐시 포트(`GetOrSetWithTTL`, `DeleteByPrefix`)
 - 페이지네이션: `limit + last_id` 커서 기반
