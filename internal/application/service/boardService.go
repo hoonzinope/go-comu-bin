@@ -42,7 +42,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 
 		boards, err := s.boardRepository.SelectBoardList(fetchLimit, lastID)
 		if err != nil {
-			return nil, customError.ErrInternalServerError
+			return nil, customError.WrapRepository("select board list", err)
 		}
 
 		hasMore := false
@@ -69,7 +69,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 	}
 	list, ok := value.(*model.BoardList)
 	if !ok {
-		return nil, customError.ErrInternalServerError
+		return nil, customError.Mark(customError.ErrCacheFailure, "decode board list cache payload")
 	}
 	return list, nil
 }
@@ -77,7 +77,10 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 func (s *BoardService) CreateBoard(userID int64, name, description string) (int64, error) {
 	// 게시판 생성 로직 구현
 	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
-	if user == nil || err != nil {
+	if err != nil {
+		return 0, customError.WrapRepository("select user by id for create board", err)
+	}
+	if user == nil {
 		return 0, customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
@@ -86,7 +89,7 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	newBoard := entity.NewBoard(name, description)
 	boardID, err := s.boardRepository.Save(newBoard)
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("save board", err)
 	}
 	s.cache.DeleteByPrefix(key.BoardListPrefix())
 	return boardID, nil
@@ -95,7 +98,10 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 func (s *BoardService) UpdateBoard(id, userID int64, name, description string) error {
 	// 게시판 수정 로직 구현
 	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
-	if user == nil || err != nil {
+	if err != nil {
+		return customError.WrapRepository("select user by id for update board", err)
+	}
+	if user == nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
@@ -103,7 +109,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	}
 	existingBoard, err := s.boardRepository.SelectBoardByID(id) // board 존재 여부 확인
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select board by id for update board", err)
 	}
 	if existingBoard == nil {
 		return customError.ErrBoardNotFound
@@ -111,7 +117,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	existingBoard.Update(name, description)
 	err = s.boardRepository.Update(existingBoard)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("update board", err)
 	}
 	s.cache.DeleteByPrefix(key.BoardListPrefix())
 	return nil
@@ -120,7 +126,10 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 func (s *BoardService) DeleteBoard(id, userID int64) error {
 	// 게시판 삭제 로직 구현
 	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
-	if user == nil || err != nil {
+	if err != nil {
+		return customError.WrapRepository("select user by id for delete board", err)
+	}
+	if user == nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
@@ -128,14 +137,14 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	}
 	existingBoard, err := s.boardRepository.SelectBoardByID(id) // board 존재 여부 확인
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select board by id for delete board", err)
 	}
 	if existingBoard == nil {
 		return customError.ErrBoardNotFound
 	}
 	err = s.boardRepository.Delete(existingBoard.ID)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("delete board", err)
 	}
 	s.cache.DeleteByPrefix(key.BoardListPrefix())
 	return nil

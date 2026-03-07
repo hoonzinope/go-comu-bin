@@ -29,7 +29,7 @@ func (s *SessionService) Login(username, password string) (string, error) {
 
 	token, err := s.tokenPort.IdToToken(userID)
 	if err != nil {
-		return "", customError.ErrInternalServerError
+		return "", customError.WrapToken("issue login token", err)
 	}
 
 	s.cache.Set(token, userID)

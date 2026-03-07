@@ -2,7 +2,6 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -24,7 +23,11 @@ func (p *JwtTokenProvider) IdToToken(userID int64) (string, error) {
 		"iat":     now.Unix(),
 		"exp":     now.Add(24 * time.Hour).Unix(),
 	})
-	return token.SignedString([]byte(p.secretKey))
+	signed, err := token.SignedString([]byte(p.secretKey))
+	if err != nil {
+		return "", customError.WrapToken("sign jwt", err)
+	}
+	return signed, nil
 }
 
 func (p *JwtTokenProvider) ValidateTokenToId(token string) (int64, error) {
@@ -35,7 +38,7 @@ func (p *JwtTokenProvider) ValidateTokenToId(token string) (int64, error) {
 		return []byte(p.secretKey), nil
 	})
 	if err != nil {
-		return 0, fmt.Errorf("%w: %v", customError.ErrInvalidToken, err)
+		return 0, customError.Wrap(customError.ErrInvalidToken, "parse jwt", err)
 	}
 
 	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok && parsedToken.Valid {
@@ -44,5 +47,5 @@ func (p *JwtTokenProvider) ValidateTokenToId(token string) (int64, error) {
 		}
 	}
 
-	return 0, fmt.Errorf("%w: %v", customError.ErrInvalidToken, errors.New("invalid token claims"))
+	return 0, customError.Wrap(customError.ErrInvalidToken, "decode jwt claims", errors.New("invalid token claims"))
 }

@@ -37,14 +37,14 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	// 댓글 생성 로직 구현
 	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("select user by id for create comment", err)
 	}
 	if user == nil {
 		return 0, customError.ErrUserNotFound
 	}
 	post, err := s.postRepository.SelectPostByID(postID) // post 존재 여부 확인
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("select post by id for create comment", err)
 	}
 	if post == nil {
 		return 0, customError.ErrPostNotFound
@@ -52,7 +52,7 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	newComment := entity.NewComment(content, authorID, postID, nil)
 	commentID, err := s.commentRepository.Save(newComment)
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("save comment", err)
 	}
 	s.cache.DeleteByPrefix(key.CommentListPrefix(postID))
 	s.cache.Delete(key.PostDetail(postID))
@@ -70,7 +70,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 
 		comments, err := s.commentRepository.SelectComments(postID, fetchLimit, lastID)
 		if err != nil {
-			return nil, customError.ErrInternalServerError
+			return nil, customError.WrapRepository("select comments by post", err)
 		}
 
 		hasMore := false
@@ -97,7 +97,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 	}
 	list, ok := value.(*model.CommentList)
 	if !ok {
-		return nil, customError.ErrInternalServerError
+		return nil, customError.Mark(customError.ErrCacheFailure, "decode comment list cache payload")
 	}
 	return list, nil
 }
@@ -106,13 +106,16 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	// 댓글 수정 로직 구현
 	comment, err := s.commentRepository.SelectCommentByID(id) // comment 존재 여부 확인
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select comment by id for update comment", err)
 	}
 	if comment == nil {
 		return customError.ErrCommentNotFound
 	}
 	requester, err := s.userRepository.SelectUserByID(authorID)
-	if requester == nil || err != nil {
+	if err != nil {
+		return customError.WrapRepository("select user by id for update comment", err)
+	}
+	if requester == nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
@@ -121,7 +124,7 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	comment.Update(content)
 	err = s.commentRepository.Update(comment)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("update comment", err)
 	}
 	s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID))
 	s.cache.Delete(key.PostDetail(comment.PostID))
@@ -132,13 +135,16 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	// 댓글 삭제 로직 구현
 	comment, err := s.commentRepository.SelectCommentByID(id) // comment 존재 여부 확인
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select comment by id for delete comment", err)
 	}
 	if comment == nil {
 		return customError.ErrCommentNotFound
 	}
 	requester, err := s.userRepository.SelectUserByID(authorID)
-	if requester == nil || err != nil {
+	if err != nil {
+		return customError.WrapRepository("select user by id for delete comment", err)
+	}
+	if requester == nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
@@ -146,7 +152,7 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	}
 	err = s.commentRepository.Delete(comment.ID)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("delete comment", err)
 	}
 	s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID))
 	s.cache.Delete(key.PostDetail(comment.PostID))

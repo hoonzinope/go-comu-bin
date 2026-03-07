@@ -13,29 +13,29 @@ import (
 var _ port.ReactionUseCase = (*ReactionService)(nil)
 
 type ReactionService struct {
-	userRepository      port.UserRepository
-	postRepository      port.PostRepository
-	commentRepository   port.CommentRepository
-	reactionRepository  port.ReactionRepository
-	cache               port.Cache
-	cachePolicy         appcache.Policy
+	userRepository     port.UserRepository
+	postRepository     port.PostRepository
+	commentRepository  port.CommentRepository
+	reactionRepository port.ReactionRepository
+	cache              port.Cache
+	cachePolicy        appcache.Policy
 }
 
 func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *ReactionService {
 	return &ReactionService{
-		userRepository:      userRepository,
-		postRepository:      postRepository,
-		commentRepository:   commentRepository,
-		reactionRepository:  reactionRepository,
-		cache:               cache,
-		cachePolicy:         cachePolicy,
+		userRepository:     userRepository,
+		postRepository:     postRepository,
+		commentRepository:  commentRepository,
+		reactionRepository: reactionRepository,
+		cache:              cache,
+		cachePolicy:        cachePolicy,
 	}
 }
 
 func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
 	user, err := s.userRepository.SelectUserByID(UserID)
 	if err != nil {
-		return false, customError.ErrInternalServerError
+		return false, customError.WrapRepository("select user by id for set reaction", err)
 	}
 	if user == nil {
 		return false, customError.ErrUserNotFound
@@ -47,7 +47,7 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 
 	_, created, changed, err := s.reactionRepository.SetUserTargetReaction(UserID, TargetID, TargetType, ReactionType)
 	if err != nil {
-		return false, customError.ErrInternalServerError
+		return false, customError.WrapRepository("set user target reaction", err)
 	}
 	if !created && !changed {
 		return false, nil
@@ -59,7 +59,7 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType) error {
 	user, err := s.userRepository.SelectUserByID(UserID)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select user by id for delete reaction", err)
 	}
 	if user == nil {
 		return customError.ErrUserNotFound
@@ -70,7 +70,7 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 
 	deleted, err := s.reactionRepository.DeleteUserTargetReaction(UserID, TargetID, TargetType)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("delete user target reaction", err)
 	}
 	if !deleted {
 		return nil
@@ -84,7 +84,7 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		reactions, err := s.reactionRepository.GetByTarget(targetID, targetType)
 		if err != nil {
-			return nil, customError.ErrInternalServerError
+			return nil, customError.WrapRepository("select reactions by target", err)
 		}
 		return mapper.ReactionsFromEntities(reactions), nil
 	})
@@ -93,7 +93,7 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 	}
 	reactions, ok := value.([]model.Reaction)
 	if !ok {
-		return nil, customError.ErrInternalServerError
+		return nil, customError.Mark(customError.ErrCacheFailure, "decode reaction list cache payload")
 	}
 	return reactions, nil
 }
@@ -116,7 +116,7 @@ func (s *ReactionService) ensureTargetExists(targetID int64, targetType entity.R
 	case entity.ReactionTargetPost:
 		post, err := s.postRepository.SelectPostByID(targetID)
 		if err != nil {
-			return customError.ErrInternalServerError
+			return customError.WrapRepository("select post by id for ensure reaction target", err)
 		}
 		if post == nil {
 			return customError.ErrPostNotFound
@@ -125,7 +125,7 @@ func (s *ReactionService) ensureTargetExists(targetID int64, targetType entity.R
 	case entity.ReactionTargetComment:
 		comment, err := s.commentRepository.SelectCommentByID(targetID)
 		if err != nil {
-			return customError.ErrInternalServerError
+			return customError.WrapRepository("select comment by id for ensure reaction target", err)
 		}
 		if comment == nil {
 			return customError.ErrCommentNotFound

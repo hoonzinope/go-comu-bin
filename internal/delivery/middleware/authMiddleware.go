@@ -12,13 +12,13 @@ func AuthWithSession(sessionUseCase port.SessionUseCase) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, err := extractToken(c.GetHeader("Authorization"))
 		if err != nil {
-			c.AbortWithStatusJSON(401, gin.H{"error": err.Error()})
+			c.AbortWithStatusJSON(401, gin.H{"error": customError.Public(err).Error()})
 			return
 		}
 
 		userID, err := sessionUseCase.ValidateTokenToId(token)
 		if err != nil {
-			c.AbortWithStatusJSON(401, gin.H{"error": customError.ErrInvalidToken.Error()})
+			c.AbortWithStatusJSON(401, gin.H{"error": customError.Public(err).Error()})
 			return
 		}
 

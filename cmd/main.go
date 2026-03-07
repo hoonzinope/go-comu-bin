@@ -13,7 +13,8 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
+	"os"
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
@@ -29,10 +30,14 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	// load config
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 
 	userRepository := inmemory.NewUserRepository()
@@ -61,9 +66,10 @@ func main() {
 		CommentUseCase:  commentUseCase,
 		ReactionUseCase: reactionUseCase,
 	})
-	log.Printf("server started on %s", server.Addr)
+	slog.Info("server started", "addr", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
 }
 

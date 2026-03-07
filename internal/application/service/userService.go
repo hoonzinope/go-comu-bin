@@ -26,7 +26,7 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 	// duplicate username check
 	existingUser, err := s.userRepository.SelectUserByUsername(username)
 	if err != nil {
-		return "", customError.ErrInternalServerError
+		return "", customError.WrapRepository("select user by username for signup", err)
 	}
 	if existingUser != nil {
 		return "", customError.ErrUserAlreadyExists
@@ -39,7 +39,7 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 		if errors.Is(err, customError.ErrUserAlreadyExists) {
 			return "", customError.ErrUserAlreadyExists
 		}
-		return "", customError.ErrInternalServerError
+		return "", customError.WrapRepository("save user for signup", err)
 	}
 	return "ok", nil
 }
@@ -47,7 +47,7 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 func (s *UserService) DeleteMe(userID int64, password string) error {
 	existingUser, err := s.userRepository.SelectUserByID(userID)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select user by id for delete me", err)
 	}
 	if existingUser == nil {
 		return customError.ErrUserNotFound
@@ -58,7 +58,7 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 
 	err = s.userRepository.Delete(existingUser.ID)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("delete user for delete me", err)
 	}
 	return nil
 }
@@ -66,7 +66,7 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 func (s *UserService) VerifyCredentials(username, password string) (int64, error) {
 	existingUser, err := s.userRepository.SelectUserByUsername(username)
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("select user by username for verify credentials", err)
 	}
 	if existingUser == nil {
 		return 0, customError.ErrUserNotFound

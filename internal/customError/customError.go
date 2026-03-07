@@ -1,22 +1,81 @@
 package customerror
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
-	// 공통 에러 정의
+	// Public/common
 	ErrInternalServerError = errors.New("internal server error")
 	ErrForbidden           = errors.New("forbidden")
 	ErrUnauthorized        = errors.New("unauthorized")
 	ErrInvalidCredential   = errors.New("invalid credential")
 	ErrMissingAuthHeader   = errors.New("missing Authorization header")
 	ErrInvalidToken        = errors.New("invalid token")
-	// User 관련 에러 정의
+
+	// Public/resource
 	ErrUserAlreadyExists = errors.New("user already exists")
 	ErrUserNotFound      = errors.New("user not found")
 	ErrBoardNotFound     = errors.New("board not found")
 	ErrPostNotFound      = errors.New("post not found")
 	ErrCommentNotFound   = errors.New("comment not found")
 	ErrReactionNotFound  = errors.New("reaction not found")
-	ErrSaveUserFailed    = errors.New("failed to save user")
-	ErrDeleteUserFailed  = errors.New("failed to delete user")
+
+	// Internal categories
+	ErrRepositoryFailure = errors.New("repository failure")
+	ErrCacheFailure      = errors.New("cache failure")
+	ErrTokenFailure      = errors.New("token failure")
 )
+
+func Mark(kind error, op string) error {
+	return fmt.Errorf("%s: %w", op, kind)
+}
+
+func Wrap(kind error, op string, err error) error {
+	if err == nil {
+		return Mark(kind, op)
+	}
+	return fmt.Errorf("%s: %w: %w", op, kind, err)
+}
+
+func WrapRepository(op string, err error) error {
+	return Wrap(ErrRepositoryFailure, op, err)
+}
+
+func WrapCache(op string, err error) error {
+	return Wrap(ErrCacheFailure, op, err)
+}
+
+func WrapToken(op string, err error) error {
+	return Wrap(ErrTokenFailure, op, err)
+}
+
+func Public(err error) error {
+	switch {
+	case errors.Is(err, ErrUserAlreadyExists):
+		return ErrUserAlreadyExists
+	case errors.Is(err, ErrUserNotFound):
+		return ErrUserNotFound
+	case errors.Is(err, ErrBoardNotFound):
+		return ErrBoardNotFound
+	case errors.Is(err, ErrPostNotFound):
+		return ErrPostNotFound
+	case errors.Is(err, ErrCommentNotFound):
+		return ErrCommentNotFound
+	case errors.Is(err, ErrReactionNotFound):
+		return ErrReactionNotFound
+	case errors.Is(err, ErrInvalidCredential):
+		return ErrInvalidCredential
+	case errors.Is(err, ErrUnauthorized):
+		return ErrUnauthorized
+	case errors.Is(err, ErrMissingAuthHeader):
+		return ErrMissingAuthHeader
+	case errors.Is(err, ErrInvalidToken):
+		return ErrInvalidToken
+	case errors.Is(err, ErrForbidden):
+		return ErrForbidden
+	default:
+		return ErrInternalServerError
+	}
+}

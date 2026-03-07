@@ -3,6 +3,7 @@ package delivery
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -771,29 +772,55 @@ func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetID int64, tar
 }
 
 func writeUseCaseError(c *gin.Context, err error) {
+	publicErr := customError.Public(err)
+	status := statusForError(err)
+	logAttrs := []any{
+		"method", c.Request.Method,
+		"path", c.FullPath(),
+		"status", status,
+		"error", err,
+		"public_error", publicErr.Error(),
+	}
+	if c.Request.URL != nil {
+		logAttrs = append(logAttrs, "request_uri", c.Request.URL.RequestURI())
+	}
+	if userID, ok := middleware.UserID(c); ok {
+		logAttrs = append(logAttrs, "user_id", userID)
+	}
+	if status >= http.StatusInternalServerError {
+		slog.Error("request failed", logAttrs...)
+	} else {
+		slog.Warn("request failed", logAttrs...)
+	}
+	c.JSON(status, errorResponse{Error: publicErr.Error()})
+}
+
+func statusForError(err error) int {
 	switch {
 	case errors.Is(err, customError.ErrUserAlreadyExists):
-		c.JSON(http.StatusConflict, errorResponse{Error: err.Error()})
+		return http.StatusConflict
 	case errors.Is(err, customError.ErrUserNotFound):
-		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
+		return http.StatusNotFound
 	case errors.Is(err, customError.ErrBoardNotFound):
-		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
+		return http.StatusNotFound
 	case errors.Is(err, customError.ErrPostNotFound):
-		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
+		return http.StatusNotFound
 	case errors.Is(err, customError.ErrCommentNotFound):
-		c.JSON(http.StatusNotFound, errorResponse{Error: err.Error()})
+		return http.StatusNotFound
+	case errors.Is(err, customError.ErrReactionNotFound):
+		return http.StatusNotFound
 	case errors.Is(err, customError.ErrInvalidCredential):
-		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
+		return http.StatusUnauthorized
 	case errors.Is(err, customError.ErrUnauthorized):
-		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
+		return http.StatusUnauthorized
 	case errors.Is(err, customError.ErrMissingAuthHeader):
-		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
+		return http.StatusUnauthorized
 	case errors.Is(err, customError.ErrInvalidToken):
-		c.JSON(http.StatusUnauthorized, errorResponse{Error: err.Error()})
+		return http.StatusUnauthorized
 	case errors.Is(err, customError.ErrForbidden):
-		c.JSON(http.StatusForbidden, errorResponse{Error: err.Error()})
+		return http.StatusForbidden
 	default:
-		c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return http.StatusInternalServerError
 	}
 }
 

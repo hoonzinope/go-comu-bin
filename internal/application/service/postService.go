@@ -45,14 +45,14 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	// 게시글 생성 로직 구현
 	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("select user by id for create post", err)
 	}
 	if user == nil {
 		return 0, customError.ErrUserNotFound
 	}
 	board, err := s.boardRepository.SelectBoardByID(boardID) // board 존재 여부 확인
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("select board by id for create post", err)
 	}
 	if board == nil {
 		return 0, customError.ErrBoardNotFound
@@ -60,7 +60,7 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	newPost := entity.NewPost(title, content, authorID, boardID)
 	postID, err := s.postRepository.Save(newPost)
 	if err != nil {
-		return 0, customError.ErrInternalServerError
+		return 0, customError.WrapRepository("save post", err)
 	}
 	s.cache.DeleteByPrefix(key.PostListPrefix(boardID))
 	return postID, nil
@@ -77,7 +77,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*mod
 
 		posts, err := s.postRepository.SelectPosts(boardID, fetchLimit, lastID)
 		if err != nil {
-			return nil, customError.ErrInternalServerError
+			return nil, customError.WrapRepository("select posts by board", err)
 		}
 
 		hasMore := false
@@ -104,7 +104,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*mod
 	}
 	list, ok := value.(*model.PostList)
 	if !ok {
-		return nil, customError.ErrInternalServerError
+		return nil, customError.Mark(customError.ErrCacheFailure, "decode post list cache payload")
 	}
 	return list, nil
 }
@@ -114,24 +114,24 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.DetailTTLSeconds, func() (interface{}, error) {
 		post, err := s.postRepository.SelectPostByID(id)
 		if err != nil {
-			return nil, customError.ErrInternalServerError
+			return nil, customError.WrapRepository("select post by id for post detail", err)
 		}
 		if post == nil {
 			return nil, customError.ErrPostNotFound
 		}
 		reactions, err := s.reactionRepository.GetByTarget(post.ID, entity.ReactionTargetPost)
 		if err != nil {
-			return nil, customError.ErrInternalServerError
+			return nil, customError.WrapRepository("select post reactions for post detail", err)
 		}
 		comments, err := s.commentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
 		commentDetails := make([]*model.CommentDetail, len(comments))
 		if err != nil {
-			return nil, customError.ErrInternalServerError
+			return nil, customError.WrapRepository("select comments for post detail", err)
 		}
 		for i, comment := range comments {
 			commentReactions, err := s.reactionRepository.GetByTarget(comment.ID, entity.ReactionTargetComment)
 			if err != nil {
-				return nil, customError.ErrInternalServerError
+				return nil, customError.WrapRepository("select comment reactions for post detail", err)
 			}
 			commentDetails[i] = &model.CommentDetail{
 				Comment:   mapper.CommentPtrFromEntity(comment),
@@ -150,7 +150,7 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 	}
 	detail, ok := value.(*model.PostDetail)
 	if !ok {
-		return nil, customError.ErrInternalServerError
+		return nil, customError.Mark(customError.ErrCacheFailure, "decode post detail cache payload")
 	}
 	return detail, nil
 }
@@ -159,13 +159,16 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	// 게시글 수정 로직 구현
 	post, err := s.postRepository.SelectPostByID(id) // post 존재 여부 확인
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select post by id for update post", err)
 	}
 	if post == nil {
 		return customError.ErrPostNotFound
 	}
 	requester, err := s.userRepository.SelectUserByID(authorID)
-	if requester == nil || err != nil {
+	if err != nil {
+		return customError.WrapRepository("select user by id for update post", err)
+	}
+	if requester == nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
@@ -174,7 +177,7 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	post.Update(title, content)
 	err = s.postRepository.Update(post)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("update post", err)
 	}
 	s.cache.Delete(key.PostDetail(post.ID))
 	s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID))
@@ -185,13 +188,16 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	// 게시글 삭제 로직 구현
 	post, err := s.postRepository.SelectPostByID(id) // post 존재 여부 확인
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("select post by id for delete post", err)
 	}
 	if post == nil {
 		return customError.ErrPostNotFound
 	}
 	requester, err := s.userRepository.SelectUserByID(authorID)
-	if requester == nil || err != nil {
+	if err != nil {
+		return customError.WrapRepository("select user by id for delete post", err)
+	}
+	if requester == nil {
 		return customError.ErrUserNotFound
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
@@ -199,7 +205,7 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	}
 	err = s.postRepository.Delete(post.ID)
 	if err != nil {
-		return customError.ErrInternalServerError
+		return customError.WrapRepository("delete post", err)
 	}
 	s.cache.Delete(key.PostDetail(post.ID))
 	s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID))
