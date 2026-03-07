@@ -78,14 +78,14 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.GET("/posts/:postID/comments", h.handlePostComments)
 	v1.POST("/posts/:postID/comments", h.authGinMiddleware, h.handlePostComments)
 	v1.GET("/posts/:postID/reactions", h.handlePostReactions)
-	v1.PUT("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReaction)
-	v1.DELETE("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReaction)
+	v1.PUT("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionPut)
+	v1.DELETE("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionDelete)
 
 	v1.PUT("/comments/:commentID", h.authGinMiddleware, h.handleComments)
 	v1.DELETE("/comments/:commentID", h.authGinMiddleware, h.handleComments)
 	v1.GET("/comments/:commentID/reactions", h.handleCommentReactions)
-	v1.PUT("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReaction)
-	v1.DELETE("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReaction)
+	v1.PUT("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionPut)
+	v1.DELETE("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionDelete)
 }
 
 func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
@@ -617,7 +617,8 @@ func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 	h.handleReactionsByTarget(c, commentID, entity.ReactionTargetComment)
 }
 
-// handleMyPostReaction godoc
+// handleMyPostReactionPut godoc
+// @ID setMyPostReaction
 // @Summary Set My Reaction for Post
 // @Description PUT creates or updates the current user's reaction on a post.
 // @Tags Reaction
@@ -630,19 +631,43 @@ func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/reactions/me [put]
-// @Router /posts/{postID}/reactions/me [delete]
-func (h *HTTPHandler) handleMyPostReaction(c *gin.Context) {
+func (h *HTTPHandler) handleMyPostReactionPut(c *gin.Context) {
 	postID, err := parseInt64(c.Param("postID"))
 	if err != nil {
 		badRequest(c, errors.New("invalid post id"))
 		return
 	}
-	h.handleMyReaction(c, postID, entity.ReactionTargetPost)
+	h.handleMyReactionPut(c, postID, entity.ReactionTargetPost)
 }
 
-// handleMyCommentReaction godoc
+// handleMyPostReactionDelete godoc
+// @ID deleteMyPostReaction
+// @Summary Delete My Reaction for Post
+// @Description DELETE removes the current user's reaction on a post.
+// @Tags Reaction
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/reactions/me [delete]
+func (h *HTTPHandler) handleMyPostReactionDelete(c *gin.Context) {
+	postID, err := parseInt64(c.Param("postID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid post id"))
+		return
+	}
+	h.handleMyReactionDelete(c, postID, entity.ReactionTargetPost)
+}
+
+// handleMyCommentReactionPut godoc
+// @ID setMyCommentReaction
 // @Summary Set My Reaction for Comment
 // @Description PUT creates or updates the current user's reaction on a comment.
 // @Tags Reaction
@@ -655,16 +680,39 @@ func (h *HTTPHandler) handleMyPostReaction(c *gin.Context) {
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID}/reactions/me [put]
-// @Router /comments/{commentID}/reactions/me [delete]
-func (h *HTTPHandler) handleMyCommentReaction(c *gin.Context) {
+func (h *HTTPHandler) handleMyCommentReactionPut(c *gin.Context) {
 	commentID, err := parseInt64(c.Param("commentID"))
 	if err != nil {
 		badRequest(c, errors.New("invalid comment id"))
 		return
 	}
-	h.handleMyReaction(c, commentID, entity.ReactionTargetComment)
+	h.handleMyReactionPut(c, commentID, entity.ReactionTargetComment)
+}
+
+// handleMyCommentReactionDelete godoc
+// @ID deleteMyCommentReaction
+// @Summary Delete My Reaction for Comment
+// @Description DELETE removes the current user's reaction on a comment.
+// @Tags Reaction
+// @Produce json
+// @Security BearerAuth
+// @Param commentID path int true "Comment ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /comments/{commentID}/reactions/me [delete]
+func (h *HTTPHandler) handleMyCommentReactionDelete(c *gin.Context) {
+	commentID, err := parseInt64(c.Param("commentID"))
+	if err != nil {
+		badRequest(c, errors.New("invalid comment id"))
+		return
+	}
+	h.handleMyReactionDelete(c, commentID, entity.ReactionTargetComment)
 }
 
 func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
@@ -679,44 +727,47 @@ func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, ta
 	}
 }
 
-func (h *HTTPHandler) handleMyReaction(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
+func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
 	}
-	switch c.Request.Method {
-	case http.MethodPut:
-		var req reactionRequest
-		if err := decodeJSON(c, &req); err != nil {
-			badRequest(c, err)
-			return
-		}
-		if userID == 0 || req.ReactionType == "" {
-			badRequest(c, errors.New("user_id and reaction_type are required"))
-			return
-		}
-		reactionType, ok := entity.ParseReactionType(req.ReactionType)
-		if !ok {
-			badRequest(c, errors.New("invalid reaction_type"))
-			return
-		}
-		created, err := h.reactionUseCase.SetReaction(userID, targetID, targetType, reactionType)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		if created {
-			c.Status(http.StatusCreated)
-			return
-		}
-		c.Status(http.StatusNoContent)
-	case http.MethodDelete:
-		if err := h.reactionUseCase.DeleteReaction(userID, targetID, targetType); err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.Status(http.StatusNoContent)
+	var req reactionRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
 	}
+	if userID == 0 || req.ReactionType == "" {
+		badRequest(c, errors.New("user_id and reaction_type are required"))
+		return
+	}
+	reactionType, ok := entity.ParseReactionType(req.ReactionType)
+	if !ok {
+		badRequest(c, errors.New("invalid reaction_type"))
+		return
+	}
+	created, err := h.reactionUseCase.SetReaction(userID, targetID, targetType, reactionType)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	if created {
+		c.Status(http.StatusCreated)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.reactionUseCase.DeleteReaction(userID, targetID, targetType); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func writeUseCaseError(c *gin.Context, err error) {

@@ -677,26 +677,17 @@ paths:
       - Reaction
   /comments/{commentID}/reactions/me:
     delete:
-      consumes:
-      - application/json
-      description: PUT creates or updates the current user's reaction on a comment.
+      description: DELETE removes the current user's reaction on a comment.
+      operationId: deleteMyCommentReaction
       parameters:
       - description: Comment ID
         in: path
         name: commentID
         required: true
         type: integer
-      - description: Set reaction payload
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/delivery.reactionRequest'
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
         "204":
           description: No Content
         "400":
@@ -705,6 +696,10 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
@@ -713,13 +708,14 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
       security:
       - BearerAuth: []
-      summary: Set My Reaction for Comment
+      summary: Delete My Reaction for Comment
       tags:
       - Reaction
     put:
       consumes:
       - application/json
       description: PUT creates or updates the current user's reaction on a comment.
+      operationId: setMyCommentReaction
       parameters:
       - description: Comment ID
         in: path
@@ -745,6 +741,10 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
@@ -1024,26 +1024,17 @@ paths:
       - Reaction
   /posts/{postID}/reactions/me:
     delete:
-      consumes:
-      - application/json
-      description: PUT creates or updates the current user's reaction on a post.
+      description: DELETE removes the current user's reaction on a post.
+      operationId: deleteMyPostReaction
       parameters:
       - description: Post ID
         in: path
         name: postID
         required: true
         type: integer
-      - description: Set reaction payload
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/delivery.reactionRequest'
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
         "204":
           description: No Content
         "400":
@@ -1052,6 +1043,10 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
@@ -1060,13 +1055,14 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
       security:
       - BearerAuth: []
-      summary: Set My Reaction for Post
+      summary: Delete My Reaction for Post
       tags:
       - Reaction
     put:
       consumes:
       - application/json
       description: PUT creates or updates the current user's reaction on a post.
+      operationId: setMyPostReaction
       parameters:
       - description: Post ID
         in: path
@@ -1092,6 +1088,10 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":

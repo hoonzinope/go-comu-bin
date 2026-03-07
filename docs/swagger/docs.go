@@ -744,6 +744,7 @@ const docTemplate = `{
                     "Reaction"
                 ],
                 "summary": "Set My Reaction for Comment",
+                "operationId": "setMyCommentReaction",
                 "parameters": [
                     {
                         "type": "integer",
@@ -777,6 +778,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -795,17 +802,15 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "PUT creates or updates the current user's reaction on a comment.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "DELETE removes the current user's reaction on a comment.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Reaction"
                 ],
-                "summary": "Set My Reaction for Comment",
+                "summary": "Delete My Reaction for Comment",
+                "operationId": "deleteMyCommentReaction",
                 "parameters": [
                     {
                         "type": "integer",
@@ -813,21 +818,9 @@ const docTemplate = `{
                         "name": "commentID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Set reaction payload",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/delivery.reactionRequest"
-                        }
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created"
-                    },
                     "204": {
                         "description": "No Content"
                     },
@@ -839,6 +832,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -1268,6 +1267,7 @@ const docTemplate = `{
                     "Reaction"
                 ],
                 "summary": "Set My Reaction for Post",
+                "operationId": "setMyPostReaction",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1301,6 +1301,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -1319,17 +1325,15 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "PUT creates or updates the current user's reaction on a post.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "DELETE removes the current user's reaction on a post.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Reaction"
                 ],
-                "summary": "Set My Reaction for Post",
+                "summary": "Delete My Reaction for Post",
+                "operationId": "deleteMyPostReaction",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1337,21 +1341,9 @@ const docTemplate = `{
                         "name": "postID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Set reaction payload",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/delivery.reactionRequest"
-                        }
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created"
-                    },
                     "204": {
                         "description": "No Content"
                     },
@@ -1363,6 +1355,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }

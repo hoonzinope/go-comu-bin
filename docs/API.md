@@ -49,16 +49,20 @@
 - `PUT /api/v1/posts/{postID}/reactions/me` (인증 필요)
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
+  - 대상 게시글이 없으면 `404`
 - `DELETE /api/v1/posts/{postID}/reactions/me` (인증 필요)
   - 내 리액션 삭제
   - 리액션이 없어도 `204`
+  - 대상 게시글이 없으면 `404`
 - `GET /api/v1/comments/{commentID}/reactions`
 - `PUT /api/v1/comments/{commentID}/reactions/me` (인증 필요)
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
+  - 대상 댓글이 없으면 `404`
 - `DELETE /api/v1/comments/{commentID}/reactions/me` (인증 필요)
   - 내 리액션 삭제
   - 리액션이 없어도 `204`
+  - 대상 댓글이 없으면 `404`
 
 `reaction_type` 요청 값은 현재 `like`, `dislike` 를 지원합니다.
 
