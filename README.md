@@ -18,6 +18,8 @@ go run ./cmd
 
 기본 설정은 루트의 `config.yml`을 사용합니다.
 
+Swagger UI는 서버 실행 후 [http://localhost:18577/swagger/index.html](http://localhost:18577/swagger/index.html) 에서 확인할 수 있습니다.
+
 ## 문서
 
 상세 문서는 `docs/`로 분리되어 있습니다.
@@ -31,11 +33,13 @@ go run ./cmd
 ## 현재 구현 요약
 
 - Delivery: `gin` 기반 HTTP 어댑터
-- 인증: JWT + middleware + token cache 검증
-- 인가: `AuthorizationPolicy` 기반(role/owner)
+- 인증: `SessionUseCase` 기반 JWT + 세션 cache 검증
+- 인가: 주입 가능한 `AuthorizationPolicy` 기반(role/owner)
 - 데이터 저장소: In-Memory 어댑터
 - 조회 캐시: 서비스 레이어 정책 + 캐시 포트(`GetOrSetWithTTL`, `DeleteByPrefix`)
 - 페이지네이션: `limit + last_id` 커서 기반
+- 모델 경계: `domain/entity` -> `application/model` -> `delivery/response`
+- 포트 구성: `internal/application/port`, 매핑: `internal/application/mapper`
 - API 규칙/스펙/운영 가이드는 `docs/` 문서를 단일 기준으로 관리
 
 ## 개발 명령

@@ -50,6 +50,8 @@
 - `POST /api/v1/comments/{commentID}/reactions` (인증 필요)
 - `DELETE /api/v1/reactions/{reactionID}` (인증 필요, 작성자 또는 admin)
 
+`reaction_type` 요청 값은 현재 `like`, `dislike` 를 지원합니다.
+
 ## 예시 요청
 
 ### 회원가입
@@ -71,9 +73,19 @@ curl -X POST http://localhost:18577/api/v1/auth/login \
 ### 게시판 생성
 
 ```bash
-TOKEN="로그인 응답 Authorization 헤더"
+TOKEN="로그인 응답 Authorization 헤더 값"
 curl -X POST http://localhost:18577/api/v1/boards \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
   -d '{"name":"free","description":"free board"}'
+```
+
+### 게시글 리액션 추가
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X POST http://localhost:18577/api/v1/posts/1/reactions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"reaction_type":"like"}'
 ```

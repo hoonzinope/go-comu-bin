@@ -11,6 +11,8 @@
 
 `HTTP Delivery -> UseCase Port -> Service -> Repository Port -> InMemory Adapter`
 
+Composition root는 `cmd/main.go` 에 두고, wiring 단계에서만 concrete 구현체를 조립합니다.
+
 ## 인증/인가 흐름
 
 - 인증
@@ -18,7 +20,7 @@
   - `SessionUseCase`가 JWT 검증 + 세션 cache 확인 수행
   - 검증 성공 후 `context.user_id` 주입
 - 인가
-  - Service 레이어에서 `AuthorizationPolicy`로 권한 판정
+  - Service 레이어에서 주입된 `AuthorizationPolicy`로 권한 판정
   - 기본 정책: `AdminOnly`, `OwnerOrAdmin`
 
 ## 세션 유효성 흐름
@@ -29,7 +31,7 @@
 
 ## 캐시 포트 확장
 
-- `application.Cache`는 인증 캐시와 조회 캐시를 단일 포트로 관리
+- `port.Cache`는 인증 캐시와 조회 캐시를 단일 포트로 관리
 - 기본 연산
   - `Get`, `Set`, `SetWithTTL`, `Delete`
 - 조회 캐시 확장 연산
@@ -77,9 +79,16 @@
 - 파일: `cmd/main.go`
 - 역할
   - config 로딩
-  - repository/usecase/auth/cache 조립
+  - repository/service/policy/auth/cache 조립
   - HTTP 서버 시작
   - admin 계정 시드(`admin/admin`)
+
+## 조립 원칙
+
+- 애플리케이션 포트는 `internal/application/port` 아래에 둔다.
+- 서비스는 필요한 repository port만 직접 받는다.
+- wiring 편의를 위해 `delivery.NewHTTPServer` 는 `HTTPDependencies` struct를 사용한다.
+- aggregate struct로 서비스 경계를 숨기지 않고, 조립 단계에서만 의존성을 묶는다.
 
 ## 디렉토리 구조
 
@@ -155,3 +164,11 @@ internal/
 - `delivery/response`: HTTP 응답 스키마(JSON 태그 정의)
 
 도메인 엔티티에는 `json` 태그를 두지 않고, 서비스가 entity를 application model로 변환한 뒤 전달 계층에서 HTTP 응답 모델로 다시 매핑합니다.
+
+## 리액션 타입 규칙
+
+- 리액션 대상과 종류는 raw string 대신 domain type으로 관리한다.
+  - `entity.ReactionTargetType`
+  - `entity.ReactionType`
+- delivery는 HTTP 문자열 입력을 파싱한 뒤 typed value로 service에 전달한다.
+- 이로 인해 `"post"`, `"comment"`, `"like"` 같은 프로토콜 문자열이 서비스/저장소 경계 전반에 흩어지는 것을 줄인다.

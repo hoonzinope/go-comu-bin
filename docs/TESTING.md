@@ -63,6 +63,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 		repositories.reaction,
 		newTestCache(),
 		newTestCachePolicy(),
+		newTestAuthorizationPolicy(),
 	)
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
@@ -89,3 +90,4 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
   - 예: 게시글 상세 캐시 hit/miss, 쓰기 후 목록/상세 무효화
 - 공통 테스트 더블은 `internal/application/cache/testutil`에 둔다.
   - `SpyCache`: `GetOrSetWithTTL` 로더 호출 횟수, `DeleteByPrefix` 무효화 여부 검증
+- 권한 정책이 필요한 서비스 테스트는 `newTestAuthorizationPolicy()`로 명시적으로 주입한다.
