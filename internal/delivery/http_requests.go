@@ -1,5 +1,11 @@
 package delivery
 
+import (
+	"errors"
+
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+)
+
 type userCredentialRequest struct {
 	Username string `json:"username" example:"alice"`
 	Password string `json:"password" example:"pw"`
@@ -25,4 +31,50 @@ type commentRequest struct {
 
 type reactionRequest struct {
 	ReactionType string `json:"reaction_type" example:"like"`
+}
+
+func (r userCredentialRequest) validate() error {
+	if r.Username == "" || r.Password == "" {
+		return errors.New("username and password are required")
+	}
+	return nil
+}
+
+func (r passwordOnlyRequest) validate() error {
+	if r.Password == "" {
+		return errors.New("password is required")
+	}
+	return nil
+}
+
+func (r boardRequest) validate() error {
+	if r.Name == "" {
+		return errors.New("name is required")
+	}
+	return nil
+}
+
+func (r postRequest) validate() error {
+	if r.Title == "" || r.Content == "" {
+		return errors.New("title and content are required")
+	}
+	return nil
+}
+
+func (r commentRequest) validate() error {
+	if r.Content == "" {
+		return errors.New("content is required")
+	}
+	return nil
+}
+
+func (r reactionRequest) parseType() (entity.ReactionType, error) {
+	if r.ReactionType == "" {
+		return "", errors.New("reaction_type is required")
+	}
+	reactionType, ok := entity.ParseReactionType(r.ReactionType)
+	if !ok {
+		return "", errors.New("invalid reaction_type")
+	}
+	return reactionType, nil
 }

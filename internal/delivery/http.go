@@ -124,8 +124,8 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if req.Username == "" || req.Password == "" {
-		badRequest(c, errors.New("username and password are required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	if _, err := h.userUseCase.SignUp(req.Username, req.Password); err != nil {
@@ -214,8 +214,8 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if req.Password == "" {
-		badRequest(c, errors.New("password is required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	if err := h.userUseCase.DeleteMe(userID, req.Password); err != nil {
@@ -281,8 +281,8 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if req.Name == "" {
-		badRequest(c, errors.New("name is required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	id, err := h.boardUseCase.CreateBoard(userID, req.Name, req.Description)
@@ -309,9 +309,8 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID} [put]
 func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
-	boardID, err := parseInt64(c.Param("boardID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid board id"))
+	boardID, ok := parsePathID(c, "boardID", "board")
+	if !ok {
 		return
 	}
 
@@ -324,8 +323,8 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if req.Name == "" {
-		badRequest(c, errors.New("name is required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	if err := h.boardUseCase.UpdateBoard(boardID, userID, req.Name, req.Description); err != nil {
@@ -350,9 +349,8 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID} [delete]
 func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
-	boardID, err := parseInt64(c.Param("boardID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid board id"))
+	boardID, ok := parsePathID(c, "boardID", "board")
+	if !ok {
 		return
 	}
 	userID, ok := h.requireAuthUserID(c)
@@ -383,9 +381,8 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID}/posts [get]
 func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
-	boardID, err := parseInt64(c.Param("boardID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid board id"))
+	boardID, ok := parsePathID(c, "boardID", "board")
+	if !ok {
 		return
 	}
 
@@ -415,9 +412,8 @@ func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID}/posts [post]
 func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
-	boardID, err := parseInt64(c.Param("boardID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid board id"))
+	boardID, ok := parsePathID(c, "boardID", "board")
+	if !ok {
 		return
 	}
 	authorID, ok := h.requireAuthUserID(c)
@@ -429,8 +425,8 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if req.Title == "" || req.Content == "" {
-		badRequest(c, errors.New("title and content are required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	postID, err := h.postUseCase.CreatePost(req.Title, req.Content, authorID, boardID)
@@ -457,9 +453,8 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID} [get]
 func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 
@@ -487,9 +482,8 @@ func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID} [put]
 func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 	authorID, ok := h.requireAuthUserID(c)
@@ -501,8 +495,8 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if req.Title == "" || req.Content == "" {
-		badRequest(c, errors.New("title and content are required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content); err != nil {
@@ -527,9 +521,8 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID} [delete]
 func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 	authorID, ok := h.requireAuthUserID(c)
@@ -560,9 +553,8 @@ func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/comments [get]
 func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 
@@ -593,9 +585,8 @@ func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/comments [post]
 func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 	authorID, ok := h.requireAuthUserID(c)
@@ -607,8 +598,8 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if req.Content == "" {
-		badRequest(c, errors.New("content is required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID)
@@ -635,9 +626,8 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID} [put]
 func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
-	commentID, err := parseInt64(c.Param("commentID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid comment id"))
+	commentID, ok := parsePathID(c, "commentID", "comment")
+	if !ok {
 		return
 	}
 
@@ -650,8 +640,8 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if req.Content == "" {
-		badRequest(c, errors.New("content is required"))
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
 		return
 	}
 	if err := h.commentUseCase.UpdateComment(commentID, authorID, req.Content); err != nil {
@@ -676,9 +666,8 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID} [delete]
 func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {
-	commentID, err := parseInt64(c.Param("commentID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid comment id"))
+	commentID, ok := parsePathID(c, "commentID", "comment")
+	if !ok {
 		return
 	}
 	authorID, ok := h.requireAuthUserID(c)
@@ -704,9 +693,8 @@ func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/reactions [get]
 func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 	h.handleReactionsByTarget(c, postID, entity.ReactionTargetPost)
@@ -724,9 +712,8 @@ func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID}/reactions [get]
 func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
-	commentID, err := parseInt64(c.Param("commentID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid comment id"))
+	commentID, ok := parsePathID(c, "commentID", "comment")
+	if !ok {
 		return
 	}
 	h.handleReactionsByTarget(c, commentID, entity.ReactionTargetComment)
@@ -750,9 +737,8 @@ func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/reactions/me [put]
 func (h *HTTPHandler) handleMyPostReactionPut(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 	h.handleMyReactionPut(c, postID, entity.ReactionTargetPost)
@@ -773,9 +759,8 @@ func (h *HTTPHandler) handleMyPostReactionPut(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/reactions/me [delete]
 func (h *HTTPHandler) handleMyPostReactionDelete(c *gin.Context) {
-	postID, err := parseInt64(c.Param("postID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid post id"))
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
 		return
 	}
 	h.handleMyReactionDelete(c, postID, entity.ReactionTargetPost)
@@ -799,9 +784,8 @@ func (h *HTTPHandler) handleMyPostReactionDelete(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID}/reactions/me [put]
 func (h *HTTPHandler) handleMyCommentReactionPut(c *gin.Context) {
-	commentID, err := parseInt64(c.Param("commentID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid comment id"))
+	commentID, ok := parsePathID(c, "commentID", "comment")
+	if !ok {
 		return
 	}
 	h.handleMyReactionPut(c, commentID, entity.ReactionTargetComment)
@@ -822,24 +806,20 @@ func (h *HTTPHandler) handleMyCommentReactionPut(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID}/reactions/me [delete]
 func (h *HTTPHandler) handleMyCommentReactionDelete(c *gin.Context) {
-	commentID, err := parseInt64(c.Param("commentID"))
-	if err != nil {
-		badRequest(c, errors.New("invalid comment id"))
+	commentID, ok := parsePathID(c, "commentID", "comment")
+	if !ok {
 		return
 	}
 	h.handleMyReactionDelete(c, commentID, entity.ReactionTargetComment)
 }
 
 func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
-	switch c.Request.Method {
-	case http.MethodGet:
-		reactions, err := h.reactionUseCase.GetReactionsByTarget(targetID, targetType)
-		if err != nil {
-			writeUseCaseError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, response.ReactionsFromDTO(reactions))
+	reactions, err := h.reactionUseCase.GetReactionsByTarget(targetID, targetType)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
 	}
+	c.JSON(http.StatusOK, response.ReactionsFromDTO(reactions))
 }
 
 func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
@@ -852,13 +832,9 @@ func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, target
 		badRequest(c, err)
 		return
 	}
-	if req.ReactionType == "" {
-		badRequest(c, errors.New("reaction_type is required"))
-		return
-	}
-	reactionType, ok := entity.ParseReactionType(req.ReactionType)
-	if !ok {
-		badRequest(c, errors.New("invalid reaction_type"))
+	reactionType, err := req.parseType()
+	if err != nil {
+		badRequest(c, err)
 		return
 	}
 	created, err := h.reactionUseCase.SetReaction(userID, targetID, targetType, reactionType)
@@ -978,6 +954,15 @@ func parseInt64(raw string) (int64, error) {
 		return 0, errors.New("value must be >= 1")
 	}
 	return v, nil
+}
+
+func parsePathID(c *gin.Context, paramName, resourceName string) (int64, bool) {
+	id, err := parseInt64(c.Param(paramName))
+	if err != nil {
+		badRequest(c, errors.New("invalid "+resourceName+" id"))
+		return 0, false
+	}
+	return id, true
 }
 
 func decodeJSON(c *gin.Context, dst any) error {
