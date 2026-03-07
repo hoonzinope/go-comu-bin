@@ -25,22 +25,24 @@ type HTTPHandler struct {
 	authGinMiddleware gin.HandlerFunc
 }
 
-func NewHTTPHandler(
-	sessionUseCase port.SessionUseCase,
-	userUseCase port.UserUseCase,
-	boardUseCase port.BoardUseCase,
-	postUseCase port.PostUseCase,
-	commentUseCase port.CommentUseCase,
-	reactionUseCase port.ReactionUseCase,
-) *HTTPHandler {
+type HTTPDependencies struct {
+	SessionUseCase  port.SessionUseCase
+	UserUseCase     port.UserUseCase
+	BoardUseCase    port.BoardUseCase
+	PostUseCase     port.PostUseCase
+	CommentUseCase  port.CommentUseCase
+	ReactionUseCase port.ReactionUseCase
+}
+
+func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 	return &HTTPHandler{
-		sessionUseCase:    sessionUseCase,
-		userUseCase:       userUseCase,
-		boardUseCase:      boardUseCase,
-		postUseCase:       postUseCase,
-		commentUseCase:    commentUseCase,
-		reactionUseCase:   reactionUseCase,
-		authGinMiddleware: middleware.AuthWithSession(sessionUseCase),
+		sessionUseCase:    deps.SessionUseCase,
+		userUseCase:       deps.UserUseCase,
+		boardUseCase:      deps.BoardUseCase,
+		postUseCase:       deps.PostUseCase,
+		commentUseCase:    deps.CommentUseCase,
+		reactionUseCase:   deps.ReactionUseCase,
+		authGinMiddleware: middleware.AuthWithSession(deps.SessionUseCase),
 	}
 }
 
@@ -84,18 +86,10 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.DELETE("/reactions/:reactionID", h.authGinMiddleware, h.handleReactionWithID)
 }
 
-func NewHTTPServer(
-	addr string,
-	sessionUseCase port.SessionUseCase,
-	userUseCase port.UserUseCase,
-	boardUseCase port.BoardUseCase,
-	postUseCase port.PostUseCase,
-	commentUseCase port.CommentUseCase,
-	reactionUseCase port.ReactionUseCase,
-) *http.Server {
+func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	handler := NewHTTPHandler(sessionUseCase, userUseCase, boardUseCase, postUseCase, commentUseCase, reactionUseCase)
+	handler := NewHTTPHandler(deps)
 	handler.RegisterRoutes(r)
 	return &http.Server{Addr: addr, Handler: r}
 }

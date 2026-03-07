@@ -204,7 +204,14 @@ func newTestHandler(
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testCache = cacheInMemory.NewInMemoryCache()
 	sessionUseCase := service.NewSessionService(user, tokenProvider, testCache)
-	return NewHTTPServer(":0", sessionUseCase, user, board, post, comment, reaction).Handler
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:  sessionUseCase,
+		UserUseCase:     user,
+		BoardUseCase:    board,
+		PostUseCase:     post,
+		CommentUseCase:  comment,
+		ReactionUseCase: reaction,
+	}).Handler
 }
 
 func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {

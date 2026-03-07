@@ -51,7 +51,14 @@ func main() {
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)
-	server := delivery.NewHTTPServer(httpAddr(cfg), sessionUseCase, userUseCase, boardUseCase, postUseCase, commentUseCase, reactionUseCase)
+	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
+		SessionUseCase:  sessionUseCase,
+		UserUseCase:     userUseCase,
+		BoardUseCase:    boardUseCase,
+		PostUseCase:     postUseCase,
+		CommentUseCase:  commentUseCase,
+		ReactionUseCase: reactionUseCase,
+	})
 	log.Printf("server started on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
