@@ -8,21 +8,21 @@ import (
 var _ port.SessionUseCase = (*SessionService)(nil)
 
 type SessionService struct {
-	userUseCase port.UserUseCase
-	tokenPort   port.TokenProvider
-	cache       port.Cache
+	credentialVerifier port.CredentialVerifier
+	tokenPort          port.TokenProvider
+	cache              port.Cache
 }
 
-func NewSessionService(userUseCase port.UserUseCase, tokenPort port.TokenProvider, cache port.Cache) *SessionService {
+func NewSessionService(credentialVerifier port.CredentialVerifier, tokenPort port.TokenProvider, cache port.Cache) *SessionService {
 	return &SessionService{
-		userUseCase: userUseCase,
-		tokenPort:   tokenPort,
-		cache:       cache,
+		credentialVerifier: credentialVerifier,
+		tokenPort:          tokenPort,
+		cache:              cache,
 	}
 }
 
 func (s *SessionService) Login(username, password string) (string, error) {
-	userID, err := s.userUseCase.Login(username, password)
+	userID, err := s.credentialVerifier.VerifyCredentials(username, password)
 	if err != nil {
 		return "", err
 	}

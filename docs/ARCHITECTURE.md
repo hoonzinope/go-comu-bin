@@ -103,6 +103,7 @@ internal/
       *.go
     port/
       cache.go
+      credential_verifier.go
       token_provider.go
       session_usecase.go
       user_usecase.go

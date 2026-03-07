@@ -21,9 +21,9 @@ import (
 const apiV1Prefix = "/api/v1"
 
 type fakeUserUseCase struct {
-	signUp   func(username, password string) (string, error)
-	deleteMe func(userID int64, password string) error
-	login    func(username, password string) (int64, error)
+	signUp           func(username, password string) (string, error)
+	deleteMe         func(userID int64, password string) error
+	verifyCredential func(username, password string) (int64, error)
 }
 
 func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
@@ -40,9 +40,9 @@ func (f *fakeUserUseCase) DeleteMe(userID int64, password string) error {
 	return nil
 }
 
-func (f *fakeUserUseCase) Login(username, password string) (int64, error) {
-	if f.login != nil {
-		return f.login(username, password)
+func (f *fakeUserUseCase) VerifyCredentials(username, password string) (int64, error) {
+	if f.verifyCredential != nil {
+		return f.verifyCredential(username, password)
 	}
 	return 1, nil
 }
@@ -168,6 +168,11 @@ type fakeReactionUseCase struct {
 
 var testCache port.Cache
 
+type authUserPort interface {
+	port.UserUseCase
+	port.CredentialVerifier
+}
+
 func (f *fakeReactionUseCase) AddReaction(userID, targetID int64, targetType, reactionType string) error {
 	if f.addReaction != nil {
 		return f.addReaction(userID, targetID, targetType, reactionType)
@@ -190,7 +195,7 @@ func (f *fakeReactionUseCase) GetReactionsByTarget(targetID int64, targetType st
 }
 
 func newTestHandler(
-	user port.UserUseCase,
+	user authUserPort,
 	board port.BoardUseCase,
 	post port.PostUseCase,
 	comment port.CommentUseCase,

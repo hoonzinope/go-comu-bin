@@ -7,6 +7,7 @@ import (
 )
 
 var _ port.UserUseCase = (*UserService)(nil)
+var _ port.CredentialVerifier = (*UserService)(nil)
 
 type UserService struct {
 	userRepository port.UserRepository
@@ -57,9 +58,7 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 	return nil
 }
 
-func (s *UserService) Login(username, password string) (int64, error) {
-	// 로그인 로직 구현
-	// user 존재 여부 확인
+func (s *UserService) VerifyCredentials(username, password string) (int64, error) {
 	existingUser, err := s.userRepository.SelectUserByUsername(username)
 	if err != nil {
 		return 0, customError.ErrInternalServerError
@@ -73,4 +72,8 @@ func (s *UserService) Login(username, password string) (int64, error) {
 		return 0, customError.ErrUserNotFound
 	}
 	return existingUser.ID, nil
+}
+
+func (s *UserService) Login(username, password string) (int64, error) {
+	return s.VerifyCredentials(username, password)
 }
