@@ -59,8 +59,12 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	if err != nil {
 		return 0, customError.WrapRepository("save comment", err)
 	}
-	s.cache.DeleteByPrefix(key.CommentListPrefix(postID))
-	s.cache.Delete(key.PostDetail(postID))
+	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(postID)); err != nil {
+		return 0, customError.WrapCache("invalidate comment list after create comment", err)
+	}
+	if err := s.cache.Delete(key.PostDetail(postID)); err != nil {
+		return 0, customError.WrapCache("invalidate post detail after create comment", err)
+	}
 	return commentID, nil
 }
 
@@ -134,8 +138,12 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if err != nil {
 		return customError.WrapRepository("update comment", err)
 	}
-	s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID))
-	s.cache.Delete(key.PostDetail(comment.PostID))
+	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID)); err != nil {
+		return customError.WrapCache("invalidate comment list after update comment", err)
+	}
+	if err := s.cache.Delete(key.PostDetail(comment.PostID)); err != nil {
+		return customError.WrapCache("invalidate post detail after update comment", err)
+	}
 	return nil
 }
 
@@ -162,8 +170,14 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	if err != nil {
 		return customError.WrapRepository("delete comment", err)
 	}
-	s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID))
-	s.cache.Delete(key.PostDetail(comment.PostID))
-	s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID))
+	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID)); err != nil {
+		return customError.WrapCache("invalidate comment list after delete comment", err)
+	}
+	if err := s.cache.Delete(key.PostDetail(comment.PostID)); err != nil {
+		return customError.WrapCache("invalidate post detail after delete comment", err)
+	}
+	if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID)); err != nil {
+		return customError.WrapCache("invalidate comment reaction list after delete comment", err)
+	}
 	return nil
 }

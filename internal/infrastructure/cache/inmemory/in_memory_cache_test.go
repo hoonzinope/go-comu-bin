@@ -11,18 +11,22 @@ import (
 
 func TestInMemoryCache_DeleteByPrefix(t *testing.T) {
 	cache := NewInMemoryCache()
-	cache.Set("posts:1", "a")
-	cache.Set("posts:2", "b")
-	cache.Set("comments:1", "c")
+	require.NoError(t, cache.Set("posts:1", "a"))
+	require.NoError(t, cache.Set("posts:2", "b"))
+	require.NoError(t, cache.Set("comments:1", "c"))
 
-	deleted := cache.DeleteByPrefix("posts:")
+	deleted, err := cache.DeleteByPrefix("posts:")
+	require.NoError(t, err)
 	assert.Equal(t, 2, deleted)
 
-	_, ok := cache.Get("posts:1")
+	_, ok, err := cache.Get("posts:1")
+	require.NoError(t, err)
 	assert.False(t, ok)
-	_, ok = cache.Get("posts:2")
+	_, ok, err = cache.Get("posts:2")
+	require.NoError(t, err)
 	assert.False(t, ok)
-	v, ok := cache.Get("comments:1")
+	v, ok, err := cache.Get("comments:1")
+	require.NoError(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, "c", v)
 }

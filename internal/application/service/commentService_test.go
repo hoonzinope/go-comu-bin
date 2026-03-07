@@ -105,8 +105,10 @@ func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	_, err = commentSvc.CreateComment("new-comment", userID, postID)
 	require.NoError(t, err)
 
-	_, ok := cache.Get(key.PostDetail(postID))
+	_, ok, err := cache.Get(key.PostDetail(postID))
+	require.NoError(t, err)
 	assert.False(t, ok)
-	_, ok = cache.Get(key.CommentList(postID, 10, 0))
+	_, ok, err = cache.Get(key.CommentList(postID, 10, 0))
+	require.NoError(t, err)
 	assert.False(t, ok)
 }

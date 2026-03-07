@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -74,4 +76,56 @@ func seedComment(commentRepository port.CommentRepository, authorID, postID int6
 	comment := entity.NewComment(content, authorID, postID, nil)
 	id, _ := commentRepository.Save(comment)
 	return id
+}
+
+type errorCache struct {
+	getErr             error
+	setErr             error
+	setWithTTLErr      error
+	deleteErr          error
+	deleteByPrefixErr  error
+	getOrSetWithTTLErr error
+}
+
+func (c *errorCache) Get(key string) (interface{}, bool, error) {
+	return nil, false, c.getErr
+}
+
+func (c *errorCache) Set(key string, value interface{}) error {
+	return c.setErr
+}
+
+func (c *errorCache) SetWithTTL(key string, value interface{}, ttlSeconds int) error {
+	if c.setWithTTLErr != nil {
+		return c.setWithTTLErr
+	}
+	if c.setErr != nil {
+		return c.setErr
+	}
+	return nil
+}
+
+func (c *errorCache) Delete(key string) error {
+	return c.deleteErr
+}
+
+func (c *errorCache) DeleteByPrefix(prefix string) (int, error) {
+	return 0, c.deleteByPrefixErr
+}
+
+func (c *errorCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
+	if c.getOrSetWithTTLErr != nil {
+		return nil, c.getOrSetWithTTLErr
+	}
+	if c.getErr != nil {
+		return nil, c.getErr
+	}
+	return loader()
+}
+
+func newCacheFailure(err error) error {
+	if err != nil {
+		return err
+	}
+	return errors.New("cache unavailable")
 }

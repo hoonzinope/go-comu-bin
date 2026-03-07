@@ -17,23 +17,21 @@ func NewCacheSessionRepository(cache port.Cache) *CacheSessionRepository {
 }
 
 func (r *CacheSessionRepository) Save(userID int64, token string, ttlSeconds int) error {
-	r.cache.SetWithTTL(sessionCacheKey(userID, token), userID, ttlSeconds)
-	return nil
+	return r.cache.SetWithTTL(sessionCacheKey(userID, token), userID, ttlSeconds)
 }
 
 func (r *CacheSessionRepository) Delete(userID int64, token string) error {
-	r.cache.Delete(sessionCacheKey(userID, token))
-	return nil
+	return r.cache.Delete(sessionCacheKey(userID, token))
 }
 
 func (r *CacheSessionRepository) DeleteByUser(userID int64) error {
-	r.cache.DeleteByPrefix(sessionCachePrefix(userID))
-	return nil
+	_, err := r.cache.DeleteByPrefix(sessionCachePrefix(userID))
+	return err
 }
 
 func (r *CacheSessionRepository) Exists(userID int64, token string) (bool, error) {
-	_, exists := r.cache.Get(sessionCacheKey(userID, token))
-	return exists, nil
+	_, exists, err := r.cache.Get(sessionCacheKey(userID, token))
+	return exists, err
 }
 
 func sessionCachePrefix(userID int64) string {

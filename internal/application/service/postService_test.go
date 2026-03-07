@@ -123,8 +123,10 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 
 	require.NoError(t, postSvc.UpdatePost(postID, userID, "new", "new-content"))
 
-	_, ok := cache.Get(key.PostDetail(postID))
+	_, ok, err := cache.Get(key.PostDetail(postID))
+	require.NoError(t, err)
 	assert.False(t, ok)
-	_, ok = cache.Get(key.PostList(boardID, 10, 0))
+	_, ok, err = cache.Get(key.PostList(boardID, 10, 0))
+	require.NoError(t, err)
 	assert.False(t, ok)
 }

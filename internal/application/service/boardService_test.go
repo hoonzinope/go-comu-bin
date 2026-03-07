@@ -87,12 +87,26 @@ func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 
 	_, err := svc.GetBoards(10, 0)
 	require.NoError(t, err)
-	_, ok := cache.Get(key.BoardList(10, 0))
+	_, ok, err := cache.Get(key.BoardList(10, 0))
+	require.NoError(t, err)
 	require.True(t, ok)
 
 	_, err = svc.CreateBoard(adminID, "b2", "d2")
 	require.NoError(t, err)
 
-	_, ok = cache.Get(key.BoardList(10, 0))
+	_, ok, err = cache.Get(key.BoardList(10, 0))
+	require.NoError(t, err)
 	assert.False(t, ok)
+}
+
+func TestBoardService_CreateBoard_ReturnsCacheFailure_WhenInvalidationFails(t *testing.T) {
+	repositories := newTestRepositories()
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	svc := NewBoardService(repositories.user, repositories.board, &errorCache{
+		deleteByPrefixErr: newCacheFailure(nil),
+	}, newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.CreateBoard(adminID, "free", "desc")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
 }

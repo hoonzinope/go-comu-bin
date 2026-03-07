@@ -28,45 +28,47 @@ func NewInMemoryCache() *InMemoryCache {
 	}
 }
 
-func (c *InMemoryCache) Get(key string) (interface{}, bool) {
+func (c *InMemoryCache) Get(key string) (interface{}, bool, error) {
 	value, exists := c.store.Load(key)
 	if !exists {
-		return nil, false
+		return nil, false, nil
 	}
 	entry, ok := value.(cacheEntry)
 	if !ok {
-		return nil, false
+		return nil, false, nil
 	}
 	if entry.hasExpiry && time.Now().After(entry.expiresAt) {
 		c.store.Delete(key)
-		return nil, false
+		return nil, false, nil
 	}
-	return entry.value, true
+	return entry.value, true, nil
 }
 
-func (c *InMemoryCache) Set(key string, value interface{}) {
+func (c *InMemoryCache) Set(key string, value interface{}) error {
 	c.store.Store(key, cacheEntry{
 		value: value,
 	})
+	return nil
 }
 
-func (c *InMemoryCache) SetWithTTL(key string, value interface{}, ttlSeconds int) {
+func (c *InMemoryCache) SetWithTTL(key string, value interface{}, ttlSeconds int) error {
 	if ttlSeconds <= 0 {
-		c.Set(key, value)
-		return
+		return c.Set(key, value)
 	}
 	c.store.Store(key, cacheEntry{
 		value:     value,
 		hasExpiry: true,
 		expiresAt: time.Now().Add(time.Duration(ttlSeconds) * time.Second),
 	})
+	return nil
 }
 
-func (c *InMemoryCache) Delete(key string) {
+func (c *InMemoryCache) Delete(key string) error {
 	c.store.Delete(key)
+	return nil
 }
 
-func (c *InMemoryCache) DeleteByPrefix(prefix string) int {
+func (c *InMemoryCache) DeleteByPrefix(prefix string) (int, error) {
 	deleted := 0
 	c.store.Range(func(key, _ interface{}) bool {
 		k, ok := key.(string)
@@ -79,23 +81,29 @@ func (c *InMemoryCache) DeleteByPrefix(prefix string) int {
 		}
 		return true
 	})
-	return deleted
+	return deleted, nil
 }
 
 func (c *InMemoryCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
-	if value, ok := c.Get(key); ok {
+	if value, ok, err := c.Get(key); err != nil {
+		return nil, err
+	} else if ok {
 		return value, nil
 	}
 
 	value, err, _ := c.sf.Do(key, func() (interface{}, error) {
-		if cached, ok := c.Get(key); ok {
+		if cached, ok, getErr := c.Get(key); getErr != nil {
+			return nil, getErr
+		} else if ok {
 			return cached, nil
 		}
 		loaded, loadErr := loader()
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		c.SetWithTTL(key, loaded, ttlSeconds)
+		if setErr := c.SetWithTTL(key, loaded, ttlSeconds); setErr != nil {
+			return nil, setErr
+		}
 		return loaded, nil
 	})
 	if err != nil {

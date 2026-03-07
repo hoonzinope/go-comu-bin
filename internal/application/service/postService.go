@@ -67,7 +67,9 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	if err != nil {
 		return 0, customError.WrapRepository("save post", err)
 	}
-	s.cache.DeleteByPrefix(key.PostListPrefix(boardID))
+	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(boardID)); err != nil {
+		return 0, customError.WrapCache("invalidate post list after create post", err)
+	}
 	return postID, nil
 }
 
@@ -187,8 +189,12 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if err != nil {
 		return customError.WrapRepository("update post", err)
 	}
-	s.cache.Delete(key.PostDetail(post.ID))
-	s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID))
+	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
+		return customError.WrapCache("invalidate post detail after update post", err)
+	}
+	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID)); err != nil {
+		return customError.WrapCache("invalidate post list after update post", err)
+	}
 	return nil
 }
 
@@ -215,9 +221,17 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if err != nil {
 		return customError.WrapRepository("delete post", err)
 	}
-	s.cache.Delete(key.PostDetail(post.ID))
-	s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID))
-	s.cache.DeleteByPrefix(key.CommentListPrefix(post.ID))
-	s.cache.Delete(key.ReactionList(string(entity.ReactionTargetPost), post.ID))
+	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
+		return customError.WrapCache("invalidate post detail after delete post", err)
+	}
+	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID)); err != nil {
+		return customError.WrapCache("invalidate post list after delete post", err)
+	}
+	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(post.ID)); err != nil {
+		return customError.WrapCache("invalidate comment list after delete post", err)
+	}
+	if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetPost), post.ID)); err != nil {
+		return customError.WrapCache("invalidate post reaction list after delete post", err)
+	}
 	return nil
 }

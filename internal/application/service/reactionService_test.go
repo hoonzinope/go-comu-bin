@@ -56,14 +56,16 @@ func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 
 	_, err := reactionSvc.GetReactionsByTarget(postID, entity.ReactionTargetPost)
 	require.NoError(t, err)
-	_, ok := cache.Get(key.ReactionList("post", postID))
+	_, ok, err := cache.Get(key.ReactionList("post", postID))
+	require.NoError(t, err)
 	require.True(t, ok)
 
 	created, err := reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	_, ok = cache.Get(key.ReactionList("post", postID))
+	_, ok, err = cache.Get(key.ReactionList("post", postID))
+	require.NoError(t, err)
 	assert.False(t, ok)
 
 	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
@@ -185,12 +187,14 @@ func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testi
 
 	_, err = reactionSvc.GetReactionsByTarget(commentID, entity.ReactionTargetComment)
 	require.NoError(t, err)
-	cache.Set(key.PostDetail(postID), "cached-post-detail")
+	require.NoError(t, cache.Set(key.PostDetail(postID), "cached-post-detail"))
 
 	require.NoError(t, reactionSvc.DeleteReaction(userID, commentID, entity.ReactionTargetComment))
 
-	_, ok := cache.Get(key.ReactionList("comment", commentID))
+	_, ok, err := cache.Get(key.ReactionList("comment", commentID))
+	require.NoError(t, err)
 	assert.False(t, ok)
-	_, ok = cache.Get(key.PostDetail(postID))
+	_, ok, err = cache.Get(key.PostDetail(postID))
+	require.NoError(t, err)
 	assert.False(t, ok)
 }

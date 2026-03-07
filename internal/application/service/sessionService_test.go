@@ -99,3 +99,19 @@ func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidToken))
 }
+
+func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails(t *testing.T) {
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user, newTestPasswordHasher())
+	_, err := userService.SignUp("alice", "pw")
+	require.NoError(t, err)
+
+	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
+		setWithTTLErr: newCacheFailure(nil),
+	})
+	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+
+	_, err = svc.Login("alice", "pw")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrRepositoryFailure))
+}

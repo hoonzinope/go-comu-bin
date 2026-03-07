@@ -18,30 +18,32 @@ func NewSpyCache() *SpyCache {
 	}
 }
 
-func (c *SpyCache) Get(key string) (interface{}, bool) {
+func (c *SpyCache) Get(key string) (interface{}, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	v, ok := c.store[key]
-	return v, ok
+	return v, ok, nil
 }
 
-func (c *SpyCache) Set(key string, value interface{}) {
+func (c *SpyCache) Set(key string, value interface{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.store[key] = value
+	return nil
 }
 
-func (c *SpyCache) SetWithTTL(key string, value interface{}, ttlSeconds int) {
-	c.Set(key, value)
+func (c *SpyCache) SetWithTTL(key string, value interface{}, ttlSeconds int) error {
+	return c.Set(key, value)
 }
 
-func (c *SpyCache) Delete(key string) {
+func (c *SpyCache) Delete(key string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.store, key)
+	return nil
 }
 
-func (c *SpyCache) DeleteByPrefix(prefix string) int {
+func (c *SpyCache) DeleteByPrefix(prefix string) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	deleted := 0
@@ -51,11 +53,13 @@ func (c *SpyCache) DeleteByPrefix(prefix string) int {
 			deleted++
 		}
 	}
-	return deleted
+	return deleted, nil
 }
 
 func (c *SpyCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
-	if v, ok := c.Get(key); ok {
+	if v, ok, err := c.Get(key); err != nil {
+		return nil, err
+	} else if ok {
 		return v, nil
 	}
 	v, err := loader()
@@ -65,7 +69,9 @@ func (c *SpyCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (in
 	c.mu.Lock()
 	c.loadCounts[key]++
 	c.mu.Unlock()
-	c.SetWithTTL(key, v, ttlSeconds)
+	if err := c.SetWithTTL(key, v, ttlSeconds); err != nil {
+		return nil, err
+	}
 	return v, nil
 }
 

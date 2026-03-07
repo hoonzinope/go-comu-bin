@@ -52,7 +52,9 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 	if !created && !changed {
 		return false, nil
 	}
-	s.invalidateReactionCaches(TargetID, TargetType)
+	if err := s.invalidateReactionCaches(TargetID, TargetType); err != nil {
+		return false, err
+	}
 	return created, nil
 }
 
@@ -75,8 +77,7 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 	if !deleted {
 		return nil
 	}
-	s.invalidateReactionCaches(TargetID, TargetType)
-	return nil
+	return s.invalidateReactionCaches(TargetID, TargetType)
 }
 
 func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
@@ -98,17 +99,24 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 	return reactions, nil
 }
 
-func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType) {
-	s.cache.Delete(key.ReactionList(string(targetType), targetID))
+func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType) error {
+	if err := s.cache.Delete(key.ReactionList(string(targetType), targetID)); err != nil {
+		return customError.WrapCache("invalidate reaction list", err)
+	}
 	if targetType == entity.ReactionTargetPost {
-		s.cache.Delete(key.PostDetail(targetID))
+		if err := s.cache.Delete(key.PostDetail(targetID)); err != nil {
+			return customError.WrapCache("invalidate post detail after post reaction", err)
+		}
 	}
 	if targetType == entity.ReactionTargetComment {
 		comment, err := s.commentRepository.SelectCommentByID(targetID)
 		if err == nil && comment != nil {
-			s.cache.Delete(key.PostDetail(comment.PostID))
+			if deleteErr := s.cache.Delete(key.PostDetail(comment.PostID)); deleteErr != nil {
+				return customError.WrapCache("invalidate post detail after comment reaction", deleteErr)
+			}
 		}
 	}
+	return nil
 }
 
 func (s *ReactionService) ensureTargetExists(targetID int64, targetType entity.ReactionTargetType) error {
