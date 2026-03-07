@@ -229,19 +229,14 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 }
 
 // handleBoardsGet godoc
-// @Summary List Boards or Create Board
-// @Description GET returns board list with cursor pagination, POST creates a board (admin only).
+// @Summary List Boards
+// @Description Returns board list with cursor pagination.
 // @Tags Board
-// @Accept json
 // @Produce json
 // @Param limit query int false "Page size" minimum(0)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
-// @Param request body boardRequest false "Create board payload (POST only)"
 // @Success 200 {object} response.BoardList
-// @Success 201 {object} idResponse
 // @Failure 400 {object} errorResponse
-// @Failure 401 {object} errorResponse
-// @Failure 403 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards [get]
 func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
@@ -258,12 +253,13 @@ func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
 }
 
 // handleBoardsPost godoc
-// @Summary List Boards or Create Board
-// @Description GET returns board list with cursor pagination, POST creates a board (admin only).
+// @Summary Create Board
+// @Description Creates a board (admin only).
 // @Tags Board
 // @Accept json
 // @Produce json
-// @Param request body boardRequest false "Create board payload (POST only)"
+// @Security BearerAuth
+// @Param request body boardRequest true "Create board payload"
 // @Success 201 {object} idResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
@@ -293,18 +289,19 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 }
 
 // handleBoardPut godoc
-// @Summary Update or Delete Board
-// @Description Update/delete board by id (admin only).
+// @Summary Update Board
+// @Description Updates a board by id (admin only).
 // @Tags Board
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param boardID path int true "Board ID"
-// @Param request body boardRequest false "Update board payload (PUT only)"
+// @Param request body boardRequest true "Update board payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID} [put]
 func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
@@ -334,10 +331,9 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 }
 
 // handleBoardDelete godoc
-// @Summary Update or Delete Board
-// @Description Update/delete board by id (admin only).
+// @Summary Delete Board
+// @Description Deletes a board by id (admin only).
 // @Tags Board
-// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param boardID path int true "Board ID"
@@ -345,6 +341,7 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID} [delete]
 func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
@@ -364,19 +361,15 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 }
 
 // handleBoardPostsGet godoc
-// @Summary List Posts by Board or Create Post
-// @Description GET returns posts in board with cursor pagination, POST creates post in board.
+// @Summary List Posts by Board
+// @Description Returns posts in board with cursor pagination.
 // @Tags Post
-// @Accept json
 // @Produce json
 // @Param boardID path int true "Board ID"
 // @Param limit query int false "Page size" minimum(0)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
-// @Param request body postRequest false "Create post payload (POST only)"
 // @Success 200 {object} response.PostList
-// @Success 201 {object} idResponse
 // @Failure 400 {object} errorResponse
-// @Failure 401 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID}/posts [get]
 func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
@@ -398,16 +391,18 @@ func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
 }
 
 // handleBoardPostsPost godoc
-// @Summary List Posts by Board or Create Post
-// @Description GET returns posts in board with cursor pagination, POST creates post in board.
+// @Summary Create Post
+// @Description Creates a post in board.
 // @Tags Post
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param boardID path int true "Board ID"
-// @Param request body postRequest false "Create post payload (POST only)"
+// @Param request body postRequest true "Create post payload"
 // @Success 201 {object} idResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards/{boardID}/posts [post]
 func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
@@ -437,18 +432,14 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 }
 
 // handlePostDetailGet godoc
-// @Summary Get, Update or Delete Post
-// @Description Retrieve post detail or mutate post by id.
+// @Summary Get Post Detail
+// @Description Retrieves post detail by id.
 // @Tags Post
-// @Accept json
 // @Produce json
 // @Param postID path int true "Post ID"
-// @Param request body postRequest false "Update post payload (PUT only)"
 // @Success 200 {object} response.PostDetail
-// @Success 204
 // @Failure 400 {object} errorResponse
-// @Failure 401 {object} errorResponse
-// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID} [get]
 func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
@@ -466,18 +457,19 @@ func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 }
 
 // handlePostDetailPut godoc
-// @Summary Get, Update or Delete Post
-// @Description Retrieve post detail or mutate post by id.
+// @Summary Update Post
+// @Description Updates a post by id.
 // @Tags Post
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param postID path int true "Post ID"
-// @Param request body postRequest false "Update post payload (PUT only)"
+// @Param request body postRequest true "Update post payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID} [put]
 func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
@@ -506,10 +498,9 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 }
 
 // handlePostDetailDelete godoc
-// @Summary Get, Update or Delete Post
-// @Description Retrieve post detail or mutate post by id.
+// @Summary Delete Post
+// @Description Deletes a post by id.
 // @Tags Post
-// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param postID path int true "Post ID"
@@ -517,6 +508,7 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID} [delete]
 func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
@@ -536,19 +528,15 @@ func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
 }
 
 // handlePostCommentsGet godoc
-// @Summary List Comments by Post or Create Comment
-// @Description GET returns comments in post with cursor pagination, POST creates comment.
+// @Summary List Comments by Post
+// @Description Returns comments in post with cursor pagination.
 // @Tags Comment
-// @Accept json
 // @Produce json
 // @Param postID path int true "Post ID"
 // @Param limit query int false "Page size" minimum(0)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
-// @Param request body commentRequest false "Create comment payload (POST only)"
 // @Success 200 {object} response.CommentList
-// @Success 201 {object} idResponse
 // @Failure 400 {object} errorResponse
-// @Failure 401 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/comments [get]
 func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
@@ -570,17 +558,18 @@ func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
 }
 
 // handlePostCommentsPost godoc
-// @Summary List Comments by Post or Create Comment
-// @Description GET returns comments in post with cursor pagination, POST creates comment.
+// @Summary Create Comment
+// @Description Creates a comment on a post.
 // @Tags Comment
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param postID path int true "Post ID"
-// @Param request body commentRequest false "Create comment payload (POST only)"
+// @Param request body commentRequest true "Create comment payload"
 // @Success 201 {object} idResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /posts/{postID}/comments [post]
 func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
@@ -610,18 +599,19 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 }
 
 // handleCommentPut godoc
-// @Summary Update or Delete Comment
-// @Description Update/delete comment by id.
+// @Summary Update Comment
+// @Description Updates comment by id.
 // @Tags Comment
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param commentID path int true "Comment ID"
-// @Param request body commentRequest false "Update comment payload (PUT only)"
+// @Param request body commentRequest true "Update comment payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID} [put]
 func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
@@ -651,10 +641,9 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 }
 
 // handleCommentDelete godoc
-// @Summary Update or Delete Comment
-// @Description Update/delete comment by id.
+// @Summary Delete Comment
+// @Description Deletes comment by id.
 // @Tags Comment
-// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param commentID path int true "Comment ID"
@@ -662,6 +651,7 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /comments/{commentID} [delete]
 func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {

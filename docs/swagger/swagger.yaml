@@ -238,10 +238,6 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -272,10 +268,7 @@ paths:
       - Auth
   /boards:
     get:
-      consumes:
-      - application/json
-      description: GET returns board list with cursor pagination, POST creates a board
-        (admin only).
+      description: Returns board list with cursor pagination.
       parameters:
       - description: Page size
         in: query
@@ -287,11 +280,6 @@ paths:
         minimum: 0
         name: last_id
         type: integer
-      - description: Create board payload (POST only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.boardRequest'
       produces:
       - application/json
       responses:
@@ -299,101 +287,35 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.BoardList'
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/delivery.idResponse'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "403":
-          description: Forbidden
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List Boards or Create Board
+      summary: List Boards
       tags:
       - Board
     post:
       consumes:
       - application/json
-      description: GET returns board list with cursor pagination, POST creates a board
-        (admin only).
+      description: Creates a board (admin only).
       parameters:
-      - description: Page size
-        in: query
-        minimum: 0
-        name: limit
-        type: integer
-      - description: Cursor id, fetch items with id < last_id
-        in: query
-        minimum: 0
-        name: last_id
-        type: integer
-      - description: Create board payload (POST only)
+      - description: Create board payload
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/delivery.boardRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BoardList'
         "201":
           description: Created
           schema:
             $ref: '#/definitions/delivery.idResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-      summary: List Boards or Create Board
-      tags:
-      - Board
-  /boards/{boardID}:
-    delete:
-      consumes:
-      - application/json
-      description: Update/delete board by id (admin only).
-      parameters:
-      - description: Board ID
-        in: path
-        name: boardID
-        required: true
-        type: integer
-      - description: Update board payload (PUT only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.boardRequest'
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
         "400":
           description: Bad Request
           schema:
@@ -412,22 +334,62 @@ paths:
             $ref: '#/definitions/delivery.errorResponse'
       security:
       - BearerAuth: []
-      summary: Update or Delete Board
+      summary: Create Board
+      tags:
+      - Board
+  /boards/{boardID}:
+    delete:
+      description: Deletes a board by id (admin only).
+      parameters:
+      - description: Board ID
+        in: path
+        name: boardID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Board
       tags:
       - Board
     put:
       consumes:
       - application/json
-      description: Update/delete board by id (admin only).
+      description: Updates a board by id (admin only).
       parameters:
       - description: Board ID
         in: path
         name: boardID
         required: true
         type: integer
-      - description: Update board payload (PUT only)
+      - description: Update board payload
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/delivery.boardRequest'
       produces:
@@ -447,21 +409,22 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
       security:
       - BearerAuth: []
-      summary: Update or Delete Board
+      summary: Update Board
       tags:
       - Board
   /boards/{boardID}/posts:
     get:
-      consumes:
-      - application/json
-      description: GET returns posts in board with cursor pagination, POST creates
-        post in board.
+      description: Returns posts in board with cursor pagination.
       parameters:
       - description: Board ID
         in: path
@@ -478,11 +441,6 @@ paths:
         minimum: 0
         name: last_id
         type: integer
-      - description: Create post payload (POST only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.postRequest'
       produces:
       - application/json
       responses:
@@ -490,58 +448,36 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.PostList'
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/delivery.idResponse'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List Posts by Board or Create Post
+      summary: List Posts by Board
       tags:
       - Post
     post:
       consumes:
       - application/json
-      description: GET returns posts in board with cursor pagination, POST creates
-        post in board.
+      description: Creates a post in board.
       parameters:
       - description: Board ID
         in: path
         name: boardID
         required: true
         type: integer
-      - description: Page size
-        in: query
-        minimum: 0
-        name: limit
-        type: integer
-      - description: Cursor id, fetch items with id < last_id
-        in: query
-        minimum: 0
-        name: last_id
-        type: integer
-      - description: Create post payload (POST only)
+      - description: Create post payload
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/delivery.postRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.PostList'
         "201":
           description: Created
           schema:
@@ -554,29 +490,28 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List Posts by Board or Create Post
+      security:
+      - BearerAuth: []
+      summary: Create Post
       tags:
       - Post
   /comments/{commentID}:
     delete:
-      consumes:
-      - application/json
-      description: Update/delete comment by id.
+      description: Deletes comment by id.
       parameters:
       - description: Comment ID
         in: path
         name: commentID
         required: true
         type: integer
-      - description: Update comment payload (PUT only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.commentRequest'
       produces:
       - application/json
       responses:
@@ -594,28 +529,33 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
       security:
       - BearerAuth: []
-      summary: Update or Delete Comment
+      summary: Delete Comment
       tags:
       - Comment
     put:
       consumes:
       - application/json
-      description: Update/delete comment by id.
+      description: Updates comment by id.
       parameters:
       - description: Comment ID
         in: path
         name: commentID
         required: true
         type: integer
-      - description: Update comment payload (PUT only)
+      - description: Update comment payload
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/delivery.commentRequest'
       produces:
@@ -635,13 +575,17 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
       security:
       - BearerAuth: []
-      summary: Update or Delete Comment
+      summary: Update Comment
       tags:
       - Comment
   /comments/{commentID}/reactions:
@@ -758,27 +702,16 @@ paths:
       - Reaction
   /posts/{postID}:
     delete:
-      consumes:
-      - application/json
-      description: Retrieve post detail or mutate post by id.
+      description: Deletes a post by id.
       parameters:
       - description: Post ID
         in: path
         name: postID
         required: true
         type: integer
-      - description: Update post payload (PUT only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.postRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.PostDetail'
         "204":
           description: No Content
         "400":
@@ -793,28 +726,27 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: Get, Update or Delete Post
+      security:
+      - BearerAuth: []
+      summary: Delete Post
       tags:
       - Post
     get:
-      consumes:
-      - application/json
-      description: Retrieve post detail or mutate post by id.
+      description: Retrieves post detail by id.
       parameters:
       - description: Post ID
         in: path
         name: postID
         required: true
         type: integer
-      - description: Update post payload (PUT only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.postRequest'
       produces:
       - application/json
       responses:
@@ -822,49 +754,40 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.PostDetail'
-        "204":
-          description: No Content
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "403":
-          description: Forbidden
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: Get, Update or Delete Post
+      summary: Get Post Detail
       tags:
       - Post
     put:
       consumes:
       - application/json
-      description: Retrieve post detail or mutate post by id.
+      description: Updates a post by id.
       parameters:
       - description: Post ID
         in: path
         name: postID
         required: true
         type: integer
-      - description: Update post payload (PUT only)
+      - description: Update post payload
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/delivery.postRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.PostDetail'
         "204":
           description: No Content
         "400":
@@ -879,19 +802,22 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: Get, Update or Delete Post
+      security:
+      - BearerAuth: []
+      summary: Update Post
       tags:
       - Post
   /posts/{postID}/comments:
     get:
-      consumes:
-      - application/json
-      description: GET returns comments in post with cursor pagination, POST creates
-        comment.
+      description: Returns comments in post with cursor pagination.
       parameters:
       - description: Post ID
         in: path
@@ -908,11 +834,6 @@ paths:
         minimum: 0
         name: last_id
         type: integer
-      - description: Create comment payload (POST only)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/delivery.commentRequest'
       produces:
       - application/json
       responses:
@@ -920,58 +841,36 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.CommentList'
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/delivery.idResponse'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List Comments by Post or Create Comment
+      summary: List Comments by Post
       tags:
       - Comment
     post:
       consumes:
       - application/json
-      description: GET returns comments in post with cursor pagination, POST creates
-        comment.
+      description: Creates a comment on a post.
       parameters:
       - description: Post ID
         in: path
         name: postID
         required: true
         type: integer
-      - description: Page size
-        in: query
-        minimum: 0
-        name: limit
-        type: integer
-      - description: Cursor id, fetch items with id < last_id
-        in: query
-        minimum: 0
-        name: last_id
-        type: integer
-      - description: Create comment payload (POST only)
+      - description: Create comment payload
         in: body
         name: request
+        required: true
         schema:
           $ref: '#/definitions/delivery.commentRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.CommentList'
         "201":
           description: Created
           schema:
@@ -984,11 +883,17 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/delivery.errorResponse'
-      summary: List Comments by Post or Create Comment
+      security:
+      - BearerAuth: []
+      summary: Create Comment
       tags:
       - Comment
   /posts/{postID}/reactions:

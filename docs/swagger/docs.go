@@ -64,12 +64,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -115,17 +109,14 @@ const docTemplate = `{
         },
         "/boards": {
             "get": {
-                "description": "GET returns board list with cursor pagination, POST creates a board (admin only).",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Returns board list with cursor pagination.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Board"
                 ],
-                "summary": "List Boards or Create Board",
+                "summary": "List Boards",
                 "parameters": [
                     {
                         "minimum": 0,
@@ -140,14 +131,6 @@ const docTemplate = `{
                         "description": "Cursor id, fetch items with id \u003c last_id",
                         "name": "last_id",
                         "in": "query"
-                    },
-                    {
-                        "description": "Create board payload (POST only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.boardRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -157,26 +140,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.BoardList"
                         }
                     },
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
-                        }
-                    },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -190,7 +155,12 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "GET returns board list with cursor pagination, POST creates a board (admin only).",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a board (admin only).",
                 "consumes": [
                     "application/json"
                 ],
@@ -200,38 +170,19 @@ const docTemplate = `{
                 "tags": [
                     "Board"
                 ],
-                "summary": "List Boards or Create Board",
+                "summary": "Create Board",
                 "parameters": [
                     {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Page size",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Cursor id, fetch items with id \u003c last_id",
-                        "name": "last_id",
-                        "in": "query"
-                    },
-                    {
-                        "description": "Create board payload (POST only)",
+                        "description": "Create board payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.boardRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.BoardList"
-                        }
-                    },
                     "201": {
                         "description": "Created",
                         "schema": {
@@ -272,7 +223,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update/delete board by id (admin only).",
+                "description": "Updates a board by id (admin only).",
                 "consumes": [
                     "application/json"
                 ],
@@ -282,7 +233,7 @@ const docTemplate = `{
                 "tags": [
                     "Board"
                 ],
-                "summary": "Update or Delete Board",
+                "summary": "Update Board",
                 "parameters": [
                     {
                         "type": "integer",
@@ -292,9 +243,10 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Update board payload (PUT only)",
+                        "description": "Update board payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.boardRequest"
                         }
@@ -318,6 +270,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -336,17 +294,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update/delete board by id (admin only).",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Deletes a board by id (admin only).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Board"
                 ],
-                "summary": "Update or Delete Board",
+                "summary": "Delete Board",
                 "parameters": [
                     {
                         "type": "integer",
@@ -354,14 +309,6 @@ const docTemplate = `{
                         "name": "boardID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Update board payload (PUT only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.boardRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -386,6 +333,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
                     },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -397,17 +350,14 @@ const docTemplate = `{
         },
         "/boards/{boardID}/posts": {
             "get": {
-                "description": "GET returns posts in board with cursor pagination, POST creates post in board.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Returns posts in board with cursor pagination.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Post"
                 ],
-                "summary": "List Posts by Board or Create Post",
+                "summary": "List Posts by Board",
                 "parameters": [
                     {
                         "type": "integer",
@@ -429,14 +379,6 @@ const docTemplate = `{
                         "description": "Cursor id, fetch items with id \u003c last_id",
                         "name": "last_id",
                         "in": "query"
-                    },
-                    {
-                        "description": "Create post payload (POST only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.postRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -446,20 +388,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.PostList"
                         }
                     },
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
-                        }
-                    },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -473,7 +403,12 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "GET returns posts in board with cursor pagination, POST creates post in board.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a post in board.",
                 "consumes": [
                     "application/json"
                 ],
@@ -483,7 +418,7 @@ const docTemplate = `{
                 "tags": [
                     "Post"
                 ],
-                "summary": "List Posts by Board or Create Post",
+                "summary": "Create Post",
                 "parameters": [
                     {
                         "type": "integer",
@@ -493,35 +428,16 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Page size",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Cursor id, fetch items with id \u003c last_id",
-                        "name": "last_id",
-                        "in": "query"
-                    },
-                    {
-                        "description": "Create post payload (POST only)",
+                        "description": "Create post payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.postRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.PostList"
-                        }
-                    },
                     "201": {
                         "description": "Created",
                         "schema": {
@@ -536,6 +452,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -556,7 +478,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update/delete comment by id.",
+                "description": "Updates comment by id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -566,7 +488,7 @@ const docTemplate = `{
                 "tags": [
                     "Comment"
                 ],
-                "summary": "Update or Delete Comment",
+                "summary": "Update Comment",
                 "parameters": [
                     {
                         "type": "integer",
@@ -576,9 +498,10 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Update comment payload (PUT only)",
+                        "description": "Update comment payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.commentRequest"
                         }
@@ -602,6 +525,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -620,17 +549,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update/delete comment by id.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Deletes comment by id.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Comment"
                 ],
-                "summary": "Update or Delete Comment",
+                "summary": "Delete Comment",
                 "parameters": [
                     {
                         "type": "integer",
@@ -638,14 +564,6 @@ const docTemplate = `{
                         "name": "commentID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Update comment payload (PUT only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.commentRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -666,6 +584,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -853,17 +777,14 @@ const docTemplate = `{
         },
         "/posts/{postID}": {
             "get": {
-                "description": "Retrieve post detail or mutate post by id.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Retrieves post detail by id.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Post"
                 ],
-                "summary": "Get, Update or Delete Post",
+                "summary": "Get Post Detail",
                 "parameters": [
                     {
                         "type": "integer",
@@ -871,14 +792,6 @@ const docTemplate = `{
                         "name": "postID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Update post payload (PUT only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.postRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -888,23 +801,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.PostDetail"
                         }
                     },
-                    "204": {
-                        "description": "No Content"
-                    },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -918,7 +822,12 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Retrieve post detail or mutate post by id.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates a post by id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -928,7 +837,7 @@ const docTemplate = `{
                 "tags": [
                     "Post"
                 ],
-                "summary": "Get, Update or Delete Post",
+                "summary": "Update Post",
                 "parameters": [
                     {
                         "type": "integer",
@@ -938,21 +847,16 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Update post payload (PUT only)",
+                        "description": "Update post payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.postRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.PostDetail"
-                        }
-                    },
                     "204": {
                         "description": "No Content"
                     },
@@ -970,6 +874,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -983,17 +893,19 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Retrieve post detail or mutate post by id.",
-                "consumes": [
-                    "application/json"
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
                 ],
+                "description": "Deletes a post by id.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Post"
                 ],
-                "summary": "Get, Update or Delete Post",
+                "summary": "Delete Post",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1001,23 +913,9 @@ const docTemplate = `{
                         "name": "postID",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Update post payload (PUT only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.postRequest"
-                        }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.PostDetail"
-                        }
-                    },
                     "204": {
                         "description": "No Content"
                     },
@@ -1035,6 +933,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -1050,17 +954,14 @@ const docTemplate = `{
         },
         "/posts/{postID}/comments": {
             "get": {
-                "description": "GET returns comments in post with cursor pagination, POST creates comment.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Returns comments in post with cursor pagination.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Comment"
                 ],
-                "summary": "List Comments by Post or Create Comment",
+                "summary": "List Comments by Post",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1082,14 +983,6 @@ const docTemplate = `{
                         "description": "Cursor id, fetch items with id \u003c last_id",
                         "name": "last_id",
                         "in": "query"
-                    },
-                    {
-                        "description": "Create comment payload (POST only)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.commentRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -1099,20 +992,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.CommentList"
                         }
                     },
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
-                        }
-                    },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
@@ -1126,7 +1007,12 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "GET returns comments in post with cursor pagination, POST creates comment.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a comment on a post.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1136,7 +1022,7 @@ const docTemplate = `{
                 "tags": [
                     "Comment"
                 ],
-                "summary": "List Comments by Post or Create Comment",
+                "summary": "Create Comment",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1146,35 +1032,16 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Page size",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Cursor id, fetch items with id \u003c last_id",
-                        "name": "last_id",
-                        "in": "query"
-                    },
-                    {
-                        "description": "Create comment payload (POST only)",
+                        "description": "Create comment payload",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/delivery.commentRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.CommentList"
-                        }
-                    },
                     "201": {
                         "description": "Created",
                         "schema": {
@@ -1189,6 +1056,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
