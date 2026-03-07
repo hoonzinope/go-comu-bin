@@ -19,7 +19,8 @@ func TestSessionService_Login_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), cache)
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	token, err := svc.Login("alice", "pw")
 	require.NoError(t, err)
@@ -28,7 +29,8 @@ func TestSessionService_Login_Success(t *testing.T) {
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
-	_, exists := cache.Get(sessionCacheKey(user.ID, token))
+	exists, err := sessionRepository.Exists(user.ID, token)
+	require.NoError(t, err)
 	assert.True(t, exists)
 }
 
@@ -39,7 +41,8 @@ func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), cache)
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	token, err := svc.Login("alice", "pw")
 	require.NoError(t, err)
@@ -59,9 +62,10 @@ func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
-	cache.SetWithTTL(sessionCacheKey(userID, token), userID, tokenProvider.TTLSeconds())
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	require.NoError(t, sessionRepository.Save(userID, token, tokenProvider.TTLSeconds()))
 
-	svc := NewSessionService(userService, tokenProvider, cache)
+	svc := NewSessionService(userService, tokenProvider, sessionRepository)
 
 	gotUserID, err := svc.ValidateTokenToId(token)
 	require.NoError(t, err)
@@ -75,7 +79,8 @@ func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), cache)
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	token1, err := svc.Login("alice", "pw")
 	require.NoError(t, err)

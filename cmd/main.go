@@ -58,7 +58,8 @@ func main() {
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
-	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, cache)
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, sessionRepository)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
 		SessionUseCase:  sessionUseCase,
 		UserUseCase:     userUseCase,

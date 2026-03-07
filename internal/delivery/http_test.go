@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
@@ -168,7 +167,7 @@ type fakeReactionUseCase struct {
 	getReactionsByTarget func(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }
 
-var testCache port.Cache
+var testSessionRepository port.SessionRepository
 
 type authUserPort interface {
 	port.UserUseCase
@@ -204,8 +203,8 @@ func newTestHandler(
 	reaction port.ReactionUseCase,
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
-	testCache = cacheInMemory.NewInMemoryCache()
-	sessionUseCase := service.NewSessionService(user, tokenProvider, testCache)
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, tokenProvider, testSessionRepository)
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:  sessionUseCase,
 		UserUseCase:     user,
@@ -238,8 +237,8 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
-	require.NotNil(t, testCache)
-	testCache.SetWithTTL("session:user:"+strconv.FormatInt(userID, 10)+":"+token, userID, tokenProvider.TTLSeconds())
+	require.NotNil(t, testSessionRepository)
+	require.NoError(t, testSessionRepository.Save(userID, token, tokenProvider.TTLSeconds()))
 
 	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
 	req.Header.Set("Content-Type", "application/json")

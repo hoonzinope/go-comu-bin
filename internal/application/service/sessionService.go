@@ -1,8 +1,6 @@
 package service
 
 import (
-	"fmt"
-
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
@@ -12,14 +10,14 @@ var _ port.SessionUseCase = (*SessionService)(nil)
 type SessionService struct {
 	credentialVerifier port.CredentialVerifier
 	tokenPort          port.TokenProvider
-	cache              port.Cache
+	sessionRepository  port.SessionRepository
 }
 
-func NewSessionService(credentialVerifier port.CredentialVerifier, tokenPort port.TokenProvider, cache port.Cache) *SessionService {
+func NewSessionService(credentialVerifier port.CredentialVerifier, tokenPort port.TokenProvider, sessionRepository port.SessionRepository) *SessionService {
 	return &SessionService{
 		credentialVerifier: credentialVerifier,
 		tokenPort:          tokenPort,
-		cache:              cache,
+		sessionRepository:  sessionRepository,
 	}
 }
 
@@ -34,7 +32,9 @@ func (s *SessionService) Login(username, password string) (string, error) {
 		return "", customError.WrapToken("issue login token", err)
 	}
 
-	s.cache.SetWithTTL(sessionCacheKey(userID, token), userID, s.tokenPort.TTLSeconds())
+	if err := s.sessionRepository.Save(userID, token, s.tokenPort.TTLSeconds()); err != nil {
+		return "", customError.WrapRepository("save session", err)
+	}
 	return token, nil
 }
 
@@ -43,13 +43,11 @@ func (s *SessionService) Logout(token string) error {
 	if err != nil {
 		return nil
 	}
-	s.cache.Delete(sessionCacheKey(userID, token))
-	return nil
+	return s.sessionRepository.Delete(userID, token)
 }
 
 func (s *SessionService) InvalidateUserSessions(userID int64) error {
-	s.cache.DeleteByPrefix(sessionCachePrefix(userID))
-	return nil
+	return s.sessionRepository.DeleteByUser(userID)
 }
 
 func (s *SessionService) ValidateTokenToId(token string) (int64, error) {
@@ -58,17 +56,13 @@ func (s *SessionService) ValidateTokenToId(token string) (int64, error) {
 		return 0, err
 	}
 
-	if _, exists := s.cache.Get(sessionCacheKey(userID, token)); !exists {
+	exists, err := s.sessionRepository.Exists(userID, token)
+	if err != nil {
+		return 0, customError.WrapRepository("lookup session", err)
+	}
+	if !exists {
 		return 0, customError.ErrInvalidToken
 	}
 
 	return userID, nil
-}
-
-func sessionCachePrefix(userID int64) string {
-	return fmt.Sprintf("session:user:%d:", userID)
-}
-
-func sessionCacheKey(userID int64, token string) string {
-	return sessionCachePrefix(userID) + token
 }
