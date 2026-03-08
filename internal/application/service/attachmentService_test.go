@@ -137,6 +137,7 @@ func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {
 	assert.Equal(t, "posts/1/a.png", storage.openKey)
 	assert.Equal(t, "image/png", file.ContentType)
 	assert.Equal(t, "a.png", file.FileName)
+	assert.NotEmpty(t, file.ETag)
 	assert.Equal(t, "hello", string(data))
 }
 

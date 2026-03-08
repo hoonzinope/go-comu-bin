@@ -399,6 +399,8 @@
 - attachment 응답에는 실제 파일 조회용 `file_url`을 포함한다.
 - 1차 파일 조회는 published post 기준 public read 경로로 연다.
 - draft 작성 중 미리보기는 owner/admin 전용 authenticated `preview_url`로 제공한다.
+- 파일 캐시는 앱 메모리 캐시보다 HTTP 캐시 헤더를 우선 적용한다.
+- `file_url`은 `Cache-Control: public` + `ETag`를 사용하고, `preview_url`은 `private, no-store`로 둔다.
 - post update/publish 시 본문에 들어 있는 attachment 참조가 실제로 해당 post의 attachment인지 검증한다.
 
 후속 작업

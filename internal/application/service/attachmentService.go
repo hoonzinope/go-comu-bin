@@ -160,6 +160,7 @@ func (s *AttachmentService) GetPostAttachmentFile(postID, attachmentID int64) (*
 		FileName:    attachment.FileName,
 		ContentType: attachment.ContentType,
 		SizeBytes:   attachment.SizeBytes,
+		ETag:        buildAttachmentETag(attachment),
 		Content:     content,
 	}, nil
 }
@@ -197,6 +198,7 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(postID, attachmentID, u
 		FileName:    attachment.FileName,
 		ContentType: attachment.ContentType,
 		SizeBytes:   attachment.SizeBytes,
+		ETag:        buildAttachmentETag(attachment),
 		Content:     content,
 	}, nil
 }
@@ -248,4 +250,8 @@ func buildAttachmentEmbedMarkdown(fileName string, attachmentID int64) string {
 
 func buildAttachmentPreviewURL(postID, attachmentID int64) string {
 	return fmt.Sprintf("/api/v1/posts/%d/attachments/%d/preview", postID, attachmentID)
+}
+
+func buildAttachmentETag(attachment *entity.Attachment) string {
+	return fmt.Sprintf("\"att-%d-%d-%d\"", attachment.ID, attachment.SizeBytes, attachment.CreatedAt.Unix())
 }

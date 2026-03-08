@@ -82,9 +82,12 @@
 - `GET /api/v1/posts/{postID}/attachments/{attachmentID}/file`
   - published post의 attachment 파일 본문을 반환합니다.
   - `attachments[].file_url`이 이 경로를 가리킵니다.
+  - `Cache-Control: public, max-age=300`과 `ETag`를 반환합니다.
+  - `If-None-Match`가 일치하면 `304 Not Modified`를 반환합니다.
 - `GET /api/v1/posts/{postID}/attachments/{attachmentID}/preview` (인증 필요, 작성자 또는 admin)
   - draft/published post의 attachment 미리보기 파일 본문을 반환합니다.
   - `attachments[].preview_url` 및 upload 응답의 `preview_url`이 이 경로를 가리킵니다.
+  - `Cache-Control: private, no-store`를 반환합니다.
 - `POST /api/v1/posts/{postID}/attachments` (인증 필요, 작성자 또는 admin)
   - draft/published post에 attachment 메타데이터를 추가합니다.
 - `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)

@@ -771,6 +771,14 @@ func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
 		return
 	}
 	defer file.Content.Close()
+	c.Header("Cache-Control", "public, max-age=300")
+	if file.ETag != "" {
+		c.Header("ETag", file.ETag)
+		if c.GetHeader("If-None-Match") == file.ETag {
+			c.Status(http.StatusNotModified)
+			return
+		}
+	}
 	c.Header("Content-Disposition", "inline; filename=\""+file.FileName+"\"")
 	c.DataFromReader(http.StatusOK, file.SizeBytes, file.ContentType, file.Content, nil)
 }
@@ -808,6 +816,7 @@ func (h *HTTPHandler) handlePostAttachmentPreviewGet(c *gin.Context) {
 		return
 	}
 	defer file.Content.Close()
+	c.Header("Cache-Control", "private, no-store")
 	c.Header("Content-Disposition", "inline; filename=\""+file.FileName+"\"")
 	c.DataFromReader(http.StatusOK, file.SizeBytes, file.ContentType, file.Content, nil)
 }

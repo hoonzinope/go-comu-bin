@@ -644,6 +644,7 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 					FileName:    "a.png",
 					ContentType: "image/png",
 					SizeBytes:   5,
+					ETag:        "\"att-8-5-0\"",
 					Content:     io.NopCloser(strings.NewReader("hello")),
 				}, nil
 			},
@@ -656,8 +657,41 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "image/png", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "public, max-age=300", rr.Header().Get("Cache-Control"))
+	assert.Equal(t, "\"att-8-5-0\"", rr.Header().Get("ETag"))
 	assert.Contains(t, rr.Header().Get("Content-Disposition"), "a.png")
 	assert.Equal(t, "hello", rr.Body.String())
+}
+
+func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			getPostAttachmentFile: func(postID, attachmentID int64) (*model.AttachmentFile, error) {
+				return &model.AttachmentFile{
+					FileName:    "a.png",
+					ContentType: "image/png",
+					SizeBytes:   5,
+					ETag:        "\"att-8-5-0\"",
+					Content:     io.NopCloser(strings.NewReader("hello")),
+				}, nil
+			},
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	req.Header.Set("If-None-Match", "\"att-8-5-0\"")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotModified, rr.Code)
+	assert.Empty(t, rr.Body.String())
+	assert.Equal(t, "\"att-8-5-0\"", rr.Header().Get("ETag"))
 }
 
 func TestHandleGetAttachmentPreview_Success(t *testing.T) {
@@ -677,6 +711,7 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 					FileName:    "a.png",
 					ContentType: "image/png",
 					SizeBytes:   5,
+					ETag:        "\"att-8-5-0\"",
 					Content:     io.NopCloser(strings.NewReader("hello")),
 				}, nil
 			},
@@ -695,6 +730,7 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "image/png", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "private, no-store", rr.Header().Get("Cache-Control"))
 	assert.Contains(t, rr.Header().Get("Content-Disposition"), "a.png")
 	assert.Equal(t, "hello", rr.Body.String())
 }
