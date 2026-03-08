@@ -32,3 +32,13 @@ func (p *RoleAuthorizationPolicy) OwnerOrAdmin(user *entity.User, resourceOwnerI
 	}
 	return nil
 }
+
+func (p *RoleAuthorizationPolicy) CanWrite(user *entity.User) error {
+	if user == nil {
+		return customError.ErrUnauthorized
+	}
+	if user.IsSuspended() {
+		return customError.ErrUserSuspended
+	}
+	return nil
+}

@@ -139,3 +139,48 @@ func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }
+
+func TestUserService_SuspendUser_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	targetID := seedUser(repositories.user, "alice", "pw", "user")
+
+	err := svc.SuspendUser(adminID, targetID, "spam", "7d")
+	require.NoError(t, err)
+
+	target, err := repositories.user.SelectUserByID(targetID)
+	require.NoError(t, err)
+	require.NotNil(t, target)
+	assert.True(t, target.IsSuspended())
+	assert.Equal(t, "spam", target.SuspensionReason)
+	require.NotNil(t, target.SuspendedUntil)
+}
+
+func TestUserService_SuspendUser_ForbiddenForNonAdmin(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	targetID := seedUser(repositories.user, "alice", "pw", "user")
+
+	err := svc.SuspendUser(userID, targetID, "spam", "7d")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrForbidden))
+}
+
+func TestUserService_UnsuspendUser_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	targetID := seedUser(repositories.user, "alice", "pw", "user")
+
+	require.NoError(t, svc.SuspendUser(adminID, targetID, "spam", "unlimited"))
+	require.NoError(t, svc.UnsuspendUser(adminID, targetID))
+
+	target, err := repositories.user.SelectUserByID(targetID)
+	require.NoError(t, err)
+	require.NotNil(t, target)
+	assert.False(t, target.IsSuspended())
+	assert.Equal(t, "", target.SuspensionReason)
+	assert.Nil(t, target.SuspendedUntil)
+}

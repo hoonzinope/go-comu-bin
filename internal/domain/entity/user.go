@@ -10,21 +10,24 @@ import (
 type UserStatus string
 
 const (
-	UserStatusActive  UserStatus = "active"
-	UserStatusDeleted UserStatus = "deleted"
+	UserStatusActive    UserStatus = "active"
+	UserStatusSuspended UserStatus = "suspended"
+	UserStatusDeleted   UserStatus = "deleted"
 )
 
 type User struct {
-	ID        int64
-	UUID      string
-	Name      string
-	Email     string
-	Password  string
-	Role      string
-	Status    UserStatus
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt *time.Time
+	ID               int64
+	UUID             string
+	Name             string
+	Email            string
+	Password         string
+	Role             string
+	Status           UserStatus
+	SuspensionReason string
+	SuspendedUntil   *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	DeletedAt        *time.Time
 }
 
 func (u *User) IsAdmin() bool {
@@ -35,12 +38,38 @@ func (u *User) IsDeleted() bool {
 	return u.Status == UserStatusDeleted
 }
 
+func (u *User) IsSuspended() bool {
+	if u.Status != UserStatusSuspended {
+		return false
+	}
+	if u.SuspendedUntil == nil {
+		return true
+	}
+	return u.SuspendedUntil.After(time.Now())
+}
+
+func (u *User) Suspend(reason string, until *time.Time) {
+	u.Status = UserStatusSuspended
+	u.SuspensionReason = reason
+	u.SuspendedUntil = until
+	u.UpdatedAt = time.Now()
+}
+
+func (u *User) Unsuspend() {
+	u.Status = UserStatusActive
+	u.SuspensionReason = ""
+	u.SuspendedUntil = nil
+	u.UpdatedAt = time.Now()
+}
+
 func (u *User) SoftDelete() {
 	now := time.Now()
 	u.Name = fmt.Sprintf("deleted-user-%d", u.ID)
 	u.Email = ""
 	u.Password = ""
 	u.Status = UserStatusDeleted
+	u.SuspensionReason = ""
+	u.SuspendedUntil = nil
 	u.UpdatedAt = now
 	u.DeletedAt = &now
 }

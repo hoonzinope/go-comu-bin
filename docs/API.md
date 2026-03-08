@@ -25,6 +25,12 @@
   - 계정은 soft delete 처리되고, 식별 정보는 익명화됩니다.
   - 탈퇴 성공 시 해당 사용자의 활성 세션 무효화를 시도합니다.
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
+- `PUT /api/v1/users/{userID}/suspension` (인증 필요, admin)
+  - 사용자 쓰기 제재를 설정합니다.
+  - 요청 본문: `reason`, `duration`
+  - `duration` 허용값: `7d`, `15d`, `30d`, `unlimited`
+- `DELETE /api/v1/users/{userID}/suspension` (인증 필요, admin)
+  - 사용자 쓰기 제재를 해제합니다.
 
 ## Board
 
@@ -39,17 +45,23 @@
 - `GET /api/v1/boards/{boardID}/posts?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
+  - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `GET /api/v1/posts/{postID}`
 - `PUT /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
+  - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `DELETE /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
+  - 정지된(`suspended`) 사용자는 `403 Forbidden`
 
 ## Comment
 
 - `GET /api/v1/posts/{postID}/comments?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
 - `POST /api/v1/posts/{postID}/comments` (인증 필요)
+  - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `PUT /api/v1/comments/{commentID}` (인증 필요, 작성자 또는 admin)
+  - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `DELETE /api/v1/comments/{commentID}` (인증 필요, 작성자 또는 admin)
+  - 정지된(`suspended`) 사용자는 `403 Forbidden`
 
 ## Reaction
 
@@ -100,6 +112,16 @@ curl -X POST http://localhost:18577/api/v1/boards \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
   -d '{"name":"free","description":"free board"}'
+```
+
+### 사용자 제재 설정
+
+```bash
+TOKEN="관리자 로그인 응답 Authorization 헤더 값"
+curl -X PUT http://localhost:18577/api/v1/users/2/suspension \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"reason":"spam","duration":"7d"}'
 ```
 
 ### 게시글 내 리액션 생성

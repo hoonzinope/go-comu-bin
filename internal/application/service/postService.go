@@ -55,6 +55,9 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	if user == nil {
 		return 0, customError.ErrUserNotFound
 	}
+	if err := s.authorizationPolicy.CanWrite(user); err != nil {
+		return 0, err
+	}
 	board, err := s.boardRepository.SelectBoardByID(boardID) // board 존재 여부 확인
 	if err != nil {
 		return 0, customError.WrapRepository("select board by id for create post", err)
@@ -256,6 +259,9 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if requester == nil {
 		return customError.ErrUserNotFound
 	}
+	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+		return err
+	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return err
 	}
@@ -288,6 +294,9 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	}
 	if requester == nil {
 		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+		return err
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return err

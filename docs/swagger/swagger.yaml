@@ -75,6 +75,15 @@ definitions:
         example: alice
         type: string
     type: object
+  delivery.userSuspensionRequest:
+    properties:
+      duration:
+        example: 7d
+        type: string
+      reason:
+        example: spam
+        type: string
+    type: object
   response.Board:
     properties:
       created_at:
@@ -1042,6 +1051,91 @@ paths:
       summary: Sign up
       tags:
       - Auth
+  /users/{userID}/suspension:
+    delete:
+      description: Clear a user's suspension (admin only).
+      parameters:
+      - description: User ID
+        in: path
+        name: userID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unsuspend User
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: Suspend a user from post/comment write actions (admin only).
+      parameters:
+      - description: User ID
+        in: path
+        name: userID
+        required: true
+        type: integer
+      - description: Suspension payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.userSuspensionRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Suspend User
+      tags:
+      - User
   /users/me:
     delete:
       consumes:

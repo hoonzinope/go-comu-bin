@@ -15,6 +15,11 @@ type passwordOnlyRequest struct {
 	Password string `json:"password" example:"pw"`
 }
 
+type userSuspensionRequest struct {
+	Reason   string `json:"reason" example:"spam"`
+	Duration string `json:"duration" example:"7d"`
+}
+
 type boardRequest struct {
 	Name        string `json:"name" example:"free"`
 	Description string `json:"description" example:"free board"`
@@ -77,4 +82,18 @@ func (r reactionRequest) parseType() (entity.ReactionType, error) {
 		return "", errors.New("invalid reaction_type")
 	}
 	return reactionType, nil
+}
+
+func (r userSuspensionRequest) parse() (string, entity.SuspensionDuration, error) {
+	if r.Reason == "" {
+		return "", "", errors.New("reason is required")
+	}
+	if r.Duration == "" {
+		return "", "", errors.New("duration is required")
+	}
+	duration, ok := entity.ParseSuspensionDuration(r.Duration)
+	if !ok {
+		return "", "", errors.New("invalid duration")
+	}
+	return r.Reason, duration, nil
 }

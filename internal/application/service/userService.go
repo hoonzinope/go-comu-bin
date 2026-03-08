@@ -3,7 +3,9 @@ package service
 import (
 	"errors"
 	"strings"
+	"time"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -13,14 +15,20 @@ var _ port.UserUseCase = (*UserService)(nil)
 var _ port.CredentialVerifier = (*UserService)(nil)
 
 type UserService struct {
-	userRepository port.UserRepository
-	passwordHasher port.PasswordHasher
+	userRepository      port.UserRepository
+	passwordHasher      port.PasswordHasher
+	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewUserService(userRepository port.UserRepository, passwordHasher port.PasswordHasher) *UserService {
+func NewUserService(userRepository port.UserRepository, passwordHasher port.PasswordHasher, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {
+	var authorizationPolicy policy.AuthorizationPolicy = policy.NewRoleAuthorizationPolicy()
+	if len(authorizationPolicies) > 0 && authorizationPolicies[0] != nil {
+		authorizationPolicy = authorizationPolicies[0]
+	}
 	return &UserService{
-		userRepository: userRepository,
-		passwordHasher: passwordHasher,
+		userRepository:      userRepository,
+		passwordHasher:      passwordHasher,
+		authorizationPolicy: authorizationPolicy,
 	}
 }
 
@@ -94,4 +102,61 @@ func (s *UserService) VerifyCredentials(username, password string) (int64, error
 		return 0, customError.ErrInvalidCredential
 	}
 	return existingUser.ID, nil
+}
+
+func (s *UserService) SuspendUser(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error {
+	if strings.TrimSpace(reason) == "" {
+		return customError.ErrInvalidInput
+	}
+	until, ok := duration.EndTime(time.Now())
+	if !ok {
+		return customError.ErrInvalidInput
+	}
+	admin, err := s.userRepository.SelectUserByID(adminID)
+	if err != nil {
+		return customError.WrapRepository("select admin by id for suspend user", err)
+	}
+	if admin == nil {
+		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+		return err
+	}
+	target, err := s.userRepository.SelectUserByID(targetUserID)
+	if err != nil {
+		return customError.WrapRepository("select target user by id for suspend user", err)
+	}
+	if target == nil {
+		return customError.ErrUserNotFound
+	}
+	target.Suspend(strings.TrimSpace(reason), until)
+	if err := s.userRepository.Update(target); err != nil {
+		return customError.WrapRepository("update user suspension", err)
+	}
+	return nil
+}
+
+func (s *UserService) UnsuspendUser(adminID, targetUserID int64) error {
+	admin, err := s.userRepository.SelectUserByID(adminID)
+	if err != nil {
+		return customError.WrapRepository("select admin by id for unsuspend user", err)
+	}
+	if admin == nil {
+		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+		return err
+	}
+	target, err := s.userRepository.SelectUserByID(targetUserID)
+	if err != nil {
+		return customError.WrapRepository("select target user by id for unsuspend user", err)
+	}
+	if target == nil {
+		return customError.ErrUserNotFound
+	}
+	target.Unsuspend()
+	if err := s.userRepository.Update(target); err != nil {
+		return customError.WrapRepository("clear user suspension", err)
+	}
+	return nil
 }

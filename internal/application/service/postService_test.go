@@ -7,6 +7,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,6 +67,20 @@ func TestPostService_CreatePost_InvalidInput(t *testing.T) {
 	_, err := svc.CreatePost(" ", "content", userID, boardID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
+func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
+	repositories := newTestRepositories()
+	user := entity.NewUser("user", "pw")
+	user.Suspend("spam", nil)
+	userID, err := repositories.user.Save(user)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err = svc.CreatePost("title", "content", userID, boardID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrUserSuspended))
 }
 
 func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {

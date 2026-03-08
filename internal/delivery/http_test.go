@@ -24,6 +24,8 @@ const apiV1Prefix = "/api/v1"
 type fakeUserUseCase struct {
 	signUp           func(username, password string) (string, error)
 	deleteMe         func(userID int64, password string) error
+	suspendUser      func(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error
+	unsuspendUser    func(adminID, targetUserID int64) error
 	verifyCredential func(username, password string) (int64, error)
 }
 
@@ -37,6 +39,20 @@ func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
 func (f *fakeUserUseCase) DeleteMe(userID int64, password string) error {
 	if f.deleteMe != nil {
 		return f.deleteMe(userID, password)
+	}
+	return nil
+}
+
+func (f *fakeUserUseCase) SuspendUser(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error {
+	if f.suspendUser != nil {
+		return f.suspendUser(adminID, targetUserID, reason, duration)
+	}
+	return nil
+}
+
+func (f *fakeUserUseCase) UnsuspendUser(adminID, targetUserID int64) error {
+	if f.unsuspendUser != nil {
+		return f.unsuspendUser(adminID, targetUserID)
 	}
 	return nil
 }
@@ -260,6 +276,71 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	return rr
+}
+
+func TestHandleUserSuspend_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{
+			suspendUser: func(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error {
+				assert.Equal(t, int64(1), adminID)
+				assert.Equal(t, int64(7), targetUserID)
+				assert.Equal(t, "spam", reason)
+				assert.Equal(t, entity.SuspensionDuration7Days, duration)
+				return nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/7/suspension", map[string]any{
+		"reason":   "spam",
+		"duration": "7d",
+	}, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/7/suspension", map[string]any{
+		"reason":   "spam",
+		"duration": "3d",
+	}, 1)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHandleUserUnsuspend_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{
+			unsuspendUser: func(adminID, targetUserID int64) error {
+				assert.Equal(t, int64(1), adminID)
+				assert.Equal(t, int64(7), targetUserID)
+				return nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/7/suspension", nil, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {

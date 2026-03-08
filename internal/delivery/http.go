@@ -66,6 +66,8 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/login", h.handleUserLogin)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
+	v1.PUT("/users/:userID/suspension", h.authGinMiddleware, h.handleUserSuspend)
+	v1.DELETE("/users/:userID/suspension", h.authGinMiddleware, h.handleUserUnsuspend)
 
 	v1.GET("/boards", h.handleBoardsGet)
 	v1.POST("/boards", h.authGinMiddleware, h.handleBoardsPost)
@@ -221,6 +223,78 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		return
 	}
 	if err := h.accountUseCase.DeleteMyAccount(userID, req.Password); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleUserSuspend godoc
+// @Summary Suspend User
+// @Description Suspend a user from post/comment write actions (admin only).
+// @Tags User
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param userID path int true "User ID"
+// @Param request body userSuspensionRequest true "Suspension payload"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/{userID}/suspension [put]
+func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
+	targetUserID, ok := parsePathID(c, "userID", "user")
+	if !ok {
+		return
+	}
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req userSuspensionRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	reason, duration, err := req.parse()
+	if err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := h.userUseCase.SuspendUser(adminID, targetUserID, reason, duration); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleUserUnsuspend godoc
+// @Summary Unsuspend User
+// @Description Clear a user's suspension (admin only).
+// @Tags User
+// @Security BearerAuth
+// @Produce json
+// @Param userID path int true "User ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/{userID}/suspension [delete]
+func (h *HTTPHandler) handleUserUnsuspend(c *gin.Context) {
+	targetUserID, ok := parsePathID(c, "userID", "user")
+	if !ok {
+		return
+	}
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.userUseCase.UnsuspendUser(adminID, targetUserID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -898,6 +972,8 @@ func statusForError(err error) int {
 	case errors.Is(err, customError.ErrInvalidToken):
 		return http.StatusUnauthorized
 	case errors.Is(err, customError.ErrForbidden):
+		return http.StatusForbidden
+	case errors.Is(err, customError.ErrUserSuspended):
 		return http.StatusForbidden
 	default:
 		return http.StatusInternalServerError

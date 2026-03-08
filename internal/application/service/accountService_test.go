@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,6 +24,14 @@ func (s *stubUserUseCase) DeleteMe(userID int64, password string) error {
 	if s.deleteMe != nil {
 		return s.deleteMe(userID, password)
 	}
+	return nil
+}
+
+func (s *stubUserUseCase) SuspendUser(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error {
+	return nil
+}
+
+func (s *stubUserUseCase) UnsuspendUser(adminID, targetUserID int64) error {
 	return nil
 }
 

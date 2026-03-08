@@ -47,6 +47,9 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	if user == nil {
 		return 0, customError.ErrUserNotFound
 	}
+	if err := s.authorizationPolicy.CanWrite(user); err != nil {
+		return 0, err
+	}
 	post, err := s.postRepository.SelectPostByID(postID) // post 존재 여부 확인
 	if err != nil {
 		return 0, customError.WrapRepository("select post by id for create comment", err)
@@ -149,6 +152,9 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if requester == nil {
 		return customError.ErrUserNotFound
 	}
+	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+		return err
+	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 		return err
 	}
@@ -181,6 +187,9 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	}
 	if requester == nil {
 		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+		return err
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 		return err

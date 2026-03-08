@@ -14,6 +14,7 @@ var (
 	ErrInvalidCredential   = errors.New("invalid credential")
 	ErrMissingAuthHeader   = errors.New("missing Authorization header")
 	ErrInvalidToken        = errors.New("invalid token")
+	ErrUserSuspended       = errors.New("user suspended")
 
 	// Public/resource
 	ErrUserAlreadyExists = errors.New("user already exists")
@@ -68,6 +69,8 @@ func Public(err error) error {
 		return ErrReactionNotFound
 	case errors.Is(err, ErrInvalidCredential):
 		return ErrInvalidCredential
+	case errors.Is(err, ErrUserSuspended):
+		return ErrUserSuspended
 	case errors.Is(err, ErrInvalidInput):
 		return ErrInvalidInput
 	case errors.Is(err, ErrUnauthorized):
