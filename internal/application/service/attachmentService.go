@@ -26,6 +26,7 @@ import (
 )
 
 var _ port.AttachmentUseCase = (*AttachmentService)(nil)
+var _ port.AttachmentCleanupUseCase = (*AttachmentService)(nil)
 
 const attachmentDefaultMaxSizeBytes int64 = 10 << 20
 

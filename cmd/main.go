@@ -151,7 +151,7 @@ func newFileStorage(cfg *config.Config) (port.FileStorage, error) {
 	}
 }
 
-func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentService *service.AttachmentService) {
+func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase) {
 	if !cfg.Jobs.Enabled {
 		return
 	}
@@ -164,7 +164,7 @@ func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.C
 			Name:     "orphan-attachment-cleanup",
 			Interval: interval,
 			Run: func(ctx context.Context) error {
-				_, err := attachmentService.CleanupOrphanAttachments(ctx, time.Now(), gracePeriod, batchSize)
+				_, err := attachmentCleanupUseCase.CleanupOrphanAttachments(ctx, time.Now(), gracePeriod, batchSize)
 				return err
 			},
 		})
