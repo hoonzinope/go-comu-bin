@@ -237,3 +237,31 @@
 
 - `internal/application/service/postService.go`
 - `internal/delivery/http.go`
+
+## 2026-03-08 - Comment 상태 모델도 soft delete 기준으로 맞춘다
+
+상태
+
+- decided
+
+배경
+
+- `Post`는 `deleted` 상태 기반 soft delete로 전환됐지만 `Comment`는 아직 hard delete 성격으로 남아 있었다.
+
+결론
+
+- `Comment`는 우선 `active`, `deleted` 2단계 상태로 시작한다.
+- `updated_at`, `deleted_at`을 추가한다.
+- 삭제는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식으로 처리한다.
+- 공개 조회에서는 `deleted` 댓글을 제외한다.
+
+후속 작업
+
+- `Comment` 엔티티/저장소/서비스 soft delete 반영
+- 이후 대댓글 API 연결 시 같은 상태 규칙을 따른다
+
+관련 문서/코드
+
+- `internal/domain/entity/comment.go`
+- `internal/application/service/commentService.go`
+- `internal/infrastructure/persistence/inmemory/commentRepository.go`

@@ -44,6 +44,22 @@ func TestCommentRepository_SaveSelectUpdateDelete(t *testing.T) {
 	assert.Nil(t, deleted)
 }
 
+func TestCommentRepository_Delete_SoftDeletesAndExcludesFromList(t *testing.T) {
+	repo := NewCommentRepository()
+	id, err := repo.Save(testComment("hello", 1, 1))
+	require.NoError(t, err)
+
+	require.NoError(t, repo.Delete(id))
+
+	selected, err := repo.SelectCommentByID(id)
+	require.NoError(t, err)
+	assert.Nil(t, selected)
+
+	comments, err := repo.SelectComments(1, 10, 0)
+	require.NoError(t, err)
+	assert.Empty(t, comments)
+}
+
 func TestCommentRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
 	repo := NewCommentRepository()
 	_, _ = repo.Save(testComment("c1", 1, 1))

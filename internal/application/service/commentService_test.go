@@ -139,3 +139,20 @@ func TestCommentService_GetCommentsByPost_ReturnsCacheFailure_WhenCacheLoadFails
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
 }
+
+func TestCommentService_DeleteComment_SoftDeletedCommentIsNoLongerVisible(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	commentID, err := svc.CreateComment("comment", userID, postID)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.DeleteComment(commentID, userID))
+
+	list, err := svc.GetCommentsByPost(postID, 10, 0)
+	require.NoError(t, err)
+	assert.Empty(t, list.Comments)
+}

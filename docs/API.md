@@ -68,6 +68,10 @@
 
 ## Comment
 
+- 상태 모델
+  - 내부 기본 상태는 `active`, `deleted`
+  - 삭제 API는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식
+  - 공개 목록/상세 조회에서는 `active`만 노출
 - `GET /api/v1/posts/{postID}/comments?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
 - `POST /api/v1/posts/{postID}/comments` (인증 필요)

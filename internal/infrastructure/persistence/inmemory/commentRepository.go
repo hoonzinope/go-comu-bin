@@ -44,7 +44,7 @@ func (r *CommentRepository) SelectCommentByID(id int64) (*entity.Comment, error)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if comment, exists := r.commentDB.Data[id]; exists {
+	if comment, exists := r.commentDB.Data[id]; exists && comment.Status == entity.CommentStatusActive {
 		return comment, nil
 	}
 	return nil, nil
@@ -60,7 +60,7 @@ func (r *CommentRepository) SelectComments(postID int64, limit int, lastID int64
 
 	var comments []*entity.Comment
 	for _, comment := range r.commentDB.Data {
-		if comment.PostID == postID {
+		if comment.PostID == postID && comment.Status == entity.CommentStatusActive {
 			if lastID > 0 && comment.ID >= lastID {
 				continue
 			}
@@ -92,6 +92,11 @@ func (r *CommentRepository) Delete(id int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	delete(r.commentDB.Data, id)
+	comment, exists := r.commentDB.Data[id]
+	if !exists {
+		return nil
+	}
+	comment.SoftDelete()
+	r.commentDB.Data[id] = comment
 	return nil
 }
