@@ -92,6 +92,29 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 		assert.Equal(t, int64(8), reactions[0].UserID)
 	})
 
+	t.Run("delete by target removes all reactions for target", func(t *testing.T) {
+		repo := newRepository()
+
+		_, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		require.NoError(t, err)
+		_, _, _, err = repo.SetUserTargetReaction(8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
+		require.NoError(t, err)
+		_, _, _, err = repo.SetUserTargetReaction(9, 11, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		require.NoError(t, err)
+
+		deletedCount, err := repo.DeleteByTarget(10, entity.ReactionTargetPost)
+		require.NoError(t, err)
+		assert.Equal(t, 2, deletedCount)
+
+		reactions, err := repo.GetByTarget(10, entity.ReactionTargetPost)
+		require.NoError(t, err)
+		assert.Empty(t, reactions)
+
+		otherTarget, err := repo.GetByTarget(11, entity.ReactionTargetPost)
+		require.NoError(t, err)
+		require.Len(t, otherTarget, 1)
+	})
+
 	t.Run("concurrent set preserves uniqueness", func(t *testing.T) {
 		repo := newRepository()
 

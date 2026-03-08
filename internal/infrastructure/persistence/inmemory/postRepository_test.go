@@ -3,9 +3,17 @@ package inmemory
 import (
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	"github.com/hoonzinope/go-comu-bin/internal/application/porttest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPostRepositoryContract(t *testing.T) {
+	porttest.RunPostRepositoryContractTests(t, func() port.PostRepository {
+		return NewPostRepository()
+	})
+}
 
 func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
 	repo := NewPostRepository()

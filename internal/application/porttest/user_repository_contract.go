@@ -32,6 +32,11 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.NotNil(t, byID)
 		assert.Equal(t, "alice", byID.Name)
 		assert.NotEmpty(t, byID.UUID)
+
+		byUUID, err := repo.SelectUserByUUID(byID.UUID)
+		require.NoError(t, err)
+		require.NotNil(t, byUUID)
+		assert.Equal(t, id, byUUID.ID)
 	})
 
 	t.Run("username is unique", func(t *testing.T) {
@@ -129,6 +134,10 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		byName, err := repo.SelectUserByUsername("alice")
 		require.NoError(t, err)
 		assert.Nil(t, byName)
+
+		byUUID, err := repo.SelectUserByUUID(user.UUID)
+		require.NoError(t, err)
+		assert.Nil(t, byUUID)
 
 		includingDeleted, err := repo.SelectUserByIDIncludingDeleted(id)
 		require.NoError(t, err)
