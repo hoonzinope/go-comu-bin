@@ -2335,6 +2335,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/response.CommentDetail"
                     }
                 },
+                "comments_has_more": {
+                    "type": "boolean"
+                },
                 "post": {
                     "$ref": "#/definitions/response.Post"
                 },

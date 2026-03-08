@@ -232,6 +232,8 @@ definitions:
         items:
           $ref: '#/definitions/response.CommentDetail'
         type: array
+      comments_has_more:
+        type: boolean
       post:
         $ref: '#/definitions/response.Post'
       reactions:

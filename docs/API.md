@@ -66,6 +66,7 @@
 - `GET /api/v1/posts/{postID}`
   - 응답 본문에는 `attachments` 목록이 포함됩니다.
   - 응답의 `comments` 는 최신 공개 댓글 최대 10개만 포함합니다.
+  - `comments_has_more=true` 면 상세에 포함되지 않은 추가 댓글이 더 있다는 뜻입니다.
   - 댓글 전체 목록이 필요하면 `GET /api/v1/posts/{postID}/comments` 를 사용합니다.
   - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentID})` 형식을 사용합니다.
   - 각 attachment는 실제 파일 조회용 `file_url`과 draft 미리보기용 `preview_url`을 포함합니다.
