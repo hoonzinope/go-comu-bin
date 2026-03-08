@@ -115,7 +115,8 @@
 - 상태 모델
   - 내부 기본 상태는 `active`, `deleted`
   - 삭제 API는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식
-  - 공개 목록/상세 조회에서는 `active`만 노출
+  - 공개 목록/상세 조회에서는 기본적으로 `active` 댓글만 노출한다.
+  - 단, 활성 reply가 남아 있는 삭제된 부모 댓글은 `삭제된 댓글` tombstone으로 함께 노출한다.
 - 대댓글 규칙
   - 생성 요청에서 `parent_id`를 받는다.
   - 현재 정책은 1-depth 대댓글만 허용한다.
