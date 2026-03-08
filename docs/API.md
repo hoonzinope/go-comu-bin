@@ -59,10 +59,12 @@
   - 게시판이 없으면 `404 Not Found`
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - 생성 시점 본문에는 `attachment://{id}` 참조를 포함할 수 없습니다.
 - `POST /api/v1/boards/{boardID}/posts/drafts` (인증 필요)
   - 임시저장 글을 생성합니다.
   - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - 생성 시점 본문에는 `attachment://{id}` 참조를 포함할 수 없습니다.
 - `GET /api/v1/posts/{postID}`
   - 응답 본문에는 `attachments` 목록이 포함됩니다.
   - 응답의 `comments` 는 최신 공개 댓글 최대 10개만 포함합니다.
