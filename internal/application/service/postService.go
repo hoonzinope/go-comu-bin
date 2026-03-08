@@ -1,6 +1,8 @@
 package service
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
@@ -20,26 +22,30 @@ var (
 var _ port.PostUseCase = (*PostService)(nil)
 
 type PostService struct {
-	userRepository      port.UserRepository
-	boardRepository     port.BoardRepository
-	postRepository      port.PostRepository
-	commentRepository   port.CommentRepository
-	reactionRepository  port.ReactionRepository
-	cache               port.Cache
-	cachePolicy         appcache.Policy
-	authorizationPolicy policy.AuthorizationPolicy
+	userRepository       port.UserRepository
+	boardRepository      port.BoardRepository
+	postRepository       port.PostRepository
+	attachmentRepository port.AttachmentRepository
+	commentRepository    port.CommentRepository
+	reactionRepository   port.ReactionRepository
+	cache                port.Cache
+	cachePolicy          appcache.Policy
+	authorizationPolicy  policy.AuthorizationPolicy
 }
 
-func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *PostService {
+var attachmentEmbedPattern = regexp.MustCompile(`!\[[^\]]*]\(attachment://([0-9]+)\)`)
+
+func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *PostService {
 	return &PostService{
-		userRepository:      userRepository,
-		boardRepository:     boardRepository,
-		postRepository:      postRepository,
-		commentRepository:   commentRepository,
-		reactionRepository:  reactionRepository,
-		cache:               cache,
-		cachePolicy:         cachePolicy,
-		authorizationPolicy: authorizationPolicy,
+		userRepository:       userRepository,
+		boardRepository:      boardRepository,
+		postRepository:       postRepository,
+		attachmentRepository: attachmentRepository,
+		commentRepository:    commentRepository,
+		reactionRepository:   reactionRepository,
+		cache:                cache,
+		cachePolicy:          cachePolicy,
+		authorizationPolicy:  authorizationPolicy,
 	}
 }
 
@@ -53,6 +59,9 @@ func (s *PostService) CreateDraftPost(title, content string, authorID, boardID i
 
 func (s *PostService) createPost(title, content string, authorID, boardID int64, draft bool) (int64, error) {
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
+		return 0, customError.ErrInvalidInput
+	}
+	if len(extractAttachmentRefIDs(content)) > 0 {
 		return 0, customError.ErrInvalidInput
 	}
 	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
@@ -179,14 +188,20 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 		if err != nil {
 			return nil, err
 		}
+		attachmentEntities, err := s.attachmentRepository.SelectByPostID(post.ID)
+		if err != nil {
+			return nil, customError.WrapRepository("select attachments for post detail", err)
+		}
+		attachments := attachmentsFromEntities(attachmentEntities)
 		reactionModels, err := s.reactionsFromEntities(reactions)
 		if err != nil {
 			return nil, err
 		}
 		postDetail := &model.PostDetail{
-			Post:      postModel,
-			Comments:  commentDetails,
-			Reactions: reactionModels,
+			Post:        postModel,
+			Attachments: attachments,
+			Comments:    commentDetails,
+			Reactions:   reactionModels,
 		}
 		return postDetail, nil
 	})
@@ -219,6 +234,9 @@ func (s *PostService) PublishPost(id, authorID int64) error {
 		return err
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return err
+	}
+	if err := s.validateAttachmentRefs(post.ID, post.Content); err != nil {
 		return err
 	}
 	post.Publish()
@@ -313,6 +331,9 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return err
 	}
+	if err := s.validateAttachmentRefs(post.ID, content); err != nil {
+		return err
+	}
 	post.Update(title, content)
 	err = s.postRepository.Update(post)
 	if err != nil {
@@ -366,4 +387,57 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 		return customError.WrapCache("invalidate post reaction list after delete post", err)
 	}
 	return nil
+}
+
+func (s *PostService) validateAttachmentRefs(postID int64, content string) error {
+	for _, attachmentID := range extractAttachmentRefIDs(content) {
+		attachment, err := s.attachmentRepository.SelectByID(attachmentID)
+		if err != nil {
+			return customError.WrapRepository("select attachment by id for validate post attachments", err)
+		}
+		if attachment == nil || attachment.PostID != postID {
+			return customError.ErrInvalidInput
+		}
+	}
+	return nil
+}
+
+func extractAttachmentRefIDs(content string) []int64 {
+	matches := attachmentEmbedPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	seen := make(map[int64]struct{}, len(matches))
+	out := make([]int64, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		id, err := strconv.ParseInt(match[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func attachmentsFromEntities(items []*entity.Attachment) []model.Attachment {
+	out := make([]model.Attachment, 0, len(items))
+	for _, item := range items {
+		out = append(out, model.Attachment{
+			ID:          item.ID,
+			PostID:      item.PostID,
+			FileName:    item.FileName,
+			ContentType: item.ContentType,
+			SizeBytes:   item.SizeBytes,
+			StorageKey:  item.StorageKey,
+			CreatedAt:   item.CreatedAt,
+		})
+	}
+	return out
 }

@@ -36,3 +36,8 @@ type userSuspensionResponse struct {
 type attachmentListResponse struct {
 	Attachments []response.Attachment `json:"attachments"`
 }
+
+type attachmentUploadResponse struct {
+	ID            int64  `json:"id" example:"1"`
+	EmbedMarkdown string `json:"embed_markdown" example:"![a.png](attachment://1)"`
+}

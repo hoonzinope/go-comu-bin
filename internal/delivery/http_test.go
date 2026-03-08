@@ -225,7 +225,7 @@ type fakeAttachmentUseCase struct {
 	createPostAttachment func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
 	getPostAttachments   func(postID int64) ([]model.Attachment, error)
 	deletePostAttachment func(postID, attachmentID, userID int64) error
-	uploadPostAttachment func(postID, userID int64, fileName, contentType string, content io.Reader) (int64, error)
+	uploadPostAttachment func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
 }
 
 func (f *fakeAttachmentUseCase) CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
@@ -249,11 +249,11 @@ func (f *fakeAttachmentUseCase) DeletePostAttachment(postID, attachmentID, userI
 	return nil
 }
 
-func (f *fakeAttachmentUseCase) UploadPostAttachment(postID, userID int64, fileName, contentType string, content io.Reader) (int64, error) {
+func (f *fakeAttachmentUseCase) UploadPostAttachment(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 	if f.uploadPostAttachment != nil {
 		return f.uploadPostAttachment(postID, userID, fileName, contentType, content)
 	}
-	return 1, nil
+	return &model.AttachmentUpload{ID: 1, EmbedMarkdown: "![a.png](attachment://1)"}, nil
 }
 
 var testSessionRepository port.SessionRepository
@@ -575,7 +575,7 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			uploadPostAttachment: func(postID, userID int64, fileName, contentType string, content io.Reader) (int64, error) {
+			uploadPostAttachment: func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 				assert.Equal(t, int64(3), postID)
 				assert.Equal(t, int64(1), userID)
 				assert.Equal(t, "a.png", fileName)
@@ -583,7 +583,7 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 				data, err := io.ReadAll(content)
 				require.NoError(t, err)
 				assert.Equal(t, "hello", string(data))
-				return 8, nil
+				return &model.AttachmentUpload{ID: 8, EmbedMarkdown: "![a.png](attachment://8)"}, nil
 			},
 		},
 	)
@@ -608,7 +608,7 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
-	assert.JSONEq(t, `{"id":8}`, rr.Body.String())
+	assert.JSONEq(t, `{"id":8,"embed_markdown":"![a.png](attachment://8)"}`, rr.Body.String())
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {

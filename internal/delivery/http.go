@@ -381,7 +381,7 @@ func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body boardRequest true "Create board payload"
-// @Success 201 {object} idResponse
+// @Success 201 {object} attachmentUploadResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
@@ -726,12 +726,15 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 			contentType = guessed
 		}
 	}
-	id, err := h.attachmentUseCase.UploadPostAttachment(postID, userID, fileHeader.Filename, contentType, file)
+	upload, err := h.attachmentUseCase.UploadPostAttachment(postID, userID, fileHeader.Filename, contentType, file)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, idResponse{ID: id})
+	c.JSON(http.StatusCreated, attachmentUploadResponse{
+		ID:            upload.ID,
+		EmbedMarkdown: upload.EmbedMarkdown,
+	})
 }
 
 // handlePostAttachmentDelete godoc

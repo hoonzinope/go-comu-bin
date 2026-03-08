@@ -59,10 +59,14 @@
   - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `GET /api/v1/posts/{postID}`
+  - 응답 본문에는 `attachments` 목록이 포함됩니다.
+  - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentID})` 형식을 사용합니다.
 - `POST /api/v1/posts/{postID}/publish` (인증 필요, 작성자 또는 admin)
   - `draft -> published` 상태 전이를 수행합니다.
+  - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
 - `PUT /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
 - `DELETE /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
 
@@ -71,6 +75,7 @@
 - Attachment는 현재 `Post` 전용 메타데이터 도메인입니다.
 - 실제 파일 저장은 `FileStorage` 포트를 통해 수행하고, post 연결 메타데이터는 attachment 도메인이 관리합니다.
 - 필드: `file_name`, `content_type`, `size_bytes`, `storage_key`
+- 본문 내 직접 참조 형식: `![alt](attachment://{attachmentID})`
 - `GET /api/v1/posts/{postID}/attachments`
   - published post 기준으로 attachment 목록을 조회합니다.
 - `POST /api/v1/posts/{postID}/attachments` (인증 필요, 작성자 또는 admin)
@@ -78,6 +83,7 @@
 - `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
+  - 응답에는 본문에 바로 넣을 수 있는 `embed_markdown`이 포함됩니다.
 - `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)
   - attachment 메타데이터와 저장된 파일을 함께 삭제합니다.
 
@@ -212,6 +218,15 @@ TOKEN="로그인 응답 Authorization 헤더 값"
 curl -X POST http://localhost:18577/api/v1/posts/1/attachments/upload \
   -H "Authorization: $TOKEN" \
   -F "file=@./a.png"
+```
+
+응답 예시:
+
+```json
+{
+  "id": 3,
+  "embed_markdown": "![a.png](attachment://3)"
+}
 ```
 
 ### 대댓글 작성

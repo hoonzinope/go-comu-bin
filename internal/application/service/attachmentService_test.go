@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -87,9 +88,11 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
 
-	id, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", strings.NewReader("hello"))
+	upload, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", strings.NewReader("hello"))
 	require.NoError(t, err)
-	assert.NotZero(t, id)
+	require.NotNil(t, upload)
+	assert.NotZero(t, upload.ID)
+	assert.Equal(t, "![a.png](attachment://"+strconv.FormatInt(upload.ID, 10)+")", upload.EmbedMarkdown)
 	assert.Contains(t, storage.savedKey, "posts/")
 	assert.Contains(t, storage.savedKey, "a.png")
 	assert.Equal(t, "hello", storage.savedContent)

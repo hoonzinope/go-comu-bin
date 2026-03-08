@@ -47,6 +47,11 @@ func PostDetailFromDTO(detail *model.PostDetail) *PostDetail {
 		return &PostDetail{}
 	}
 
+	attachments := make([]Attachment, 0, len(detail.Attachments))
+	for _, attachment := range detail.Attachments {
+		attachments = append(attachments, attachmentFromDTO(attachment))
+	}
+
 	comments := make([]CommentDetail, 0, len(detail.Comments))
 	for _, comment := range detail.Comments {
 		comments = append(comments, commentDetailFromDTO(comment))
@@ -58,9 +63,10 @@ func PostDetailFromDTO(detail *model.PostDetail) *PostDetail {
 	}
 
 	return &PostDetail{
-		Post:      postPtrFromDTO(detail.Post),
-		Comments:  comments,
-		Reactions: reactions,
+		Post:        postPtrFromDTO(detail.Post),
+		Attachments: attachments,
+		Comments:    comments,
+		Reactions:   reactions,
 	}
 }
 

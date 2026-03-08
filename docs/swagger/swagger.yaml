@@ -22,6 +22,15 @@ definitions:
         example: attachments/a.png
         type: string
     type: object
+  delivery.attachmentUploadResponse:
+    properties:
+      embed_markdown:
+        example: '![a.png](attachment://1)'
+        type: string
+      id:
+        example: 1
+        type: integer
+    type: object
   delivery.boardRequest:
     properties:
       description:
@@ -225,6 +234,10 @@ definitions:
     type: object
   response.PostDetail:
     properties:
+      attachments:
+        items:
+          $ref: '#/definitions/response.Attachment'
+        type: array
       comments:
         items:
           $ref: '#/definitions/response.CommentDetail'
@@ -381,7 +394,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/delivery.idResponse'
+            $ref: '#/definitions/delivery.attachmentUploadResponse'
         "400":
           description: Bad Request
           schema:

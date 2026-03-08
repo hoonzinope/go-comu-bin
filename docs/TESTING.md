@@ -59,6 +59,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 		repositories.user,
 		repositories.board,
 		repositories.post,
+		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
 		newTestCache(),

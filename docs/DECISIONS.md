@@ -380,3 +380,31 @@
 - `internal/application/service/attachmentService.go`
 - `internal/application/port/file_storage.go`
 - `internal/application/port/attachment_repository.go`
+
+## 2026-03-08 - 본문 내 이미지는 attachment 참조를 직접 심는 방식으로 간다
+
+상태
+
+- decided
+
+배경
+
+- post에 attachment를 연결할 수 있어도, 본문 중간 삽입 순서와 노출 위치를 별도 attachment 목록만으로는 보장할 수 없었다.
+
+결론
+
+- 본문은 Markdown 이미지 문법으로 `attachment://{attachmentID}` 참조를 직접 가진다.
+- upload API는 본문에 바로 넣을 수 있는 `embed_markdown`을 응답한다.
+- `PostDetail`은 attachment 목록을 함께 내려 클라이언트가 본문 참조를 해석할 수 있게 한다.
+- post update/publish 시 본문에 들어 있는 attachment 참조가 실제로 해당 post의 attachment인지 검증한다.
+
+후속 작업
+
+- 파일 다운로드/노출 경로 설계
+- 필요 시 markdown renderer 또는 frontend 해석 규칙 정리
+
+관련 문서/코드
+
+- `internal/application/service/postService.go`
+- `internal/application/service/attachmentService.go`
+- `docs/API.md`

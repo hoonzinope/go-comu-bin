@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
@@ -18,7 +19,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	otherID := seedUser(repositories.user, "other", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
 	require.Error(t, err)
@@ -31,7 +32,7 @@ func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	require.NoError(t, svc.UpdatePost(postID, adminID, "new-title", "new-content"))
 }
@@ -40,7 +41,7 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	postID, err := svc.CreatePost("title", "content", userID, boardID)
 	require.NoError(t, err)
@@ -62,7 +63,7 @@ func TestPostService_CreatePost_InvalidInput(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	_, err := svc.CreatePost(" ", "content", userID, boardID)
 	require.Error(t, err)
@@ -76,7 +77,7 @@ func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
 	userID, err := repositories.user.Save(user)
 	require.NoError(t, err)
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	_, err = svc.CreatePost("title", "content", userID, boardID)
 	require.Error(t, err)
@@ -90,7 +91,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	seedPost(repositories.post, userID, boardID, "title1", "content1")
 	seedPost(repositories.post, userID, boardID, "title2", "content2")
 	seedPost(repositories.post, userID, boardID, "title3", "content3")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	list, err := svc.GetPostsList(boardID, 2, 0)
 	require.NoError(t, err)
@@ -103,7 +104,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
+	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -125,7 +126,7 @@ func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
+	postSvc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -148,7 +149,7 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 
 func TestPostService_GetPostDetail_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, &errorCache{
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, &errorCache{
 		getOrSetWithTTLErr: newCacheFailure(nil),
 	}, newTestCachePolicy(), newTestAuthorizationPolicy())
 
@@ -162,7 +163,7 @@ func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	require.NoError(t, svc.DeletePost(postID, userID))
 
@@ -179,7 +180,7 @@ func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	postID, err := svc.CreateDraftPost("draft-title", "draft-content", userID, boardID)
 	require.NoError(t, err)
@@ -194,7 +195,7 @@ func TestPostService_PublishPost_MakesDraftVisible(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	postID, err := svc.CreateDraftPost("draft-title", "draft-content", userID, boardID)
 	require.NoError(t, err)
@@ -206,4 +207,46 @@ func TestPostService_PublishPost_MakesDraftVisible(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
 	assert.Equal(t, postID, list.Posts[0].ID)
+}
+
+func TestPostService_UpdatePost_RejectsForeignAttachmentReference(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	otherPostID := seedDraftPost(repositories.post, userID, boardID, "title2", "content2")
+	foreignAttachmentID, err := repositories.attachment.Save(entity.NewAttachment(otherPostID, "a.png", "image/png", 10, "posts/2/a.png"))
+	require.NoError(t, err)
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	err = svc.UpdatePost(postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(foreignAttachmentID, 10)+")")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
+func TestPostService_PublishPost_RejectsMissingAttachmentReference(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "body ![a](attachment://999)")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	err := svc.PublishPost(postID, userID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
+func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "body")
+	_, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png"))
+	require.NoError(t, err)
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	detail, err := svc.GetPostDetail(postID)
+	require.NoError(t, err)
+	require.Len(t, detail.Attachments, 1)
+	assert.Equal(t, "a.png", detail.Attachments[0].FileName)
 }

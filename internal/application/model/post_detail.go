@@ -1,7 +1,8 @@
 package model
 
 type PostDetail struct {
-	Post      *Post
-	Comments  []*CommentDetail
-	Reactions []Reaction
+	Post        *Post
+	Attachments []Attachment
+	Comments    []*CommentDetail
+	Reactions   []Reaction
 }

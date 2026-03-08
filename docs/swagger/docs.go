@@ -186,7 +186,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
+                            "$ref": "#/definitions/delivery.attachmentUploadResponse"
                         }
                     },
                     "400": {
@@ -1981,6 +1981,19 @@ const docTemplate = `{
                 }
             }
         },
+        "delivery.attachmentUploadResponse": {
+            "type": "object",
+            "properties": {
+                "embed_markdown": {
+                    "type": "string",
+                    "example": "![a.png](attachment://1)"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
         "delivery.boardRequest": {
             "type": "object",
             "properties": {
@@ -2285,6 +2298,12 @@ const docTemplate = `{
         "response.PostDetail": {
             "type": "object",
             "properties": {
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/response.Attachment"
+                    }
+                },
                 "comments": {
                     "type": "array",
                     "items": {
