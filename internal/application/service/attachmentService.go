@@ -21,13 +21,14 @@ import (
 
 var _ port.AttachmentUseCase = (*AttachmentService)(nil)
 
-const attachmentMaxSizeBytes = 10 << 20
+const attachmentDefaultMaxSizeBytes int64 = 10 << 20
 
 type AttachmentService struct {
 	userRepository       port.UserRepository
 	postRepository       port.PostRepository
 	attachmentRepository port.AttachmentRepository
 	fileStorage          port.FileStorage
+	maxUploadSizeBytes   int64
 	authorizationPolicy  policy.AuthorizationPolicy
 }
 
@@ -40,12 +41,16 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+	if maxUploadSizeBytes <= 0 {
+		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
+	}
 	return &AttachmentService{
 		userRepository:       userRepository,
 		postRepository:       postRepository,
 		attachmentRepository: attachmentRepository,
 		fileStorage:          fileStorage,
+		maxUploadSizeBytes:   maxUploadSizeBytes,
 		authorizationPolicy:  authorizationPolicy,
 	}
 }
@@ -90,7 +95,7 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	if err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "read upload content", err)
 	}
-	if err := validateAttachmentUpload(fileName, contentType, data); err != nil {
+	if err := validateAttachmentUpload(fileName, contentType, data, s.maxUploadSizeBytes); err != nil {
 		return nil, err
 	}
 	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
@@ -113,6 +118,7 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return nil, err
 	}
+	contentType = normalizeAttachmentContentType(contentType)
 	storageKey := buildAttachmentStorageKey(postID, fileName)
 	if err := s.fileStorage.Save(storageKey, bytes.NewReader(data)); err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "save upload file", err)
@@ -279,27 +285,37 @@ func buildAttachmentETag(attachment *entity.Attachment) string {
 	return fmt.Sprintf("\"att-%d-%d-%d\"", attachment.ID, attachment.SizeBytes, attachment.CreatedAt.Unix())
 }
 
-func validateAttachmentUpload(fileName, contentType string, data []byte) error {
+func validateAttachmentUpload(fileName, contentType string, data []byte, maxUploadSizeBytes int64) error {
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" {
 		return customError.ErrInvalidInput
 	}
-	if len(data) == 0 || int64(len(data)) > attachmentMaxSizeBytes {
+	if len(data) == 0 || int64(len(data)) > maxUploadSizeBytes {
 		return customError.ErrInvalidInput
 	}
-	if _, ok := allowedAttachmentContentTypes[contentType]; !ok {
+	normalizedContentType := normalizeAttachmentContentType(contentType)
+	if _, ok := allowedAttachmentContentTypes[normalizedContentType]; !ok {
 		return customError.ErrInvalidInput
 	}
 	sniffed := http.DetectContentType(data)
-	if sniffed == "application/octet-stream" && contentType == "image/webp" {
+	if sniffed == "application/octet-stream" && normalizedContentType == "image/webp" {
 		// DetectContentType does not recognize webp reliably for short samples.
 		if len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
 			return nil
 		}
 	}
-	if sniffed != contentType {
+	if sniffed != normalizedContentType {
 		return customError.ErrInvalidInput
 	}
 	return nil
+}
+
+func normalizeAttachmentContentType(contentType string) string {
+	switch strings.TrimSpace(contentType) {
+	case "image/jpg":
+		return "image/jpeg"
+	default:
+		return strings.TrimSpace(contentType)
+	}
 }
 
 func sanitizeAttachmentFileName(fileName string) string {

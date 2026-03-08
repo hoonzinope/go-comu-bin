@@ -5,6 +5,8 @@ cache:
 storage:
   local:
     rootDir: "./data/uploads"
+  attachment:
+    maxUploadSizeBytes: 10485760
 
 delivery:
   http:

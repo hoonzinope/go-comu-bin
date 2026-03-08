@@ -95,8 +95,8 @@
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
   - 응답에는 본문에 바로 넣을 수 있는 `embed_markdown`이 포함됩니다.
-  - 허용 타입: `image/png`, `image/jpeg`, `image/gif`, `image/webp`
-  - 최대 크기: `10MB`
+  - 허용 타입: `image/png`, `image/jpeg`, `image/jpg`, `image/gif`, `image/webp`
+  - 최대 크기: `storage.attachment.maxUploadSizeBytes` 설정값
   - 요청의 `Content-Type`은 실제 파일 sniffing 결과와 일치해야 합니다.
   - 저장 키는 같은 파일명 충돌을 피하기 위해 내부적으로 랜덤 suffix를 붙여 생성합니다.
 - `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)

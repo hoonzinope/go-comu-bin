@@ -17,6 +17,8 @@ cache:
 storage:
   local:
     rootDir: "./data/uploads"
+  attachment:
+    maxUploadSizeBytes: 10485760
 
 delivery:
   http:
@@ -32,6 +34,7 @@ delivery:
 - `cache.listTTLSeconds`: `> 0`
 - `cache.detailTTLSeconds`: `> 0`
 - `storage.local.rootDir`: 필수(빈 값 불가)
+- `storage.attachment.maxUploadSizeBytes`: `> 0`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
 
@@ -41,3 +44,4 @@ delivery:
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`
+- attachment 최대 업로드 크기(bytes): `cfg.Storage.Attachment.MaxUploadSizeBytes`

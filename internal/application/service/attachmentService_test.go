@@ -63,7 +63,7 @@ func TestAttachmentService_CreatePostAttachment_Success(t *testing.T) {
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	id, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "attachments/a.png")
 	require.NoError(t, err)
@@ -75,7 +75,7 @@ func TestAttachmentService_GetPostAttachments_RequiresPublishedPost(t *testing.T
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	post := seedDraftPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	_, err := svc.GetPostAttachments(post)
 	require.Error(t, err)
@@ -88,7 +88,7 @@ func TestAttachmentService_DeletePostAttachment_ForbiddenForNonOwner(t *testing.
 	otherID := seedUser(repositories.user, "bob", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 	attachmentID, err := svc.CreatePostAttachment(postID, ownerID, "a.png", "image/png", 10, "attachments/a.png")
 	require.NoError(t, err)
 
@@ -103,7 +103,7 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	png := testPNGBytes()
 	upload, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(png))
@@ -129,12 +129,30 @@ func TestAttachmentService_UploadPostAttachment_RejectsUnsupportedContentType(t 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	_, err := svc.UploadPostAttachment(postID, userID, "a.svg", "image/svg+xml", bytes.NewReader([]byte("<svg></svg>")))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 	assert.Empty(t, storage.savedKey)
+}
+
+func TestAttachmentService_UploadPostAttachment_AcceptsImageJpgAlias(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	upload, err := svc.UploadPostAttachment(postID, userID, "a.jpg", "image/jpg", bytes.NewReader([]byte{0xff, 0xd8, 0xff, 0xdb, 0, 0}))
+	require.NoError(t, err)
+	require.NotNil(t, upload)
+
+	items, err := repositories.attachment.SelectByPostID(postID)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "image/jpeg", items[0].ContentType)
 }
 
 func TestAttachmentService_UploadPostAttachment_RejectsMismatchedSniffedContentType(t *testing.T) {
@@ -143,7 +161,7 @@ func TestAttachmentService_UploadPostAttachment_RejectsMismatchedSniffedContentT
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", strings.NewReader("plain text"))
 	require.Error(t, err)
@@ -157,13 +175,26 @@ func TestAttachmentService_UploadPostAttachment_RejectsOversizedFile(t *testing.
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
-	oversized := append(testPNGBytes(), bytes.Repeat([]byte{0}, attachmentMaxSizeBytes)...)
+	oversized := append(testPNGBytes(), bytes.Repeat([]byte{0}, int(attachmentDefaultMaxSizeBytes))...)
 	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(oversized))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 	assert.Empty(t, storage.savedKey)
+}
+
+func TestAttachmentService_UploadPostAttachment_UsesConfiguredMaxSize(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, 4, newTestAuthorizationPolicy())
+
+	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 }
 
 func TestAttachmentService_UploadPostAttachment_UsesUniqueSanitizedStorageKey(t *testing.T) {
@@ -172,7 +203,7 @@ func TestAttachmentService_UploadPostAttachment_UsesUniqueSanitizedStorageKey(t 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	png := testPNGBytes()
 	first, err := svc.UploadPostAttachment(postID, userID, "../my file.png", "image/png", bytes.NewReader(png))
@@ -200,7 +231,7 @@ func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	attachmentID, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png"))
 	require.NoError(t, err)
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	file, err := svc.GetPostAttachmentFile(postID, attachmentID)
 	require.NoError(t, err)
@@ -224,7 +255,7 @@ func TestAttachmentService_GetPostAttachmentPreviewFile_AllowedForOwner(t *testi
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	attachmentID, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png"))
 	require.NoError(t, err)
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
 	file, err := svc.GetPostAttachmentPreviewFile(postID, attachmentID, userID)
 	require.NoError(t, err)

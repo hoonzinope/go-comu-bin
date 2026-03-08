@@ -125,7 +125,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, attachmentRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy(), authorizationPolicy)
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
-	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, fileStorage, authorizationPolicy)
+	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, fileStorage, 10<<20, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)

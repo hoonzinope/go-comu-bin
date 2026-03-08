@@ -15,6 +15,9 @@ type Config struct {
 		Local struct {
 			RootDir string `yaml:"rootDir"`
 		} `yaml:"local"`
+		Attachment struct {
+			MaxUploadSizeBytes int64 `yaml:"maxUploadSizeBytes"`
+		} `yaml:"attachment"`
 	} `yaml:"storage"`
 	Delivery struct {
 		HTTP struct {
@@ -43,6 +46,7 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("cache.listTTLSeconds", 30)
 	v.SetDefault("cache.detailTTLSeconds", 30)
 	v.SetDefault("storage.local.rootDir", "./data/uploads")
+	v.SetDefault("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 
 	cfg := &Config{}
 	if err := v.UnmarshalExact(cfg); err != nil {
@@ -72,6 +76,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Storage.Local.RootDir == "" {
 		return fmt.Errorf("invalid storage.local.rootDir: cannot be empty")
+	}
+	if cfg.Storage.Attachment.MaxUploadSizeBytes <= 0 {
+		return fmt.Errorf("invalid storage.attachment.maxUploadSizeBytes: %d (must be > 0)", cfg.Storage.Attachment.MaxUploadSizeBytes)
 	}
 	return nil
 }
