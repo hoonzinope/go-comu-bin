@@ -3,8 +3,10 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -183,4 +185,34 @@ func TestUserService_UnsuspendUser_Success(t *testing.T) {
 	assert.False(t, target.IsSuspended())
 	assert.Equal(t, "", target.SuspensionReason)
 	assert.Nil(t, target.SuspendedUntil)
+}
+
+func TestUserService_GetUserSuspension_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	target := entity.NewUser("alice", "pw")
+	until := time.Now().Add(7 * 24 * time.Hour)
+	target.Suspend("spam", &until)
+	targetID, err := repositories.user.Save(target)
+	require.NoError(t, err)
+
+	view, err := svc.GetUserSuspension(adminID, targetID)
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	assert.Equal(t, targetID, view.UserID)
+	assert.Equal(t, entity.UserStatusSuspended, view.Status)
+	assert.Equal(t, "spam", view.Reason)
+	require.NotNil(t, view.SuspendedUntil)
+}
+
+func TestUserService_GetUserSuspension_ForbiddenForNonAdmin(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	targetID := seedUser(repositories.user, "alice", "pw", "user")
+
+	_, err := svc.GetUserSuspension(userID, targetID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }

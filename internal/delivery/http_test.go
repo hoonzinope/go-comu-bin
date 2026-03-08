@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -22,11 +23,12 @@ import (
 const apiV1Prefix = "/api/v1"
 
 type fakeUserUseCase struct {
-	signUp           func(username, password string) (string, error)
-	deleteMe         func(userID int64, password string) error
-	suspendUser      func(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error
-	unsuspendUser    func(adminID, targetUserID int64) error
-	verifyCredential func(username, password string) (int64, error)
+	signUp            func(username, password string) (string, error)
+	deleteMe          func(userID int64, password string) error
+	getUserSuspension func(adminID, targetUserID int64) (*model.UserSuspension, error)
+	suspendUser       func(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error
+	unsuspendUser     func(adminID, targetUserID int64) error
+	verifyCredential  func(username, password string) (int64, error)
 }
 
 func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
@@ -41,6 +43,13 @@ func (f *fakeUserUseCase) DeleteMe(userID int64, password string) error {
 		return f.deleteMe(userID, password)
 	}
 	return nil
+}
+
+func (f *fakeUserUseCase) GetUserSuspension(adminID, targetUserID int64) (*model.UserSuspension, error) {
+	if f.getUserSuspension != nil {
+		return f.getUserSuspension(adminID, targetUserID)
+	}
+	return &model.UserSuspension{}, nil
 }
 
 func (f *fakeUserUseCase) SuspendUser(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error {
@@ -302,6 +311,39 @@ func TestHandleUserSuspend_Success(t *testing.T) {
 	}, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleUserSuspensionGet_Success(t *testing.T) {
+	until := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
+	handler := newTestHandler(
+		&fakeUserUseCase{
+			getUserSuspension: func(adminID, targetUserID int64) (*model.UserSuspension, error) {
+				assert.Equal(t, int64(1), adminID)
+				assert.Equal(t, int64(7), targetUserID)
+				return &model.UserSuspension{
+					UserID:         7,
+					Status:         entity.UserStatusSuspended,
+					Reason:         "spam",
+					SuspendedUntil: &until,
+				}, nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/7/suspension", nil, 1)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.JSONEq(t, `{
+		"user_id": 7,
+		"status": "suspended",
+		"reason": "spam",
+		"suspended_until": "2026-03-15T10:00:00Z"
+	}`, rr.Body.String())
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {

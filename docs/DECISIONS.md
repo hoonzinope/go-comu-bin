@@ -146,3 +146,38 @@
 - `internal/application/policy/authorization_policy.go`
 - `internal/application/service/postService.go`
 - `internal/application/service/commentService.go`
+
+## 2026-03-08 - 다음 우선순위는 admin 운영 API 보강
+
+상태
+
+- decided
+
+배경
+
+- 사용자 제재 기능은 추가됐지만, 운영자가 현재 제재 상태를 조회하는 읽기 API는 아직 없었다.
+- 다음 작업 후보로 `admin API 보강`과 `post/comment 상태 모델 확장` 중 우선순위 판단이 필요했다.
+
+관찰
+
+- 이미 `suspension` 쓰기 정책과 admin 설정/해제 API는 존재한다.
+- 반면 운영자가 제재 상태를 확인할 방법이 부족해 기능이 반쯤 열린 상태였다.
+- `post/comment` 상태 모델 확장은 중요하지만, 현재 즉시 막히는 운영 흐름은 아니었다.
+
+결론
+
+- 다음 작업은 `post/comment` 상태 모델 확장보다 `admin 운영 API 보강`을 우선한다.
+- 1차 보강 범위는 `admin user suspension 조회 API`다.
+- 관리자 인증 후 특정 사용자의 현재 상태, 제재 사유, 종료 시각을 조회할 수 있어야 한다.
+
+후속 작업
+
+- `GET /users/{userID}/suspension` 구현
+- Swagger / API 문서 반영
+- 이후 제재 유저 목록 조회 API 검토
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `internal/application/service/userService.go`
+- `docs/API.md`

@@ -66,6 +66,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/login", h.handleUserLogin)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
+	v1.GET("/users/:userID/suspension", h.authGinMiddleware, h.handleUserSuspensionGet)
 	v1.PUT("/users/:userID/suspension", h.authGinMiddleware, h.handleUserSuspend)
 	v1.DELETE("/users/:userID/suspension", h.authGinMiddleware, h.handleUserUnsuspend)
 
@@ -227,6 +228,42 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// handleUserSuspensionGet godoc
+// @Summary Get User Suspension
+// @Description Returns the current suspension status for a user (admin only).
+// @Tags User
+// @Security BearerAuth
+// @Produce json
+// @Param userID path int true "User ID"
+// @Success 200 {object} userSuspensionResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/{userID}/suspension [get]
+func (h *HTTPHandler) handleUserSuspensionGet(c *gin.Context) {
+	targetUserID, ok := parsePathID(c, "userID", "user")
+	if !ok {
+		return
+	}
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	view, err := h.userUseCase.GetUserSuspension(adminID, targetUserID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, userSuspensionResponse{
+		UserID:         view.UserID,
+		Status:         string(view.Status),
+		Reason:         view.Reason,
+		SuspendedUntil: view.SuspendedUntil,
+	})
 }
 
 // handleUserSuspend godoc

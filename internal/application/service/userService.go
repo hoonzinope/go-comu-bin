@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
@@ -134,6 +135,38 @@ func (s *UserService) SuspendUser(adminID, targetUserID int64, reason string, du
 		return customError.WrapRepository("update user suspension", err)
 	}
 	return nil
+}
+
+func (s *UserService) GetUserSuspension(adminID, targetUserID int64) (*model.UserSuspension, error) {
+	admin, err := s.userRepository.SelectUserByID(adminID)
+	if err != nil {
+		return nil, customError.WrapRepository("select admin by id for get user suspension", err)
+	}
+	if admin == nil {
+		return nil, customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+		return nil, err
+	}
+	target, err := s.userRepository.SelectUserByID(targetUserID)
+	if err != nil {
+		return nil, customError.WrapRepository("select target user by id for get user suspension", err)
+	}
+	if target == nil {
+		return nil, customError.ErrUserNotFound
+	}
+	if target.Status == entity.UserStatusSuspended && !target.IsSuspended() {
+		target.Unsuspend()
+		if err := s.userRepository.Update(target); err != nil {
+			return nil, customError.WrapRepository("refresh expired user suspension", err)
+		}
+	}
+	return &model.UserSuspension{
+		UserID:         target.ID,
+		Status:         target.Status,
+		Reason:         target.SuspensionReason,
+		SuspendedUntil: target.SuspendedUntil,
+	}, nil
 }
 
 func (s *UserService) UnsuspendUser(adminID, targetUserID int64) error {
