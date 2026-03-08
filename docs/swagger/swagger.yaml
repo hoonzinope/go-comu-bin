@@ -154,8 +154,6 @@ definitions:
         type: string
       size_bytes:
         type: integer
-      storage_key:
-        type: string
     type: object
   response.Board:
     properties:

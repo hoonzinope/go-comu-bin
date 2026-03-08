@@ -191,7 +191,6 @@ func attachmentFromDTO(attachment model.Attachment) Attachment {
 		FileName:    attachment.FileName,
 		ContentType: attachment.ContentType,
 		SizeBytes:   attachment.SizeBytes,
-		StorageKey:  attachment.StorageKey,
 		FileURL:     fmt.Sprintf("/api/v1/posts/%d/attachments/%d/file", attachment.PostID, attachment.ID),
 		PreviewURL:  previewURL,
 		CreatedAt:   attachment.CreatedAt,

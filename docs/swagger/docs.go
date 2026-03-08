@@ -2286,9 +2286,6 @@ const docTemplate = `{
                 },
                 "size_bytes": {
                     "type": "integer"
-                },
-                "storage_key": {
-                    "type": "string"
                 }
             }
         },

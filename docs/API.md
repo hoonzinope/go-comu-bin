@@ -75,7 +75,8 @@
 
 - Attachment는 현재 `Post` 전용 메타데이터 도메인입니다.
 - 실제 파일 저장은 `FileStorage` 포트를 통해 수행하고, post 연결 메타데이터는 attachment 도메인이 관리합니다.
-- 필드: `file_name`, `content_type`, `size_bytes`, `storage_key`
+- 외부 응답 필드: `file_name`, `content_type`, `size_bytes`, `file_url`, `preview_url`
+- `storage_key`는 내부 저장 메타데이터로만 유지하고 외부 응답에는 노출하지 않습니다.
 - 본문 내 직접 참조 형식: `![alt](attachment://{attachmentID})`
 - `GET /api/v1/posts/{postID}/attachments`
   - published post 기준으로 attachment 목록을 조회합니다.

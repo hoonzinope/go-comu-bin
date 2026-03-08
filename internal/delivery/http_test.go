@@ -557,7 +557,7 @@ func TestHandleGetAttachments_Success(t *testing.T) {
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/3/attachments", nil)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.JSONEq(t, `{"attachments":[{"id":7,"post_id":3,"file_name":"a.png","content_type":"image/png","size_bytes":10,"storage_key":"attachments/a.png","file_url":"/api/v1/posts/3/attachments/7/file","preview_url":"/api/v1/posts/3/attachments/7/preview","created_at":"0001-01-01T00:00:00Z"}]}`, rr.Body.String())
+	assert.JSONEq(t, `{"attachments":[{"id":7,"post_id":3,"file_name":"a.png","content_type":"image/png","size_bytes":10,"file_url":"/api/v1/posts/3/attachments/7/file","preview_url":"/api/v1/posts/3/attachments/7/preview","created_at":"0001-01-01T00:00:00Z"}]}`, rr.Body.String())
 }
 
 func TestHandleDeleteAttachment_Success(t *testing.T) {
