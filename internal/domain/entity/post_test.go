@@ -35,3 +35,19 @@ func TestPost_SoftDelete(t *testing.T) {
 	assert.Equal(t, PostStatusDeleted, p.Status)
 	assert.NotNil(t, p.DeletedAt)
 }
+
+func TestPost_NewDraftPost(t *testing.T) {
+	p := NewDraftPost("title", "content", 10, 20)
+
+	assert.Equal(t, PostStatusDraft, p.Status)
+	assert.Nil(t, p.DeletedAt)
+}
+
+func TestPost_Publish(t *testing.T) {
+	p := NewDraftPost("title", "content", 10, 20)
+
+	p.Publish()
+
+	assert.Equal(t, PostStatusPublished, p.Status)
+	assert.Nil(t, p.DeletedAt)
+}

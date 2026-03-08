@@ -77,8 +77,10 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 
 	v1.GET("/boards/:boardID/posts", h.handleBoardPostsGet)
 	v1.POST("/boards/:boardID/posts", h.authGinMiddleware, h.handleBoardPostsPost)
+	v1.POST("/boards/:boardID/posts/drafts", h.authGinMiddleware, h.handleBoardDraftPostsPost)
 
 	v1.GET("/posts/:postID", h.handlePostDetailGet)
+	v1.POST("/posts/:postID/publish", h.authGinMiddleware, h.handlePostPublish)
 	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetailPut)
 	v1.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetailDelete)
 
@@ -541,6 +543,47 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 	c.JSON(http.StatusCreated, idResponse{ID: postID})
 }
 
+// handleBoardDraftPostsPost godoc
+// @Summary Create Draft Post
+// @Description Creates a draft post in board.
+// @Tags Post
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param boardID path int true "Board ID"
+// @Param request body postRequest true "Create draft post payload"
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /boards/{boardID}/posts/drafts [post]
+func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
+	boardID, ok := parsePathID(c, "boardID", "board")
+	if !ok {
+		return
+	}
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req postRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
+		return
+	}
+	postID, err := h.postUseCase.CreateDraftPost(req.Title, req.Content, authorID, boardID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, idResponse{ID: postID})
+}
+
 // handlePostDetailGet godoc
 // @Summary Get Post Detail
 // @Description Retrieves post detail by id.
@@ -564,6 +607,36 @@ func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response.PostDetailFromDTO(post))
+}
+
+// handlePostPublish godoc
+// @Summary Publish Post
+// @Description Publishes a draft post by id.
+// @Tags Post
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/publish [post]
+func (h *HTTPHandler) handlePostPublish(c *gin.Context) {
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
+		return
+	}
+	authorID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.postUseCase.PublishPost(postID, authorID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // handlePostDetailPut godoc

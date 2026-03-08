@@ -50,6 +50,16 @@ func (r *PostRepository) SelectPostByID(id int64) (*entity.Post, error) {
 	return nil, nil
 }
 
+func (r *PostRepository) SelectPostByIDIncludingUnpublished(id int64) (*entity.Post, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if post, exists := r.postDB.Data[id]; exists && post.Status != entity.PostStatusDeleted {
+		return post, nil
+	}
+	return nil, nil
+}
+
 func (r *PostRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

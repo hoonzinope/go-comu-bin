@@ -44,7 +44,14 @@ func NewPostService(userRepository port.UserRepository, boardRepository port.Boa
 }
 
 func (s *PostService) CreatePost(title, content string, authorID, boardID int64) (int64, error) {
-	// 게시글 생성 로직 구현
+	return s.createPost(title, content, authorID, boardID, false)
+}
+
+func (s *PostService) CreateDraftPost(title, content string, authorID, boardID int64) (int64, error) {
+	return s.createPost(title, content, authorID, boardID, true)
+}
+
+func (s *PostService) createPost(title, content string, authorID, boardID int64, draft bool) (int64, error) {
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
 		return 0, customError.ErrInvalidInput
 	}
@@ -65,13 +72,20 @@ func (s *PostService) CreatePost(title, content string, authorID, boardID int64)
 	if board == nil {
 		return 0, customError.ErrBoardNotFound
 	}
-	newPost := entity.NewPost(title, content, authorID, boardID)
+	var newPost *entity.Post
+	if draft {
+		newPost = entity.NewDraftPost(title, content, authorID, boardID)
+	} else {
+		newPost = entity.NewPost(title, content, authorID, boardID)
+	}
 	postID, err := s.postRepository.Save(newPost)
 	if err != nil {
 		return 0, customError.WrapRepository("save post", err)
 	}
-	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(boardID)); err != nil {
-		return 0, customError.WrapCache("invalidate post list after create post", err)
+	if !draft {
+		if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(boardID)); err != nil {
+			return 0, customError.WrapCache("invalidate post list after create post", err)
+		}
 	}
 	return postID, nil
 }
@@ -186,6 +200,40 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 	return detail, nil
 }
 
+func (s *PostService) PublishPost(id, authorID int64) error {
+	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(id)
+	if err != nil {
+		return customError.WrapRepository("select post by id including unpublished for publish post", err)
+	}
+	if post == nil {
+		return customError.ErrPostNotFound
+	}
+	requester, err := s.userRepository.SelectUserByID(authorID)
+	if err != nil {
+		return customError.WrapRepository("select user by id for publish post", err)
+	}
+	if requester == nil {
+		return customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+		return err
+	}
+	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return err
+	}
+	post.Publish()
+	if err := s.postRepository.Update(post); err != nil {
+		return customError.WrapRepository("publish post", err)
+	}
+	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID)); err != nil {
+		return customError.WrapCache("invalidate post list after publish post", err)
+	}
+	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
+		return customError.WrapCache("invalidate post detail after publish post", err)
+	}
+	return nil
+}
+
 func (s *PostService) postsFromEntities(posts []*entity.Post) ([]model.Post, error) {
 	out := make([]model.Post, 0, len(posts))
 	for _, post := range posts {
@@ -245,7 +293,7 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
 		return customError.ErrInvalidInput
 	}
-	post, err := s.postRepository.SelectPostByID(id) // post 존재 여부 확인
+	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(id) // post 존재 여부 확인
 	if err != nil {
 		return customError.WrapRepository("select post by id for update post", err)
 	}
@@ -281,7 +329,7 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 
 func (s *PostService) DeletePost(id, authorID int64) error {
 	// 게시글 삭제 로직 구현
-	post, err := s.postRepository.SelectPostByID(id) // post 존재 여부 확인
+	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(id) // post 존재 여부 확인
 	if err != nil {
 		return customError.WrapRepository("select post by id for delete post", err)
 	}

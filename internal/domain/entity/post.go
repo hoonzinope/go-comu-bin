@@ -35,6 +35,19 @@ func NewPost(title, content string, authorID, boardID int64) *Post {
 	}
 }
 
+func NewDraftPost(title, content string, authorID, boardID int64) *Post {
+	now := time.Now()
+	return &Post{
+		Title:     title,
+		Content:   content,
+		AuthorID:  authorID,
+		BoardID:   boardID,
+		Status:    PostStatusDraft,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
 func (p *Post) Update(title, content string) {
 	p.Title = title
 	p.Content = content
@@ -46,4 +59,10 @@ func (p *Post) SoftDelete() {
 	p.Status = PostStatusDeleted
 	p.UpdatedAt = now
 	p.DeletedAt = &now
+}
+
+func (p *Post) Publish() {
+	p.Status = PostStatusPublished
+	p.DeletedAt = nil
+	p.UpdatedAt = time.Now()
 }

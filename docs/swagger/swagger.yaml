@@ -527,6 +527,51 @@ paths:
       summary: Create Post
       tags:
       - Post
+  /boards/{boardID}/posts/drafts:
+    post:
+      consumes:
+      - application/json
+      description: Creates a draft post in board.
+      parameters:
+      - description: Board ID
+        in: path
+        name: boardID
+        required: true
+        type: integer
+      - description: Create draft post payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.postRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Draft Post
+      tags:
+      - Post
   /comments/{commentID}:
     delete:
       description: Deletes comment by id.
@@ -920,6 +965,45 @@ paths:
       summary: Create Comment
       tags:
       - Comment
+  /posts/{postID}/publish:
+    post:
+      description: Publishes a draft post by id.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Publish Post
+      tags:
+      - Post
   /posts/{postID}/reactions:
     get:
       consumes:

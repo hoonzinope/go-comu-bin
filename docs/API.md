@@ -54,7 +54,13 @@
   - 응답 메타: `has_more`, `next_last_id`
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+- `POST /api/v1/boards/{boardID}/posts/drafts` (인증 필요)
+  - 임시저장 글을 생성합니다.
+  - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
+  - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `GET /api/v1/posts/{postID}`
+- `POST /api/v1/posts/{postID}/publish` (인증 필요, 작성자 또는 admin)
+  - `draft -> published` 상태 전이를 수행합니다.
 - `PUT /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `DELETE /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
@@ -137,6 +143,24 @@ curl -X PUT http://localhost:18577/api/v1/users/2/suspension \
 ```bash
 TOKEN="관리자 로그인 응답 Authorization 헤더 값"
 curl -X GET http://localhost:18577/api/v1/users/2/suspension \
+  -H "Authorization: $TOKEN"
+```
+
+### 게시글 임시저장
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X POST http://localhost:18577/api/v1/boards/1/posts/drafts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"title":"draft title","content":"draft body"}'
+```
+
+### 임시저장 글 발행
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X POST http://localhost:18577/api/v1/posts/1/publish \
   -H "Authorization: $TOKEN"
 ```
 

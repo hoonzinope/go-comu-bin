@@ -211,3 +211,29 @@
 - `internal/domain/entity/post.go`
 - `internal/application/service/postService.go`
 - `internal/infrastructure/persistence/inmemory/postRepository.go`
+
+## 2026-03-08 - Draft는 별도 API로 다룬다
+
+상태
+
+- decided
+
+배경
+
+- `Post` 상태에 `draft`가 추가되었으므로, 임시저장과 발행 흐름을 어떤 API로 열지 정할 필요가 있었다.
+
+결론
+
+- 일반 글 작성 API는 기존처럼 생성 즉시 `published`로 둔다.
+- draft는 별도 임시저장 API로 생성한다.
+- draft 발행은 별도 publish API로 `draft -> published` 상태 전이만 수행한다.
+
+후속 작업
+
+- draft 생성 API 추가
+- draft publish API 추가
+
+관련 문서/코드
+
+- `internal/application/service/postService.go`
+- `internal/delivery/http.go`

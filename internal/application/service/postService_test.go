@@ -174,3 +174,36 @@ func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
 }
+
+func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	postID, err := svc.CreateDraftPost("draft-title", "draft-content", userID, boardID)
+	require.NoError(t, err)
+	assert.NotZero(t, postID)
+
+	list, err := svc.GetPostsList(boardID, 10, 0)
+	require.NoError(t, err)
+	assert.Empty(t, list.Posts)
+}
+
+func TestPostService_PublishPost_MakesDraftVisible(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	postID, err := svc.CreateDraftPost("draft-title", "draft-content", userID, boardID)
+	require.NoError(t, err)
+
+	err = svc.PublishPost(postID, userID)
+	require.NoError(t, err)
+
+	list, err := svc.GetPostsList(boardID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Posts, 1)
+	assert.Equal(t, postID, list.Posts[0].ID)
+}

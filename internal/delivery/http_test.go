@@ -120,16 +120,25 @@ func (f *fakeBoardUseCase) DeleteBoard(id, userID int64) error {
 }
 
 type fakePostUseCase struct {
-	createPost    func(title, content string, authorID, boardID int64) (int64, error)
-	getPostsList  func(boardID int64, limit int, lastID int64) (*model.PostList, error)
-	getPostDetail func(postID int64) (*model.PostDetail, error)
-	updatePost    func(id, authorID int64, title, content string) error
-	deletePost    func(id, authorID int64) error
+	createPost      func(title, content string, authorID, boardID int64) (int64, error)
+	createDraftPost func(title, content string, authorID, boardID int64) (int64, error)
+	getPostsList    func(boardID int64, limit int, lastID int64) (*model.PostList, error)
+	getPostDetail   func(postID int64) (*model.PostDetail, error)
+	publishPost     func(id, authorID int64) error
+	updatePost      func(id, authorID int64, title, content string) error
+	deletePost      func(id, authorID int64) error
 }
 
 func (f *fakePostUseCase) CreatePost(title, content string, authorID, boardID int64) (int64, error) {
 	if f.createPost != nil {
 		return f.createPost(title, content, authorID, boardID)
+	}
+	return 1, nil
+}
+
+func (f *fakePostUseCase) CreateDraftPost(title, content string, authorID, boardID int64) (int64, error) {
+	if f.createDraftPost != nil {
+		return f.createDraftPost(title, content, authorID, boardID)
 	}
 	return 1, nil
 }
@@ -146,6 +155,13 @@ func (f *fakePostUseCase) GetPostDetail(postID int64) (*model.PostDetail, error)
 		return f.getPostDetail(postID)
 	}
 	return &model.PostDetail{}, nil
+}
+
+func (f *fakePostUseCase) PublishPost(id, authorID int64) error {
+	if f.publishPost != nil {
+		return f.publishPost(id, authorID)
+	}
+	return nil
 }
 
 func (f *fakePostUseCase) UpdatePost(id, authorID int64, title, content string) error {
@@ -344,6 +360,54 @@ func TestHandleUserSuspensionGet_Success(t *testing.T) {
 		"reason": "spam",
 		"suspended_until": "2026-03-15T10:00:00Z"
 	}`, rr.Body.String())
+}
+
+func TestHandleCreateDraftPost_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{
+			createDraftPost: func(title, content string, authorID, boardID int64) (int64, error) {
+				assert.Equal(t, "draft", title)
+				assert.Equal(t, "content", content)
+				assert.Equal(t, int64(1), authorID)
+				assert.Equal(t, int64(3), boardID)
+				return 9, nil
+			},
+		},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/3/posts/drafts", map[string]string{
+		"title":   "draft",
+		"content": "content",
+	}, 1)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.JSONEq(t, `{"id":9}`, rr.Body.String())
+}
+
+func TestHandlePublishPost_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{
+			publishPost: func(id, authorID int64) error {
+				assert.Equal(t, int64(5), id)
+				assert.Equal(t, int64(1), authorID)
+				return nil
+			},
+		},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/5/publish", nil, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
