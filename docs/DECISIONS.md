@@ -527,3 +527,52 @@
 - `internal/application/service/attachmentService.go`
 - `internal/infrastructure/job`
 - `internal/config/config.go`
+
+## 2026-03-08 - Attachment 후속 구현 상태를 코드 기준으로 완료 처리한다
+
+상태
+
+- decided
+
+배경
+
+- `docs/DECISIONS.md`와 `docs/ROADMAP.md`에는 Attachment 후속 작업이 아직 남아 있는 듯한 표현이 남아 있었다.
+- 실제 코드 기준으로 orphan 정책, storage adapter, 이미지 최적화, cleanup job runner가 어디까지 반영됐는지 다시 확인할 필요가 있었다.
+
+관찰
+
+- `Attachment` 엔티티는 `orphaned_at`, `pending_delete_at`에 해당하는 상태를 이미 가진다.
+- `AttachmentService`는 공개 조회/공개 파일 조회에서 orphan 및 `pending_delete` 첨부를 숨기고, owner/admin preview에서는 orphan는 허용하고 `pending_delete`는 차단한다.
+- 업로드 시 `jpeg/png` 최적화가 설정값으로 제어되며, 허용 타입/용량/sniffing 검증도 반영돼 있다.
+- `FileStorage`는 `local`과 `object` provider를 모두 지원하며, `cmd/main.go`에서 설정 기반으로 조립된다.
+- 공통 in-process job runner가 존재하고, 서버 부팅 시 attachment cleanup job이 config 기반으로 등록된다.
+- attachment cleanup 유스케이스는 orphan 및 `pending_delete` 대상을 grace period 이후 실제 파일 삭제 + 메타데이터 삭제까지 수행한다.
+
+결론
+
+- Attachment 후속으로 결정했던 아래 항목은 현재 코드 기준 이미 반영된 것으로 본다.
+  - orphan 표시/노출 정책
+  - object storage adapter
+  - 서버 내부 이미지 최적화
+  - 공통 in-process job runner
+  - orphan attachment cleanup 유스케이스
+  - jobs config 및 서버 시작 시 runner 등록
+- 따라서 로드맵의 현재 상태 메모는 Attachment 후속과 background job 기반 cleanup까지 반영된 상태로 갱신한다.
+- Step 2에서 Attachment 다음 확장 도메인 우선순위는 기존 결정대로 `Tag -> Report -> Notification/PointHistory` 순서를 유지한다.
+
+후속 작업
+
+- `Tag` 도메인 스코프와 API 초안 정리
+- `Report` 도메인 착수 전 moderation 상태 모델 보강 범위 재점검
+- Attachment cleanup 실행 결과를 관측할 수 있도록 observability 보강 시 job 로그/메트릭 정리
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `cmd/main.go`
+- `internal/domain/entity/attachment.go`
+- `internal/application/service/attachmentService.go`
+- `internal/infrastructure/job/inprocess/runner.go`
+- `internal/infrastructure/storage/localfs/fileStorage.go`
+- `internal/infrastructure/storage/object/fileStorage.go`
+- `internal/config/config.go`
