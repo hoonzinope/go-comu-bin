@@ -3,6 +3,8 @@ package entity
 import (
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type UserStatus string
@@ -14,6 +16,7 @@ const (
 
 type User struct {
 	ID        int64
+	UUID      string
 	Name      string
 	Email     string
 	Password  string
@@ -45,6 +48,7 @@ func (u *User) SoftDelete() {
 func NewUser(name, password string) *User {
 	now := time.Now()
 	return &User{
+		UUID:      uuid.NewString(),
 		Name:      name,
 		Email:     "",
 		Password:  password,
@@ -58,6 +62,7 @@ func NewUser(name, password string) *User {
 func NewAdmin(name, password string) *User {
 	now := time.Now()
 	return &User{
+		UUID:      uuid.NewString(),
 		Name:      name,
 		Email:     "",
 		Password:  password,

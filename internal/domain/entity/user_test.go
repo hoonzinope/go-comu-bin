@@ -8,6 +8,7 @@ import (
 
 func TestUser_NewUserAndIsAdmin(t *testing.T) {
 	u := NewUser("alice", "pw")
+	assert.NotEmpty(t, u.UUID)
 	assert.Equal(t, "alice", u.Name)
 	assert.Equal(t, "", u.Email)
 	assert.Equal(t, "pw", u.Password)
@@ -22,6 +23,7 @@ func TestUser_NewUserAndIsAdmin(t *testing.T) {
 
 func TestUser_NewAdminAndIsAdmin(t *testing.T) {
 	u := NewAdmin("admin", "pw")
+	assert.NotEmpty(t, u.UUID)
 	assert.Equal(t, "admin", u.Role)
 	assert.Equal(t, UserStatusActive, u.Status)
 	assert.True(t, u.IsAdmin())
@@ -31,9 +33,11 @@ func TestUser_NewAdminAndIsAdmin(t *testing.T) {
 func TestUser_SoftDelete(t *testing.T) {
 	u := NewUser("alice", "pw")
 	u.ID = 7
+	beforeUUID := u.UUID
 
 	u.SoftDelete()
 
+	assert.Equal(t, beforeUUID, u.UUID)
 	assert.Equal(t, "deleted-user-7", u.Name)
 	assert.Equal(t, "", u.Email)
 	assert.Equal(t, "", u.Password)

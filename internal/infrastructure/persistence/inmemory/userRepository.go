@@ -35,7 +35,7 @@ func (r *UserRepository) Save(user *entity.User) (int64, error) {
 	defer r.mu.Unlock()
 
 	for _, existingUser := range r.userDB.Data {
-		if existingUser.Name == user.Name {
+		if existingUser.UUID == user.UUID || existingUser.Name == user.Name {
 			return 0, customError.ErrUserAlreadyExists
 		}
 	}
@@ -72,6 +72,14 @@ func (r *UserRepository) Update(user *entity.User) error {
 	defer r.mu.Unlock()
 
 	if _, exists := r.userDB.Data[user.ID]; exists {
+		for id, existingUser := range r.userDB.Data {
+			if id == user.ID {
+				continue
+			}
+			if existingUser.UUID == user.UUID || existingUser.Name == user.Name {
+				return customError.ErrUserAlreadyExists
+			}
+		}
 		r.userDB.Data[user.ID] = user
 	}
 	return nil

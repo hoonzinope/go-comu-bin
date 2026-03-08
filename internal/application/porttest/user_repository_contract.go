@@ -31,6 +31,7 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.NoError(t, err)
 		require.NotNil(t, byID)
 		assert.Equal(t, "alice", byID.Name)
+		assert.NotEmpty(t, byID.UUID)
 	})
 
 	t.Run("username is unique", func(t *testing.T) {
@@ -40,6 +41,21 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.NoError(t, err)
 
 		_, err = repo.Save(entity.NewUser("alice", "pw2"))
+		require.Error(t, err)
+		assert.ErrorIs(t, err, customError.ErrUserAlreadyExists)
+	})
+
+	t.Run("uuid is unique", func(t *testing.T) {
+		repo := newRepository()
+
+		user1 := entity.NewUser("alice", "pw")
+		user1.UUID = "fixed-uuid"
+		_, err := repo.Save(user1)
+		require.NoError(t, err)
+
+		user2 := entity.NewUser("bob", "pw")
+		user2.UUID = "fixed-uuid"
+		_, err = repo.Save(user2)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, customError.ErrUserAlreadyExists)
 	})
