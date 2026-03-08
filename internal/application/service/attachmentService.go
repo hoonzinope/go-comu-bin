@@ -105,6 +105,7 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	return &model.AttachmentUpload{
 		ID:            id,
 		EmbedMarkdown: buildAttachmentEmbedMarkdown(fileName, id),
+		PreviewURL:    buildAttachmentPreviewURL(postID, id),
 	}, nil
 }
 
@@ -129,6 +130,7 @@ func (s *AttachmentService) GetPostAttachments(postID int64) ([]model.Attachment
 			ContentType: item.ContentType,
 			SizeBytes:   item.SizeBytes,
 			StorageKey:  item.StorageKey,
+			PreviewURL:  buildAttachmentPreviewURL(item.PostID, item.ID),
 			CreatedAt:   item.CreatedAt,
 		})
 	}
@@ -153,6 +155,43 @@ func (s *AttachmentService) GetPostAttachmentFile(postID, attachmentID int64) (*
 	content, err := s.fileStorage.Open(attachment.StorageKey)
 	if err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "open attachment file", err)
+	}
+	return &model.AttachmentFile{
+		FileName:    attachment.FileName,
+		ContentType: attachment.ContentType,
+		SizeBytes:   attachment.SizeBytes,
+		Content:     content,
+	}, nil
+}
+
+func (s *AttachmentService) GetPostAttachmentPreviewFile(postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
+	if err != nil {
+		return nil, customError.WrapRepository("select post by id including unpublished for preview attachment file", err)
+	}
+	if post == nil {
+		return nil, customError.ErrPostNotFound
+	}
+	requester, err := s.userRepository.SelectUserByID(userID)
+	if err != nil {
+		return nil, customError.WrapRepository("select user by id for preview attachment file", err)
+	}
+	if requester == nil {
+		return nil, customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return nil, err
+	}
+	attachment, err := s.attachmentRepository.SelectByID(attachmentID)
+	if err != nil {
+		return nil, customError.WrapRepository("select attachment by id for preview attachment file", err)
+	}
+	if attachment == nil || attachment.PostID != postID {
+		return nil, customError.ErrAttachmentNotFound
+	}
+	content, err := s.fileStorage.Open(attachment.StorageKey)
+	if err != nil {
+		return nil, customError.Wrap(customError.ErrInternalServerError, "open preview attachment file", err)
 	}
 	return &model.AttachmentFile{
 		FileName:    attachment.FileName,
@@ -205,4 +244,8 @@ func buildAttachmentStorageKey(postID int64, fileName string) string {
 
 func buildAttachmentEmbedMarkdown(fileName string, attachmentID int64) string {
 	return fmt.Sprintf("![%s](attachment://%d)", fileName, attachmentID)
+}
+
+func buildAttachmentPreviewURL(postID, attachmentID int64) string {
+	return fmt.Sprintf("/api/v1/posts/%d/attachments/%d/preview", postID, attachmentID)
 }

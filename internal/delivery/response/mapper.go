@@ -181,6 +181,10 @@ func reactionFromDTO(reaction model.Reaction) Reaction {
 }
 
 func attachmentFromDTO(attachment model.Attachment) Attachment {
+	previewURL := attachment.PreviewURL
+	if previewURL == "" {
+		previewURL = fmt.Sprintf("/api/v1/posts/%d/attachments/%d/preview", attachment.PostID, attachment.ID)
+	}
 	return Attachment{
 		ID:          attachment.ID,
 		PostID:      attachment.PostID,
@@ -189,6 +193,7 @@ func attachmentFromDTO(attachment model.Attachment) Attachment {
 		SizeBytes:   attachment.SizeBytes,
 		StorageKey:  attachment.StorageKey,
 		FileURL:     fmt.Sprintf("/api/v1/posts/%d/attachments/%d/file", attachment.PostID, attachment.ID),
+		PreviewURL:  previewURL,
 		CreatedAt:   attachment.CreatedAt,
 	}
 }

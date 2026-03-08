@@ -105,6 +105,7 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	require.NotNil(t, upload)
 	assert.NotZero(t, upload.ID)
 	assert.Equal(t, "![a.png](attachment://"+strconv.FormatInt(upload.ID, 10)+")", upload.EmbedMarkdown)
+	assert.Equal(t, "/api/v1/posts/"+strconv.FormatInt(postID, 10)+"/attachments/"+strconv.FormatInt(upload.ID, 10)+"/preview", upload.PreviewURL)
 	assert.Contains(t, storage.savedKey, "posts/")
 	assert.Contains(t, storage.savedKey, "a.png")
 	assert.Equal(t, "hello", storage.savedContent)
@@ -136,5 +137,26 @@ func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {
 	assert.Equal(t, "posts/1/a.png", storage.openKey)
 	assert.Equal(t, "image/png", file.ContentType)
 	assert.Equal(t, "a.png", file.FileName)
+	assert.Equal(t, "hello", string(data))
+}
+
+func TestAttachmentService_GetPostAttachmentPreviewFile_AllowedForOwner(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{openContent: "hello"}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	attachmentID, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png"))
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+
+	file, err := svc.GetPostAttachmentPreviewFile(postID, attachmentID, userID)
+	require.NoError(t, err)
+	require.NotNil(t, file)
+	defer file.Content.Close()
+
+	data, err := io.ReadAll(file.Content)
+	require.NoError(t, err)
+	assert.Equal(t, "posts/1/a.png", storage.openKey)
 	assert.Equal(t, "hello", string(data))
 }

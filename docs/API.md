@@ -61,7 +61,7 @@
 - `GET /api/v1/posts/{postID}`
   - 응답 본문에는 `attachments` 목록이 포함됩니다.
   - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentID})` 형식을 사용합니다.
-  - 각 attachment는 실제 파일 조회용 `file_url`을 포함합니다.
+  - 각 attachment는 실제 파일 조회용 `file_url`과 draft 미리보기용 `preview_url`을 포함합니다.
 - `POST /api/v1/posts/{postID}/publish` (인증 필요, 작성자 또는 admin)
   - `draft -> published` 상태 전이를 수행합니다.
   - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
@@ -82,6 +82,9 @@
 - `GET /api/v1/posts/{postID}/attachments/{attachmentID}/file`
   - published post의 attachment 파일 본문을 반환합니다.
   - `attachments[].file_url`이 이 경로를 가리킵니다.
+- `GET /api/v1/posts/{postID}/attachments/{attachmentID}/preview` (인증 필요, 작성자 또는 admin)
+  - draft/published post의 attachment 미리보기 파일 본문을 반환합니다.
+  - `attachments[].preview_url` 및 upload 응답의 `preview_url`이 이 경로를 가리킵니다.
 - `POST /api/v1/posts/{postID}/attachments` (인증 필요, 작성자 또는 admin)
   - draft/published post에 attachment 메타데이터를 추가합니다.
 - `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)
@@ -237,7 +240,8 @@ curl -X POST http://localhost:18577/api/v1/posts/1/attachments/upload \
 ```json
 {
   "id": 3,
-  "embed_markdown": "![a.png](attachment://3)"
+  "embed_markdown": "![a.png](attachment://3)",
+  "preview_url": "/api/v1/posts/1/attachments/3/preview"
 }
 ```
 

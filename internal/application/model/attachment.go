@@ -9,5 +9,6 @@ type Attachment struct {
 	ContentType string
 	SizeBytes   int64
 	StorageKey  string
+	PreviewURL  string
 	CreatedAt   time.Time
 }

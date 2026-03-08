@@ -81,5 +81,6 @@ type Attachment struct {
 	SizeBytes   int64     `json:"size_bytes"`
 	StorageKey  string    `json:"storage_key"`
 	FileURL     string    `json:"file_url"`
+	PreviewURL  string    `json:"preview_url"`
 	CreatedAt   time.Time `json:"created_at"`
 }

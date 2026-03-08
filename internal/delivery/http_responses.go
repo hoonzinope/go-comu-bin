@@ -40,4 +40,5 @@ type attachmentListResponse struct {
 type attachmentUploadResponse struct {
 	ID            int64  `json:"id" example:"1"`
 	EmbedMarkdown string `json:"embed_markdown" example:"![a.png](attachment://1)"`
+	PreviewURL    string `json:"preview_url" example:"/api/v1/posts/1/attachments/1/preview"`
 }

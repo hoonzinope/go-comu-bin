@@ -3,6 +3,7 @@ package delivery
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -88,6 +89,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/posts/:postID/publish", h.authGinMiddleware, h.handlePostPublish)
 	v1.GET("/posts/:postID/attachments", h.handlePostAttachmentsGet)
 	v1.GET("/posts/:postID/attachments/:attachmentID/file", h.handlePostAttachmentFileGet)
+	v1.GET("/posts/:postID/attachments/:attachmentID/preview", h.authGinMiddleware, h.handlePostAttachmentPreviewGet)
 	v1.POST("/posts/:postID/attachments", h.authGinMiddleware, h.handlePostAttachmentsPost)
 	v1.POST("/posts/:postID/attachments/upload", h.authGinMiddleware, h.handlePostAttachmentsUpload)
 	v1.DELETE("/posts/:postID/attachments/:attachmentID", h.authGinMiddleware, h.handlePostAttachmentDelete)
@@ -732,9 +734,14 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 		writeUseCaseError(c, err)
 		return
 	}
+	previewURL := upload.PreviewURL
+	if previewURL == "" {
+		previewURL = fmt.Sprintf("/api/v1/posts/%d/attachments/%d/preview", postID, upload.ID)
+	}
 	c.JSON(http.StatusCreated, attachmentUploadResponse{
 		ID:            upload.ID,
 		EmbedMarkdown: upload.EmbedMarkdown,
+		PreviewURL:    previewURL,
 	})
 }
 
@@ -759,6 +766,43 @@ func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
 		return
 	}
 	file, err := h.attachmentUseCase.GetPostAttachmentFile(postID, attachmentID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	defer file.Content.Close()
+	c.Header("Content-Disposition", "inline; filename=\""+file.FileName+"\"")
+	c.DataFromReader(http.StatusOK, file.SizeBytes, file.ContentType, file.Content, nil)
+}
+
+// handlePostAttachmentPreviewGet godoc
+// @Summary Preview Post Attachment File
+// @Description Returns the stored file for an attachment of a draft or published post for the owner or admin.
+// @Tags Attachment
+// @Produce application/octet-stream
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Param attachmentID path int true "Attachment ID"
+// @Success 200 {file} file
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/attachments/{attachmentID}/preview [get]
+func (h *HTTPHandler) handlePostAttachmentPreviewGet(c *gin.Context) {
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
+		return
+	}
+	attachmentID, ok := parsePathID(c, "attachmentID", "attachment")
+	if !ok {
+		return
+	}
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	file, err := h.attachmentUseCase.GetPostAttachmentPreviewFile(postID, attachmentID, userID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return

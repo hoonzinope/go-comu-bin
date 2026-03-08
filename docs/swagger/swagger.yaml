@@ -30,6 +30,9 @@ definitions:
       id:
         example: 1
         type: integer
+      preview_url:
+        example: /api/v1/posts/1/attachments/1/preview
+        type: string
     type: object
   delivery.boardRequest:
     properties:
@@ -147,6 +150,8 @@ definitions:
         type: integer
       post_id:
         type: integer
+      preview_url:
+        type: string
       size_bytes:
         type: integer
       storage_key:
@@ -1094,6 +1099,49 @@ paths:
           schema:
             $ref: '#/definitions/delivery.errorResponse'
       summary: Get Post Attachment File
+      tags:
+      - Attachment
+  /posts/{postID}/attachments/{attachmentID}/preview:
+    get:
+      description: Returns the stored file for an attachment of a draft or published
+        post for the owner or admin.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Attachment ID
+        in: path
+        name: attachmentID
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Preview Post Attachment File
       tags:
       - Attachment
   /posts/{postID}/attachments/upload:
