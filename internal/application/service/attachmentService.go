@@ -303,11 +303,11 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 			return customError.ErrInvalidInput
 		}
 	}
-	if err := s.fileStorage.Delete(attachment.StorageKey); err != nil {
-		return customError.Wrap(customError.ErrInternalServerError, "delete stored file", err)
-	}
 	if err := s.attachmentRepository.Delete(attachmentID); err != nil {
 		return customError.WrapRepository("delete attachment", err)
+	}
+	if err := s.fileStorage.Delete(attachment.StorageKey); err != nil {
+		return customError.Wrap(customError.ErrInternalServerError, "delete stored file", err)
 	}
 	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete attachment")
 	return nil
@@ -332,11 +332,11 @@ func (s *AttachmentService) CleanupOrphanAttachments(ctx context.Context, now ti
 			return deletedCount, ctx.Err()
 		default:
 		}
-		if err := s.fileStorage.Delete(item.StorageKey); err != nil {
-			return deletedCount, customError.Wrap(customError.ErrInternalServerError, "delete orphan attachment file", err)
-		}
 		if err := s.attachmentRepository.Delete(item.ID); err != nil {
 			return deletedCount, customError.WrapRepository("delete orphan attachment metadata", err)
+		}
+		if err := s.fileStorage.Delete(item.StorageKey); err != nil {
+			return deletedCount, customError.Wrap(customError.ErrInternalServerError, "delete orphan attachment file", err)
 		}
 		deletedCount++
 	}
