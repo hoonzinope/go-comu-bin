@@ -26,6 +26,7 @@ Swagger UI는 서버 실행 후 [http://localhost:18577/swagger/index.html](http
 
 - [로드맵](docs/ROADMAP.md)
 - [아키텍처](docs/ARCHITECTURE.md)
+- [결정 기록](docs/DECISIONS.md)
 - [설정](docs/CONFIG.md)
 - [HTTP API](docs/API.md)
 - [테스트 가이드](docs/TESTING.md)
