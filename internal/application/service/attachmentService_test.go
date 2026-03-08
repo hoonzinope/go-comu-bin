@@ -3,6 +3,10 @@ package service
 import (
 	"bytes"
 	"errors"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"strconv"
 	"strings"
@@ -56,6 +60,36 @@ func (s *spyFileStorage) Open(key string) (io.ReadCloser, error) {
 
 func testPNGBytes() []byte {
 	return []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0}
+}
+
+func actualPNGBytes() []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x * 8), G: uint8(y * 8), B: 120, A: 255})
+		}
+	}
+	var out bytes.Buffer
+	err := png.Encode(&out, img)
+	if err != nil {
+		panic(err)
+	}
+	return out.Bytes()
+}
+
+func actualJPEGBytes(quality int) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 96, 96))
+	for y := 0; y < 96; y++ {
+		for x := 0; x < 96; x++ {
+			img.Set(x, y, color.RGBA{R: uint8((x*y)%255 + 1), G: uint8((x*3)%255 + 1), B: uint8((y*5)%255 + 1), A: 255})
+		}
+	}
+	var out bytes.Buffer
+	err := jpeg.Encode(&out, img, &jpeg.Options{Quality: quality})
+	if err != nil {
+		panic(err)
+	}
+	return out.Bytes()
 }
 
 func TestAttachmentService_CreatePostAttachment_Success(t *testing.T) {
@@ -140,6 +174,64 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	require.Len(t, items, 1)
 	assert.Equal(t, storage.savedKey, items[0].StorageKey)
 	assert.Equal(t, int64(len(png)), items[0].SizeBytes)
+}
+
+func TestAttachmentService_UploadPostAttachment_OptimizesJPEGBeforeSaving(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentServiceWithOptions(
+		repositories.user,
+		repositories.post,
+		repositories.attachment,
+		storage,
+		attachmentDefaultMaxSizeBytes,
+		ImageOptimizationConfig{Enabled: true, JPEGQuality: 60},
+		newTestAuthorizationPolicy(),
+	)
+
+	original := actualJPEGBytes(100)
+	upload, err := svc.UploadPostAttachment(postID, userID, "a.jpg", "image/jpeg", bytes.NewReader(original))
+	require.NoError(t, err)
+	require.NotNil(t, upload)
+	assert.Less(t, len(storage.savedContent), len(original))
+
+	items, err := repositories.attachment.SelectByPostID(postID)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, int64(len(storage.savedContent)), items[0].SizeBytes)
+}
+
+func TestAttachmentService_UploadPostAttachment_DisabledOptimizationKeepsOriginalBytes(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentServiceWithOptions(
+		repositories.user,
+		repositories.post,
+		repositories.attachment,
+		storage,
+		attachmentDefaultMaxSizeBytes,
+		ImageOptimizationConfig{Enabled: false, JPEGQuality: 60},
+		newTestAuthorizationPolicy(),
+	)
+
+	original := actualJPEGBytes(100)
+	_, err := svc.UploadPostAttachment(postID, userID, "a.jpg", "image/jpeg", bytes.NewReader(original))
+	require.NoError(t, err)
+	assert.Equal(t, string(original), storage.savedContent)
+}
+
+func TestOptimizeAttachmentImage_InvalidPNGFallsBackToOriginal(t *testing.T) {
+	original := testPNGBytes()
+
+	optimized := optimizeAttachmentImage("image/png", original, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82})
+
+	assert.Equal(t, original, optimized)
 }
 
 func TestAttachmentService_UploadPostAttachment_RejectsUnsupportedContentType(t *testing.T) {

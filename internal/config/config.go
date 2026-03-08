@@ -13,7 +13,7 @@ type Config struct {
 	} `yaml:"cache"`
 	Storage struct {
 		Provider string `yaml:"provider"`
-		Local struct {
+		Local    struct {
 			RootDir string `yaml:"rootDir"`
 		} `yaml:"local"`
 		Object struct {
@@ -25,6 +25,10 @@ type Config struct {
 		} `yaml:"object"`
 		Attachment struct {
 			MaxUploadSizeBytes int64 `yaml:"maxUploadSizeBytes"`
+			ImageOptimization  struct {
+				Enabled     bool `yaml:"enabled"`
+				JPEGQuality int  `yaml:"jpegQuality"`
+			} `yaml:"imageOptimization"`
 		} `yaml:"attachment"`
 	} `yaml:"storage"`
 	Delivery struct {
@@ -56,6 +60,8 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("storage.provider", "local")
 	v.SetDefault("storage.local.rootDir", "./data/uploads")
 	v.SetDefault("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.SetDefault("storage.attachment.imageOptimization.enabled", true)
+	v.SetDefault("storage.attachment.imageOptimization.jpegQuality", 82)
 
 	cfg := &Config{}
 	if err := v.UnmarshalExact(cfg); err != nil {
@@ -106,6 +112,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Storage.Attachment.MaxUploadSizeBytes <= 0 {
 		return fmt.Errorf("invalid storage.attachment.maxUploadSizeBytes: %d (must be > 0)", cfg.Storage.Attachment.MaxUploadSizeBytes)
+	}
+	if cfg.Storage.Attachment.ImageOptimization.JPEGQuality < 1 || cfg.Storage.Attachment.ImageOptimization.JPEGQuality > 100 {
+		return fmt.Errorf("invalid storage.attachment.imageOptimization.jpegQuality: %d (must be 1..100)", cfg.Storage.Attachment.ImageOptimization.JPEGQuality)
 	}
 	return nil
 }

@@ -26,6 +26,9 @@ storage:
     useSSL: false
   attachment:
     maxUploadSizeBytes: 10485760
+    imageOptimization:
+      enabled: true
+      jpegQuality: 82
 
 delivery:
   http:
@@ -47,6 +50,7 @@ delivery:
 - `storage.object.accessKey`: provider가 `object`일 때 필수
 - `storage.object.secretKey`: provider가 `object`일 때 필수
 - `storage.attachment.maxUploadSizeBytes`: `> 0`
+- `storage.attachment.imageOptimization.jpegQuality`: `1..100`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
 
@@ -59,3 +63,4 @@ delivery:
 - 파일 저장 provider: `cfg.Storage.Provider`
 - object storage endpoint/bucket: `cfg.Storage.Object.Endpoint`, `cfg.Storage.Object.Bucket`
 - attachment 최대 업로드 크기(bytes): `cfg.Storage.Attachment.MaxUploadSizeBytes`
+- attachment 이미지 최적화: `cfg.Storage.Attachment.ImageOptimization.Enabled`, `cfg.Storage.Attachment.ImageOptimization.JPEGQuality`

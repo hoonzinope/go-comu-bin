@@ -5,6 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -29,7 +32,13 @@ type AttachmentService struct {
 	attachmentRepository port.AttachmentRepository
 	fileStorage          port.FileStorage
 	maxUploadSizeBytes   int64
+	imageOptimization    ImageOptimizationConfig
 	authorizationPolicy  policy.AuthorizationPolicy
+}
+
+type ImageOptimizationConfig struct {
+	Enabled     bool
+	JPEGQuality int
 }
 
 var allowedAttachmentContentTypes = map[string]struct{}{
@@ -42,8 +51,23 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+	return NewAttachmentServiceWithOptions(
+		userRepository,
+		postRepository,
+		attachmentRepository,
+		fileStorage,
+		maxUploadSizeBytes,
+		ImageOptimizationConfig{Enabled: true, JPEGQuality: 82},
+		authorizationPolicy,
+	)
+}
+
+func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
+	}
+	if imageOptimization.JPEGQuality < 1 || imageOptimization.JPEGQuality > 100 {
+		imageOptimization.JPEGQuality = 82
 	}
 	return &AttachmentService{
 		userRepository:       userRepository,
@@ -51,6 +75,7 @@ func NewAttachmentService(userRepository port.UserRepository, postRepository por
 		attachmentRepository: attachmentRepository,
 		fileStorage:          fileStorage,
 		maxUploadSizeBytes:   maxUploadSizeBytes,
+		imageOptimization:    imageOptimization,
 		authorizationPolicy:  authorizationPolicy,
 	}
 }
@@ -119,6 +144,7 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 		return nil, err
 	}
 	contentType = normalizeAttachmentContentType(contentType)
+	data = optimizeAttachmentImage(contentType, data, s.imageOptimization)
 	storageKey := buildAttachmentStorageKey(postID, fileName)
 	if err := s.fileStorage.Save(storageKey, bytes.NewReader(data)); err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "save upload file", err)
@@ -322,6 +348,51 @@ func normalizeAttachmentContentType(contentType string) string {
 	default:
 		return strings.TrimSpace(contentType)
 	}
+}
+
+func optimizeAttachmentImage(contentType string, data []byte, cfg ImageOptimizationConfig) []byte {
+	if !cfg.Enabled {
+		return data
+	}
+	switch contentType {
+	case "image/jpeg":
+		return optimizeJPEG(data, cfg.JPEGQuality)
+	case "image/png":
+		return optimizePNG(data)
+	default:
+		return data
+	}
+}
+
+func optimizeJPEG(data []byte, quality int) []byte {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data
+	}
+	var out bytes.Buffer
+	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: quality}); err != nil {
+		return data
+	}
+	if out.Len() == 0 || out.Len() >= len(data) {
+		return data
+	}
+	return out.Bytes()
+}
+
+func optimizePNG(data []byte) []byte {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data
+	}
+	var out bytes.Buffer
+	encoder := png.Encoder{CompressionLevel: png.BestCompression}
+	if err := encoder.Encode(&out, img); err != nil {
+		return data
+	}
+	if out.Len() == 0 || out.Len() >= len(data) {
+		return data
+	}
+	return out.Bytes()
 }
 
 func sanitizeAttachmentFileName(fileName string) string {
