@@ -877,8 +877,6 @@ func statusForError(err error) int {
 	switch {
 	case errors.Is(err, customError.ErrUserAlreadyExists):
 		return http.StatusConflict
-	case errors.Is(err, customError.ErrUserDeletionBlocked):
-		return http.StatusConflict
 	case errors.Is(err, customError.ErrInvalidInput):
 		return http.StatusBadRequest
 	case errors.Is(err, customError.ErrUserNotFound):

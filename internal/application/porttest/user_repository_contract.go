@@ -94,4 +94,24 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.NotNil(t, bob)
 		assert.Equal(t, "bob", bob.Name)
 	})
+
+	t.Run("update persists user soft delete state", func(t *testing.T) {
+		repo := newRepository()
+
+		user := entity.NewUser("alice", "pw")
+		id, err := repo.Save(user)
+		require.NoError(t, err)
+		user.ID = id
+		user.SoftDelete()
+
+		require.NoError(t, repo.Update(user))
+
+		byID, err := repo.SelectUserByID(id)
+		require.NoError(t, err)
+		assert.Nil(t, byID)
+
+		byName, err := repo.SelectUserByUsername("alice")
+		require.NoError(t, err)
+		assert.Nil(t, byName)
+	})
 }

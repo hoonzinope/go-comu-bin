@@ -77,18 +77,6 @@ func (r *CommentRepository) SelectComments(postID int64, limit int, lastID int64
 	return comments, nil
 }
 
-func (r *CommentRepository) ExistsByAuthor(authorID int64) (bool, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	for _, comment := range r.commentDB.Data {
-		if comment.AuthorID == authorID {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func (r *CommentRepository) Update(comment *entity.Comment) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

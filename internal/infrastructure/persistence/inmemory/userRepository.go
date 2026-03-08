@@ -50,7 +50,7 @@ func (r *UserRepository) SelectUserByUsername(username string) (*entity.User, er
 	defer r.mu.RUnlock()
 
 	for _, user := range r.userDB.Data {
-		if user.Name == username {
+		if user.Name == username && !user.IsDeleted() {
 			return user, nil
 		}
 	}
@@ -61,10 +61,20 @@ func (r *UserRepository) SelectUserByID(id int64) (*entity.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if user, exists := r.userDB.Data[id]; exists {
+	if user, exists := r.userDB.Data[id]; exists && !user.IsDeleted() {
 		return user, nil
 	}
 	return nil, nil
+}
+
+func (r *UserRepository) Update(user *entity.User) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.userDB.Data[user.ID]; exists {
+		r.userDB.Data[user.ID] = user
+	}
+	return nil
 }
 
 func (r *UserRepository) Delete(id int64) error {

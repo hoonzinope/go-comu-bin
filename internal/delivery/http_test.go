@@ -360,20 +360,6 @@ func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
-func TestHTTP_UserDeleteMe_Conflict(t *testing.T) {
-	account := &fakeAccountUseCase{
-		deleteMyAccount: func(userID int64, password string) error {
-			return customError.ErrUserDeletionBlocked
-		},
-	}
-	handler := newTestHandler(&fakeUserUseCase{}, account, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
-
-	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/me", map[string]string{
-		"password": "pw",
-	}, 1)
-	assert.Equal(t, http.StatusConflict, rr.Code)
-}
-
 func TestHTTP_ProtectedRoute_InvalidAuthorizationScheme(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
 

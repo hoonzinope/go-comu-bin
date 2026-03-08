@@ -93,18 +93,6 @@ func (r *ReactionRepository) GetByTarget(targetID int64, targetType entity.React
 	return reactions, nil
 }
 
-func (r *ReactionRepository) ExistsByUser(userID int64) (bool, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	for _, reaction := range r.reactionDB.Data {
-		if reaction.UserID == userID {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func userTargetKey(userID, targetID int64, targetType entity.ReactionTargetType) string {
 	return string(targetType) + ":" + strconv.FormatInt(targetID, 10) + ":" + strconv.FormatInt(userID, 10)
 }

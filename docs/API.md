@@ -19,9 +19,9 @@
   - 사용자 미존재 또는 비밀번호 불일치 시 동일하게 `401 Unauthorized`
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)
+  - 계정은 soft delete 처리되고, 식별 정보는 익명화됩니다.
   - 탈퇴 성공 시 해당 사용자의 활성 세션 무효화를 시도합니다.
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
-  - 작성한 게시글, 댓글, 리액션이 남아 있으면 `409 Conflict`
 
 ## Board
 
