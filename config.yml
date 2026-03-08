@@ -26,8 +26,8 @@ delivery:
 
 jobs:
   enabled: true
-  orphanAttachmentCleanup:
+  attachmentCleanup:
     enabled: true
     intervalSeconds: 600
-    gracePeriodSeconds: 86400
+    gracePeriodSeconds: 600
     batchSize: 50
