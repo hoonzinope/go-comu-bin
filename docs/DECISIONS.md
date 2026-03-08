@@ -346,9 +346,37 @@
 - `FileStorage` 포트 추가
 - local filesystem 어댑터 추가
 - storage root config 추가
+- draft post attachment upload API 추가
 
 관련 문서/코드
 
 - `internal/application/port`
 - `internal/infrastructure`
 - `internal/config/config.go`
+
+## 2026-03-08 - Post attachment 업로드는 FileStorage + Attachment 메타를 함께 쓴다
+
+상태
+
+- decided
+
+배경
+
+- 실제 이미지 업로드를 열기 위해서는 파일 바이트 저장과 post 연결 메타를 분리해 다룰 필요가 있었다.
+
+결론
+
+- 현재 업로드는 `draft/published post`에 대해 바로 수행한다.
+- 파일 본문은 `FileStorage`가 저장하고, post 연결과 메타데이터는 `AttachmentRepository`가 관리한다.
+- upload API는 multipart file 입력을 받아 `storage_key`를 생성하고 attachment 메타를 함께 기록한다.
+
+후속 작업
+
+- upload API 문서/Swagger 반영
+- 나중에 post 없는 선업로드 + bind 흐름 검토
+
+관련 문서/코드
+
+- `internal/application/service/attachmentService.go`
+- `internal/application/port/file_storage.go`
+- `internal/application/port/attachment_repository.go`

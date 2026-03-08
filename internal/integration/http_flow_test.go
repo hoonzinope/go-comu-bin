@@ -17,6 +17,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -108,6 +109,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	fileStorage := localfs.NewFileStorage(t.TempDir())
 
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
@@ -123,7 +125,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy(), authorizationPolicy)
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
-	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, authorizationPolicy)
+	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, fileStorage, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)

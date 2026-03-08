@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -223,6 +225,7 @@ type fakeAttachmentUseCase struct {
 	createPostAttachment func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
 	getPostAttachments   func(postID int64) ([]model.Attachment, error)
 	deletePostAttachment func(postID, attachmentID, userID int64) error
+	uploadPostAttachment func(postID, userID int64, fileName, contentType string, content io.Reader) (int64, error)
 }
 
 func (f *fakeAttachmentUseCase) CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
@@ -244,6 +247,13 @@ func (f *fakeAttachmentUseCase) DeletePostAttachment(postID, attachmentID, userI
 		return f.deletePostAttachment(postID, attachmentID, userID)
 	}
 	return nil
+}
+
+func (f *fakeAttachmentUseCase) UploadPostAttachment(postID, userID int64, fileName, contentType string, content io.Reader) (int64, error) {
+	if f.uploadPostAttachment != nil {
+		return f.uploadPostAttachment(postID, userID, fileName, contentType, content)
+	}
+	return 1, nil
 }
 
 var testSessionRepository port.SessionRepository
@@ -554,6 +564,51 @@ func TestHandleDeleteAttachment_Success(t *testing.T) {
 	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/3/attachments/7", nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleUploadAttachment_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			uploadPostAttachment: func(postID, userID int64, fileName, contentType string, content io.Reader) (int64, error) {
+				assert.Equal(t, int64(3), postID)
+				assert.Equal(t, int64(1), userID)
+				assert.Equal(t, "a.png", fileName)
+				assert.Equal(t, "image/png", contentType)
+				data, err := io.ReadAll(content)
+				require.NoError(t, err)
+				assert.Equal(t, "hello", string(data))
+				return 8, nil
+			},
+		},
+	)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "a.png")
+	require.NoError(t, err)
+	_, err = io.WriteString(part, "hello")
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/posts/3/attachments/upload", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.JSONEq(t, `{"id":8}`, rr.Body.String())
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {

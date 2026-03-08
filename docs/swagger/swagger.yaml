@@ -1049,6 +1049,54 @@ paths:
       summary: Delete Post Attachment
       tags:
       - Attachment
+  /posts/{postID}/attachments/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads a file and creates attachment metadata for a post.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Attachment file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload Post Attachment
+      tags:
+      - Attachment
   /posts/{postID}/comments:
     get:
       description: Returns comments in post with cursor pagination.

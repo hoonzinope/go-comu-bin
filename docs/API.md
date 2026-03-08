@@ -69,14 +69,17 @@
 ## Attachment
 
 - Attachment는 현재 `Post` 전용 메타데이터 도메인입니다.
-- 현재 단계에서는 실제 파일 업로드가 아니라 메타데이터만 다룹니다.
+- 실제 파일 저장은 `FileStorage` 포트를 통해 수행하고, post 연결 메타데이터는 attachment 도메인이 관리합니다.
 - 필드: `file_name`, `content_type`, `size_bytes`, `storage_key`
 - `GET /api/v1/posts/{postID}/attachments`
   - published post 기준으로 attachment 목록을 조회합니다.
 - `POST /api/v1/posts/{postID}/attachments` (인증 필요, 작성자 또는 admin)
   - draft/published post에 attachment 메타데이터를 추가합니다.
+- `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)
+  - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
+  - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
 - `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)
-  - attachment 메타데이터를 삭제합니다.
+  - attachment 메타데이터와 저장된 파일을 함께 삭제합니다.
 
 ## Comment
 
@@ -200,6 +203,15 @@ curl -X POST http://localhost:18577/api/v1/posts/1/attachments \
 
 ```bash
 curl -X GET http://localhost:18577/api/v1/posts/1/attachments
+```
+
+### 게시글 첨부파일 업로드
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X POST http://localhost:18577/api/v1/posts/1/attachments/upload \
+  -H "Authorization: $TOKEN" \
+  -F "file=@./a.png"
 ```
 
 ### 대댓글 작성

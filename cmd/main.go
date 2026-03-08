@@ -27,6 +27,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 )
 
 func main() {
@@ -46,6 +47,7 @@ func main() {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	fileStorage := localfs.NewFileStorage(cfg.Storage.Local.RootDir)
 
 	if err := seedAdmin(userRepository); err != nil {
 		slog.Error("failed to seed admin user", "error", err)
@@ -60,7 +62,7 @@ func main() {
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
-	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, authorizationPolicy)
+	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, fileStorage, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)

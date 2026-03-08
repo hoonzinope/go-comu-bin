@@ -1,6 +1,10 @@
 package service
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
@@ -16,14 +20,16 @@ type AttachmentService struct {
 	userRepository       port.UserRepository
 	postRepository       port.PostRepository
 	attachmentRepository port.AttachmentRepository
+	fileStorage          port.FileStorage
 	authorizationPolicy  policy.AuthorizationPolicy
 }
 
-func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
 	return &AttachmentService{
 		userRepository:       userRepository,
 		postRepository:       postRepository,
 		attachmentRepository: attachmentRepository,
+		fileStorage:          fileStorage,
 		authorizationPolicy:  authorizationPolicy,
 	}
 }
@@ -58,6 +64,41 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 		return 0, customError.WrapRepository("save attachment", err)
 	}
 	return id, nil
+}
+
+func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName, contentType string, content io.Reader) (int64, error) {
+	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || content == nil {
+		return 0, customError.ErrInvalidInput
+	}
+	data, err := io.ReadAll(content)
+	if err != nil {
+		return 0, customError.Wrap(customError.ErrInternalServerError, "read upload content", err)
+	}
+	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
+	if err != nil {
+		return 0, customError.WrapRepository("select post by id including unpublished for upload attachment", err)
+	}
+	if post == nil {
+		return 0, customError.ErrPostNotFound
+	}
+	requester, err := s.userRepository.SelectUserByID(userID)
+	if err != nil {
+		return 0, customError.WrapRepository("select user by id for upload attachment", err)
+	}
+	if requester == nil {
+		return 0, customError.ErrUserNotFound
+	}
+	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+		return 0, err
+	}
+	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return 0, err
+	}
+	storageKey := buildAttachmentStorageKey(postID, fileName)
+	if err := s.fileStorage.Save(storageKey, bytes.NewReader(data)); err != nil {
+		return 0, customError.Wrap(customError.ErrInternalServerError, "save upload file", err)
+	}
+	return s.CreatePostAttachment(postID, userID, fileName, contentType, int64(len(data)), storageKey)
 }
 
 func (s *AttachmentService) GetPostAttachments(postID int64) ([]model.Attachment, error) {
@@ -115,8 +156,15 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 	if attachment == nil || attachment.PostID != postID {
 		return customError.ErrInvalidInput
 	}
+	if err := s.fileStorage.Delete(attachment.StorageKey); err != nil {
+		return customError.Wrap(customError.ErrInternalServerError, "delete stored file", err)
+	}
 	if err := s.attachmentRepository.Delete(attachmentID); err != nil {
 		return customError.WrapRepository("delete attachment", err)
 	}
 	return nil
+}
+
+func buildAttachmentStorageKey(postID int64, fileName string) string {
+	return filepath.ToSlash(filepath.Join("posts", fmt.Sprintf("%d", postID), fileName))
 }

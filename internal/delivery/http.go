@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -86,6 +88,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/posts/:postID/publish", h.authGinMiddleware, h.handlePostPublish)
 	v1.GET("/posts/:postID/attachments", h.handlePostAttachmentsGet)
 	v1.POST("/posts/:postID/attachments", h.authGinMiddleware, h.handlePostAttachmentsPost)
+	v1.POST("/posts/:postID/attachments/upload", h.authGinMiddleware, h.handlePostAttachmentsUpload)
 	v1.DELETE("/posts/:postID/attachments/:attachmentID", h.authGinMiddleware, h.handlePostAttachmentDelete)
 	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetailPut)
 	v1.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetailDelete)
@@ -674,6 +677,56 @@ func (h *HTTPHandler) handlePostAttachmentsPost(c *gin.Context) {
 		return
 	}
 	id, err := h.attachmentUseCase.CreatePostAttachment(postID, userID, req.FileName, req.ContentType, req.SizeBytes, req.StorageKey)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, idResponse{ID: id})
+}
+
+// handlePostAttachmentsUpload godoc
+// @Summary Upload Post Attachment
+// @Description Uploads a file and creates attachment metadata for a post.
+// @Tags Attachment
+// @Accept mpfd
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Param file formData file true "Attachment file"
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/attachments/upload [post]
+func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
+		return
+	}
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		badRequest(c, errors.New("file is required"))
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		writeUseCaseError(c, customError.Wrap(customError.ErrInternalServerError, "open upload file", err))
+		return
+	}
+	defer file.Close()
+	contentType := fileHeader.Header.Get("Content-Type")
+	if contentType == "" || contentType == "application/octet-stream" {
+		if guessed := mime.TypeByExtension(filepath.Ext(fileHeader.Filename)); guessed != "" {
+			contentType = guessed
+		}
+	}
+	id, err := h.attachmentUseCase.UploadPostAttachment(postID, userID, fileHeader.Filename, contentType, file)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
