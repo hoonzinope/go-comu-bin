@@ -7,7 +7,7 @@ import (
 )
 
 type UserSuspension struct {
-	UserID         int64
+	UserUUID       string
 	Status         entity.UserStatus
 	Reason         string
 	SuspendedUntil *time.Time

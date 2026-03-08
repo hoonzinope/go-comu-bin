@@ -147,11 +147,14 @@ func TestUserService_SuspendUser_Success(t *testing.T) {
 	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
+	target, err := repositories.user.SelectUserByID(targetID)
+	require.NoError(t, err)
+	require.NotNil(t, target)
 
-	err := svc.SuspendUser(adminID, targetID, "spam", "7d")
+	err = svc.SuspendUser(adminID, target.UUID, "spam", "7d")
 	require.NoError(t, err)
 
-	target, err := repositories.user.SelectUserByID(targetID)
+	target, err = repositories.user.SelectUserByID(targetID)
 	require.NoError(t, err)
 	require.NotNil(t, target)
 	assert.True(t, target.IsSuspended())
@@ -164,8 +167,11 @@ func TestUserService_SuspendUser_ForbiddenForNonAdmin(t *testing.T) {
 	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
+	target, err := repositories.user.SelectUserByID(targetID)
+	require.NoError(t, err)
+	require.NotNil(t, target)
 
-	err := svc.SuspendUser(userID, targetID, "spam", "7d")
+	err = svc.SuspendUser(userID, target.UUID, "spam", "7d")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }
@@ -175,11 +181,14 @@ func TestUserService_UnsuspendUser_Success(t *testing.T) {
 	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
-
-	require.NoError(t, svc.SuspendUser(adminID, targetID, "spam", "unlimited"))
-	require.NoError(t, svc.UnsuspendUser(adminID, targetID))
-
 	target, err := repositories.user.SelectUserByID(targetID)
+	require.NoError(t, err)
+	require.NotNil(t, target)
+
+	require.NoError(t, svc.SuspendUser(adminID, target.UUID, "spam", "unlimited"))
+	require.NoError(t, svc.UnsuspendUser(adminID, target.UUID))
+
+	target, err = repositories.user.SelectUserByID(targetID)
 	require.NoError(t, err)
 	require.NotNil(t, target)
 	assert.False(t, target.IsSuspended())
@@ -196,11 +205,14 @@ func TestUserService_GetUserSuspension_Success(t *testing.T) {
 	target.Suspend("spam", &until)
 	targetID, err := repositories.user.Save(target)
 	require.NoError(t, err)
+	target, err = repositories.user.SelectUserByID(targetID)
+	require.NoError(t, err)
+	require.NotNil(t, target)
 
-	view, err := svc.GetUserSuspension(adminID, targetID)
+	view, err := svc.GetUserSuspension(adminID, target.UUID)
 	require.NoError(t, err)
 	require.NotNil(t, view)
-	assert.Equal(t, targetID, view.UserID)
+	assert.Equal(t, target.UUID, view.UserUUID)
 	assert.Equal(t, entity.UserStatusSuspended, view.Status)
 	assert.Equal(t, "spam", view.Reason)
 	require.NotNil(t, view.SuspendedUntil)
@@ -211,8 +223,11 @@ func TestUserService_GetUserSuspension_ForbiddenForNonAdmin(t *testing.T) {
 	svc := NewUserService(repositories.user, newTestPasswordHasher())
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
+	target, err := repositories.user.SelectUserByID(targetID)
+	require.NoError(t, err)
+	require.NotNil(t, target)
 
-	_, err := svc.GetUserSuspension(userID, targetID)
+	_, err = svc.GetUserSuspension(userID, target.UUID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }

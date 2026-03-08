@@ -101,6 +101,19 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	assert.Equal(t, list.Posts[len(list.Posts)-1].ID, *list.NextLastID)
 }
 
+func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	seedPost(repositories.post, userID, boardID, "title", "content")
+	require.NoError(t, repositories.board.Delete(boardID))
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.GetPostsList(boardID, 10, 0)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+}
+
 func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
@@ -174,6 +187,33 @@ func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
 	list, err := svc.GetPostsList(boardID, 10, 0)
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
+}
+
+func TestPostService_DeletePost_OrphansAttachmentsAndSoftDeletesComments(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	commentID := seedComment(repositories.comment, userID, postID, "comment")
+	attachmentID, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png"))
+	require.NoError(t, err)
+	attachment, err := repositories.attachment.SelectByID(attachmentID)
+	require.NoError(t, err)
+	require.NotNil(t, attachment)
+	attachment.MarkReferenced()
+	require.NoError(t, repositories.attachment.Update(attachment))
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	require.NoError(t, svc.DeletePost(postID, userID))
+
+	comment, err := repositories.comment.SelectCommentByID(commentID)
+	require.NoError(t, err)
+	assert.Nil(t, comment)
+
+	attachment, err = repositories.attachment.SelectByID(attachmentID)
+	require.NoError(t, err)
+	require.NotNil(t, attachment)
+	assert.True(t, attachment.IsOrphaned())
 }
 
 func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {

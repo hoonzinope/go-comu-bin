@@ -57,6 +57,18 @@ func (r *UserRepository) SelectUserByUsername(username string) (*entity.User, er
 	return nil, nil
 }
 
+func (r *UserRepository) SelectUserByUUID(userUUID string) (*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, user := range r.userDB.Data {
+		if user.UUID == userUUID && !user.IsDeleted() {
+			return user, nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *UserRepository) SelectUserByID(id int64) (*entity.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -105,7 +105,7 @@ func (s *UserService) VerifyCredentials(username, password string) (int64, error
 	return existingUser.ID, nil
 }
 
-func (s *UserService) SuspendUser(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error {
+func (s *UserService) SuspendUser(adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
 	if strings.TrimSpace(reason) == "" {
 		return customError.ErrInvalidInput
 	}
@@ -123,9 +123,9 @@ func (s *UserService) SuspendUser(adminID, targetUserID int64, reason string, du
 	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 		return err
 	}
-	target, err := s.userRepository.SelectUserByID(targetUserID)
+	target, err := s.userRepository.SelectUserByUUID(targetUserUUID)
 	if err != nil {
-		return customError.WrapRepository("select target user by id for suspend user", err)
+		return customError.WrapRepository("select target user by uuid for suspend user", err)
 	}
 	if target == nil {
 		return customError.ErrUserNotFound
@@ -137,7 +137,7 @@ func (s *UserService) SuspendUser(adminID, targetUserID int64, reason string, du
 	return nil
 }
 
-func (s *UserService) GetUserSuspension(adminID, targetUserID int64) (*model.UserSuspension, error) {
+func (s *UserService) GetUserSuspension(adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 	admin, err := s.userRepository.SelectUserByID(adminID)
 	if err != nil {
 		return nil, customError.WrapRepository("select admin by id for get user suspension", err)
@@ -148,9 +148,9 @@ func (s *UserService) GetUserSuspension(adminID, targetUserID int64) (*model.Use
 	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 		return nil, err
 	}
-	target, err := s.userRepository.SelectUserByID(targetUserID)
+	target, err := s.userRepository.SelectUserByUUID(targetUserUUID)
 	if err != nil {
-		return nil, customError.WrapRepository("select target user by id for get user suspension", err)
+		return nil, customError.WrapRepository("select target user by uuid for get user suspension", err)
 	}
 	if target == nil {
 		return nil, customError.ErrUserNotFound
@@ -162,14 +162,14 @@ func (s *UserService) GetUserSuspension(adminID, targetUserID int64) (*model.Use
 		}
 	}
 	return &model.UserSuspension{
-		UserID:         target.ID,
+		UserUUID:       target.UUID,
 		Status:         target.Status,
 		Reason:         target.SuspensionReason,
 		SuspendedUntil: target.SuspendedUntil,
 	}, nil
 }
 
-func (s *UserService) UnsuspendUser(adminID, targetUserID int64) error {
+func (s *UserService) UnsuspendUser(adminID int64, targetUserUUID string) error {
 	admin, err := s.userRepository.SelectUserByID(adminID)
 	if err != nil {
 		return customError.WrapRepository("select admin by id for unsuspend user", err)
@@ -180,9 +180,9 @@ func (s *UserService) UnsuspendUser(adminID, targetUserID int64) error {
 	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 		return err
 	}
-	target, err := s.userRepository.SelectUserByID(targetUserID)
+	target, err := s.userRepository.SelectUserByUUID(targetUserUUID)
 	if err != nil {
-		return customError.WrapRepository("select target user by id for unsuspend user", err)
+		return customError.WrapRepository("select target user by uuid for unsuspend user", err)
 	}
 	if target == nil {
 		return customError.ErrUserNotFound

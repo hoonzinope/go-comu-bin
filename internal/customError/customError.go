@@ -20,6 +20,7 @@ var (
 	ErrUserAlreadyExists  = errors.New("user already exists")
 	ErrUserNotFound       = errors.New("user not found")
 	ErrBoardNotFound      = errors.New("board not found")
+	ErrBoardNotEmpty      = errors.New("board not empty")
 	ErrPostNotFound       = errors.New("post not found")
 	ErrAttachmentNotFound = errors.New("attachment not found")
 	ErrCommentNotFound    = errors.New("comment not found")
@@ -62,6 +63,8 @@ func Public(err error) error {
 		return ErrUserNotFound
 	case errors.Is(err, ErrBoardNotFound):
 		return ErrBoardNotFound
+	case errors.Is(err, ErrBoardNotEmpty):
+		return ErrBoardNotEmpty
 	case errors.Is(err, ErrPostNotFound):
 		return ErrPostNotFound
 	case errors.Is(err, ErrAttachmentNotFound):

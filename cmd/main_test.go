@@ -24,6 +24,10 @@ func (r *stubUserRepository) SelectUserByUsername(username string) (*entity.User
 	return nil, nil
 }
 
+func (r *stubUserRepository) SelectUserByUUID(userUUID string) (*entity.User, error) {
+	return nil, nil
+}
+
 func (r *stubUserRepository) SelectUserByID(id int64) (*entity.User, error) {
 	return nil, nil
 }

@@ -27,7 +27,7 @@ type idResponse struct {
 }
 
 type userSuspensionResponse struct {
-	UserID         int64      `json:"user_id" example:"1"`
+	UserUUID       string     `json:"user_uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Status         string     `json:"status" example:"suspended"`
 	Reason         string     `json:"reason,omitempty" example:"spam"`
 	SuspendedUntil *time.Time `json:"suspended_until,omitempty" example:"2026-03-15T10:00:00Z"`

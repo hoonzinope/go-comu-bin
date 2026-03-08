@@ -87,6 +87,18 @@ func (r *PostRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]
 	return posts, nil
 }
 
+func (r *PostRepository) ExistsByBoardID(boardID int64) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, post := range r.postDB.Data {
+		if post.BoardID == boardID && post.Status != entity.PostStatusDeleted {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *PostRepository) Update(post *entity.Post) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

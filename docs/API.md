@@ -25,14 +25,14 @@
   - 계정은 soft delete 처리되고, 식별 정보는 익명화됩니다.
   - 탈퇴 성공 시 해당 사용자의 활성 세션 무효화를 시도합니다.
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
-- `GET /api/v1/users/{userID}/suspension` (인증 필요, admin)
+- `GET /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자의 현재 제재 상태를 조회합니다.
-  - 응답 필드: `user_id`, `status`, `reason`, `suspended_until`
-- `PUT /api/v1/users/{userID}/suspension` (인증 필요, admin)
+  - 응답 필드: `user_uuid`, `status`, `reason`, `suspended_until`
+- `PUT /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자 쓰기 제재를 설정합니다.
   - 요청 본문: `reason`, `duration`
   - `duration` 허용값: `7d`, `15d`, `30d`, `unlimited`
-- `DELETE /api/v1/users/{userID}/suspension` (인증 필요, admin)
+- `DELETE /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자 쓰기 제재를 해제합니다.
 
 ## Board
@@ -42,6 +42,8 @@
 - `POST /api/v1/boards` (인증 필요, admin)
 - `PUT /api/v1/boards/{boardID}` (인증 필요, admin)
 - `DELETE /api/v1/boards/{boardID}` (인증 필요, admin)
+  - 비어 있는 게시판에만 허용됩니다.
+  - 삭제되지 않은 게시글이 하나라도 있으면 `409 Conflict`
 
 ## Post
 
@@ -52,6 +54,7 @@
   - 공개 목록/상세 조회에서는 `published`만 노출
 - `GET /api/v1/boards/{boardID}/posts?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
+  - 게시판이 없으면 `404 Not Found`
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `POST /api/v1/boards/{boardID}/posts/drafts` (인증 필요)
@@ -70,6 +73,8 @@
   - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
 - `DELETE /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - 하위 댓글은 soft delete 처리됩니다.
+  - 첨부는 orphan 처리되어 cleanup job 대상이 됩니다.
 
 ## Attachment
 
@@ -117,6 +122,7 @@
   - 응답은 flat list를 유지하고 `parent_id`로 관계를 표현한다.
 - `GET /api/v1/posts/{postID}/comments?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
+  - 삭제된 게시글이면 `404 Not Found`
 - `POST /api/v1/posts/{postID}/comments` (인증 필요)
   - 요청 본문은 `content`, 선택적 `parent_id`
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
@@ -128,6 +134,7 @@
 ## Reaction
 
 - `GET /api/v1/posts/{postID}/reactions`
+  - 삭제된 게시글이면 `404 Not Found`
 - `PUT /api/v1/posts/{postID}/reactions/me` (인증 필요)
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
@@ -137,6 +144,7 @@
   - 리액션이 없어도 `204`
   - 대상 게시글이 없으면 `404`
 - `GET /api/v1/comments/{commentID}/reactions`
+  - 삭제된 댓글이면 `404 Not Found`
 - `PUT /api/v1/comments/{commentID}/reactions/me` (인증 필요)
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
@@ -180,7 +188,7 @@ curl -X POST http://localhost:18577/api/v1/boards \
 
 ```bash
 TOKEN="관리자 로그인 응답 Authorization 헤더 값"
-curl -X PUT http://localhost:18577/api/v1/users/2/suspension \
+curl -X PUT http://localhost:18577/api/v1/users/550e8400-e29b-41d4-a716-446655440000/suspension \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
   -d '{"reason":"spam","duration":"7d"}'
@@ -190,7 +198,7 @@ curl -X PUT http://localhost:18577/api/v1/users/2/suspension \
 
 ```bash
 TOKEN="관리자 로그인 응답 Authorization 헤더 값"
-curl -X GET http://localhost:18577/api/v1/users/2/suspension \
+curl -X GET http://localhost:18577/api/v1/users/550e8400-e29b-41d4-a716-446655440000/suspension \
   -H "Authorization: $TOKEN"
 ```
 

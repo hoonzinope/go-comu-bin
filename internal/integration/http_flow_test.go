@@ -121,7 +121,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	require.NoError(t, err)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher)
-	boardUseCase := service.NewBoardService(userRepository, boardRepository, cache, testCachePolicy(), authorizationPolicy)
+	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, cache, testCachePolicy(), authorizationPolicy)
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, attachmentRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy(), authorizationPolicy)
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())

@@ -89,6 +89,14 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64) (*model.CommentList, error) {
 	cacheKey := key.CommentList(postID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
+		post, err := s.postRepository.SelectPostByID(postID)
+		if err != nil {
+			return nil, customError.WrapRepository("select post by id for comment list", err)
+		}
+		if post == nil {
+			return nil, customError.ErrPostNotFound
+		}
+
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
 		fetchLimit := limit
 		if limit > 0 {

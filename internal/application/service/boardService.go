@@ -18,15 +18,17 @@ var _ port.BoardUseCase = (*BoardService)(nil)
 type BoardService struct {
 	userRepository      port.UserRepository
 	boardRepository     port.BoardRepository
+	postRepository      port.PostRepository
 	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *BoardService {
+func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
+		postRepository:      postRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
@@ -153,6 +155,13 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	}
 	if existingBoard == nil {
 		return customError.ErrBoardNotFound
+	}
+	hasPosts, err := s.postRepository.ExistsByBoardID(existingBoard.ID)
+	if err != nil {
+		return customError.WrapRepository("check board posts before delete board", err)
+	}
+	if hasPosts {
+		return customError.ErrBoardNotEmpty
 	}
 	err = s.boardRepository.Delete(existingBoard.ID)
 	if err != nil {

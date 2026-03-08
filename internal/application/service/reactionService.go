@@ -83,6 +83,9 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
 	cacheKey := key.ReactionList(string(targetType), targetID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
+		if err := s.ensureTargetExists(targetID, targetType); err != nil {
+			return nil, err
+		}
 		reactions, err := s.reactionRepository.GetByTarget(targetID, targetType)
 		if err != nil {
 			return nil, customError.WrapRepository("select reactions by target", err)

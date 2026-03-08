@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -72,9 +73,9 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/login", h.handleUserLogin)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
-	v1.GET("/users/:userID/suspension", h.authGinMiddleware, h.handleUserSuspensionGet)
-	v1.PUT("/users/:userID/suspension", h.authGinMiddleware, h.handleUserSuspend)
-	v1.DELETE("/users/:userID/suspension", h.authGinMiddleware, h.handleUserUnsuspend)
+	v1.GET("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspensionGet)
+	v1.PUT("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspend)
+	v1.DELETE("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserUnsuspend)
 
 	v1.GET("/boards", h.handleBoardsGet)
 	v1.POST("/boards", h.authGinMiddleware, h.handleBoardsPost)
@@ -249,30 +250,31 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 // @Tags User
 // @Security BearerAuth
 // @Produce json
-// @Param userID path int true "User ID"
+// @Param userUUID path string true "User UUID"
 // @Success 200 {object} userSuspensionResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /users/{userID}/suspension [get]
+// @Router /users/{userUUID}/suspension [get]
 func (h *HTTPHandler) handleUserSuspensionGet(c *gin.Context) {
-	targetUserID, ok := parsePathID(c, "userID", "user")
-	if !ok {
+	targetUserUUID := strings.TrimSpace(c.Param("userUUID"))
+	if targetUserUUID == "" {
+		badRequest(c, errors.New("invalid user uuid"))
 		return
 	}
 	adminID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
 	}
-	view, err := h.userUseCase.GetUserSuspension(adminID, targetUserID)
+	view, err := h.userUseCase.GetUserSuspension(adminID, targetUserUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, userSuspensionResponse{
-		UserID:         view.UserID,
+		UserUUID:       view.UserUUID,
 		Status:         string(view.Status),
 		Reason:         view.Reason,
 		SuspendedUntil: view.SuspendedUntil,
@@ -286,7 +288,7 @@ func (h *HTTPHandler) handleUserSuspensionGet(c *gin.Context) {
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Param userID path int true "User ID"
+// @Param userUUID path string true "User UUID"
 // @Param request body userSuspensionRequest true "Suspension payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
@@ -294,10 +296,11 @@ func (h *HTTPHandler) handleUserSuspensionGet(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /users/{userID}/suspension [put]
+// @Router /users/{userUUID}/suspension [put]
 func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
-	targetUserID, ok := parsePathID(c, "userID", "user")
-	if !ok {
+	targetUserUUID := strings.TrimSpace(c.Param("userUUID"))
+	if targetUserUUID == "" {
+		badRequest(c, errors.New("invalid user uuid"))
 		return
 	}
 	adminID, ok := h.requireAuthUserID(c)
@@ -314,7 +317,7 @@ func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.userUseCase.SuspendUser(adminID, targetUserID, reason, duration); err != nil {
+	if err := h.userUseCase.SuspendUser(adminID, targetUserUUID, reason, duration); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -327,24 +330,25 @@ func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
 // @Tags User
 // @Security BearerAuth
 // @Produce json
-// @Param userID path int true "User ID"
+// @Param userUUID path string true "User UUID"
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /users/{userID}/suspension [delete]
+// @Router /users/{userUUID}/suspension [delete]
 func (h *HTTPHandler) handleUserUnsuspend(c *gin.Context) {
-	targetUserID, ok := parsePathID(c, "userID", "user")
-	if !ok {
+	targetUserUUID := strings.TrimSpace(c.Param("userUUID"))
+	if targetUserUUID == "" {
+		badRequest(c, errors.New("invalid user uuid"))
 		return
 	}
 	adminID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
 	}
-	if err := h.userUseCase.UnsuspendUser(adminID, targetUserID); err != nil {
+	if err := h.userUseCase.UnsuspendUser(adminID, targetUserUUID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1271,6 +1275,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, customError.ErrBoardNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, customError.ErrBoardNotEmpty):
+		return http.StatusConflict
 	case errors.Is(err, customError.ErrPostNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, customError.ErrCommentNotFound):

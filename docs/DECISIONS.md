@@ -238,6 +238,50 @@
 - `internal/application/service/postService.go`
 - `internal/delivery/http.go`
 
+## 2026-03-08 - 삭제/공개 조회 일관성과 suspension 식별자 계약 정리
+
+상태
+
+- decided
+
+배경
+
+- 공개 조회와 soft delete 규칙이 일부 경로에서 일관되지 않았다.
+- 게시판 삭제 시 하위 게시글이 남아 aggregate 경계가 흐려질 수 있었다.
+- user suspension API는 외부 식별자 정책과 다르게 내부 `user_id`를 노출하고 있었다.
+
+관찰
+
+- 삭제된 게시글 이후에도 댓글/리액션 조회가 계속 가능한 경로가 있었다.
+- 게시글 삭제 시 첨부가 orphan 처리되지 않아 cleanup job 대상에서 빠질 수 있었다.
+- 게시판 삭제는 현재 hard delete이며, 비어 있지 않은 게시판도 삭제 가능했다.
+- 아키텍처 문서는 외부 사용자 식별자로 `uuid` 사용을 원칙으로 둔다.
+
+결론
+
+- 공개 조회는 부모 리소스의 공개 상태를 먼저 확인해야 한다.
+- 삭제된 게시글의 댓글/리액션은 공개 조회에서 더 이상 접근할 수 없어야 한다.
+- 게시글 삭제 시 하위 댓글은 soft delete 처리하고, 첨부는 orphan 처리해 후속 cleanup 대상으로 넘긴다.
+- 게시판 삭제는 비어 있는 게시판에만 허용한다.
+- suspension API는 외부 계약을 `user_uuid` 기준으로 정리한다.
+
+후속 작업
+
+- 댓글/리액션 조회 서비스에 부모 공개 상태 검증 추가
+- 게시글 삭제 시 댓글/첨부 정리 로직 추가
+- `BoardRepository`/`PostRepository` 계약에 게시판 비어 있음 검증을 위한 최소 확장 추가
+- suspension API 요청/응답/문서/테스트를 `uuid` 기준으로 정리
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `docs/API.md`
+- `internal/application/service/postService.go`
+- `internal/application/service/commentService.go`
+- `internal/application/service/reactionService.go`
+- `internal/application/service/userService.go`
+- `internal/delivery/http.go`
+
 ## 2026-03-08 - Comment 상태 모델도 soft delete 기준으로 맞춘다
 
 상태

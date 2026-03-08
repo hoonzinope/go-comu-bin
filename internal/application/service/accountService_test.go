@@ -28,19 +28,19 @@ func (s *stubUserUseCase) DeleteMe(userID int64, password string) error {
 	return nil
 }
 
-func (s *stubUserUseCase) GetUserSuspension(adminID, targetUserID int64) (*model.UserSuspension, error) {
+func (s *stubUserUseCase) GetUserSuspension(adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 	return &model.UserSuspension{
-		UserID:         targetUserID,
+		UserUUID:       targetUserUUID,
 		Status:         entity.UserStatusActive,
 		SuspendedUntil: nil,
 	}, nil
 }
 
-func (s *stubUserUseCase) SuspendUser(adminID, targetUserID int64, reason string, duration entity.SuspensionDuration) error {
+func (s *stubUserUseCase) SuspendUser(adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
 	return nil
 }
 
-func (s *stubUserUseCase) UnsuspendUser(adminID, targetUserID int64) error {
+func (s *stubUserUseCase) UnsuspendUser(adminID int64, targetUserUUID string) error {
 	return nil
 }
 

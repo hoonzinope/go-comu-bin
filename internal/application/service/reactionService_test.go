@@ -209,3 +209,17 @@ func TestReactionService_GetReactionsByTarget_ReturnsCacheFailure_WhenCacheLoadF
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
 }
+
+func TestReactionService_GetReactionsByTarget_ReturnsPostNotFound_WhenPostDeleted(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy())
+
+	require.NoError(t, repositories.post.Delete(postID))
+
+	_, err := svc.GetReactionsByTarget(postID, entity.ReactionTargetPost)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrPostNotFound))
+}

@@ -1792,7 +1792,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/{userID}/suspension": {
+        "/users/{userUUID}/suspension": {
             "get": {
                 "security": [
                     {
@@ -1809,9 +1809,9 @@ const docTemplate = `{
                 "summary": "Get User Suspension",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "userID",
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "userUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1874,9 +1874,9 @@ const docTemplate = `{
                 "summary": "Suspend User",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "userID",
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "userUUID",
                         "in": "path",
                         "required": true
                     },
@@ -1942,9 +1942,9 @@ const docTemplate = `{
                 "summary": "Unsuspend User",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "userID",
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "userUUID",
                         "in": "path",
                         "required": true
                     }
@@ -2159,9 +2159,9 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2026-03-15T10:00:00Z"
                 },
-                "user_id": {
-                    "type": "integer",
-                    "example": 1
+                "user_uuid": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },

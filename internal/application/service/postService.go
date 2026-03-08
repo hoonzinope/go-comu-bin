@@ -102,6 +102,14 @@ func (s *PostService) createPost(title, content string, authorID, boardID int64,
 func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*model.PostList, error) {
 	cacheKey := key.PostList(boardID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
+		board, err := s.boardRepository.SelectBoardByID(boardID)
+		if err != nil {
+			return nil, customError.WrapRepository("select board by id for post list", err)
+		}
+		if board == nil {
+			return nil, customError.ErrBoardNotFound
+		}
+
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
 		fetchLimit := limit
 		if limit > 0 {
@@ -380,6 +388,21 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if err != nil {
 		return customError.WrapRepository("delete post", err)
 	}
+	comments, err := s.commentRepository.SelectComments(post.ID, int(^uint(0)>>1), 0)
+	if err != nil {
+		return customError.WrapRepository("select comments for delete post", err)
+	}
+	for _, comment := range comments {
+		if err := s.commentRepository.Delete(comment.ID); err != nil {
+			return customError.WrapRepository("soft delete post comments", err)
+		}
+		if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID)); err != nil {
+			return customError.WrapCache("invalidate comment reaction list after delete post", err)
+		}
+	}
+	if err := s.orphanPostAttachments(post.ID); err != nil {
+		return err
+	}
 	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
 		return customError.WrapCache("invalidate post detail after delete post", err)
 	}
@@ -468,6 +491,20 @@ func (s *PostService) syncPostAttachmentOrphans(postID int64, content string) er
 		}
 		if err := s.attachmentRepository.Update(item); err != nil {
 			return customError.WrapRepository("update attachment orphan state", err)
+		}
+	}
+	return nil
+}
+
+func (s *PostService) orphanPostAttachments(postID int64) error {
+	items, err := s.attachmentRepository.SelectByPostID(postID)
+	if err != nil {
+		return customError.WrapRepository("select attachments by post id for delete post", err)
+	}
+	for _, item := range items {
+		item.MarkOrphaned()
+		if err := s.attachmentRepository.Update(item); err != nil {
+			return customError.WrapRepository("orphan attachments for delete post", err)
 		}
 	}
 	return nil
