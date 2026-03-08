@@ -28,6 +28,7 @@ import (
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
+	objectstorage "github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/object"
 )
 
 func main() {
@@ -47,7 +48,11 @@ func main() {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
-	fileStorage := localfs.NewFileStorage(cfg.Storage.Local.RootDir)
+	fileStorage, err := newFileStorage(cfg)
+	if err != nil {
+		slog.Error("failed to initialize file storage", "error", err)
+		os.Exit(1)
+	}
 
 	if err := seedAdmin(userRepository); err != nil {
 		slog.Error("failed to seed admin user", "error", err)
@@ -108,5 +113,22 @@ func cachePolicy(cfg *config.Config) appcache.Policy {
 	return appcache.Policy{
 		ListTTLSeconds:   cfg.Cache.ListTTLSeconds,
 		DetailTTLSeconds: cfg.Cache.DetailTTLSeconds,
+	}
+}
+
+func newFileStorage(cfg *config.Config) (port.FileStorage, error) {
+	switch cfg.Storage.Provider {
+	case "local":
+		return localfs.NewFileStorage(cfg.Storage.Local.RootDir), nil
+	case "object":
+		return objectstorage.NewFileStorage(
+			cfg.Storage.Object.Endpoint,
+			cfg.Storage.Object.Bucket,
+			cfg.Storage.Object.AccessKey,
+			cfg.Storage.Object.SecretKey,
+			cfg.Storage.Object.UseSSL,
+		)
+	default:
+		return nil, fmt.Errorf("unsupported storage provider: %s", cfg.Storage.Provider)
 	}
 }

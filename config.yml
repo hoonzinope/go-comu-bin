@@ -3,8 +3,15 @@ cache:
   detailTTLSeconds: 30
 
 storage:
+  provider: "local"
   local:
     rootDir: "./data/uploads"
+  object:
+    endpoint: ""
+    bucket: ""
+    accessKey: ""
+    secretKey: ""
+    useSSL: false
   attachment:
     maxUploadSizeBytes: 10485760
 

@@ -15,8 +15,15 @@ cache:
   detailTTLSeconds: 30
 
 storage:
+  provider: "local"
   local:
     rootDir: "./data/uploads"
+  object:
+    endpoint: ""
+    bucket: ""
+    accessKey: ""
+    secretKey: ""
+    useSSL: false
   attachment:
     maxUploadSizeBytes: 10485760
 
@@ -34,6 +41,11 @@ delivery:
 - `cache.listTTLSeconds`: `> 0`
 - `cache.detailTTLSeconds`: `> 0`
 - `storage.local.rootDir`: 필수(빈 값 불가)
+- `storage.provider`: `local | object`
+- `storage.object.endpoint`: provider가 `object`일 때 필수
+- `storage.object.bucket`: provider가 `object`일 때 필수
+- `storage.object.accessKey`: provider가 `object`일 때 필수
+- `storage.object.secretKey`: provider가 `object`일 때 필수
 - `storage.attachment.maxUploadSizeBytes`: `> 0`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
@@ -44,4 +56,6 @@ delivery:
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`
+- 파일 저장 provider: `cfg.Storage.Provider`
+- object storage endpoint/bucket: `cfg.Storage.Object.Endpoint`, `cfg.Storage.Object.Bucket`
 - attachment 최대 업로드 크기(bytes): `cfg.Storage.Attachment.MaxUploadSizeBytes`

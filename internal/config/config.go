@@ -12,9 +12,17 @@ type Config struct {
 		DetailTTLSeconds int `yaml:"detailTTLSeconds"`
 	} `yaml:"cache"`
 	Storage struct {
+		Provider string `yaml:"provider"`
 		Local struct {
 			RootDir string `yaml:"rootDir"`
 		} `yaml:"local"`
+		Object struct {
+			Endpoint  string `yaml:"endpoint"`
+			Bucket    string `yaml:"bucket"`
+			AccessKey string `yaml:"accessKey"`
+			SecretKey string `yaml:"secretKey"`
+			UseSSL    bool   `yaml:"useSSL"`
+		} `yaml:"object"`
 		Attachment struct {
 			MaxUploadSizeBytes int64 `yaml:"maxUploadSizeBytes"`
 		} `yaml:"attachment"`
@@ -45,6 +53,7 @@ func Load() (*Config, error) {
 func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("cache.listTTLSeconds", 30)
 	v.SetDefault("cache.detailTTLSeconds", 30)
+	v.SetDefault("storage.provider", "local")
 	v.SetDefault("storage.local.rootDir", "./data/uploads")
 	v.SetDefault("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 
@@ -74,8 +83,26 @@ func validate(cfg *Config) error {
 	if cfg.Cache.DetailTTLSeconds <= 0 {
 		return fmt.Errorf("invalid cache.detailTTLSeconds: %d (must be > 0)", cfg.Cache.DetailTTLSeconds)
 	}
-	if cfg.Storage.Local.RootDir == "" {
-		return fmt.Errorf("invalid storage.local.rootDir: cannot be empty")
+	switch cfg.Storage.Provider {
+	case "local":
+		if cfg.Storage.Local.RootDir == "" {
+			return fmt.Errorf("invalid storage.local.rootDir: cannot be empty")
+		}
+	case "object":
+		if cfg.Storage.Object.Endpoint == "" {
+			return fmt.Errorf("invalid storage.object.endpoint: cannot be empty")
+		}
+		if cfg.Storage.Object.Bucket == "" {
+			return fmt.Errorf("invalid storage.object.bucket: cannot be empty")
+		}
+		if cfg.Storage.Object.AccessKey == "" {
+			return fmt.Errorf("invalid storage.object.accessKey: cannot be empty")
+		}
+		if cfg.Storage.Object.SecretKey == "" {
+			return fmt.Errorf("invalid storage.object.secretKey: cannot be empty")
+		}
+	default:
+		return fmt.Errorf("invalid storage.provider: %s", cfg.Storage.Provider)
 	}
 	if cfg.Storage.Attachment.MaxUploadSizeBytes <= 0 {
 		return fmt.Errorf("invalid storage.attachment.maxUploadSizeBytes: %d (must be > 0)", cfg.Storage.Attachment.MaxUploadSizeBytes)

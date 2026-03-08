@@ -14,6 +14,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 60)
+	v.Set("storage.provider", "local")
 	v.Set("storage.local.rootDir", "./data/uploads")
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 
@@ -23,6 +24,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
 	assert.Equal(t, 30, cfg.Cache.ListTTLSeconds)
 	assert.Equal(t, 60, cfg.Cache.DetailTTLSeconds)
+	assert.Equal(t, "local", cfg.Storage.Provider)
 	assert.Equal(t, "./data/uploads", cfg.Storage.Local.RootDir)
 	assert.Equal(t, int64(10<<20), cfg.Storage.Attachment.MaxUploadSizeBytes)
 }
@@ -34,6 +36,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		v.Set("delivery.http.auth.secret", "test-secret")
 		v.Set("cache.listTTLSeconds", 30)
 		v.Set("cache.detailTTLSeconds", 30)
+		v.Set("storage.provider", "local")
 		v.Set("storage.local.rootDir", "./data/uploads")
 		v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 
@@ -48,6 +51,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		v.Set("delivery.http.auth.secret", "test-secret")
 		v.Set("cache.listTTLSeconds", 30)
 		v.Set("cache.detailTTLSeconds", 30)
+		v.Set("storage.provider", "local")
 		v.Set("storage.local.rootDir", "./data/uploads")
 		v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 
@@ -63,6 +67,7 @@ func TestLoadFromViper_UnknownField(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
 	v.Set("storage.local.rootDir", "./data/uploads")
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("delivery.http.unknown", true)
@@ -78,6 +83,7 @@ func TestLoadFromViper_InvalidCacheTTL(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 0)
 	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
 	v.Set("storage.local.rootDir", "./data/uploads")
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 
@@ -92,6 +98,7 @@ func TestLoadFromViper_InvalidStorageRoot(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
 	v.Set("storage.local.rootDir", "")
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 
@@ -106,10 +113,32 @@ func TestLoadFromViper_InvalidAttachmentMaxUploadSize(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
 	v.Set("storage.local.rootDir", "./data/uploads")
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(0))
 
 	cfg, err := loadFromViper(v)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
+}
+
+func TestLoadFromViper_ObjectStorageConfig(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "object")
+	v.Set("storage.object.endpoint", "localhost:9000")
+	v.Set("storage.object.bucket", "attachments")
+	v.Set("storage.object.accessKey", "minio")
+	v.Set("storage.object.secretKey", "minio123")
+	v.Set("storage.object.useSSL", false)
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+
+	cfg, err := loadFromViper(v)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, "object", cfg.Storage.Provider)
+	assert.Equal(t, "attachments", cfg.Storage.Object.Bucket)
 }
