@@ -44,6 +44,22 @@ func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
 	assert.Nil(t, deleted)
 }
 
+func TestPostRepository_Delete_SoftDeletesAndExcludesFromList(t *testing.T) {
+	repo := NewPostRepository()
+	id, err := repo.Save(testPost("title", "content", 1, 1))
+	require.NoError(t, err)
+
+	require.NoError(t, repo.Delete(id))
+
+	selected, err := repo.SelectPostByID(id)
+	require.NoError(t, err)
+	assert.Nil(t, selected)
+
+	posts, err := repo.SelectPosts(1, 10, 0)
+	require.NoError(t, err)
+	assert.Empty(t, posts)
+}
+
 func TestPostRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
 	repo := NewPostRepository()
 	_, _ = repo.Save(testPost("p1", "c1", 1, 1))

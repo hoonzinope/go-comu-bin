@@ -13,6 +13,8 @@ func TestPost_NewPostAndUpdatePost(t *testing.T) {
 	assert.Equal(t, "content", p.Content)
 	assert.EqualValues(t, 10, p.AuthorID)
 	assert.EqualValues(t, 20, p.BoardID)
+	assert.Equal(t, PostStatusPublished, p.Status)
+	assert.Nil(t, p.DeletedAt)
 	assert.False(t, p.CreatedAt.IsZero())
 	assert.False(t, p.UpdatedAt.IsZero())
 
@@ -23,4 +25,13 @@ func TestPost_NewPostAndUpdatePost(t *testing.T) {
 	assert.Equal(t, "new-title", p.Title)
 	assert.Equal(t, "new-content", p.Content)
 	assert.True(t, p.UpdatedAt.After(before))
+}
+
+func TestPost_SoftDelete(t *testing.T) {
+	p := NewPost("title", "content", 10, 20)
+
+	p.SoftDelete()
+
+	assert.Equal(t, PostStatusDeleted, p.Status)
+	assert.NotNil(t, p.DeletedAt)
 }

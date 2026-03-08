@@ -156,3 +156,21 @@ func TestPostService_GetPostDetail_ReturnsCacheFailure_WhenCacheLoadFails(t *tes
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
 }
+
+func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	require.NoError(t, svc.DeletePost(postID, userID))
+
+	_, err := svc.GetPostDetail(postID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrPostNotFound))
+
+	list, err := svc.GetPostsList(boardID, 10, 0)
+	require.NoError(t, err)
+	assert.Empty(t, list.Posts)
+}

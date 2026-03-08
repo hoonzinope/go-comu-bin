@@ -44,7 +44,7 @@ func (r *PostRepository) SelectPostByID(id int64) (*entity.Post, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if post, exists := r.postDB.Data[id]; exists {
+	if post, exists := r.postDB.Data[id]; exists && post.Status == entity.PostStatusPublished {
 		return post, nil
 	}
 	return nil, nil
@@ -60,7 +60,7 @@ func (r *PostRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]
 
 	var posts []*entity.Post
 	for _, post := range r.postDB.Data {
-		if post.BoardID == boardID {
+		if post.BoardID == boardID && post.Status == entity.PostStatusPublished {
 			if lastID > 0 && post.ID >= lastID {
 				continue
 			}
@@ -92,6 +92,11 @@ func (r *PostRepository) Delete(id int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	delete(r.postDB.Data, id)
+	post, exists := r.postDB.Data[id]
+	if !exists {
+		return nil
+	}
+	post.SoftDelete()
+	r.postDB.Data[id] = post
 	return nil
 }

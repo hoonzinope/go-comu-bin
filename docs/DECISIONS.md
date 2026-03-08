@@ -181,3 +181,33 @@
 - `internal/delivery/http.go`
 - `internal/application/service/userService.go`
 - `docs/API.md`
+
+## 2026-03-08 - Post 상태 모델은 기본 3단계로 시작
+
+상태
+
+- decided
+
+배경
+
+- admin 운영 API 보강 이후, 다음 우선순위로 `post/comment` 상태 모델 확장이 남아 있었다.
+- 우선 `Post` 상태를 최소 규칙으로 도입해 이후 soft delete와 draft 확장의 기반을 만들 필요가 있었다.
+
+결론
+
+- `Post` 상태는 우선 `draft`, `published`, `deleted` 3단계로 시작한다.
+- 현재 기본 글 작성 API는 임시저장 기능이 없으므로 생성 시 기본 상태는 `published`다.
+- 삭제는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식으로 처리한다.
+- 공개 목록/상세 조회에서는 `published`만 노출하고 `deleted`는 제외한다.
+
+후속 작업
+
+- `Post` 엔티티에 상태/삭제 시각 추가
+- 저장소 조회 규칙을 `published` 중심으로 정리
+- 이후 `draft` 전용 API는 별도 작업으로 확장
+
+관련 문서/코드
+
+- `internal/domain/entity/post.go`
+- `internal/application/service/postService.go`
+- `internal/infrastructure/persistence/inmemory/postRepository.go`

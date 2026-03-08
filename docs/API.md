@@ -45,6 +45,11 @@
 
 ## Post
 
+- 상태 모델
+  - 내부 기본 상태는 `draft`, `published`, `deleted`
+  - 현재 공개 글 생성 API는 임시저장 기능이 없으므로 생성 시 기본 상태는 `published`
+  - 삭제 API는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식
+  - 공개 목록/상세 조회에서는 `published`만 노출
 - `GET /api/v1/boards/{boardID}/posts?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
