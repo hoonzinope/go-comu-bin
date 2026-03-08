@@ -418,3 +418,35 @@
 - `internal/application/service/postService.go`
 - `internal/application/service/attachmentService.go`
 - `docs/API.md`
+
+## 2026-03-08 - Attachment 후속은 orphan 표시, object storage adapter, 서버 내부 이미지 최적화로 간다
+
+상태
+
+- decided
+
+배경
+
+- attachment 업로드/참조/조회 흐름은 갖춰졌지만, 미사용 파일 정리 정책과 저장소 확장, 저장 효율화는 아직 남아 있었다.
+
+결론
+
+- unused attachment는 즉시 삭제하지 않고 `Attachment`에 orphan 표시를 남긴다.
+- orphan attachment는 public 응답/공개 파일 조회에서는 제외하고, owner/admin preview에서는 유지한다.
+- 실제 삭제는 나중 배치 잡이 처리할 수 있도록 지연 정리 정책을 전제로 한다.
+- 파일 저장 포트 구현체로 S3-compatible object storage adapter를 추가하되, 기본 provider는 계속 local로 둔다.
+- 이미지 후처리는 업로드 시점에 서버 내부 저장본만 최적화한다.
+- 1차 최적화 범위는 `jpeg/jpg`, `png` 재인코딩이다. `gif`, `webp`는 원본 유지로 시작한다.
+
+후속 작업
+
+- attachment orphan 필드/표시 정책 구현
+- storage provider config와 object storage adapter 추가
+- 업로드 시 이미지 최적화 처리 추가
+
+관련 문서/코드
+
+- `internal/domain/entity/attachment.go`
+- `internal/application/service/attachmentService.go`
+- `internal/application/service/postService.go`
+- `internal/infrastructure/storage`

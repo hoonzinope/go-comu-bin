@@ -148,6 +148,9 @@ func (s *AttachmentService) GetPostAttachments(postID int64) ([]model.Attachment
 	}
 	out := make([]model.Attachment, 0, len(items))
 	for _, item := range items {
+		if item.IsOrphaned() {
+			continue
+		}
 		out = append(out, model.Attachment{
 			ID:          item.ID,
 			PostID:      item.PostID,
@@ -175,6 +178,9 @@ func (s *AttachmentService) GetPostAttachmentFile(postID, attachmentID int64) (*
 		return nil, customError.WrapRepository("select attachment by id for get attachment file", err)
 	}
 	if attachment == nil || attachment.PostID != postID {
+		return nil, customError.ErrAttachmentNotFound
+	}
+	if attachment.IsOrphaned() {
 		return nil, customError.ErrAttachmentNotFound
 	}
 	content, err := s.fileStorage.Open(attachment.StorageKey)

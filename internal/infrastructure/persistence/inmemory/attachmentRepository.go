@@ -62,6 +62,17 @@ func (r *AttachmentRepository) SelectByPostID(postID int64) ([]*entity.Attachmen
 	return out, nil
 }
 
+func (r *AttachmentRepository) Update(attachment *entity.Attachment) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if attachment == nil {
+		return nil
+	}
+	r.attachmentDB.Data[attachment.ID] = attachment
+	return nil
+}
+
 func (r *AttachmentRepository) Delete(id int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

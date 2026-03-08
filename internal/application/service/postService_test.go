@@ -241,7 +241,9 @@ func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "body")
-	_, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png"))
+	attachment := entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png")
+	attachment.MarkReferenced()
+	_, err := repositories.attachment.Save(attachment)
 	require.NoError(t, err)
 	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
@@ -249,4 +251,28 @@ func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, detail.Attachments, 1)
 	assert.Equal(t, "a.png", detail.Attachments[0].FileName)
+}
+
+func TestPostService_UpdatePost_MarksUnusedAttachmentsAsOrphaned(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	referenced := entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png")
+	referenced.MarkReferenced()
+	referencedID, err := repositories.attachment.Save(referenced)
+	require.NoError(t, err)
+	unusedID, err := repositories.attachment.Save(entity.NewAttachment(postID, "b.png", "image/png", 10, "posts/1/b.png"))
+	require.NoError(t, err)
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	err = svc.UpdatePost(postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(referencedID, 10)+")")
+	require.NoError(t, err)
+
+	referencedAfter, err := repositories.attachment.SelectByID(referencedID)
+	require.NoError(t, err)
+	unusedAfter, err := repositories.attachment.SelectByID(unusedID)
+	require.NoError(t, err)
+	assert.False(t, referencedAfter.IsOrphaned())
+	assert.True(t, unusedAfter.IsOrphaned())
 }

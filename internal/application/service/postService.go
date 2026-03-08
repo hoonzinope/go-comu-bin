@@ -239,6 +239,9 @@ func (s *PostService) PublishPost(id, authorID int64) error {
 	if err := s.validateAttachmentRefs(post.ID, post.Content); err != nil {
 		return err
 	}
+	if err := s.syncPostAttachmentOrphans(post.ID, post.Content); err != nil {
+		return err
+	}
 	post.Publish()
 	if err := s.postRepository.Update(post); err != nil {
 		return customError.WrapRepository("publish post", err)
@@ -332,6 +335,9 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 		return err
 	}
 	if err := s.validateAttachmentRefs(post.ID, content); err != nil {
+		return err
+	}
+	if err := s.syncPostAttachmentOrphans(post.ID, content); err != nil {
 		return err
 	}
 	post.Update(title, content)
@@ -429,6 +435,9 @@ func extractAttachmentRefIDs(content string) []int64 {
 func attachmentsFromEntities(items []*entity.Attachment) []model.Attachment {
 	out := make([]model.Attachment, 0, len(items))
 	for _, item := range items {
+		if item.IsOrphaned() {
+			continue
+		}
 		out = append(out, model.Attachment{
 			ID:          item.ID,
 			PostID:      item.PostID,
@@ -440,4 +449,26 @@ func attachmentsFromEntities(items []*entity.Attachment) []model.Attachment {
 		})
 	}
 	return out
+}
+
+func (s *PostService) syncPostAttachmentOrphans(postID int64, content string) error {
+	items, err := s.attachmentRepository.SelectByPostID(postID)
+	if err != nil {
+		return customError.WrapRepository("select attachments by post id for sync orphans", err)
+	}
+	refIDs := make(map[int64]struct{})
+	for _, id := range extractAttachmentRefIDs(content) {
+		refIDs[id] = struct{}{}
+	}
+	for _, item := range items {
+		if _, ok := refIDs[item.ID]; ok {
+			item.MarkReferenced()
+		} else {
+			item.MarkOrphaned()
+		}
+		if err := s.attachmentRepository.Update(item); err != nil {
+			return customError.WrapRepository("update attachment orphan state", err)
+		}
+	}
+	return nil
 }

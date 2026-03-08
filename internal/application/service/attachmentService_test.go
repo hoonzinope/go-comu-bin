@@ -82,6 +82,25 @@ func TestAttachmentService_GetPostAttachments_RequiresPublishedPost(t *testing.T
 	assert.True(t, errors.Is(err, customError.ErrPostNotFound))
 }
 
+func TestAttachmentService_GetPostAttachments_ExcludesOrphaned(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	referenced := entity.NewAttachment(postID, "a.png", "image/png", 10, "attachments/a.png")
+	referenced.MarkReferenced()
+	_, err := repositories.attachment.Save(referenced)
+	require.NoError(t, err)
+	_, err = repositories.attachment.Save(entity.NewAttachment(postID, "b.png", "image/png", 10, "attachments/b.png"))
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	items, err := svc.GetPostAttachments(postID)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "a.png", items[0].FileName)
+}
+
 func TestAttachmentService_DeletePostAttachment_ForbiddenForNonOwner(t *testing.T) {
 	repositories := newTestRepositories()
 	ownerID := seedUser(repositories.user, "alice", "pw", "user")
@@ -229,7 +248,9 @@ func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	attachmentID, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png"))
+	attachment := entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png")
+	attachment.MarkReferenced()
+	attachmentID, err := repositories.attachment.Save(attachment)
 	require.NoError(t, err)
 	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
@@ -245,6 +266,21 @@ func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {
 	assert.Equal(t, "a.png", file.FileName)
 	assert.NotEmpty(t, file.ETag)
 	assert.Equal(t, "hello", string(data))
+}
+
+func TestAttachmentService_GetPostAttachmentFile_RejectsOrphaned(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{openContent: "hello"}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	attachmentID, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png"))
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	_, err = svc.GetPostAttachmentFile(postID, attachmentID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
 }
 
 func TestAttachmentService_GetPostAttachmentPreviewFile_AllowedForOwner(t *testing.T) {
