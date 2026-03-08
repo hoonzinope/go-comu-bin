@@ -74,6 +74,25 @@ func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 	assert.Equal(t, entity.ReactionTypeLike, reactions[0].Type)
 }
 
+func TestReactionService_SetReaction_SucceedsWhenCacheInvalidationFails(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, &errorCache{
+		deleteErr: newCacheFailure(nil),
+	}, newTestCachePolicy())
+
+	created, err := reactionSvc.SetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	require.NoError(t, repoErr)
+	require.Len(t, reactions, 1)
+	assert.Equal(t, entity.ReactionTypeLike, reactions[0].Type)
+}
+
 func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()

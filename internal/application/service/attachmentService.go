@@ -115,15 +115,7 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 	if err != nil {
 		return 0, customError.WrapRepository("save attachment", err)
 	}
-	if err := s.cache.Delete(key.PostDetail(postID)); err != nil {
-		if rollbackErr := s.attachmentRepository.Delete(id); rollbackErr != nil {
-			return 0, errors.Join(
-				customError.WrapCache("invalidate post detail after create attachment", err),
-				customError.WrapRepository("rollback attachment metadata after cache failure", rollbackErr),
-			)
-		}
-		return 0, customError.WrapCache("invalidate post detail after create attachment", err)
-	}
+	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after create attachment")
 	return id, nil
 }
 
@@ -317,9 +309,7 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 	if err := s.attachmentRepository.Delete(attachmentID); err != nil {
 		return customError.WrapRepository("delete attachment", err)
 	}
-	if err := s.cache.Delete(key.PostDetail(postID)); err != nil {
-		return customError.WrapCache("invalidate post detail after delete attachment", err)
-	}
+	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete attachment")
 	return nil
 }
 

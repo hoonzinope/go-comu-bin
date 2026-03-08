@@ -975,6 +975,22 @@ func TestHTTP_PostDetail_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
+func TestHTTP_PostDetail_IncludesCommentsHasMore(t *testing.T) {
+	post := &fakePostUseCase{
+		getPostDetail: func(postID int64) (*model.PostDetail, error) {
+			return &model.PostDetail{
+				Post:            &model.Post{ID: postID, Title: "title"},
+				CommentsHasMore: true,
+			}, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"comments_has_more":true`)
+}
+
 func TestHTTP_NotFound(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 

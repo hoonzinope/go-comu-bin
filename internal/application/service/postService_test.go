@@ -160,6 +160,26 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestPostService_UpdatePost_SucceedsWhenCacheInvalidationFails(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, &errorCache{
+		deleteErr:         newCacheFailure(nil),
+		deleteByPrefixErr: newCacheFailure(nil),
+	}, newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	err := svc.UpdatePost(postID, userID, "new", "new-content")
+	require.NoError(t, err)
+
+	post, repoErr := repositories.post.SelectPostByIDIncludingUnpublished(postID)
+	require.NoError(t, repoErr)
+	require.NotNil(t, post)
+	assert.Equal(t, "new", post.Title)
+	assert.Equal(t, "new-content", post.Content)
+}
+
 func TestPostService_GetPostDetail_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, &errorCache{
@@ -313,6 +333,22 @@ func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, detail.Attachments, 1)
 	assert.Equal(t, "a.png", detail.Attachments[0].FileName)
+}
+
+func TestPostService_GetPostDetail_ExposesCommentPreviewHasMore(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "body")
+	for i := 0; i < 11; i++ {
+		seedComment(repositories.comment, userID, postID, "comment")
+	}
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	detail, err := svc.GetPostDetail(postID)
+	require.NoError(t, err)
+	require.Len(t, detail.Comments, 10)
+	assert.True(t, detail.CommentsHasMore)
 }
 
 func TestPostService_UpdatePost_MarksUnusedAttachmentsAsOrphaned(t *testing.T) {

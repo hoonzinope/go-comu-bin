@@ -92,9 +92,7 @@ func (s *PostService) createPost(title, content string, authorID, boardID int64,
 		return 0, customError.WrapRepository("save post", err)
 	}
 	if !draft {
-		if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(boardID)); err != nil {
-			return 0, customError.WrapCache("invalidate post list after create post", err)
-		}
+		bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(boardID), "invalidate post list after create post")
 	}
 	return postID, nil
 }
@@ -169,7 +167,7 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 		if err != nil {
 			return nil, customError.WrapRepository("select post reactions for post detail", err)
 		}
-		comments, err := s.visibleCommentsForDetail(post.ID, commentDefaultLimit)
+		comments, commentsHasMore, err := s.visibleCommentsForDetail(post.ID, commentDefaultLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -206,10 +204,11 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 			return nil, err
 		}
 		postDetail := &model.PostDetail{
-			Post:        postModel,
-			Attachments: attachments,
-			Comments:    commentDetails,
-			Reactions:   reactionModels,
+			Post:            postModel,
+			Attachments:     attachments,
+			Comments:        commentDetails,
+			CommentsHasMore: commentsHasMore,
+			Reactions:       reactionModels,
 		}
 		return postDetail, nil
 	})
@@ -254,12 +253,8 @@ func (s *PostService) PublishPost(id, authorID int64) error {
 	if err := s.postRepository.Update(post); err != nil {
 		return customError.WrapRepository("publish post", err)
 	}
-	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID)); err != nil {
-		return customError.WrapCache("invalidate post list after publish post", err)
-	}
-	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
-		return customError.WrapCache("invalidate post detail after publish post", err)
-	}
+	bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(post.BoardID), "invalidate post list after publish post")
+	bestEffortCacheDelete(s.cache, key.PostDetail(post.ID), "invalidate post detail after publish post")
 	return nil
 }
 
@@ -353,12 +348,8 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string) erro
 	if err != nil {
 		return customError.WrapRepository("update post", err)
 	}
-	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
-		return customError.WrapCache("invalidate post detail after update post", err)
-	}
-	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID)); err != nil {
-		return customError.WrapCache("invalidate post list after update post", err)
-	}
+	bestEffortCacheDelete(s.cache, key.PostDetail(post.ID), "invalidate post detail after update post")
+	bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(post.BoardID), "invalidate post list after update post")
 	return nil
 }
 
@@ -399,9 +390,7 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 		if err := s.commentRepository.Delete(comment.ID); err != nil {
 			return customError.WrapRepository("soft delete post comments", err)
 		}
-		if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID)); err != nil {
-			return customError.WrapCache("invalidate comment reaction list after delete post", err)
-		}
+		bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetComment), comment.ID), "invalidate comment reaction list after delete post")
 	}
 	if err := s.orphanPostAttachments(post.ID); err != nil {
 		return err
@@ -409,18 +398,10 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if _, err := s.reactionRepository.DeleteByTarget(post.ID, entity.ReactionTargetPost); err != nil {
 		return customError.WrapRepository("delete post reactions", err)
 	}
-	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
-		return customError.WrapCache("invalidate post detail after delete post", err)
-	}
-	if _, err := s.cache.DeleteByPrefix(key.PostListPrefix(post.BoardID)); err != nil {
-		return customError.WrapCache("invalidate post list after delete post", err)
-	}
-	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(post.ID)); err != nil {
-		return customError.WrapCache("invalidate comment list after delete post", err)
-	}
-	if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetPost), post.ID)); err != nil {
-		return customError.WrapCache("invalidate post reaction list after delete post", err)
-	}
+	bestEffortCacheDelete(s.cache, key.PostDetail(post.ID), "invalidate post detail after delete post")
+	bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(post.BoardID), "invalidate post list after delete post")
+	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(post.ID), "invalidate comment list after delete post")
+	bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetPost), post.ID), "invalidate post reaction list after delete post")
 	return nil
 }
 
@@ -516,14 +497,16 @@ func (s *PostService) orphanPostAttachments(postID int64) error {
 	return nil
 }
 
-func (s *PostService) visibleCommentsForDetail(postID int64, limit int) ([]*entity.Comment, error) {
+func (s *PostService) visibleCommentsForDetail(postID int64, limit int) ([]*entity.Comment, bool, error) {
 	comments, err := s.commentRepository.SelectCommentsIncludingDeleted(postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select comments for post detail including deleted", err)
+		return nil, false, customError.WrapRepository("select comments for post detail including deleted", err)
 	}
 	filtered := filterVisibleComments(comments, 0)
+	hasMore := false
 	if limit > 0 && len(filtered) > limit {
+		hasMore = true
 		filtered = filtered[:limit]
 	}
-	return filtered, nil
+	return filtered, hasMore, nil
 }

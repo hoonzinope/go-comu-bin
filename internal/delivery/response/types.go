@@ -36,10 +36,11 @@ type PostList struct {
 }
 
 type PostDetail struct {
-	Post        *Post           `json:"post"`
-	Attachments []Attachment    `json:"attachments"`
-	Comments    []CommentDetail `json:"comments"`
-	Reactions   []Reaction      `json:"reactions"`
+	Post            *Post           `json:"post"`
+	Attachments     []Attachment    `json:"attachments"`
+	Comments        []CommentDetail `json:"comments"`
+	CommentsHasMore bool            `json:"comments_has_more"`
+	Reactions       []Reaction      `json:"reactions"`
 }
 
 type Comment struct {

@@ -143,6 +143,26 @@ func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestCommentService_CreateComment_SucceedsWhenCacheInvalidationFails(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, repositories.reaction, &errorCache{
+		deleteErr:         newCacheFailure(nil),
+		deleteByPrefixErr: newCacheFailure(nil),
+	}, newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	commentID, err := svc.CreateComment("new-comment", userID, postID, nil)
+	require.NoError(t, err)
+	assert.NotZero(t, commentID)
+
+	comment, repoErr := repositories.comment.SelectCommentByID(commentID)
+	require.NoError(t, repoErr)
+	require.NotNil(t, comment)
+	assert.Equal(t, "new-comment", comment.Content)
+}
+
 func TestCommentService_GetCommentsByPost_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, repositories.reaction, &errorCache{

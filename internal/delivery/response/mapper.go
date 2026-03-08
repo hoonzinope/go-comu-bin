@@ -65,10 +65,11 @@ func PostDetailFromDTO(detail *model.PostDetail) *PostDetail {
 	}
 
 	return &PostDetail{
-		Post:        postPtrFromDTO(detail.Post),
-		Attachments: attachments,
-		Comments:    comments,
-		Reactions:   reactions,
+		Post:            postPtrFromDTO(detail.Post),
+		Attachments:     attachments,
+		Comments:        comments,
+		CommentsHasMore: detail.CommentsHasMore,
+		Reactions:       reactions,
 	}
 }
 

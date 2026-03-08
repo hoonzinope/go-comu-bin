@@ -98,9 +98,7 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if err != nil {
 		return 0, customError.WrapRepository("save board", err)
 	}
-	if _, err := s.cache.DeleteByPrefix(key.BoardListPrefix()); err != nil {
-		return 0, customError.WrapCache("invalidate board list after create board", err)
-	}
+	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after create board")
 	return boardID, nil
 }
 
@@ -131,9 +129,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if err != nil {
 		return customError.WrapRepository("update board", err)
 	}
-	if _, err := s.cache.DeleteByPrefix(key.BoardListPrefix()); err != nil {
-		return customError.WrapCache("invalidate board list after update board", err)
-	}
+	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after update board")
 	return nil
 }
 
@@ -167,8 +163,6 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	if err != nil {
 		return customError.WrapRepository("delete board", err)
 	}
-	if _, err := s.cache.DeleteByPrefix(key.BoardListPrefix()); err != nil {
-		return customError.WrapCache("invalidate board list after delete board", err)
-	}
+	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after delete board")
 	return nil
 }

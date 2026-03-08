@@ -136,7 +136,7 @@ func TestAttachmentService_CreatePostAttachment_Success(t *testing.T) {
 	assert.NotZero(t, id)
 }
 
-func TestAttachmentService_CreatePostAttachment_RollsBackMetadataWhenCacheInvalidationFails(t *testing.T) {
+func TestAttachmentService_CreatePostAttachment_SucceedsWhenCacheInvalidationFails(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -151,13 +151,14 @@ func TestAttachmentService_CreatePostAttachment_RollsBackMetadataWhenCacheInvali
 		newTestAuthorizationPolicy(),
 	)
 
-	_, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "attachments/a.png")
-	require.Error(t, err)
-	assertCacheFailure(t, err)
+	id, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "attachments/a.png")
+	require.NoError(t, err)
+	assert.NotZero(t, id)
 
 	items, repoErr := repositories.attachment.SelectByPostID(postID)
 	require.NoError(t, repoErr)
-	assert.Empty(t, items)
+	require.Len(t, items, 1)
+	assert.Equal(t, id, items[0].ID)
 }
 
 func TestAttachmentService_GetPostAttachments_RequiresPublishedPost(t *testing.T) {

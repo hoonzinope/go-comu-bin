@@ -112,16 +112,20 @@ func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestBoardService_CreateBoard_ReturnsCacheFailure_WhenInvalidationFails(t *testing.T) {
+func TestBoardService_CreateBoard_Succeeds_WhenInvalidationFails(t *testing.T) {
 	repositories := newTestRepositories()
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, &errorCache{
 		deleteByPrefixErr: newCacheFailure(nil),
 	}, newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	_, err := svc.CreateBoard(adminID, "free", "desc")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+	boardID, err := svc.CreateBoard(adminID, "free", "desc")
+	require.NoError(t, err)
+	assert.NotZero(t, boardID)
+
+	board, repoErr := repositories.board.SelectBoardByID(boardID)
+	require.NoError(t, repoErr)
+	assert.NotNil(t, board)
 }
 
 func TestBoardService_GetBoards_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {

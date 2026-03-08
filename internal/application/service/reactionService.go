@@ -52,9 +52,7 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 	if !created && !changed {
 		return false, nil
 	}
-	if err := s.invalidateReactionCaches(TargetID, TargetType); err != nil {
-		return false, err
-	}
+	s.invalidateReactionCaches(TargetID, TargetType)
 	return created, nil
 }
 
@@ -77,7 +75,8 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 	if !deleted {
 		return nil
 	}
-	return s.invalidateReactionCaches(TargetID, TargetType)
+	s.invalidateReactionCaches(TargetID, TargetType)
+	return nil
 }
 
 func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
@@ -120,24 +119,17 @@ func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([
 	return out, nil
 }
 
-func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType) error {
-	if err := s.cache.Delete(key.ReactionList(string(targetType), targetID)); err != nil {
-		return customError.WrapCache("invalidate reaction list", err)
-	}
+func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType) {
+	bestEffortCacheDelete(s.cache, key.ReactionList(string(targetType), targetID), "invalidate reaction list")
 	if targetType == entity.ReactionTargetPost {
-		if err := s.cache.Delete(key.PostDetail(targetID)); err != nil {
-			return customError.WrapCache("invalidate post detail after post reaction", err)
-		}
+		bestEffortCacheDelete(s.cache, key.PostDetail(targetID), "invalidate post detail after post reaction")
 	}
 	if targetType == entity.ReactionTargetComment {
 		comment, err := s.commentRepository.SelectCommentByID(targetID)
 		if err == nil && comment != nil {
-			if deleteErr := s.cache.Delete(key.PostDetail(comment.PostID)); deleteErr != nil {
-				return customError.WrapCache("invalidate post detail after comment reaction", deleteErr)
-			}
+			bestEffortCacheDelete(s.cache, key.PostDetail(comment.PostID), "invalidate post detail after comment reaction")
 		}
 	}
-	return nil
 }
 
 func (s *ReactionService) ensureTargetExists(targetID int64, targetType entity.ReactionTargetType) error {

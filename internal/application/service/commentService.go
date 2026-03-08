@@ -79,12 +79,8 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 	if err != nil {
 		return 0, customError.WrapRepository("save comment", err)
 	}
-	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(postID)); err != nil {
-		return 0, customError.WrapCache("invalidate comment list after create comment", err)
-	}
-	if err := s.cache.Delete(key.PostDetail(postID)); err != nil {
-		return 0, customError.WrapCache("invalidate post detail after create comment", err)
-	}
+	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after create comment")
+	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after create comment")
 	return commentID, nil
 }
 
@@ -181,12 +177,8 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if err != nil {
 		return customError.WrapRepository("update comment", err)
 	}
-	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID)); err != nil {
-		return customError.WrapCache("invalidate comment list after update comment", err)
-	}
-	if err := s.cache.Delete(key.PostDetail(comment.PostID)); err != nil {
-		return customError.WrapCache("invalidate post detail after update comment", err)
-	}
+	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(comment.PostID), "invalidate comment list after update comment")
+	bestEffortCacheDelete(s.cache, key.PostDetail(comment.PostID), "invalidate post detail after update comment")
 	return nil
 }
 
@@ -218,15 +210,9 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	if _, err := s.reactionRepository.DeleteByTarget(comment.ID, entity.ReactionTargetComment); err != nil {
 		return customError.WrapRepository("delete comment reactions", err)
 	}
-	if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID)); err != nil {
-		return customError.WrapCache("invalidate comment reaction list after delete comment", err)
-	}
-	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID)); err != nil {
-		return customError.WrapCache("invalidate comment list after delete comment", err)
-	}
-	if err := s.cache.Delete(key.PostDetail(comment.PostID)); err != nil {
-		return customError.WrapCache("invalidate post detail after delete comment", err)
-	}
+	bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetComment), comment.ID), "invalidate comment reaction list after delete comment")
+	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(comment.PostID), "invalidate comment list after delete comment")
+	bestEffortCacheDelete(s.cache, key.PostDetail(comment.PostID), "invalidate post detail after delete comment")
 	return nil
 }
 
