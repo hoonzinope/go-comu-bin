@@ -521,22 +521,7 @@ func (s *PostService) visibleCommentsForDetail(postID int64, limit int) ([]*enti
 	if err != nil {
 		return nil, customError.WrapRepository("select comments for post detail including deleted", err)
 	}
-	activeChildParentIDs := make(map[int64]struct{})
-	for _, comment := range comments {
-		if comment.Status == entity.CommentStatusActive && comment.ParentID != nil {
-			activeChildParentIDs[*comment.ParentID] = struct{}{}
-		}
-	}
-	filtered := make([]*entity.Comment, 0, len(comments))
-	for _, comment := range comments {
-		if comment.Status == entity.CommentStatusActive {
-			filtered = append(filtered, comment)
-			continue
-		}
-		if _, ok := activeChildParentIDs[comment.ID]; ok {
-			filtered = append(filtered, comment)
-		}
-	}
+	filtered := filterVisibleComments(comments, 0)
 	if limit > 0 && len(filtered) > limit {
 		filtered = filtered[:limit]
 	}
