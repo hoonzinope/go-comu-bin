@@ -39,6 +39,7 @@
 
 - `GET /api/v1/boards?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
+  - `limit`은 `1` 이상의 정수여야 합니다.
 - `POST /api/v1/boards` (인증 필요, admin)
 - `PUT /api/v1/boards/{boardID}` (인증 필요, admin)
 - `DELETE /api/v1/boards/{boardID}` (인증 필요, admin)
@@ -54,6 +55,7 @@
   - 공개 목록/상세 조회에서는 `published`만 노출
 - `GET /api/v1/boards/{boardID}/posts?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
+  - `limit`은 `1` 이상의 정수여야 합니다.
   - 게시판이 없으면 `404 Not Found`
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
@@ -109,6 +111,7 @@
   - 저장 키는 같은 파일명 충돌을 피하기 위해 내부적으로 랜덤 suffix를 붙여 생성합니다.
 - `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)
   - attachment 메타데이터와 저장된 파일을 함께 삭제합니다.
+  - 게시글 본문에서 `attachment://{attachmentID}` 로 참조 중인 첨부는 삭제할 수 없습니다.
 
 ## Comment
 
@@ -124,6 +127,7 @@
   - 응답은 flat list를 유지하고 `parent_id`로 관계를 표현한다.
 - `GET /api/v1/posts/{postID}/comments?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
+  - `limit`은 `1` 이상의 정수여야 합니다.
   - 삭제된 게시글이면 `404 Not Found`
 - `POST /api/v1/posts/{postID}/comments` (인증 필요)
   - 요청 본문은 `content`, 선택적 `parent_id`

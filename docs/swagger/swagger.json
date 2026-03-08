@@ -115,7 +115,7 @@
                 "summary": "List Boards",
                 "parameters": [
                     {
-                        "minimum": 0,
+                        "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
                         "name": "limit",
@@ -363,7 +363,7 @@
                         "required": true
                     },
                     {
-                        "minimum": 0,
+                        "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
                         "name": "limit",
@@ -1339,7 +1339,7 @@
                         "required": true
                     },
                     {
-                        "minimum": 0,
+                        "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
                         "name": "limit",

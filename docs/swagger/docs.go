@@ -119,7 +119,7 @@ const docTemplate = `{
                 "summary": "List Boards",
                 "parameters": [
                     {
-                        "minimum": 0,
+                        "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
                         "name": "limit",
@@ -367,7 +367,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "minimum": 0,
+                        "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
                         "name": "limit",
@@ -1343,7 +1343,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "minimum": 0,
+                        "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
                         "name": "limit",

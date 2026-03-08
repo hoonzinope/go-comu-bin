@@ -341,7 +341,7 @@ paths:
       parameters:
       - description: Page size
         in: query
-        minimum: 0
+        minimum: 1
         name: limit
         type: integer
       - description: Cursor id, fetch items with id < last_id
@@ -502,7 +502,7 @@ paths:
         type: integer
       - description: Page size
         in: query
-        minimum: 0
+        minimum: 1
         name: limit
         type: integer
       - description: Cursor id, fetch items with id < last_id
@@ -1138,7 +1138,7 @@ paths:
         type: integer
       - description: Page size
         in: query
-        minimum: 0
+        minimum: 1
         name: limit
         type: integer
       - description: Cursor id, fetch items with id < last_id

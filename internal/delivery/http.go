@@ -360,7 +360,7 @@ func (h *HTTPHandler) handleUserUnsuspend(c *gin.Context) {
 // @Description Returns board list with cursor pagination.
 // @Tags Board
 // @Produce json
-// @Param limit query int false "Page size" minimum(0)
+// @Param limit query int false "Page size" minimum(1)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
 // @Success 200 {object} response.BoardList
 // @Failure 400 {object} errorResponse
@@ -493,7 +493,7 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 // @Tags Post
 // @Produce json
 // @Param boardID path int true "Board ID"
-// @Param limit query int false "Page size" minimum(0)
+// @Param limit query int false "Page size" minimum(1)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
 // @Success 200 {object} response.PostList
 // @Failure 400 {object} errorResponse
@@ -924,7 +924,7 @@ func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
 // @Tags Comment
 // @Produce json
 // @Param postID path int true "Post ID"
-// @Param limit query int false "Page size" minimum(0)
+// @Param limit query int false "Page size" minimum(1)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
 // @Success 200 {object} response.CommentList
 // @Failure 400 {object} errorResponse
@@ -1309,7 +1309,7 @@ func parseLimitLastID(c *gin.Context) (int, int64, bool) {
 
 	if limitStr != "" {
 		v, err := strconv.Atoi(limitStr)
-		if err != nil || v < 0 {
+		if err != nil || v < 1 {
 			badRequest(c, errors.New("invalid limit"))
 			return 0, 0, false
 		}
