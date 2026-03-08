@@ -78,7 +78,7 @@ func (r *failingAttachmentRepository) SelectByPostID(postID int64) ([]*entity.At
 	return nil, nil
 }
 
-func (r *failingAttachmentRepository) SelectOrphansBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error) {
+func (r *failingAttachmentRepository) SelectCleanupCandidatesBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error) {
 	return nil, nil
 }
 
@@ -265,7 +265,7 @@ func TestAttachmentService_DeletePostAttachment_ReturnsAttachmentNotFound_WhenAt
 	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
 }
 
-func TestAttachmentService_DeletePostAttachment_DeletesMetadataBeforeStoredFile(t *testing.T) {
+func TestAttachmentService_DeletePostAttachment_MarksPendingDeleteWithoutDeletingStoredFile(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{deleteErr: errors.New("boom")}
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -276,11 +276,37 @@ func TestAttachmentService_DeletePostAttachment_DeletesMetadataBeforeStoredFile(
 	require.NoError(t, err)
 
 	err = svc.DeletePostAttachment(postID, attachmentID, userID)
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	item, repoErr := repositories.attachment.SelectByID(attachmentID)
 	require.NoError(t, repoErr)
-	assert.Nil(t, item)
+	require.NotNil(t, item)
+	assert.True(t, item.IsPendingDelete())
+	assert.Empty(t, storage.deleteKey)
+}
+
+func TestAttachmentService_DeletePostAttachment_HidesPendingDeleteAttachment(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{openContent: "hello"}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+	attachmentID, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "posts/1/a.png")
+	require.NoError(t, err)
+	require.NoError(t, svc.DeletePostAttachment(postID, attachmentID, userID))
+
+	items, err := svc.GetPostAttachments(postID)
+	require.NoError(t, err)
+	assert.Empty(t, items)
+
+	_, err = svc.GetPostAttachmentFile(postID, attachmentID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
+
+	_, err = svc.GetPostAttachmentPreviewFile(postID, attachmentID, userID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
 }
 
 func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.T) {
@@ -609,6 +635,27 @@ func TestAttachmentService_CleanupOrphanAttachments_RemovesExpiredOrphans(t *tes
 	assert.NotNil(t, referencedAfter)
 }
 
+func TestAttachmentService_CleanupOrphanAttachments_RemovesPendingDeleteAttachments(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+	attachmentID, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "posts/1/a.png")
+	require.NoError(t, err)
+	require.NoError(t, svc.DeletePostAttachment(postID, attachmentID, userID))
+
+	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now().Add(2*time.Hour), time.Hour, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 1, deletedCount)
+	assert.Equal(t, "posts/1/a.png", storage.deleteKey)
+
+	item, repoErr := repositories.attachment.SelectByID(attachmentID)
+	require.NoError(t, repoErr)
+	assert.Nil(t, item)
+}
+
 func TestAttachmentService_CleanupOrphanAttachments_RespectsLimit(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{}
@@ -654,5 +701,6 @@ func TestAttachmentService_CleanupOrphanAttachments_StopsOnStorageDeleteError(t 
 
 	stillThere, err := repositories.attachment.SelectByID(attachmentID)
 	require.NoError(t, err)
-	assert.Nil(t, stillThere)
+	require.NotNil(t, stillThere)
+	assert.True(t, stillThere.IsPendingDelete())
 }

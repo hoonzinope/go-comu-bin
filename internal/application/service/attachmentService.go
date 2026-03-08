@@ -184,7 +184,7 @@ func (s *AttachmentService) GetPostAttachments(postID int64) ([]model.Attachment
 	}
 	out := make([]model.Attachment, 0, len(items))
 	for _, item := range items {
-		if item.IsOrphaned() {
+		if item.IsOrphaned() || item.IsPendingDelete() {
 			continue
 		}
 		out = append(out, model.Attachment{
@@ -216,7 +216,7 @@ func (s *AttachmentService) GetPostAttachmentFile(postID, attachmentID int64) (*
 	if attachment == nil || attachment.PostID != postID {
 		return nil, customError.ErrAttachmentNotFound
 	}
-	if attachment.IsOrphaned() {
+	if attachment.IsOrphaned() || attachment.IsPendingDelete() {
 		return nil, customError.ErrAttachmentNotFound
 	}
 	content, err := s.fileStorage.Open(attachment.StorageKey)
@@ -255,6 +255,9 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(postID, attachmentID, u
 		return nil, customError.WrapRepository("select attachment by id for preview attachment file", err)
 	}
 	if attachment == nil || attachment.PostID != postID {
+		return nil, customError.ErrAttachmentNotFound
+	}
+	if attachment.IsPendingDelete() {
 		return nil, customError.ErrAttachmentNotFound
 	}
 	content, err := s.fileStorage.Open(attachment.StorageKey)
@@ -303,11 +306,9 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 			return customError.ErrInvalidInput
 		}
 	}
-	if err := s.attachmentRepository.Delete(attachmentID); err != nil {
-		return customError.WrapRepository("delete attachment", err)
-	}
-	if err := s.fileStorage.Delete(attachment.StorageKey); err != nil {
-		return customError.Wrap(customError.ErrInternalServerError, "delete stored file", err)
+	attachment.MarkPendingDelete()
+	if err := s.attachmentRepository.Update(attachment); err != nil {
+		return customError.WrapRepository("mark attachment pending delete", err)
 	}
 	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete attachment")
 	return nil
@@ -321,7 +322,7 @@ func (s *AttachmentService) CleanupOrphanAttachments(ctx context.Context, now ti
 		return 0, nil
 	}
 	cutoff := now.Add(-gracePeriod)
-	items, err := s.attachmentRepository.SelectOrphansBefore(cutoff, limit)
+	items, err := s.attachmentRepository.SelectCleanupCandidatesBefore(cutoff, limit)
 	if err != nil {
 		return 0, customError.WrapRepository("select orphan attachments for cleanup", err)
 	}
@@ -332,11 +333,17 @@ func (s *AttachmentService) CleanupOrphanAttachments(ctx context.Context, now ti
 			return deletedCount, ctx.Err()
 		default:
 		}
-		if err := s.attachmentRepository.Delete(item.ID); err != nil {
-			return deletedCount, customError.WrapRepository("delete orphan attachment metadata", err)
+		if !item.IsPendingDelete() {
+			item.MarkPendingDeleteAt(cutoff)
+			if err := s.attachmentRepository.Update(item); err != nil {
+				return deletedCount, customError.WrapRepository("mark attachment pending delete for cleanup", err)
+			}
 		}
 		if err := s.fileStorage.Delete(item.StorageKey); err != nil {
 			return deletedCount, customError.Wrap(customError.ErrInternalServerError, "delete orphan attachment file", err)
+		}
+		if err := s.attachmentRepository.Delete(item.ID); err != nil {
+			return deletedCount, customError.WrapRepository("delete orphan attachment metadata", err)
 		}
 		deletedCount++
 	}

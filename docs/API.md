@@ -60,6 +60,7 @@
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - 생성 시점 본문에는 `attachment://{id}` 참조를 포함할 수 없습니다.
+  - 첨부가 필요한 글은 먼저 draft를 만든 뒤 첨부 업로드와 본문 수정을 거쳐 publish 해야 합니다.
 - `POST /api/v1/boards/{boardID}/posts/drafts` (인증 필요)
   - 임시저장 글을 생성합니다.
   - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
@@ -92,18 +93,19 @@
 - 본문 내 직접 참조 형식: `![alt](attachment://{attachmentID})`
 - `GET /api/v1/posts/{postID}/attachments`
   - published post 기준으로 attachment 목록을 조회합니다.
-  - orphan attachment는 제외합니다.
+  - orphan attachment와 `pending_delete` attachment는 제외합니다.
 - `GET /api/v1/posts/{postID}/attachments/{attachmentID}/file`
   - published post의 attachment 파일 본문을 반환합니다.
   - `attachments[].file_url`이 이 경로를 가리킵니다.
   - `Cache-Control: public, max-age=300`과 `ETag`를 반환합니다.
   - `If-None-Match`가 일치하면 `304 Not Modified`를 반환합니다.
-  - orphan attachment는 `404`로 숨깁니다.
+  - orphan attachment와 `pending_delete` attachment는 `404`로 숨깁니다.
 - `GET /api/v1/posts/{postID}/attachments/{attachmentID}/preview` (인증 필요, 작성자 또는 admin)
   - draft/published post의 attachment 미리보기 파일 본문을 반환합니다.
   - `attachments[].preview_url` 및 upload 응답의 `preview_url`이 이 경로를 가리킵니다.
   - `Cache-Control: private, no-store`를 반환합니다.
-  - orphan attachment도 owner/admin preview에서는 접근할 수 있습니다.
+  - orphan attachment는 owner/admin preview에서는 접근할 수 있습니다.
+  - `pending_delete` attachment는 owner/admin preview에서도 접근할 수 없습니다.
 - `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
@@ -115,7 +117,7 @@
   - 서버 내부 저장본은 `storage.attachment.imageOptimization` 설정에 따라 `jpeg/jpg`, `png`를 최적화할 수 있습니다.
   - 저장 키는 같은 파일명 충돌을 피하기 위해 내부적으로 랜덤 suffix를 붙여 생성합니다.
 - `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)
-  - attachment 메타데이터와 저장된 파일을 함께 삭제합니다.
+  - attachment는 즉시 `pending_delete` 상태로 숨겨지고, 실제 파일/메타데이터 hard delete는 cleanup job이 비동기로 수행합니다.
   - 게시글 본문에서 `attachment://{attachmentID}` 로 참조 중인 첨부는 삭제할 수 없습니다.
 
 ## Comment

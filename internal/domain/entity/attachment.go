@@ -3,14 +3,15 @@ package entity
 import "time"
 
 type Attachment struct {
-	ID          int64
-	PostID      int64
-	FileName    string
-	ContentType string
-	SizeBytes   int64
-	StorageKey  string
-	CreatedAt   time.Time
-	OrphanedAt  *time.Time
+	ID              int64
+	PostID          int64
+	FileName        string
+	ContentType     string
+	SizeBytes       int64
+	StorageKey      string
+	CreatedAt       time.Time
+	OrphanedAt      *time.Time
+	PendingDeleteAt *time.Time
 }
 
 func NewAttachment(postID int64, fileName, contentType string, sizeBytes int64, storageKey string) *Attachment {
@@ -40,4 +41,20 @@ func (a *Attachment) MarkOrphaned() {
 
 func (a *Attachment) IsOrphaned() bool {
 	return a.OrphanedAt != nil
+}
+
+func (a *Attachment) MarkPendingDelete() {
+	now := time.Now()
+	a.MarkPendingDeleteAt(now)
+}
+
+func (a *Attachment) MarkPendingDeleteAt(at time.Time) {
+	if a.PendingDeleteAt != nil {
+		return
+	}
+	a.PendingDeleteAt = &at
+}
+
+func (a *Attachment) IsPendingDelete() bool {
+	return a.PendingDeleteAt != nil
 }

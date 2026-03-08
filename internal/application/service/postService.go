@@ -121,7 +121,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*mod
 
 		hasMore := false
 		var nextLastID *int64
-		if limit >= 0 && len(posts) > limit {
+		if len(posts) > limit {
 			hasMore = true
 			posts = posts[:limit]
 		}
@@ -411,7 +411,7 @@ func (s *PostService) validateAttachmentRefs(postID int64, content string) error
 		if err != nil {
 			return customError.WrapRepository("select attachment by id for validate post attachments", err)
 		}
-		if attachment == nil || attachment.PostID != postID {
+		if attachment == nil || attachment.PostID != postID || attachment.IsPendingDelete() {
 			return customError.ErrInvalidInput
 		}
 	}

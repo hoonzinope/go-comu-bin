@@ -64,27 +64,42 @@ func (r *AttachmentRepository) SelectByPostID(postID int64) ([]*entity.Attachmen
 	return out, nil
 }
 
-func (r *AttachmentRepository) SelectOrphansBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error) {
+func (r *AttachmentRepository) SelectCleanupCandidatesBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	out := make([]*entity.Attachment, 0)
 	for _, attachment := range r.attachmentDB.Data {
-		if attachment.OrphanedAt == nil {
-			continue
-		}
-		if attachment.OrphanedAt.After(cutoff) {
+		if !attachmentEligibleForCleanup(attachment, cutoff) {
 			continue
 		}
 		out = append(out, attachment)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].OrphanedAt.Before(*out[j].OrphanedAt)
+		return cleanupEligibleAt(out[i]).Before(cleanupEligibleAt(out[j]))
 	})
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func attachmentEligibleForCleanup(attachment *entity.Attachment, cutoff time.Time) bool {
+	eligibleAt := cleanupEligibleAt(attachment)
+	if eligibleAt.IsZero() {
+		return false
+	}
+	return !eligibleAt.After(cutoff)
+}
+
+func cleanupEligibleAt(attachment *entity.Attachment) time.Time {
+	if attachment.PendingDeleteAt != nil {
+		return *attachment.PendingDeleteAt
+	}
+	if attachment.OrphanedAt != nil {
+		return *attachment.OrphanedAt
+	}
+	return time.Time{}
 }
 
 func (r *AttachmentRepository) Update(attachment *entity.Attachment) error {

@@ -10,7 +10,7 @@ type AttachmentRepository interface {
 	Save(*entity.Attachment) (int64, error)
 	SelectByID(id int64) (*entity.Attachment, error)
 	SelectByPostID(postID int64) ([]*entity.Attachment, error)
-	SelectOrphansBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error)
+	SelectCleanupCandidatesBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error)
 	Update(*entity.Attachment) error
 	Delete(id int64) error
 }
