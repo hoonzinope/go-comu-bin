@@ -17,12 +17,13 @@ var (
 	ErrUserSuspended       = errors.New("user suspended")
 
 	// Public/resource
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrBoardNotFound     = errors.New("board not found")
-	ErrPostNotFound      = errors.New("post not found")
-	ErrCommentNotFound   = errors.New("comment not found")
-	ErrReactionNotFound  = errors.New("reaction not found")
+	ErrUserAlreadyExists  = errors.New("user already exists")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrBoardNotFound      = errors.New("board not found")
+	ErrPostNotFound       = errors.New("post not found")
+	ErrAttachmentNotFound = errors.New("attachment not found")
+	ErrCommentNotFound    = errors.New("comment not found")
+	ErrReactionNotFound   = errors.New("reaction not found")
 
 	// Internal categories
 	ErrRepositoryFailure = errors.New("repository failure")
@@ -63,6 +64,8 @@ func Public(err error) error {
 		return ErrBoardNotFound
 	case errors.Is(err, ErrPostNotFound):
 		return ErrPostNotFound
+	case errors.Is(err, ErrAttachmentNotFound):
+		return ErrAttachmentNotFound
 	case errors.Is(err, ErrCommentNotFound):
 		return ErrCommentNotFound
 	case errors.Is(err, ErrReactionNotFound):

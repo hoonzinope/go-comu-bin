@@ -135,6 +135,33 @@ func (s *AttachmentService) GetPostAttachments(postID int64) ([]model.Attachment
 	return out, nil
 }
 
+func (s *AttachmentService) GetPostAttachmentFile(postID, attachmentID int64) (*model.AttachmentFile, error) {
+	post, err := s.postRepository.SelectPostByID(postID)
+	if err != nil {
+		return nil, customError.WrapRepository("select post by id for get attachment file", err)
+	}
+	if post == nil {
+		return nil, customError.ErrPostNotFound
+	}
+	attachment, err := s.attachmentRepository.SelectByID(attachmentID)
+	if err != nil {
+		return nil, customError.WrapRepository("select attachment by id for get attachment file", err)
+	}
+	if attachment == nil || attachment.PostID != postID {
+		return nil, customError.ErrAttachmentNotFound
+	}
+	content, err := s.fileStorage.Open(attachment.StorageKey)
+	if err != nil {
+		return nil, customError.Wrap(customError.ErrInternalServerError, "open attachment file", err)
+	}
+	return &model.AttachmentFile{
+		FileName:    attachment.FileName,
+		ContentType: attachment.ContentType,
+		SizeBytes:   attachment.SizeBytes,
+		Content:     content,
+	}, nil
+}
+
 func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID int64) error {
 	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
 	if err != nil {

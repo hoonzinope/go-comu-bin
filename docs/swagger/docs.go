@@ -1285,6 +1285,54 @@ const docTemplate = `{
                 }
             }
         },
+        "/posts/{postID}/attachments/{attachmentID}/file": {
+            "get": {
+                "description": "Returns the stored file for an attachment of a published post.",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Attachment"
+                ],
+                "summary": "Get Post Attachment File",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Post ID",
+                        "name": "postID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Attachment ID",
+                        "name": "attachmentID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/posts/{postID}/comments": {
             "get": {
                 "description": "Returns comments in post with cursor pagination.",
@@ -2153,6 +2201,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "file_name": {
+                    "type": "string"
+                },
+                "file_url": {
                     "type": "string"
                 },
                 "id": {

@@ -10,5 +10,6 @@ type AttachmentUseCase interface {
 	CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
 	UploadPostAttachment(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
 	GetPostAttachments(postID int64) ([]model.Attachment, error)
+	GetPostAttachmentFile(postID, attachmentID int64) (*model.AttachmentFile, error)
 	DeletePostAttachment(postID, attachmentID, userID int64) error
 }

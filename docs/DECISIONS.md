@@ -396,6 +396,8 @@
 - 본문은 Markdown 이미지 문법으로 `attachment://{attachmentID}` 참조를 직접 가진다.
 - upload API는 본문에 바로 넣을 수 있는 `embed_markdown`을 응답한다.
 - `PostDetail`은 attachment 목록을 함께 내려 클라이언트가 본문 참조를 해석할 수 있게 한다.
+- attachment 응답에는 실제 파일 조회용 `file_url`을 포함한다.
+- 1차 파일 조회는 published post 기준 public read 경로로 연다.
 - post update/publish 시 본문에 들어 있는 attachment 참조가 실제로 해당 post의 attachment인지 검증한다.
 
 후속 작업

@@ -87,6 +87,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.GET("/posts/:postID", h.handlePostDetailGet)
 	v1.POST("/posts/:postID/publish", h.authGinMiddleware, h.handlePostPublish)
 	v1.GET("/posts/:postID/attachments", h.handlePostAttachmentsGet)
+	v1.GET("/posts/:postID/attachments/:attachmentID/file", h.handlePostAttachmentFileGet)
 	v1.POST("/posts/:postID/attachments", h.authGinMiddleware, h.handlePostAttachmentsPost)
 	v1.POST("/posts/:postID/attachments/upload", h.authGinMiddleware, h.handlePostAttachmentsUpload)
 	v1.DELETE("/posts/:postID/attachments/:attachmentID", h.authGinMiddleware, h.handlePostAttachmentDelete)
@@ -735,6 +736,36 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 		ID:            upload.ID,
 		EmbedMarkdown: upload.EmbedMarkdown,
 	})
+}
+
+// handlePostAttachmentFileGet godoc
+// @Summary Get Post Attachment File
+// @Description Returns the stored file for an attachment of a published post.
+// @Tags Attachment
+// @Produce application/octet-stream
+// @Param postID path int true "Post ID"
+// @Param attachmentID path int true "Attachment ID"
+// @Success 200 {file} file
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/attachments/{attachmentID}/file [get]
+func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
+		return
+	}
+	attachmentID, ok := parsePathID(c, "attachmentID", "attachment")
+	if !ok {
+		return
+	}
+	file, err := h.attachmentUseCase.GetPostAttachmentFile(postID, attachmentID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	defer file.Content.Close()
+	c.Header("Content-Disposition", "inline; filename=\""+file.FileName+"\"")
+	c.DataFromReader(http.StatusOK, file.SizeBytes, file.ContentType, file.Content, nil)
 }
 
 // handlePostAttachmentDelete godoc

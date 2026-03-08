@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,13 @@ func TestFileStorage_SaveAndDelete(t *testing.T) {
 	storage := NewFileStorage(rootDir)
 
 	require.NoError(t, storage.Save("posts/1/a.txt", strings.NewReader("hello")))
+
+	reader, err := storage.Open("posts/1/a.txt")
+	require.NoError(t, err)
+	defer reader.Close()
+	opened, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", string(opened))
 
 	data, err := os.ReadFile(filepath.Join(rootDir, "posts/1/a.txt"))
 	require.NoError(t, err)

@@ -1,6 +1,8 @@
 package response
 
 import (
+	"fmt"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 )
 
@@ -186,6 +188,7 @@ func attachmentFromDTO(attachment model.Attachment) Attachment {
 		ContentType: attachment.ContentType,
 		SizeBytes:   attachment.SizeBytes,
 		StorageKey:  attachment.StorageKey,
+		FileURL:     fmt.Sprintf("/api/v1/posts/%d/attachments/%d/file", attachment.PostID, attachment.ID),
 		CreatedAt:   attachment.CreatedAt,
 	}
 }

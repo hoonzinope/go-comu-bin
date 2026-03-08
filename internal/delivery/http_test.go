@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -222,10 +223,11 @@ type fakeReactionUseCase struct {
 }
 
 type fakeAttachmentUseCase struct {
-	createPostAttachment func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
-	getPostAttachments   func(postID int64) ([]model.Attachment, error)
-	deletePostAttachment func(postID, attachmentID, userID int64) error
-	uploadPostAttachment func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
+	createPostAttachment  func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
+	getPostAttachments    func(postID int64) ([]model.Attachment, error)
+	getPostAttachmentFile func(postID, attachmentID int64) (*model.AttachmentFile, error)
+	deletePostAttachment  func(postID, attachmentID, userID int64) error
+	uploadPostAttachment  func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
 }
 
 func (f *fakeAttachmentUseCase) CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
@@ -240,6 +242,13 @@ func (f *fakeAttachmentUseCase) GetPostAttachments(postID int64) ([]model.Attach
 		return f.getPostAttachments(postID)
 	}
 	return []model.Attachment{}, nil
+}
+
+func (f *fakeAttachmentUseCase) GetPostAttachmentFile(postID, attachmentID int64) (*model.AttachmentFile, error) {
+	if f.getPostAttachmentFile != nil {
+		return f.getPostAttachmentFile(postID, attachmentID)
+	}
+	return nil, customError.ErrAttachmentNotFound
 }
 
 func (f *fakeAttachmentUseCase) DeletePostAttachment(postID, attachmentID, userID int64) error {
@@ -540,7 +549,7 @@ func TestHandleGetAttachments_Success(t *testing.T) {
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/3/attachments", nil)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.JSONEq(t, `{"attachments":[{"id":7,"post_id":3,"file_name":"a.png","content_type":"image/png","size_bytes":10,"storage_key":"attachments/a.png","created_at":"0001-01-01T00:00:00Z"}]}`, rr.Body.String())
+	assert.JSONEq(t, `{"attachments":[{"id":7,"post_id":3,"file_name":"a.png","content_type":"image/png","size_bytes":10,"storage_key":"attachments/a.png","file_url":"/api/v1/posts/3/attachments/7/file","created_at":"0001-01-01T00:00:00Z"}]}`, rr.Body.String())
 }
 
 func TestHandleDeleteAttachment_Success(t *testing.T) {
@@ -609,6 +618,38 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
 	assert.JSONEq(t, `{"id":8,"embed_markdown":"![a.png](attachment://8)"}`, rr.Body.String())
+}
+
+func TestHandleGetAttachmentFile_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			getPostAttachmentFile: func(postID, attachmentID int64) (*model.AttachmentFile, error) {
+				assert.Equal(t, int64(3), postID)
+				assert.Equal(t, int64(8), attachmentID)
+				return &model.AttachmentFile{
+					FileName:    "a.png",
+					ContentType: "image/png",
+					SizeBytes:   5,
+					Content:     io.NopCloser(strings.NewReader("hello")),
+				}, nil
+			},
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "image/png", rr.Header().Get("Content-Type"))
+	assert.Contains(t, rr.Header().Get("Content-Disposition"), "a.png")
+	assert.Equal(t, "hello", rr.Body.String())
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {

@@ -37,6 +37,14 @@ func (s *FileStorage) Save(key string, content io.Reader) error {
 	return err
 }
 
+func (s *FileStorage) Open(key string) (io.ReadCloser, error) {
+	fullPath, err := s.resolve(key)
+	if err != nil {
+		return nil, err
+	}
+	return os.Open(fullPath)
+}
+
 func (s *FileStorage) Delete(key string) error {
 	fullPath, err := s.resolve(key)
 	if err != nil {

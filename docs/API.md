@@ -61,6 +61,7 @@
 - `GET /api/v1/posts/{postID}`
   - 응답 본문에는 `attachments` 목록이 포함됩니다.
   - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentID})` 형식을 사용합니다.
+  - 각 attachment는 실제 파일 조회용 `file_url`을 포함합니다.
 - `POST /api/v1/posts/{postID}/publish` (인증 필요, 작성자 또는 admin)
   - `draft -> published` 상태 전이를 수행합니다.
   - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
@@ -78,6 +79,9 @@
 - 본문 내 직접 참조 형식: `![alt](attachment://{attachmentID})`
 - `GET /api/v1/posts/{postID}/attachments`
   - published post 기준으로 attachment 목록을 조회합니다.
+- `GET /api/v1/posts/{postID}/attachments/{attachmentID}/file`
+  - published post의 attachment 파일 본문을 반환합니다.
+  - `attachments[].file_url`이 이 경로를 가리킵니다.
 - `POST /api/v1/posts/{postID}/attachments` (인증 필요, 작성자 또는 admin)
   - draft/published post에 attachment 메타데이터를 추가합니다.
 - `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)
@@ -209,6 +213,14 @@ curl -X POST http://localhost:18577/api/v1/posts/1/attachments \
 
 ```bash
 curl -X GET http://localhost:18577/api/v1/posts/1/attachments
+```
+
+응답 필드에는 `file_url`이 포함됩니다.
+
+### 게시글 첨부파일 조회
+
+```bash
+curl -X GET http://localhost:18577/api/v1/posts/1/attachments/3/file --output a.png
 ```
 
 ### 게시글 첨부파일 업로드

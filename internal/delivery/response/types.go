@@ -80,5 +80,6 @@ type Attachment struct {
 	ContentType string    `json:"content_type"`
 	SizeBytes   int64     `json:"size_bytes"`
 	StorageKey  string    `json:"storage_key"`
+	FileURL     string    `json:"file_url"`
 	CreatedAt   time.Time `json:"created_at"`
 }
