@@ -22,7 +22,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v.Set("jobs.enabled", true)
 	v.Set("jobs.orphanAttachmentCleanup.enabled", true)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)
@@ -39,6 +39,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.True(t, cfg.Jobs.Enabled)
 	assert.True(t, cfg.Jobs.OrphanAttachmentCleanup.Enabled)
 	assert.Equal(t, 600, cfg.Jobs.OrphanAttachmentCleanup.IntervalSeconds)
+	assert.Equal(t, 600, cfg.Jobs.OrphanAttachmentCleanup.GracePeriodSeconds)
 }
 
 func TestLoadFromViper_InvalidPort(t *testing.T) {
@@ -53,7 +54,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 		v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 		v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-		v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+		v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 		v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 		cfg, err := loadFromViper(v)
@@ -72,7 +73,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 		v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 		v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-		v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+		v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 		v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 		cfg, err := loadFromViper(v)
@@ -92,7 +93,7 @@ func TestLoadFromViper_UnknownField(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 	v.Set("delivery.http.unknown", true)
 
@@ -112,7 +113,7 @@ func TestLoadFromViper_InvalidCacheTTL(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)
@@ -131,7 +132,7 @@ func TestLoadFromViper_InvalidStorageRoot(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)
@@ -150,7 +151,7 @@ func TestLoadFromViper_InvalidAttachmentMaxUploadSize(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(0))
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)
@@ -169,7 +170,7 @@ func TestLoadFromViper_InvalidAttachmentJPEGQuality(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 101)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)
@@ -188,7 +189,7 @@ func TestLoadFromViper_InvalidOrphanCleanupInterval(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 0)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)
@@ -211,7 +212,7 @@ func TestLoadFromViper_ObjectStorageConfig(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.Set("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.Set("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)

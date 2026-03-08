@@ -74,7 +74,7 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("jobs.enabled", true)
 	v.SetDefault("jobs.orphanAttachmentCleanup.enabled", true)
 	v.SetDefault("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.SetDefault("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 86400)
+	v.SetDefault("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
 	v.SetDefault("jobs.orphanAttachmentCleanup.batchSize", 50)
 
 	cfg := &Config{}

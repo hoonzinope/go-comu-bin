@@ -41,7 +41,7 @@ jobs:
   orphanAttachmentCleanup:
     enabled: true
     intervalSeconds: 600
-    gracePeriodSeconds: 86400
+    gracePeriodSeconds: 600
     batchSize: 50
 ```
 
@@ -77,3 +77,4 @@ jobs:
 - attachment 이미지 최적화: `cfg.Storage.Attachment.ImageOptimization.Enabled`, `cfg.Storage.Attachment.ImageOptimization.JPEGQuality`
 - background jobs on/off: `cfg.Jobs.Enabled`
 - orphan attachment cleanup 주기/유예/배치 크기: `cfg.Jobs.OrphanAttachmentCleanup.*`
+  - 기본 유예는 `600`초이며, orphan와 `pending_delete` attachment 모두 같은 cleanup 주기를 사용합니다.
