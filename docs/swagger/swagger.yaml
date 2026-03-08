@@ -7,21 +7,6 @@ definitions:
           $ref: '#/definitions/response.Attachment'
         type: array
     type: object
-  delivery.attachmentRequest:
-    properties:
-      content_type:
-        example: image/png
-        type: string
-      file_name:
-        example: a.png
-        type: string
-      size_bytes:
-        example: 1024
-        type: integer
-      storage_key:
-        example: attachments/a.png
-        type: string
-    type: object
   delivery.attachmentUploadResponse:
     properties:
       embed_markdown:
@@ -973,54 +958,6 @@ paths:
           schema:
             $ref: '#/definitions/delivery.errorResponse'
       summary: List Post Attachments
-      tags:
-      - Attachment
-    post:
-      consumes:
-      - application/json
-      description: Creates attachment metadata for a post.
-      parameters:
-      - description: Post ID
-        in: path
-        name: postID
-        required: true
-        type: integer
-      - description: Create attachment payload
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/delivery.attachmentRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/delivery.idResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/delivery.errorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create Post Attachment
       tags:
       - Attachment
   /posts/{postID}/attachments/{attachmentID}:

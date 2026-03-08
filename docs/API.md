@@ -89,8 +89,6 @@
   - draft/published post의 attachment 미리보기 파일 본문을 반환합니다.
   - `attachments[].preview_url` 및 upload 응답의 `preview_url`이 이 경로를 가리킵니다.
   - `Cache-Control: private, no-store`를 반환합니다.
-- `POST /api/v1/posts/{postID}/attachments` (인증 필요, 작성자 또는 admin)
-  - draft/published post에 attachment 메타데이터를 추가합니다.
 - `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
@@ -208,16 +206,6 @@ curl -X POST http://localhost:18577/api/v1/boards/1/posts/drafts \
 TOKEN="로그인 응답 Authorization 헤더 값"
 curl -X POST http://localhost:18577/api/v1/posts/1/publish \
   -H "Authorization: $TOKEN"
-```
-
-### 게시글 첨부 메타데이터 추가
-
-```bash
-TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X POST http://localhost:18577/api/v1/posts/1/attachments \
-  -H "Content-Type: application/json" \
-  -H "Authorization: $TOKEN" \
-  -d '{"file_name":"a.png","content_type":"image/png","size_bytes":1024,"storage_key":"attachments/a.png"}'
 ```
 
 ### 게시글 첨부 메타데이터 조회

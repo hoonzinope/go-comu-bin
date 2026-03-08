@@ -405,6 +405,7 @@
 - 업로드 MIME은 요청 헤더만 믿지 않고 본문 sniffing 결과와 일치해야 한다.
 - storage key는 같은 파일명 충돌을 피하기 위해 `postID/랜덤-sanitized-name` 규칙으로 생성한다.
 - `storage_key`는 내부 저장 메타데이터로만 유지하고 외부 응답에서는 숨긴다.
+- 외부 `manual metadata create API`는 제거하고 attachment 생성은 upload 기반으로만 연다.
 - post update/publish 시 본문에 들어 있는 attachment 참조가 실제로 해당 post의 attachment인지 검증한다.
 
 후속 작업

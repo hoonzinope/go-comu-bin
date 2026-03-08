@@ -90,7 +90,6 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.GET("/posts/:postID/attachments", h.handlePostAttachmentsGet)
 	v1.GET("/posts/:postID/attachments/:attachmentID/file", h.handlePostAttachmentFileGet)
 	v1.GET("/posts/:postID/attachments/:attachmentID/preview", h.authGinMiddleware, h.handlePostAttachmentPreviewGet)
-	v1.POST("/posts/:postID/attachments", h.authGinMiddleware, h.handlePostAttachmentsPost)
 	v1.POST("/posts/:postID/attachments/upload", h.authGinMiddleware, h.handlePostAttachmentsUpload)
 	v1.DELETE("/posts/:postID/attachments/:attachmentID", h.authGinMiddleware, h.handlePostAttachmentDelete)
 	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetailPut)
@@ -643,48 +642,6 @@ func (h *HTTPHandler) handlePostAttachmentsGet(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, attachmentListResponse{Attachments: response.AttachmentsFromDTO(items)})
-}
-
-// handlePostAttachmentsPost godoc
-// @Summary Create Post Attachment
-// @Description Creates attachment metadata for a post.
-// @Tags Attachment
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param postID path int true "Post ID"
-// @Param request body attachmentRequest true "Create attachment payload"
-// @Success 201 {object} idResponse
-// @Failure 400 {object} errorResponse
-// @Failure 401 {object} errorResponse
-// @Failure 403 {object} errorResponse
-// @Failure 404 {object} errorResponse
-// @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/attachments [post]
-func (h *HTTPHandler) handlePostAttachmentsPost(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
-	if !ok {
-		return
-	}
-	userID, ok := h.requireAuthUserID(c)
-	if !ok {
-		return
-	}
-	var req attachmentRequest
-	if err := decodeJSON(c, &req); err != nil {
-		badRequest(c, err)
-		return
-	}
-	if err := req.validate(); err != nil {
-		badRequest(c, err)
-		return
-	}
-	id, err := h.attachmentUseCase.CreatePostAttachment(postID, userID, req.FileName, req.ContentType, req.SizeBytes, req.StorageKey)
-	if err != nil {
-		writeUseCaseError(c, err)
-		return
-	}
-	c.JSON(http.StatusCreated, idResponse{ID: id})
 }
 
 // handlePostAttachmentsUpload godoc

@@ -499,38 +499,6 @@ func TestHandleCreateComment_WithParentID_Success(t *testing.T) {
 	assert.JSONEq(t, `{"id":11}`, rr.Body.String())
 }
 
-func TestHandleCreateAttachment_Success(t *testing.T) {
-	handler := newTestHandler(
-		&fakeUserUseCase{},
-		&fakeAccountUseCase{},
-		&fakeBoardUseCase{},
-		&fakePostUseCase{},
-		&fakeCommentUseCase{},
-		&fakeReactionUseCase{},
-		&fakeAttachmentUseCase{
-			createPostAttachment: func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
-				assert.Equal(t, int64(3), postID)
-				assert.Equal(t, int64(1), userID)
-				assert.Equal(t, "a.png", fileName)
-				assert.Equal(t, "image/png", contentType)
-				assert.Equal(t, int64(10), sizeBytes)
-				assert.Equal(t, "attachments/a.png", storageKey)
-				return 7, nil
-			},
-		},
-	)
-
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/3/attachments", map[string]any{
-		"file_name":    "a.png",
-		"content_type": "image/png",
-		"size_bytes":   10,
-		"storage_key":  "attachments/a.png",
-	}, 1)
-
-	assert.Equal(t, http.StatusCreated, rr.Code)
-	assert.JSONEq(t, `{"id":7}`, rr.Body.String())
-}
-
 func TestHandleGetAttachments_Success(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{},

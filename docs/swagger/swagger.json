@@ -1063,80 +1063,6 @@
                         }
                     }
                 }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Creates attachment metadata for a post.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Attachment"
-                ],
-                "summary": "Create Post Attachment",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Create attachment payload",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/delivery.attachmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/delivery.errorResponse"
-                        }
-                    }
-                }
             }
         },
         "/posts/{postID}/attachments/upload": {
@@ -2066,27 +1992,6 @@
                     "items": {
                         "$ref": "#/definitions/response.Attachment"
                     }
-                }
-            }
-        },
-        "delivery.attachmentRequest": {
-            "type": "object",
-            "properties": {
-                "content_type": {
-                    "type": "string",
-                    "example": "image/png"
-                },
-                "file_name": {
-                    "type": "string",
-                    "example": "a.png"
-                },
-                "size_bytes": {
-                    "type": "integer",
-                    "example": 1024
-                },
-                "storage_key": {
-                    "type": "string",
-                    "example": "attachments/a.png"
                 }
             }
         },
