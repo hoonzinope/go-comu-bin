@@ -13,6 +13,13 @@
 
 Composition root는 `cmd/main.go` 에 두고, wiring 단계에서만 concrete 구현체를 조립합니다.
 
+## 사용자 식별자 정책
+
+- 내부 PK/FK는 `int64`를 유지한다.
+- 외부에 노출하는 사용자 식별자는 `User.UUID`를 사용한다.
+- 게시글/댓글/리액션 응답은 내부 `author_id`/`user_id` 대신 `author_uuid`/`user_uuid`를 노출한다.
+- soft delete 후에도 `uuid`는 유지되며, `name` 같은 식별 정보만 익명화한다.
+
 ## 인증/인가 흐름
 
 - 인증

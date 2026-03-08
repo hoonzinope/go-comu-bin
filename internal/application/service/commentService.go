@@ -93,8 +93,13 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 			nextLastID = &next
 		}
 
+		commentModels, err := s.commentsFromEntities(comments)
+		if err != nil {
+			return nil, err
+		}
+
 		return &model.CommentList{
-			Comments:   mapper.CommentsFromEntities(comments),
+			Comments:   commentModels,
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,
@@ -109,6 +114,20 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 		return nil, customError.Mark(customError.ErrCacheFailure, "decode comment list cache payload")
 	}
 	return list, nil
+}
+
+func (s *CommentService) commentsFromEntities(comments []*entity.Comment) ([]model.Comment, error) {
+	out := make([]model.Comment, 0, len(comments))
+	for _, comment := range comments {
+		authorUUID, err := userUUIDByID(s.userRepository, comment.AuthorID)
+		if err != nil {
+			return nil, err
+		}
+		commentModel := mapper.CommentFromEntity(comment)
+		commentModel.AuthorUUID = authorUUID
+		out = append(out, commentModel)
+	}
+	return out, nil
 }
 
 func (s *CommentService) UpdateComment(id, authorID int64, content string) error {

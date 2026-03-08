@@ -11,6 +11,9 @@
 
 모든 엔드포인트는 `/api/v1` prefix를 사용합니다.
 
+공개 응답의 사용자 식별자는 내부 `id` 대신 `uuid`를 사용합니다.
+예: `author_uuid`, `user_uuid`
+
 ## User
 
 - `POST /api/v1/signup`

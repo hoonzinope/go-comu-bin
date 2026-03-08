@@ -67,6 +67,16 @@ func (r *UserRepository) SelectUserByID(id int64) (*entity.User, error) {
 	return nil, nil
 }
 
+func (r *UserRepository) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if user, exists := r.userDB.Data[id]; exists {
+		return user, nil
+	}
+	return nil, nil
+}
+
 func (r *UserRepository) Update(user *entity.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

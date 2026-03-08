@@ -1515,8 +1515,8 @@ const docTemplate = `{
         "response.Comment": {
             "type": "object",
             "properties": {
-                "author_id": {
-                    "type": "integer"
+                "author_uuid": {
+                    "type": "string"
                 },
                 "content": {
                     "type": "string"
@@ -1575,8 +1575,8 @@ const docTemplate = `{
         "response.Post": {
             "type": "object",
             "properties": {
-                "author_id": {
-                    "type": "integer"
+                "author_uuid": {
+                    "type": "string"
                 },
                 "board_id": {
                     "type": "integer"
@@ -1659,8 +1659,8 @@ const docTemplate = `{
                 "type": {
                     "type": "string"
                 },
-                "user_id": {
-                    "type": "integer"
+                "user_uuid": {
+                    "type": "string"
                 }
             }
         }

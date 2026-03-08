@@ -225,6 +225,11 @@ func mustGetPost(t *testing.T, baseURL string, postID int64) {
 	mustUnmarshal(t, body, &resp)
 	post := resp["post"].(map[string]any)
 	assert.EqualValues(t, postID, int64(post["id"].(float64)))
+	authorUUID, ok := post["author_uuid"].(string)
+	require.True(t, ok)
+	assert.NotEmpty(t, authorUUID)
+	_, hasAuthorID := post["author_id"]
+	assert.False(t, hasAuthorID)
 }
 
 func mustUpdatePost(t *testing.T, baseURL, token string, postID int64, title, content string) {
@@ -263,6 +268,11 @@ func mustGetComments(t *testing.T, baseURL string, postID, expectedCommentID int
 	require.NotEmpty(t, comments)
 	first := comments[0].(map[string]any)
 	assert.EqualValues(t, expectedCommentID, int64(first["id"].(float64)))
+	authorUUID, ok := first["author_uuid"].(string)
+	require.True(t, ok)
+	assert.NotEmpty(t, authorUUID)
+	_, hasAuthorID := first["author_id"]
+	assert.False(t, hasAuthorID)
 }
 
 func mustUpdateComment(t *testing.T, baseURL, token string, commentID int64, content string) {
@@ -303,6 +313,11 @@ func mustHaveFirstPostReactionType(t *testing.T, baseURL string, postID int64, e
 	mustUnmarshal(t, body, &resp)
 	require.NotEmpty(t, resp)
 	assert.Equal(t, expectedType, resp[0]["type"])
+	userUUID, ok := resp[0]["user_uuid"].(string)
+	require.True(t, ok)
+	assert.NotEmpty(t, userUUID)
+	_, hasUserID := resp[0]["user_id"]
+	assert.False(t, hasUserID)
 }
 
 func mustHaveFirstCommentReactionType(t *testing.T, baseURL string, commentID int64, expectedType string) {
@@ -313,6 +328,11 @@ func mustHaveFirstCommentReactionType(t *testing.T, baseURL string, commentID in
 	mustUnmarshal(t, body, &resp)
 	require.NotEmpty(t, resp)
 	assert.Equal(t, expectedType, resp[0]["type"])
+	userUUID, ok := resp[0]["user_uuid"].(string)
+	require.True(t, ok)
+	assert.NotEmpty(t, userUUID)
+	_, hasUserID := resp[0]["user_id"]
+	assert.False(t, hasUserID)
 }
 
 func mustDeletePostReaction(t *testing.T, baseURL, token string, postID int64) {

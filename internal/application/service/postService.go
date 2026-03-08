@@ -98,8 +98,13 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*mod
 			nextLastID = &next
 		}
 
+		postModels, err := s.postsFromEntities(posts)
+		if err != nil {
+			return nil, err
+		}
+
 		return &model.PostList{
-			Posts:      mapper.PostsFromEntities(posts),
+			Posts:      postModels,
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,
@@ -140,15 +145,31 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 			if err != nil {
 				return nil, customError.WrapRepository("select comment reactions for post detail", err)
 			}
+			commentModel, err := s.commentFromEntity(comment)
+			if err != nil {
+				return nil, err
+			}
+			commentReactionModels, err := s.reactionsFromEntities(commentReactions)
+			if err != nil {
+				return nil, err
+			}
 			commentDetails[i] = &model.CommentDetail{
-				Comment:   mapper.CommentPtrFromEntity(comment),
-				Reactions: mapper.ReactionsFromEntities(commentReactions),
+				Comment:   commentModel,
+				Reactions: commentReactionModels,
 			}
 		}
+		postModel, err := s.postFromEntity(post)
+		if err != nil {
+			return nil, err
+		}
+		reactionModels, err := s.reactionsFromEntities(reactions)
+		if err != nil {
+			return nil, err
+		}
 		postDetail := &model.PostDetail{
-			Post:      mapper.PostPtrFromEntity(post),
+			Post:      postModel,
 			Comments:  commentDetails,
-			Reactions: mapper.ReactionsFromEntities(reactions),
+			Reactions: reactionModels,
 		}
 		return postDetail, nil
 	})
@@ -160,6 +181,60 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 		return nil, customError.Mark(customError.ErrCacheFailure, "decode post detail cache payload")
 	}
 	return detail, nil
+}
+
+func (s *PostService) postsFromEntities(posts []*entity.Post) ([]model.Post, error) {
+	out := make([]model.Post, 0, len(posts))
+	for _, post := range posts {
+		postModel, err := s.postModelFromEntity(post)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, postModel)
+	}
+	return out, nil
+}
+
+func (s *PostService) postFromEntity(post *entity.Post) (*model.Post, error) {
+	postModel, err := s.postModelFromEntity(post)
+	if err != nil {
+		return nil, err
+	}
+	return &postModel, nil
+}
+
+func (s *PostService) postModelFromEntity(post *entity.Post) (model.Post, error) {
+	authorUUID, err := userUUIDByID(s.userRepository, post.AuthorID)
+	if err != nil {
+		return model.Post{}, err
+	}
+	out := mapper.PostFromEntity(post)
+	out.AuthorUUID = authorUUID
+	return out, nil
+}
+
+func (s *PostService) commentFromEntity(comment *entity.Comment) (*model.Comment, error) {
+	authorUUID, err := userUUIDByID(s.userRepository, comment.AuthorID)
+	if err != nil {
+		return nil, err
+	}
+	out := mapper.CommentFromEntity(comment)
+	out.AuthorUUID = authorUUID
+	return &out, nil
+}
+
+func (s *PostService) reactionsFromEntities(reactions []*entity.Reaction) ([]model.Reaction, error) {
+	out := make([]model.Reaction, 0, len(reactions))
+	for _, reaction := range reactions {
+		userUUID, err := userUUIDByID(s.userRepository, reaction.UserID)
+		if err != nil {
+			return nil, err
+		}
+		reactionModel := mapper.ReactionFromEntity(reaction)
+		reactionModel.UserUUID = userUUID
+		out = append(out, reactionModel)
+	}
+	return out, nil
 }
 
 func (s *PostService) UpdatePost(id, authorID int64, title, content string) error {

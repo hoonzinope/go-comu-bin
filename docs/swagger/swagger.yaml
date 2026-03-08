@@ -103,8 +103,8 @@ definitions:
     type: object
   response.Comment:
     properties:
-      author_id:
-        type: integer
+      author_uuid:
+        type: string
       content:
         type: string
       created_at:
@@ -142,8 +142,8 @@ definitions:
     type: object
   response.Post:
     properties:
-      author_id:
-        type: integer
+      author_uuid:
+        type: string
       board_id:
         type: integer
       content:
@@ -197,8 +197,8 @@ definitions:
         type: string
       type:
         type: string
-      user_id:
-        type: integer
+      user_uuid:
+        type: string
     type: object
 info:
   contact: {}

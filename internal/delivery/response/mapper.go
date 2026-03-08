@@ -102,13 +102,13 @@ func boardFromDTO(board model.Board) Board {
 
 func postFromDTO(post model.Post) Post {
 	return Post{
-		ID:        post.ID,
-		Title:     post.Title,
-		Content:   post.Content,
-		AuthorID:  post.AuthorID,
-		BoardID:   post.BoardID,
-		CreatedAt: post.CreatedAt,
-		UpdatedAt: post.UpdatedAt,
+		ID:         post.ID,
+		Title:      post.Title,
+		Content:    post.Content,
+		AuthorUUID: post.AuthorUUID,
+		BoardID:    post.BoardID,
+		CreatedAt:  post.CreatedAt,
+		UpdatedAt:  post.UpdatedAt,
 	}
 }
 
@@ -122,12 +122,12 @@ func postPtrFromDTO(post *model.Post) *Post {
 
 func commentFromDTO(comment model.Comment) Comment {
 	return Comment{
-		ID:        comment.ID,
-		Content:   comment.Content,
-		AuthorID:  comment.AuthorID,
-		PostID:    comment.PostID,
-		ParentID:  comment.ParentID,
-		CreatedAt: comment.CreatedAt,
+		ID:         comment.ID,
+		Content:    comment.Content,
+		AuthorUUID: comment.AuthorUUID,
+		PostID:     comment.PostID,
+		ParentID:   comment.ParentID,
+		CreatedAt:  comment.CreatedAt,
 	}
 }
 
@@ -159,7 +159,7 @@ func reactionFromDTO(reaction model.Reaction) Reaction {
 		TargetType: string(reaction.TargetType),
 		TargetID:   reaction.TargetID,
 		Type:       string(reaction.Type),
-		UserID:     reaction.UserID,
+		UserUUID:   reaction.UserUUID,
 		CreatedAt:  reaction.CreatedAt,
 	}
 }

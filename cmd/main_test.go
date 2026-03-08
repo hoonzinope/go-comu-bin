@@ -28,6 +28,10 @@ func (r *stubUserRepository) SelectUserByID(id int64) (*entity.User, error) {
 	return nil, nil
 }
 
+func (r *stubUserRepository) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
+	return nil, nil
+}
+
 func (r *stubUserRepository) Update(user *entity.User) error {
 	return nil
 }

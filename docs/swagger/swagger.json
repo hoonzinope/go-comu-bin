@@ -1511,8 +1511,8 @@
         "response.Comment": {
             "type": "object",
             "properties": {
-                "author_id": {
-                    "type": "integer"
+                "author_uuid": {
+                    "type": "string"
                 },
                 "content": {
                     "type": "string"
@@ -1571,8 +1571,8 @@
         "response.Post": {
             "type": "object",
             "properties": {
-                "author_id": {
-                    "type": "integer"
+                "author_uuid": {
+                    "type": "string"
                 },
                 "board_id": {
                     "type": "integer"
@@ -1655,8 +1655,8 @@
                 "type": {
                     "type": "string"
                 },
-                "user_id": {
-                    "type": "integer"
+                "user_uuid": {
+                    "type": "string"
                 }
             }
         }

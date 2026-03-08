@@ -129,5 +129,10 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		byName, err := repo.SelectUserByUsername("alice")
 		require.NoError(t, err)
 		assert.Nil(t, byName)
+
+		includingDeleted, err := repo.SelectUserByIDIncludingDeleted(id)
+		require.NoError(t, err)
+		require.NotNil(t, includingDeleted)
+		assert.Equal(t, user.UUID, includingDeleted.UUID)
 	})
 }

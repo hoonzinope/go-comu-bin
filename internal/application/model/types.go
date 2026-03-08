@@ -14,22 +14,24 @@ type Board struct {
 }
 
 type Post struct {
-	ID        int64
-	Title     string
-	Content   string
-	AuthorID  int64
-	BoardID   int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID         int64
+	Title      string
+	Content    string
+	AuthorID   int64
+	AuthorUUID string
+	BoardID    int64
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type Comment struct {
-	ID        int64
-	Content   string
-	AuthorID  int64
-	PostID    int64
-	ParentID  *int64
-	CreatedAt time.Time
+	ID         int64
+	Content    string
+	AuthorID   int64
+	AuthorUUID string
+	PostID     int64
+	ParentID   *int64
+	CreatedAt  time.Time
 }
 
 type Reaction struct {
@@ -38,5 +40,6 @@ type Reaction struct {
 	TargetID   int64
 	Type       entity.ReactionType
 	UserID     int64
+	UserUUID   string
 	CreatedAt  time.Time
 }

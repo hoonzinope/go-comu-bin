@@ -87,7 +87,11 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 		if err != nil {
 			return nil, customError.WrapRepository("select reactions by target", err)
 		}
-		return mapper.ReactionsFromEntities(reactions), nil
+		reactionModels, err := s.reactionsFromEntities(reactions)
+		if err != nil {
+			return nil, err
+		}
+		return reactionModels, nil
 	})
 	if err != nil {
 		return nil, normalizeCacheLoadError("load reaction list cache", err)
@@ -97,6 +101,20 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 		return nil, customError.Mark(customError.ErrCacheFailure, "decode reaction list cache payload")
 	}
 	return reactions, nil
+}
+
+func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([]model.Reaction, error) {
+	out := make([]model.Reaction, 0, len(reactions))
+	for _, reaction := range reactions {
+		userUUID, err := userUUIDByID(s.userRepository, reaction.UserID)
+		if err != nil {
+			return nil, err
+		}
+		reactionModel := mapper.ReactionFromEntity(reaction)
+		reactionModel.UserUUID = userUUID
+		out = append(out, reactionModel)
+	}
+	return out, nil
 }
 
 func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType) error {
