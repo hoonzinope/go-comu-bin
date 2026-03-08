@@ -97,6 +97,7 @@
   - 허용 타입: `image/png`, `image/jpeg`, `image/gif`, `image/webp`
   - 최대 크기: `10MB`
   - 요청의 `Content-Type`은 실제 파일 sniffing 결과와 일치해야 합니다.
+  - 저장 키는 같은 파일명 충돌을 피하기 위해 내부적으로 랜덤 suffix를 붙여 생성합니다.
 - `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)
   - attachment 메타데이터와 저장된 파일을 함께 삭제합니다.
 

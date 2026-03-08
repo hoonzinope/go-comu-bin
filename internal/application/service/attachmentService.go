@@ -2,11 +2,15 @@ package service
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
@@ -33,6 +37,8 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 	"image/gif":  {},
 	"image/webp": {},
 }
+
+var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
 	return &AttachmentService{
@@ -254,7 +260,11 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 }
 
 func buildAttachmentStorageKey(postID int64, fileName string) string {
-	return filepath.ToSlash(filepath.Join("posts", fmt.Sprintf("%d", postID), fileName))
+	suffix, err := newAttachmentKeySuffix()
+	if err != nil {
+		suffix = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return filepath.ToSlash(filepath.Join("posts", fmt.Sprintf("%d", postID), suffix+"-"+sanitizeAttachmentFileName(fileName)))
 }
 
 func buildAttachmentEmbedMarkdown(fileName string, attachmentID int64) string {
@@ -290,4 +300,22 @@ func validateAttachmentUpload(fileName, contentType string, data []byte) error {
 		return customError.ErrInvalidInput
 	}
 	return nil
+}
+
+func sanitizeAttachmentFileName(fileName string) string {
+	base := filepath.Base(strings.TrimSpace(fileName))
+	sanitized := attachmentFileNameSanitizer.ReplaceAllString(base, "-")
+	sanitized = strings.Trim(sanitized, "-.")
+	if sanitized == "" {
+		return "file"
+	}
+	return sanitized
+}
+
+func newAttachmentKeySuffix() (string, error) {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }

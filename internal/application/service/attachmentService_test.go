@@ -166,6 +166,32 @@ func TestAttachmentService_UploadPostAttachment_RejectsOversizedFile(t *testing.
 	assert.Empty(t, storage.savedKey)
 }
 
+func TestAttachmentService_UploadPostAttachment_UsesUniqueSanitizedStorageKey(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+
+	png := testPNGBytes()
+	first, err := svc.UploadPostAttachment(postID, userID, "../my file.png", "image/png", bytes.NewReader(png))
+	require.NoError(t, err)
+	firstKey := storage.savedKey
+
+	second, err := svc.UploadPostAttachment(postID, userID, "../my file.png", "image/png", bytes.NewReader(png))
+	require.NoError(t, err)
+	secondKey := storage.savedKey
+
+	require.NotNil(t, first)
+	require.NotNil(t, second)
+	assert.NotEqual(t, first.ID, second.ID)
+	assert.NotEqual(t, firstKey, secondKey)
+	assert.True(t, strings.HasPrefix(firstKey, "posts/"+strconv.FormatInt(postID, 10)+"/"))
+	assert.True(t, strings.HasSuffix(firstKey, "-my-file.png"))
+	assert.True(t, strings.HasSuffix(secondKey, "-my-file.png"))
+}
+
 func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{openContent: "hello"}
