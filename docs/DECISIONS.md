@@ -265,3 +265,31 @@
 - `internal/domain/entity/comment.go`
 - `internal/application/service/commentService.go`
 - `internal/infrastructure/persistence/inmemory/commentRepository.go`
+
+## 2026-03-08 - 대댓글은 parentID 저장, 정책은 1-depth 제한
+
+상태
+
+- decided
+
+배경
+
+- `Comment.ParentID`는 이미 있었지만 실제 생성 API와 서비스 규칙에는 아직 연결되지 않았다.
+
+결론
+
+- 저장 모델은 계속 `parentID`를 사용한다.
+- 현재 서비스 정책은 1-depth 대댓글만 허용한다.
+- 부모 댓글은 같은 게시글에 속한 활성 댓글이어야 한다.
+- 조회는 기존 flat list + `parent_id` 노출을 유지하고, 최적화는 어댑터 책임으로 둔다.
+
+후속 작업
+
+- comment create API에 `parent_id` 연결
+- 1-depth 검증 로직 추가
+
+관련 문서/코드
+
+- `internal/domain/entity/comment.go`
+- `internal/application/service/commentService.go`
+- `internal/delivery/http_requests.go`

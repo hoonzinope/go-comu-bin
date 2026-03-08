@@ -79,6 +79,12 @@ func seedComment(commentRepository port.CommentRepository, authorID, postID int6
 	return id
 }
 
+func seedCommentWithParent(commentRepository port.CommentRepository, authorID, postID int64, content string, parentID *int64) int64 {
+	comment := entity.NewComment(content, authorID, postID, parentID)
+	id, _ := commentRepository.Save(comment)
+	return id
+}
+
 type errorCache struct {
 	getErr             error
 	setErr             error

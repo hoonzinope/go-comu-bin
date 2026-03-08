@@ -31,7 +31,8 @@ type postRequest struct {
 }
 
 type commentRequest struct {
-	Content string `json:"content" example:"nice post"`
+	Content  string `json:"content" example:"nice post"`
+	ParentID *int64 `json:"parent_id,omitempty" example:"1"`
 }
 
 type reactionRequest struct {

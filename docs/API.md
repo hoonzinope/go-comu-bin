@@ -72,9 +72,15 @@
   - 내부 기본 상태는 `active`, `deleted`
   - 삭제 API는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식
   - 공개 목록/상세 조회에서는 `active`만 노출
+- 대댓글 규칙
+  - 생성 요청에서 `parent_id`를 받는다.
+  - 현재 정책은 1-depth 대댓글만 허용한다.
+  - 부모 댓글은 같은 게시글에 속한 활성 댓글이어야 한다.
+  - 응답은 flat list를 유지하고 `parent_id`로 관계를 표현한다.
 - `GET /api/v1/posts/{postID}/comments?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
 - `POST /api/v1/posts/{postID}/comments` (인증 필요)
+  - 요청 본문은 `content`, 선택적 `parent_id`
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `PUT /api/v1/comments/{commentID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
@@ -166,6 +172,16 @@ curl -X POST http://localhost:18577/api/v1/boards/1/posts/drafts \
 TOKEN="로그인 응답 Authorization 헤더 값"
 curl -X POST http://localhost:18577/api/v1/posts/1/publish \
   -H "Authorization: $TOKEN"
+```
+
+### 대댓글 작성
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X POST http://localhost:18577/api/v1/posts/1/comments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"content":"reply","parent_id":5}'
 ```
 
 ### 게시글 내 리액션 생성

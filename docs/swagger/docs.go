@@ -1705,6 +1705,10 @@ const docTemplate = `{
                 "content": {
                     "type": "string",
                     "example": "nice post"
+                },
+                "parent_id": {
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },

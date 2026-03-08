@@ -773,7 +773,7 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID)
+	id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID, req.ParentID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return

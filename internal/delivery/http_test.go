@@ -179,15 +179,15 @@ func (f *fakePostUseCase) DeletePost(id, authorID int64) error {
 }
 
 type fakeCommentUseCase struct {
-	createComment     func(content string, authorID, postID int64) (int64, error)
+	createComment     func(content string, authorID, postID int64, parentID *int64) (int64, error)
 	getCommentsByPost func(postID int64, limit int, lastID int64) (*model.CommentList, error)
 	updateComment     func(id, authorID int64, content string) error
 	deleteComment     func(id, authorID int64) error
 }
 
-func (f *fakeCommentUseCase) CreateComment(content string, authorID, postID int64) (int64, error) {
+func (f *fakeCommentUseCase) CreateComment(content string, authorID, postID int64, parentID *int64) (int64, error) {
 	if f.createComment != nil {
-		return f.createComment(content, authorID, postID)
+		return f.createComment(content, authorID, postID, parentID)
 	}
 	return 1, nil
 }
@@ -408,6 +408,34 @@ func TestHandlePublishPost_Success(t *testing.T) {
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/5/publish", nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleCreateComment_WithParentID_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{
+			createComment: func(content string, authorID, postID int64, parentID *int64) (int64, error) {
+				assert.Equal(t, "reply", content)
+				assert.Equal(t, int64(1), authorID)
+				assert.Equal(t, int64(3), postID)
+				require.NotNil(t, parentID)
+				assert.Equal(t, int64(9), *parentID)
+				return 11, nil
+			},
+		},
+		&fakeReactionUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/3/comments", map[string]any{
+		"content":   "reply",
+		"parent_id": 9,
+	}, 1)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.JSONEq(t, `{"id":11}`, rr.Body.String())
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {

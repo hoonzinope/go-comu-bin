@@ -19,7 +19,7 @@ func TestCommentService_UpdateComment_ForbiddenForNonOwnerNonAdmin(t *testing.T)
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
-	commentID, err := svc.CreateComment("comment", ownerID, postID)
+	commentID, err := svc.CreateComment("comment", ownerID, postID, nil)
 	require.NoError(t, err)
 
 	err = svc.UpdateComment(commentID, otherID, "new-comment")
@@ -34,7 +34,7 @@ func TestCommentService_UpdateComment_AllowedForAdmin(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
-	commentID, err := svc.CreateComment("comment", ownerID, postID)
+	commentID, err := svc.CreateComment("comment", ownerID, postID, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, svc.UpdateComment(commentID, adminID, "new-comment"))
@@ -47,7 +47,7 @@ func TestCommentService_CreateGetDelete_Success(t *testing.T) {
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	commentID, err := svc.CreateComment("comment", userID, postID)
+	commentID, err := svc.CreateComment("comment", userID, postID, nil)
 	require.NoError(t, err)
 	assert.NotZero(t, commentID)
 
@@ -65,7 +65,7 @@ func TestCommentService_CreateComment_InvalidInput(t *testing.T) {
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	_, err := svc.CreateComment(" ", userID, postID)
+	_, err := svc.CreateComment(" ", userID, postID, nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 }
@@ -80,7 +80,7 @@ func TestCommentService_CreateComment_BlockedForSuspendedUser(t *testing.T) {
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	_, err = svc.CreateComment("comment", userID, postID)
+	_, err = svc.CreateComment("comment", userID, postID, nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrUserSuspended))
 }
@@ -118,7 +118,7 @@ func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	_, err = commentSvc.GetCommentsByPost(postID, 10, 0)
 	require.NoError(t, err)
 
-	_, err = commentSvc.CreateComment("new-comment", userID, postID)
+	_, err = commentSvc.CreateComment("new-comment", userID, postID, nil)
 	require.NoError(t, err)
 
 	_, ok, err := cache.Get(key.PostDetail(postID))
@@ -147,7 +147,7 @@ func TestCommentService_DeleteComment_SoftDeletedCommentIsNoLongerVisible(t *tes
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	commentID, err := svc.CreateComment("comment", userID, postID)
+	commentID, err := svc.CreateComment("comment", userID, postID, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, svc.DeleteComment(commentID, userID))
@@ -155,4 +155,50 @@ func TestCommentService_DeleteComment_SoftDeletedCommentIsNoLongerVisible(t *tes
 	list, err := svc.GetCommentsByPost(postID, 10, 0)
 	require.NoError(t, err)
 	assert.Empty(t, list.Comments)
+}
+
+func TestCommentService_CreateReplyComment_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	parentID := seedComment(repositories.comment, userID, postID, "parent")
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	commentID, err := svc.CreateComment("reply", userID, postID, &parentID)
+	require.NoError(t, err)
+	assert.NotZero(t, commentID)
+
+	list, err := svc.GetCommentsByPost(postID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Comments, 2)
+	assert.Equal(t, &parentID, list.Comments[0].ParentID)
+}
+
+func TestCommentService_CreateReplyComment_RejectsNestedReply(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	parentID := seedComment(repositories.comment, userID, postID, "parent")
+	replyID := seedCommentWithParent(repositories.comment, userID, postID, "reply", &parentID)
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.CreateComment("nested", userID, postID, &replyID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
+func TestCommentService_CreateReplyComment_RejectsParentFromAnotherPost(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	otherPostID := seedPost(repositories.post, userID, boardID, "title2", "content2")
+	parentID := seedComment(repositories.comment, userID, otherPostID, "parent")
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.CreateComment("reply", userID, postID, &parentID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 }

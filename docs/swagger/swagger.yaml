@@ -14,6 +14,9 @@ definitions:
       content:
         example: nice post
         type: string
+      parent_id:
+        example: 1
+        type: integer
     type: object
   delivery.errorResponse:
     properties:

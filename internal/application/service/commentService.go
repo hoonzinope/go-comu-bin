@@ -35,7 +35,7 @@ func NewCommentService(userRepository port.UserRepository, postRepository port.P
 	}
 }
 
-func (s *CommentService) CreateComment(content string, authorID, postID int64) (int64, error) {
+func (s *CommentService) CreateComment(content string, authorID, postID int64, parentID *int64) (int64, error) {
 	// 댓글 생성 로직 구현
 	if strings.TrimSpace(content) == "" {
 		return 0, customError.ErrInvalidInput
@@ -57,7 +57,22 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64) (
 	if post == nil {
 		return 0, customError.ErrPostNotFound
 	}
-	newComment := entity.NewComment(content, authorID, postID, nil)
+	if parentID != nil {
+		parent, err := s.commentRepository.SelectCommentByID(*parentID)
+		if err != nil {
+			return 0, customError.WrapRepository("select parent comment by id for create comment", err)
+		}
+		if parent == nil {
+			return 0, customError.ErrCommentNotFound
+		}
+		if parent.PostID != postID {
+			return 0, customError.ErrInvalidInput
+		}
+		if parent.ParentID != nil {
+			return 0, customError.ErrInvalidInput
+		}
+	}
+	newComment := entity.NewComment(content, authorID, postID, parentID)
 	commentID, err := s.commentRepository.Save(newComment)
 	if err != nil {
 		return 0, customError.WrapRepository("save comment", err)
