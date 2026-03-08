@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
 	"strings"
 
@@ -16,12 +17,21 @@ import (
 
 var _ port.AttachmentUseCase = (*AttachmentService)(nil)
 
+const attachmentMaxSizeBytes = 10 << 20
+
 type AttachmentService struct {
 	userRepository       port.UserRepository
 	postRepository       port.PostRepository
 	attachmentRepository port.AttachmentRepository
 	fileStorage          port.FileStorage
 	authorizationPolicy  policy.AuthorizationPolicy
+}
+
+var allowedAttachmentContentTypes = map[string]struct{}{
+	"image/png":  {},
+	"image/jpeg": {},
+	"image/gif":  {},
+	"image/webp": {},
 }
 
 func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
@@ -73,6 +83,9 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	data, err := io.ReadAll(content)
 	if err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "read upload content", err)
+	}
+	if err := validateAttachmentUpload(fileName, contentType, data); err != nil {
+		return nil, err
 	}
 	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
 	if err != nil {
@@ -254,4 +267,27 @@ func buildAttachmentPreviewURL(postID, attachmentID int64) string {
 
 func buildAttachmentETag(attachment *entity.Attachment) string {
 	return fmt.Sprintf("\"att-%d-%d-%d\"", attachment.ID, attachment.SizeBytes, attachment.CreatedAt.Unix())
+}
+
+func validateAttachmentUpload(fileName, contentType string, data []byte) error {
+	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" {
+		return customError.ErrInvalidInput
+	}
+	if len(data) == 0 || int64(len(data)) > attachmentMaxSizeBytes {
+		return customError.ErrInvalidInput
+	}
+	if _, ok := allowedAttachmentContentTypes[contentType]; !ok {
+		return customError.ErrInvalidInput
+	}
+	sniffed := http.DetectContentType(data)
+	if sniffed == "application/octet-stream" && contentType == "image/webp" {
+		// DetectContentType does not recognize webp reliably for short samples.
+		if len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
+			return nil
+		}
+	}
+	if sniffed != contentType {
+		return customError.ErrInvalidInput
+	}
+	return nil
 }

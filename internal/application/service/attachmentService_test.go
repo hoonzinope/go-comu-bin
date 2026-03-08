@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"strconv"
@@ -53,6 +54,10 @@ func (s *spyFileStorage) Open(key string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(s.openContent)), nil
 }
 
+func testPNGBytes() []byte {
+	return []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0}
+}
+
 func TestAttachmentService_CreatePostAttachment_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -100,7 +105,8 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
 
-	upload, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", strings.NewReader("hello"))
+	png := testPNGBytes()
+	upload, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(png))
 	require.NoError(t, err)
 	require.NotNil(t, upload)
 	assert.NotZero(t, upload.ID)
@@ -108,13 +114,56 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	assert.Equal(t, "/api/v1/posts/"+strconv.FormatInt(postID, 10)+"/attachments/"+strconv.FormatInt(upload.ID, 10)+"/preview", upload.PreviewURL)
 	assert.Contains(t, storage.savedKey, "posts/")
 	assert.Contains(t, storage.savedKey, "a.png")
-	assert.Equal(t, "hello", storage.savedContent)
+	assert.Equal(t, string(png), storage.savedContent)
 
 	items, err := repositories.attachment.SelectByPostID(postID)
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	assert.Equal(t, storage.savedKey, items[0].StorageKey)
-	assert.Equal(t, int64(5), items[0].SizeBytes)
+	assert.Equal(t, int64(len(png)), items[0].SizeBytes)
+}
+
+func TestAttachmentService_UploadPostAttachment_RejectsUnsupportedContentType(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+
+	_, err := svc.UploadPostAttachment(postID, userID, "a.svg", "image/svg+xml", bytes.NewReader([]byte("<svg></svg>")))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.Empty(t, storage.savedKey)
+}
+
+func TestAttachmentService_UploadPostAttachment_RejectsMismatchedSniffedContentType(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+
+	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", strings.NewReader("plain text"))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.Empty(t, storage.savedKey)
+}
+
+func TestAttachmentService_UploadPostAttachment_RejectsOversizedFile(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestAuthorizationPolicy())
+
+	oversized := append(testPNGBytes(), bytes.Repeat([]byte{0}, attachmentMaxSizeBytes)...)
+	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(oversized))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.Empty(t, storage.savedKey)
 }
 
 func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {

@@ -401,6 +401,8 @@
 - draft 작성 중 미리보기는 owner/admin 전용 authenticated `preview_url`로 제공한다.
 - 파일 캐시는 앱 메모리 캐시보다 HTTP 캐시 헤더를 우선 적용한다.
 - `file_url`은 `Cache-Control: public` + `ETag`를 사용하고, `preview_url`은 `private, no-store`로 둔다.
+- attachment 업로드는 우선 이미지 화이트리스트(`png`, `jpeg`, `gif`, `webp`)와 최대 10MB 제한을 둔다.
+- 업로드 MIME은 요청 헤더만 믿지 않고 본문 sniffing 결과와 일치해야 한다.
 - post update/publish 시 본문에 들어 있는 attachment 참조가 실제로 해당 post의 attachment인지 검증한다.
 
 후속 작업
