@@ -48,14 +48,14 @@ func TestRunner_Start_RunsRegisteredJobOnTick(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	runCh := make(chan struct{}, 1)
-	runner.Register(Job{
+	require.NoError(t, runner.Register(Job{
 		Name:     "orphan-cleanup",
 		Interval: time.Second,
 		Run: func(context.Context) error {
 			runCh <- struct{}{}
 			return nil
 		},
-	})
+	}))
 
 	runner.Start(ctx)
 	require.Eventually(t, func() bool {
@@ -75,11 +75,11 @@ func TestRunner_Start_StopsTickerOnContextDone(t *testing.T) {
 	factory := &stubTickerFactory{}
 	runner := NewRunner(logger, WithTickerFactory(factory.New))
 	ctx, cancel := context.WithCancel(context.Background())
-	runner.Register(Job{
+	require.NoError(t, runner.Register(Job{
 		Name:     "orphan-cleanup",
 		Interval: time.Second,
 		Run:      func(context.Context) error { return nil },
-	})
+	}))
 
 	runner.Start(ctx)
 	require.Eventually(t, func() bool {
@@ -94,11 +94,10 @@ func TestRunner_Start_StopsTickerOnContextDone(t *testing.T) {
 	assert.True(t, stopped)
 }
 
-func TestRunner_Register_InvalidJobPanics(t *testing.T) {
+func TestRunner_Register_InvalidJobReturnsError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runner := NewRunner(logger)
 
-	assert.Panics(t, func() {
-		runner.Register(Job{Name: "", Interval: time.Second, Run: func(context.Context) error { return errors.New("x") }})
-	})
+	err := runner.Register(Job{Name: "", Interval: time.Second, Run: func(context.Context) error { return errors.New("x") }})
+	require.Error(t, err)
 }

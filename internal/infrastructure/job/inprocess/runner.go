@@ -2,6 +2,7 @@ package inprocess
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 )
@@ -54,11 +55,12 @@ func NewRunner(logger *slog.Logger, opts ...Option) *Runner {
 	return runner
 }
 
-func (r *Runner) Register(job Job) {
+func (r *Runner) Register(job Job) error {
 	if job.Name == "" || job.Interval <= 0 || job.Run == nil {
-		panic("invalid job registration")
+		return fmt.Errorf("invalid job registration")
 	}
 	r.jobs = append(r.jobs, job)
+	return nil
 }
 
 func (r *Runner) Start(ctx context.Context) {

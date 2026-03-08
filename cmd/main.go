@@ -85,7 +85,10 @@ func main() {
 		},
 		authorizationPolicy,
 	)
-	startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase)
+	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase); err != nil {
+		slog.Error("failed to start background jobs", "error", err)
+		os.Exit(1)
+	}
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)
@@ -151,23 +154,26 @@ func newFileStorage(cfg *config.Config) (port.FileStorage, error) {
 	}
 }
 
-func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase) {
+func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase) error {
 	if !cfg.Jobs.Enabled {
-		return
+		return nil
 	}
 	runner := jobrunner.NewRunner(logger)
-	if cfg.Jobs.OrphanAttachmentCleanup.Enabled {
-		interval := time.Duration(cfg.Jobs.OrphanAttachmentCleanup.IntervalSeconds) * time.Second
-		gracePeriod := time.Duration(cfg.Jobs.OrphanAttachmentCleanup.GracePeriodSeconds) * time.Second
-		batchSize := cfg.Jobs.OrphanAttachmentCleanup.BatchSize
-		runner.Register(jobrunner.Job{
-			Name:     "orphan-attachment-cleanup",
+	if cfg.Jobs.AttachmentCleanup.Enabled {
+		interval := time.Duration(cfg.Jobs.AttachmentCleanup.IntervalSeconds) * time.Second
+		gracePeriod := time.Duration(cfg.Jobs.AttachmentCleanup.GracePeriodSeconds) * time.Second
+		batchSize := cfg.Jobs.AttachmentCleanup.BatchSize
+		if err := runner.Register(jobrunner.Job{
+			Name:     "attachment-cleanup",
 			Interval: interval,
 			Run: func(ctx context.Context) error {
-				_, err := attachmentCleanupUseCase.CleanupOrphanAttachments(ctx, time.Now(), gracePeriod, batchSize)
+				_, err := attachmentCleanupUseCase.CleanupAttachments(ctx, time.Now(), gracePeriod, batchSize)
 				return err
 			},
-		})
+		}); err != nil {
+			return err
+		}
 	}
 	runner.Start(ctx)
+	return nil
 }
