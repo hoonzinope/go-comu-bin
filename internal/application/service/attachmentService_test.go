@@ -136,6 +136,30 @@ func TestAttachmentService_CreatePostAttachment_Success(t *testing.T) {
 	assert.NotZero(t, id)
 }
 
+func TestAttachmentService_CreatePostAttachment_RollsBackMetadataWhenCacheInvalidationFails(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(
+		repositories.user,
+		repositories.post,
+		repositories.attachment,
+		&spyFileStorage{},
+		&errorCache{deleteErr: newCacheFailure(nil)},
+		attachmentDefaultMaxSizeBytes,
+		newTestAuthorizationPolicy(),
+	)
+
+	_, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "attachments/a.png")
+	require.Error(t, err)
+	assertCacheFailure(t, err)
+
+	items, repoErr := repositories.attachment.SelectByPostID(postID)
+	require.NoError(t, repoErr)
+	assert.Empty(t, items)
+}
+
 func TestAttachmentService_GetPostAttachments_RequiresPublishedPost(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -226,6 +250,18 @@ func TestAttachmentService_DeletePostAttachment_RejectsReferencedAttachment(t *t
 	stillThere, err := repositories.attachment.SelectByID(attachmentID)
 	require.NoError(t, err)
 	assert.NotNil(t, stillThere)
+}
+
+func TestAttachmentService_DeletePostAttachment_ReturnsAttachmentNotFound_WhenAttachmentMissing(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, &spyFileStorage{}, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	err := svc.DeletePostAttachment(postID, 999, userID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
 }
 
 func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.T) {

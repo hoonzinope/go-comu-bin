@@ -116,6 +116,12 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 		return 0, customError.WrapRepository("save attachment", err)
 	}
 	if err := s.cache.Delete(key.PostDetail(postID)); err != nil {
+		if rollbackErr := s.attachmentRepository.Delete(id); rollbackErr != nil {
+			return 0, errors.Join(
+				customError.WrapCache("invalidate post detail after create attachment", err),
+				customError.WrapRepository("rollback attachment metadata after cache failure", rollbackErr),
+			)
+		}
 		return 0, customError.WrapCache("invalidate post detail after create attachment", err)
 	}
 	return id, nil
@@ -298,7 +304,7 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 		return customError.WrapRepository("select attachment by id for delete attachment", err)
 	}
 	if attachment == nil || attachment.PostID != postID {
-		return customError.ErrInvalidInput
+		return customError.ErrAttachmentNotFound
 	}
 	for _, referencedAttachmentID := range extractAttachmentRefIDs(post.Content) {
 		if referencedAttachmentID == attachmentID {
