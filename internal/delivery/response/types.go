@@ -71,3 +71,13 @@ type Reaction struct {
 	UserUUID   string    `json:"user_uuid"`
 	CreatedAt  time.Time `json:"created_at"`
 }
+
+type Attachment struct {
+	ID          int64     `json:"id"`
+	PostID      int64     `json:"post_id"`
+	FileName    string    `json:"file_name"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	StorageKey  string    `json:"storage_key"`
+	CreatedAt   time.Time `json:"created_at"`
+}

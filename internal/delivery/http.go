@@ -25,17 +25,19 @@ type HTTPHandler struct {
 	postUseCase       port.PostUseCase
 	commentUseCase    port.CommentUseCase
 	reactionUseCase   port.ReactionUseCase
+	attachmentUseCase port.AttachmentUseCase
 	authGinMiddleware gin.HandlerFunc
 }
 
 type HTTPDependencies struct {
-	SessionUseCase  port.SessionUseCase
-	UserUseCase     port.UserUseCase
-	AccountUseCase  port.AccountUseCase
-	BoardUseCase    port.BoardUseCase
-	PostUseCase     port.PostUseCase
-	CommentUseCase  port.CommentUseCase
-	ReactionUseCase port.ReactionUseCase
+	SessionUseCase    port.SessionUseCase
+	UserUseCase       port.UserUseCase
+	AccountUseCase    port.AccountUseCase
+	BoardUseCase      port.BoardUseCase
+	PostUseCase       port.PostUseCase
+	CommentUseCase    port.CommentUseCase
+	ReactionUseCase   port.ReactionUseCase
+	AttachmentUseCase port.AttachmentUseCase
 }
 
 func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
@@ -47,6 +49,7 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		postUseCase:       deps.PostUseCase,
 		commentUseCase:    deps.CommentUseCase,
 		reactionUseCase:   deps.ReactionUseCase,
+		attachmentUseCase: deps.AttachmentUseCase,
 		authGinMiddleware: middleware.AuthWithSession(deps.SessionUseCase),
 	}
 }
@@ -81,6 +84,9 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 
 	v1.GET("/posts/:postID", h.handlePostDetailGet)
 	v1.POST("/posts/:postID/publish", h.authGinMiddleware, h.handlePostPublish)
+	v1.GET("/posts/:postID/attachments", h.handlePostAttachmentsGet)
+	v1.POST("/posts/:postID/attachments", h.authGinMiddleware, h.handlePostAttachmentsPost)
+	v1.DELETE("/posts/:postID/attachments/:attachmentID", h.authGinMiddleware, h.handlePostAttachmentDelete)
 	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetailPut)
 	v1.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetailDelete)
 
@@ -607,6 +613,107 @@ func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response.PostDetailFromDTO(post))
+}
+
+// handlePostAttachmentsGet godoc
+// @Summary List Post Attachments
+// @Description Returns attachments for a published post.
+// @Tags Attachment
+// @Produce json
+// @Param postID path int true "Post ID"
+// @Success 200 {object} attachmentListResponse
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/attachments [get]
+func (h *HTTPHandler) handlePostAttachmentsGet(c *gin.Context) {
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
+		return
+	}
+	items, err := h.attachmentUseCase.GetPostAttachments(postID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, attachmentListResponse{Attachments: response.AttachmentsFromDTO(items)})
+}
+
+// handlePostAttachmentsPost godoc
+// @Summary Create Post Attachment
+// @Description Creates attachment metadata for a post.
+// @Tags Attachment
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Param request body attachmentRequest true "Create attachment payload"
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/attachments [post]
+func (h *HTTPHandler) handlePostAttachmentsPost(c *gin.Context) {
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
+		return
+	}
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req attachmentRequest
+	if err := decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
+		return
+	}
+	id, err := h.attachmentUseCase.CreatePostAttachment(postID, userID, req.FileName, req.ContentType, req.SizeBytes, req.StorageKey)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, idResponse{ID: id})
+}
+
+// handlePostAttachmentDelete godoc
+// @Summary Delete Post Attachment
+// @Description Deletes attachment metadata from a post.
+// @Tags Attachment
+// @Produce json
+// @Security BearerAuth
+// @Param postID path int true "Post ID"
+// @Param attachmentID path int true "Attachment ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postID}/attachments/{attachmentID} [delete]
+func (h *HTTPHandler) handlePostAttachmentDelete(c *gin.Context) {
+	postID, ok := parsePathID(c, "postID", "post")
+	if !ok {
+		return
+	}
+	attachmentID, ok := parsePathID(c, "attachmentID", "attachment")
+	if !ok {
+		return
+	}
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.attachmentUseCase.DeletePostAttachment(postID, attachmentID, userID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // handlePostPublish godoc

@@ -14,20 +14,22 @@ import (
 )
 
 type testRepositories struct {
-	user     port.UserRepository
-	board    port.BoardRepository
-	post     port.PostRepository
-	comment  port.CommentRepository
-	reaction port.ReactionRepository
+	user       port.UserRepository
+	board      port.BoardRepository
+	post       port.PostRepository
+	comment    port.CommentRepository
+	reaction   port.ReactionRepository
+	attachment port.AttachmentRepository
 }
 
 func newTestRepositories() testRepositories {
 	return testRepositories{
-		user:     inmemory.NewUserRepository(),
-		board:    inmemory.NewBoardRepository(),
-		post:     inmemory.NewPostRepository(),
-		comment:  inmemory.NewCommentRepository(),
-		reaction: inmemory.NewReactionRepository(),
+		user:       inmemory.NewUserRepository(),
+		board:      inmemory.NewBoardRepository(),
+		post:       inmemory.NewPostRepository(),
+		comment:    inmemory.NewCommentRepository(),
+		reaction:   inmemory.NewReactionRepository(),
+		attachment: inmemory.NewAttachmentRepository(),
 	}
 }
 
@@ -69,6 +71,12 @@ func seedBoard(boardRepository port.BoardRepository, name, description string) i
 
 func seedPost(postRepository port.PostRepository, authorID, boardID int64, title, content string) int64 {
 	post := entity.NewPost(title, content, authorID, boardID)
+	id, _ := postRepository.Save(post)
+	return id
+}
+
+func seedDraftPost(postRepository port.PostRepository, authorID, boardID int64, title, content string) int64 {
+	post := entity.NewDraftPost(title, content, authorID, boardID)
 	id, _ := postRepository.Save(post)
 	return id
 }

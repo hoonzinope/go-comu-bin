@@ -1,5 +1,27 @@
 basePath: /api/v1
 definitions:
+  delivery.attachmentListResponse:
+    properties:
+      attachments:
+        items:
+          $ref: '#/definitions/response.Attachment'
+        type: array
+    type: object
+  delivery.attachmentRequest:
+    properties:
+      content_type:
+        example: image/png
+        type: string
+      file_name:
+        example: a.png
+        type: string
+      size_bytes:
+        example: 1024
+        type: integer
+      storage_key:
+        example: attachments/a.png
+        type: string
+    type: object
   delivery.boardRequest:
     properties:
       description:
@@ -101,6 +123,23 @@ definitions:
       user_id:
         example: 1
         type: integer
+    type: object
+  response.Attachment:
+    properties:
+      content_type:
+        type: string
+      created_at:
+        type: string
+      file_name:
+        type: string
+      id:
+        type: integer
+      post_id:
+        type: integer
+      size_bytes:
+        type: integer
+      storage_key:
+        type: string
     type: object
   response.Board:
     properties:
@@ -887,6 +926,129 @@ paths:
       summary: Update Post
       tags:
       - Post
+  /posts/{postID}/attachments:
+    get:
+      description: Returns attachments for a published post.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.attachmentListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Post Attachments
+      tags:
+      - Attachment
+    post:
+      consumes:
+      - application/json
+      description: Creates attachment metadata for a post.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Create attachment payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.attachmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Post Attachment
+      tags:
+      - Attachment
+  /posts/{postID}/attachments/{attachmentID}:
+    delete:
+      description: Deletes attachment metadata from a post.
+      parameters:
+      - description: Post ID
+        in: path
+        name: postID
+        required: true
+        type: integer
+      - description: Attachment ID
+        in: path
+        name: attachmentID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Post Attachment
+      tags:
+      - Attachment
   /posts/{postID}/comments:
     get:
       description: Returns comments in post with cursor pagination.

@@ -107,6 +107,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	postRepository := inmemory.NewPostRepository()
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
+	attachmentRepository := inmemory.NewAttachmentRepository()
 
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
@@ -122,19 +123,21 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy(), authorizationPolicy)
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
+	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, sessionRepository)
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
-		SessionUseCase:  sessionUseCase,
-		UserUseCase:     userUseCase,
-		AccountUseCase:  accountUseCase,
-		BoardUseCase:    boardUseCase,
-		PostUseCase:     postUseCase,
-		CommentUseCase:  commentUseCase,
-		ReactionUseCase: reactionUseCase,
+		SessionUseCase:    sessionUseCase,
+		UserUseCase:       userUseCase,
+		AccountUseCase:    accountUseCase,
+		BoardUseCase:      boardUseCase,
+		PostUseCase:       postUseCase,
+		CommentUseCase:    commentUseCase,
+		ReactionUseCase:   reactionUseCase,
+		AttachmentUseCase: attachmentUseCase,
 	})
 	return httptest.NewServer(httpServer.Handler)
 }

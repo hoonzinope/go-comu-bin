@@ -45,6 +45,7 @@ func main() {
 	postRepository := inmemory.NewPostRepository()
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
+	attachmentRepository := inmemory.NewAttachmentRepository()
 
 	if err := seedAdmin(userRepository); err != nil {
 		slog.Error("failed to seed admin user", "error", err)
@@ -59,19 +60,21 @@ func main() {
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, cachePolicy(cfg), authorizationPolicy)
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
+	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, sessionRepository)
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
-		SessionUseCase:  sessionUseCase,
-		UserUseCase:     userUseCase,
-		AccountUseCase:  accountUseCase,
-		BoardUseCase:    boardUseCase,
-		PostUseCase:     postUseCase,
-		CommentUseCase:  commentUseCase,
-		ReactionUseCase: reactionUseCase,
+		SessionUseCase:    sessionUseCase,
+		UserUseCase:       userUseCase,
+		AccountUseCase:    accountUseCase,
+		BoardUseCase:      boardUseCase,
+		PostUseCase:       postUseCase,
+		CommentUseCase:    commentUseCase,
+		ReactionUseCase:   reactionUseCase,
+		AttachmentUseCase: attachmentUseCase,
 	})
 	slog.Info("server started", "addr", server.Addr)
 	if err := server.ListenAndServe(); err != nil {

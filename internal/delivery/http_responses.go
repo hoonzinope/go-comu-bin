@@ -1,6 +1,10 @@
 package delivery
 
-import "time"
+import (
+	"time"
+
+	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
+)
 
 type signUpResponse struct {
 	Result string `json:"result" example:"ok"`
@@ -27,4 +31,8 @@ type userSuspensionResponse struct {
 	Status         string     `json:"status" example:"suspended"`
 	Reason         string     `json:"reason,omitempty" example:"spam"`
 	SuspendedUntil *time.Time `json:"suspended_until,omitempty" example:"2026-03-15T10:00:00Z"`
+}
+
+type attachmentListResponse struct {
+	Attachments []response.Attachment `json:"attachments"`
 }

@@ -91,6 +91,14 @@ func ReactionsFromDTO(items []model.Reaction) []Reaction {
 	return out
 }
 
+func AttachmentsFromDTO(items []model.Attachment) []Attachment {
+	out := make([]Attachment, 0, len(items))
+	for _, item := range items {
+		out = append(out, attachmentFromDTO(item))
+	}
+	return out
+}
+
 func boardFromDTO(board model.Board) Board {
 	return Board{
 		ID:          board.ID,
@@ -161,5 +169,17 @@ func reactionFromDTO(reaction model.Reaction) Reaction {
 		Type:       string(reaction.Type),
 		UserUUID:   reaction.UserUUID,
 		CreatedAt:  reaction.CreatedAt,
+	}
+}
+
+func attachmentFromDTO(attachment model.Attachment) Attachment {
+	return Attachment{
+		ID:          attachment.ID,
+		PostID:      attachment.PostID,
+		FileName:    attachment.FileName,
+		ContentType: attachment.ContentType,
+		SizeBytes:   attachment.SizeBytes,
+		StorageKey:  attachment.StorageKey,
+		CreatedAt:   attachment.CreatedAt,
 	}
 }

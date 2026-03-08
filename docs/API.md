@@ -66,6 +66,18 @@
 - `DELETE /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
 
+## Attachment
+
+- Attachment는 현재 `Post` 전용 메타데이터 도메인입니다.
+- 현재 단계에서는 실제 파일 업로드가 아니라 메타데이터만 다룹니다.
+- 필드: `file_name`, `content_type`, `size_bytes`, `storage_key`
+- `GET /api/v1/posts/{postID}/attachments`
+  - published post 기준으로 attachment 목록을 조회합니다.
+- `POST /api/v1/posts/{postID}/attachments` (인증 필요, 작성자 또는 admin)
+  - draft/published post에 attachment 메타데이터를 추가합니다.
+- `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)
+  - attachment 메타데이터를 삭제합니다.
+
 ## Comment
 
 - 상태 모델
@@ -172,6 +184,22 @@ curl -X POST http://localhost:18577/api/v1/boards/1/posts/drafts \
 TOKEN="로그인 응답 Authorization 헤더 값"
 curl -X POST http://localhost:18577/api/v1/posts/1/publish \
   -H "Authorization: $TOKEN"
+```
+
+### 게시글 첨부 메타데이터 추가
+
+```bash
+TOKEN="로그인 응답 Authorization 헤더 값"
+curl -X POST http://localhost:18577/api/v1/posts/1/attachments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $TOKEN" \
+  -d '{"file_name":"a.png","content_type":"image/png","size_bytes":1024,"storage_key":"attachments/a.png"}'
+```
+
+### 게시글 첨부 메타데이터 조회
+
+```bash
+curl -X GET http://localhost:18577/api/v1/posts/1/attachments
 ```
 
 ### 대댓글 작성

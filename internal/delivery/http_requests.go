@@ -39,6 +39,13 @@ type reactionRequest struct {
 	ReactionType string `json:"reaction_type" example:"like"`
 }
 
+type attachmentRequest struct {
+	FileName    string `json:"file_name" example:"a.png"`
+	ContentType string `json:"content_type" example:"image/png"`
+	SizeBytes   int64  `json:"size_bytes" example:"1024"`
+	StorageKey  string `json:"storage_key" example:"attachments/a.png"`
+}
+
 func (r userCredentialRequest) validate() error {
 	if r.Username == "" || r.Password == "" {
 		return errors.New("username and password are required")
@@ -97,4 +104,11 @@ func (r userSuspensionRequest) parse() (string, entity.SuspensionDuration, error
 		return "", "", errors.New("invalid duration")
 	}
 	return r.Reason, duration, nil
+}
+
+func (r attachmentRequest) validate() error {
+	if r.FileName == "" || r.ContentType == "" || r.StorageKey == "" || r.SizeBytes <= 0 {
+		return errors.New("file_name, content_type, size_bytes, storage_key are required")
+	}
+	return nil
 }

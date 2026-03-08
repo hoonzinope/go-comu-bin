@@ -293,3 +293,33 @@
 - `internal/domain/entity/comment.go`
 - `internal/application/service/commentService.go`
 - `internal/delivery/http_requests.go`
+
+## 2026-03-08 - Attachment는 Post 전용 메타데이터부터 시작
+
+상태
+
+- decided
+
+배경
+
+- 코어 상태 모델과 draft/reply 흐름이 정리된 뒤, 다음 확장 도메인으로 `Attachment`를 도입할 시점이 되었다.
+
+결론
+
+- `Attachment`는 우선 `Post` 전용 메타데이터 도메인으로 시작한다.
+- 현재 단계에서는 파일 업로드 자체가 아니라 메타데이터만 다룬다.
+- 최소 필드는 `file_name`, `content_type`, `size_bytes`, `storage_key`다.
+- 공개 조회는 published post 기준으로만 허용한다.
+- 작성자 또는 admin은 draft/published post에 attachment를 추가/삭제할 수 있다.
+
+후속 작업
+
+- attachment entity/repository/usecase/service 추가
+- post attachment 생성/조회/삭제 API 추가
+- post detail 포함 여부는 2차 확장으로 미룬다
+
+관련 문서/코드
+
+- `internal/application/service/postService.go`
+- `internal/delivery/http.go`
+- `docs/ROADMAP.md`

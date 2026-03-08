@@ -219,6 +219,33 @@ type fakeReactionUseCase struct {
 	getReactionsByTarget func(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }
 
+type fakeAttachmentUseCase struct {
+	createPostAttachment func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
+	getPostAttachments   func(postID int64) ([]model.Attachment, error)
+	deletePostAttachment func(postID, attachmentID, userID int64) error
+}
+
+func (f *fakeAttachmentUseCase) CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
+	if f.createPostAttachment != nil {
+		return f.createPostAttachment(postID, userID, fileName, contentType, sizeBytes, storageKey)
+	}
+	return 1, nil
+}
+
+func (f *fakeAttachmentUseCase) GetPostAttachments(postID int64) ([]model.Attachment, error) {
+	if f.getPostAttachments != nil {
+		return f.getPostAttachments(postID)
+	}
+	return []model.Attachment{}, nil
+}
+
+func (f *fakeAttachmentUseCase) DeletePostAttachment(postID, attachmentID, userID int64) error {
+	if f.deletePostAttachment != nil {
+		return f.deletePostAttachment(postID, attachmentID, userID)
+	}
+	return nil
+}
+
 var testSessionRepository port.SessionRepository
 
 type authUserPort interface {
@@ -254,18 +281,20 @@ func newTestHandler(
 	post port.PostUseCase,
 	comment port.CommentUseCase,
 	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
 	sessionUseCase := service.NewSessionService(user, tokenProvider, testSessionRepository)
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:  sessionUseCase,
-		UserUseCase:     user,
-		AccountUseCase:  account,
-		BoardUseCase:    board,
-		PostUseCase:     post,
-		CommentUseCase:  comment,
-		ReactionUseCase: reaction,
+		SessionUseCase:    sessionUseCase,
+		UserUseCase:       user,
+		AccountUseCase:    account,
+		BoardUseCase:      board,
+		PostUseCase:       post,
+		CommentUseCase:    comment,
+		ReactionUseCase:   reaction,
+		AttachmentUseCase: attachment,
 	}).Handler
 }
 
@@ -319,6 +348,7 @@ func TestHandleUserSuspend_Success(t *testing.T) {
 		&fakePostUseCase{},
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/7/suspension", map[string]any{
@@ -349,6 +379,7 @@ func TestHandleUserSuspensionGet_Success(t *testing.T) {
 		&fakePostUseCase{},
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/7/suspension", nil, 1)
@@ -378,6 +409,7 @@ func TestHandleCreateDraftPost_Success(t *testing.T) {
 		},
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/3/posts/drafts", map[string]string{
@@ -403,6 +435,7 @@ func TestHandlePublishPost_Success(t *testing.T) {
 		},
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/5/publish", nil, 1)
@@ -427,6 +460,7 @@ func TestHandleCreateComment_WithParentID_Success(t *testing.T) {
 			},
 		},
 		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/3/comments", map[string]any{
@@ -438,6 +472,90 @@ func TestHandleCreateComment_WithParentID_Success(t *testing.T) {
 	assert.JSONEq(t, `{"id":11}`, rr.Body.String())
 }
 
+func TestHandleCreateAttachment_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			createPostAttachment: func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
+				assert.Equal(t, int64(3), postID)
+				assert.Equal(t, int64(1), userID)
+				assert.Equal(t, "a.png", fileName)
+				assert.Equal(t, "image/png", contentType)
+				assert.Equal(t, int64(10), sizeBytes)
+				assert.Equal(t, "attachments/a.png", storageKey)
+				return 7, nil
+			},
+		},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/3/attachments", map[string]any{
+		"file_name":    "a.png",
+		"content_type": "image/png",
+		"size_bytes":   10,
+		"storage_key":  "attachments/a.png",
+	}, 1)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.JSONEq(t, `{"id":7}`, rr.Body.String())
+}
+
+func TestHandleGetAttachments_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			getPostAttachments: func(postID int64) ([]model.Attachment, error) {
+				assert.Equal(t, int64(3), postID)
+				return []model.Attachment{{
+					ID:          7,
+					PostID:      3,
+					FileName:    "a.png",
+					ContentType: "image/png",
+					SizeBytes:   10,
+					StorageKey:  "attachments/a.png",
+				}}, nil
+			},
+		},
+	)
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/3/attachments", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.JSONEq(t, `{"attachments":[{"id":7,"post_id":3,"file_name":"a.png","content_type":"image/png","size_bytes":10,"storage_key":"attachments/a.png","created_at":"0001-01-01T00:00:00Z"}]}`, rr.Body.String())
+}
+
+func TestHandleDeleteAttachment_Success(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			deletePostAttachment: func(postID, attachmentID, userID int64) error {
+				assert.Equal(t, int64(3), postID)
+				assert.Equal(t, int64(7), attachmentID)
+				assert.Equal(t, int64(1), userID)
+				return nil
+			},
+		},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/3/attachments/7", nil, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{},
@@ -446,6 +564,7 @@ func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
 		&fakePostUseCase{},
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/7/suspension", map[string]any{
@@ -470,6 +589,7 @@ func TestHandleUserUnsuspend_Success(t *testing.T) {
 		&fakePostUseCase{},
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/7/suspension", nil, 1)
@@ -478,7 +598,7 @@ func TestHandleUserUnsuspend_Success(t *testing.T) {
 }
 
 func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/signup", nil)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
@@ -490,7 +610,7 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 			return "", customError.ErrUserAlreadyExists
 		},
 	}
-	handler := newTestHandler(user, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(user, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodPost, "/signup", map[string]string{
 		"username": "alice",
@@ -505,7 +625,7 @@ func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
 			return true, nil
 		},
 	}
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction)
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/posts/1/reactions/me", map[string]string{
 		"reaction_type": "like",
@@ -519,7 +639,7 @@ func TestHTTP_CommentReactionMeUpdate_NoContent(t *testing.T) {
 			return false, nil
 		},
 	}
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction)
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/comments/1/reactions/me", map[string]string{
 		"reaction_type": "dislike",
@@ -533,14 +653,14 @@ func TestHTTP_PostReactionMeDelete_NoContent(t *testing.T) {
 			return nil
 		},
 	}
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction)
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/1/reactions/me", nil, 1)
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString("{invalid"))
 	req.Header.Set("Content-Type", "application/json")
@@ -551,7 +671,7 @@ func TestHTTP_UserSignUp_BadJSON(t *testing.T) {
 }
 
 func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodPost, "/signup", map[string]any{
 		"username": "alice",
@@ -567,7 +687,7 @@ func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 			return customError.ErrInvalidCredential
 		},
 	}
-	handler := newTestHandler(&fakeUserUseCase{}, account, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, account, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/me", map[string]string{
 		"password": "wrong",
@@ -576,7 +696,7 @@ func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 }
 
 func TestHTTP_ProtectedRoute_InvalidAuthorizationScheme(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/auth/logout", bytes.NewBufferString(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -595,7 +715,7 @@ func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 			return 0, customError.ErrForbidden
 		},
 	}
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, board, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, board, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards", map[string]any{
 		"name":        "free",
@@ -605,21 +725,21 @@ func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 }
 
 func TestHTTP_BoardGet_BadLimit(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?limit=bad", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_BoardGet_BadOffset(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?last_id=bad", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_BoardWithID_InvalidBoardID(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/boards/abc", map[string]any{
 		"name": "free",
@@ -628,7 +748,7 @@ func TestHTTP_BoardWithID_InvalidBoardID(t *testing.T) {
 }
 
 func TestHTTP_BoardWithID_UnauthorizedBeforeValidation(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodPut, "/boards/abc", map[string]any{
 		"name": "free",
@@ -637,14 +757,14 @@ func TestHTTP_BoardWithID_UnauthorizedBeforeValidation(t *testing.T) {
 }
 
 func TestHTTP_PostWithID_InvalidPostID(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/abc", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_PostWithID_NonPositivePostID(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/0", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -654,28 +774,28 @@ func TestHTTP_PostWithID_NonPositivePostID(t *testing.T) {
 }
 
 func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodDelete, "/posts/1/reactions/me", nil)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHTTP_PostReactionList_InvalidPostID(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/abc/reactions", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_CommentReactionList_InvalidCommentID(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/comments/abc/reactions", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/1/reactions/me", nil)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
@@ -687,7 +807,7 @@ func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 			return nil, errors.New("unexpected")
 		},
 	}
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
@@ -699,14 +819,14 @@ func TestHTTP_PostDetail_NotFound(t *testing.T) {
 			return nil, customError.ErrPostNotFound
 		},
 	}
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func TestHTTP_NotFound(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{})
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/unknown", nil)
 	assert.Equal(t, http.StatusNotFound, rr.Code)
