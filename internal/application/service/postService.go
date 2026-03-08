@@ -169,11 +169,11 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 		if err != nil {
 			return nil, customError.WrapRepository("select post reactions for post detail", err)
 		}
-		comments, err := s.commentRepository.SelectComments(post.ID, commentDefaultLimit, 0) // 댓글은 최대 10개까지 조회
-		commentDetails := make([]*model.CommentDetail, len(comments))
+		comments, err := s.visibleCommentsForDetail(post.ID, commentDefaultLimit)
 		if err != nil {
-			return nil, customError.WrapRepository("select comments for post detail", err)
+			return nil, err
 		}
+		commentDetails := make([]*model.CommentDetail, len(comments))
 		for i, comment := range comments {
 			commentReactions, err := s.reactionRepository.GetByTarget(comment.ID, entity.ReactionTargetComment)
 			if err != nil {
@@ -393,6 +393,9 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 		return customError.WrapRepository("select comments for delete post", err)
 	}
 	for _, comment := range comments {
+		if _, err := s.reactionRepository.DeleteByTarget(comment.ID, entity.ReactionTargetComment); err != nil {
+			return customError.WrapRepository("delete post comment reactions", err)
+		}
 		if err := s.commentRepository.Delete(comment.ID); err != nil {
 			return customError.WrapRepository("soft delete post comments", err)
 		}
@@ -402,6 +405,9 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	}
 	if err := s.orphanPostAttachments(post.ID); err != nil {
 		return err
+	}
+	if _, err := s.reactionRepository.DeleteByTarget(post.ID, entity.ReactionTargetPost); err != nil {
+		return customError.WrapRepository("delete post reactions", err)
 	}
 	if err := s.cache.Delete(key.PostDetail(post.ID)); err != nil {
 		return customError.WrapCache("invalidate post detail after delete post", err)
@@ -508,4 +514,31 @@ func (s *PostService) orphanPostAttachments(postID int64) error {
 		}
 	}
 	return nil
+}
+
+func (s *PostService) visibleCommentsForDetail(postID int64, limit int) ([]*entity.Comment, error) {
+	comments, err := s.commentRepository.SelectCommentsIncludingDeleted(postID)
+	if err != nil {
+		return nil, customError.WrapRepository("select comments for post detail including deleted", err)
+	}
+	activeChildParentIDs := make(map[int64]struct{})
+	for _, comment := range comments {
+		if comment.Status == entity.CommentStatusActive && comment.ParentID != nil {
+			activeChildParentIDs[*comment.ParentID] = struct{}{}
+		}
+	}
+	filtered := make([]*entity.Comment, 0, len(comments))
+	for _, comment := range comments {
+		if comment.Status == entity.CommentStatusActive {
+			filtered = append(filtered, comment)
+			continue
+		}
+		if _, ok := activeChildParentIDs[comment.ID]; ok {
+			filtered = append(filtered, comment)
+		}
+	}
+	if limit > 0 && len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+	return filtered, nil
 }

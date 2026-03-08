@@ -70,6 +70,24 @@ func TestIntegration_MainFlow(t *testing.T) {
 	}, http.StatusUnauthorized)
 }
 
+func TestIntegration_DeleteParentCommentAlsoHidesReply(t *testing.T) {
+	server := newIntegrationServer(t)
+	defer server.Close()
+
+	adminToken := mustLogin(t, server.URL, "admin", "admin")
+	boardID := mustCreateBoard(t, server.URL, adminToken, "free", "general board")
+
+	mustSignUp(t, server.URL, "alice", "pw")
+	aliceToken := mustLogin(t, server.URL, "alice", "pw")
+
+	postID := mustCreatePost(t, server.URL, aliceToken, boardID, "hello", "first post")
+	parentID := mustCreateComment(t, server.URL, aliceToken, postID, "parent")
+	_ = mustCreateReplyComment(t, server.URL, aliceToken, postID, parentID, "reply")
+
+	mustDeleteComment(t, server.URL, aliceToken, parentID)
+	mustHaveDeletedParentAndVisibleReply(t, server.URL, postID, parentID)
+}
+
 func TestIntegration_ForbiddenScenarios(t *testing.T) {
 	server := newIntegrationServer(t)
 	defer server.Close()
@@ -123,7 +141,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	userUseCase := service.NewUserService(userRepository, passwordHasher)
 	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, cache, testCachePolicy(), authorizationPolicy)
 	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, attachmentRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
-	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, cache, testCachePolicy(), authorizationPolicy)
+	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy(), authorizationPolicy)
 	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, testCachePolicy())
 	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, fileStorage, 10<<20, authorizationPolicy)
 
@@ -263,6 +281,18 @@ func mustCreateComment(t *testing.T, baseURL, token string, postID int64, conten
 	return int64(resp["id"].(float64))
 }
 
+func mustCreateReplyComment(t *testing.T, baseURL, token string, postID, parentID int64, content string) int64 {
+	t.Helper()
+	body, status, _ := requestJSON(t, baseURL, token, http.MethodPost, fmt.Sprintf("/posts/%d/comments", postID), map[string]any{
+		"content":   content,
+		"parent_id": parentID,
+	})
+	assert.Equal(t, http.StatusCreated, status, "create reply comment failed: body=%s", string(body))
+	var resp map[string]any
+	mustUnmarshal(t, body, &resp)
+	return int64(resp["id"].(float64))
+}
+
 func mustGetComments(t *testing.T, baseURL string, postID, expectedCommentID int64) {
 	t.Helper()
 	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
@@ -365,6 +395,24 @@ func mustNoComments(t *testing.T, baseURL string, postID int64) {
 	comments, ok := rawComments.([]any)
 	require.True(t, ok, "unexpected comments payload type: %T", rawComments)
 	assert.Empty(t, comments)
+}
+
+func mustHaveDeletedParentAndVisibleReply(t *testing.T, baseURL string, postID, parentID int64) {
+	t.Helper()
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
+	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
+	var resp map[string]any
+	mustUnmarshal(t, body, &resp)
+	comments := resp["comments"].([]any)
+	require.Len(t, comments, 2)
+
+	reply := comments[0].(map[string]any)
+	assert.Equal(t, "reply", reply["content"])
+	assert.EqualValues(t, parentID, int64(reply["parent_id"].(float64)))
+
+	parent := comments[1].(map[string]any)
+	assert.EqualValues(t, parentID, int64(parent["id"].(float64)))
+	assert.Equal(t, "삭제된 댓글", parent["content"])
 }
 
 func mustNoPostReactions(t *testing.T, baseURL string, postID int64) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -152,6 +153,9 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	}
 	id, err := s.CreatePostAttachment(postID, userID, fileName, contentType, int64(len(data)), storageKey)
 	if err != nil {
+		if deleteErr := s.fileStorage.Delete(storageKey); deleteErr != nil {
+			return nil, errors.Join(err, customError.Wrap(customError.ErrInternalServerError, "rollback upload file", deleteErr))
+		}
 		return nil, err
 	}
 	return &model.AttachmentUpload{

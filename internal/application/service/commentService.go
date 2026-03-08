@@ -19,16 +19,18 @@ type CommentService struct {
 	userRepository      port.UserRepository
 	postRepository      port.PostRepository
 	commentRepository   port.CommentRepository
+	reactionRepository  port.ReactionRepository
 	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *CommentService {
+func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
 		commentRepository:   commentRepository,
+		reactionRepository:  reactionRepository,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
@@ -97,17 +99,10 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 			return nil, customError.ErrPostNotFound
 		}
 
-		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
-		fetchLimit := limit
-		if limit > 0 {
-			fetchLimit = limit + 1
-		}
-
-		comments, err := s.commentRepository.SelectComments(postID, fetchLimit, lastID)
+		comments, err := s.visibleCommentsByPost(postID, limit, lastID)
 		if err != nil {
-			return nil, customError.WrapRepository("select comments by post", err)
+			return nil, err
 		}
-
 		hasMore := false
 		var nextLastID *int64
 		if limit >= 0 && len(comments) > limit {
@@ -217,9 +212,14 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 		return err
 	}
-	err = s.commentRepository.Delete(comment.ID)
-	if err != nil {
+	if err := s.commentRepository.Delete(comment.ID); err != nil {
 		return customError.WrapRepository("delete comment", err)
+	}
+	if _, err := s.reactionRepository.DeleteByTarget(comment.ID, entity.ReactionTargetComment); err != nil {
+		return customError.WrapRepository("delete comment reactions", err)
+	}
+	if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID)); err != nil {
+		return customError.WrapCache("invalidate comment reaction list after delete comment", err)
 	}
 	if _, err := s.cache.DeleteByPrefix(key.CommentListPrefix(comment.PostID)); err != nil {
 		return customError.WrapCache("invalidate comment list after delete comment", err)
@@ -227,8 +227,37 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	if err := s.cache.Delete(key.PostDetail(comment.PostID)); err != nil {
 		return customError.WrapCache("invalidate post detail after delete comment", err)
 	}
-	if err := s.cache.Delete(key.ReactionList(string(entity.ReactionTargetComment), comment.ID)); err != nil {
-		return customError.WrapCache("invalidate comment reaction list after delete comment", err)
-	}
 	return nil
+}
+
+func (s *CommentService) visibleCommentsByPost(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	comments, err := s.commentRepository.SelectCommentsIncludingDeleted(postID)
+	if err != nil {
+		return nil, customError.WrapRepository("select comments by post including deleted", err)
+	}
+	activeChildParentIDs := make(map[int64]struct{})
+	for _, comment := range comments {
+		if comment.Status == entity.CommentStatusActive {
+			if comment.ParentID != nil {
+				activeChildParentIDs[*comment.ParentID] = struct{}{}
+			}
+		}
+	}
+	filtered := make([]*entity.Comment, 0, len(comments))
+	for _, comment := range comments {
+		if lastID > 0 && comment.ID >= lastID {
+			continue
+		}
+		if comment.Status == entity.CommentStatusActive {
+			filtered = append(filtered, comment)
+			continue
+		}
+		if _, ok := activeChildParentIDs[comment.ID]; ok {
+			filtered = append(filtered, comment)
+		}
+	}
+	if limit > 0 && len(filtered) > limit+1 {
+		filtered = filtered[:limit+1]
+	}
+	return filtered, nil
 }

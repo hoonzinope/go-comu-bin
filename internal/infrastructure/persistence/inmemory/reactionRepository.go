@@ -69,6 +69,22 @@ func (r *ReactionRepository) DeleteUserTargetReaction(userID, targetID int64, ta
 	return true, nil
 }
 
+func (r *ReactionRepository) DeleteByTarget(targetID int64, targetType entity.ReactionTargetType) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	deletedCount := 0
+	for reactionID, reaction := range r.reactionDB.Data {
+		if reaction.TargetID != targetID || reaction.TargetType != targetType {
+			continue
+		}
+		delete(r.userTargetIndex, userTargetKey(reaction.UserID, reaction.TargetID, reaction.TargetType))
+		delete(r.reactionDB.Data, reactionID)
+		deletedCount++
+	}
+	return deletedCount, nil
+}
+
 func (r *ReactionRepository) GetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

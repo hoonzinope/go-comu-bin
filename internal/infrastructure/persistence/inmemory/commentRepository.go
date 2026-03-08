@@ -77,6 +77,22 @@ func (r *CommentRepository) SelectComments(postID int64, limit int, lastID int64
 	return comments, nil
 }
 
+func (r *CommentRepository) SelectCommentsIncludingDeleted(postID int64) ([]*entity.Comment, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var comments []*entity.Comment
+	for _, comment := range r.commentDB.Data {
+		if comment.PostID == postID {
+			comments = append(comments, comment)
+		}
+	}
+	sort.Slice(comments, func(i, j int) bool {
+		return comments[i].ID > comments[j].ID
+	})
+	return comments, nil
+}
+
 func (r *CommentRepository) Update(comment *entity.Comment) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

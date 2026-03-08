@@ -216,6 +216,28 @@ func TestPostService_DeletePost_OrphansAttachmentsAndSoftDeletesComments(t *test
 	assert.True(t, attachment.IsOrphaned())
 }
 
+func TestPostService_DeletePost_RemovesStoredReactionsForPostAndComments(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	commentID := seedComment(repositories.comment, userID, postID, "comment")
+	_, _, _, err := repositories.reaction.SetUserTargetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	_, _, _, err = repositories.reaction.SetUserTargetReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
+	require.NoError(t, err)
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	require.NoError(t, svc.DeletePost(postID, userID))
+
+	postReactions, err := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	require.NoError(t, err)
+	assert.Empty(t, postReactions)
+	commentReactions, err := repositories.reaction.GetByTarget(commentID, entity.ReactionTargetComment)
+	require.NoError(t, err)
+	assert.Empty(t, commentReactions)
+}
+
 func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")

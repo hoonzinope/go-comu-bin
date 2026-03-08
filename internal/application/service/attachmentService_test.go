@@ -60,6 +60,34 @@ func (s *spyFileStorage) Open(key string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(s.openContent)), nil
 }
 
+type failingAttachmentRepository struct {
+	saveErr error
+}
+
+func (r *failingAttachmentRepository) Save(*entity.Attachment) (int64, error) {
+	return 0, r.saveErr
+}
+
+func (r *failingAttachmentRepository) SelectByID(id int64) (*entity.Attachment, error) {
+	return nil, nil
+}
+
+func (r *failingAttachmentRepository) SelectByPostID(postID int64) ([]*entity.Attachment, error) {
+	return nil, nil
+}
+
+func (r *failingAttachmentRepository) SelectOrphansBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error) {
+	return nil, nil
+}
+
+func (r *failingAttachmentRepository) Update(*entity.Attachment) error {
+	return nil
+}
+
+func (r *failingAttachmentRepository) Delete(id int64) error {
+	return nil
+}
+
 func testPNGBytes() []byte {
 	return []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0}
 }
@@ -176,6 +204,27 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	require.Len(t, items, 1)
 	assert.Equal(t, storage.savedKey, items[0].StorageKey)
 	assert.Equal(t, int64(len(png)), items[0].SizeBytes)
+}
+
+func TestAttachmentService_UploadPostAttachment_DeletesStoredFileWhenMetadataSaveFails(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(
+		repositories.user,
+		repositories.post,
+		&failingAttachmentRepository{saveErr: errors.New("save metadata failed")},
+		storage,
+		attachmentDefaultMaxSizeBytes,
+		newTestAuthorizationPolicy(),
+	)
+
+	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
+	require.Error(t, err)
+	assert.Contains(t, storage.savedKey, "posts/")
+	assert.Equal(t, storage.savedKey, storage.deleteKey)
 }
 
 func TestAttachmentService_UploadPostAttachment_OptimizesJPEGBeforeSaving(t *testing.T) {

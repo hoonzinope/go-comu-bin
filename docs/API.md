@@ -101,6 +101,7 @@
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
   - 응답에는 본문에 바로 넣을 수 있는 `embed_markdown`이 포함됩니다.
+  - 메타데이터 저장에 실패하면 이미 저장한 파일은 즉시 롤백을 시도합니다.
   - 허용 타입: `image/png`, `image/jpeg`, `image/jpg`, `image/gif`, `image/webp`
   - 최대 크기: `storage.attachment.maxUploadSizeBytes` 설정값
   - 요청의 `Content-Type`은 실제 파일 sniffing 결과와 일치해야 합니다.
@@ -130,6 +131,8 @@
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
 - `DELETE /api/v1/comments/{commentID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - 부모 댓글을 삭제하면 해당 댓글은 `삭제된 댓글` tombstone으로 남습니다.
+  - 하위 reply는 그대로 유지되어 계속 조회할 수 있습니다.
 
 ## Reaction
 

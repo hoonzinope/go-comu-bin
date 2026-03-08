@@ -2,6 +2,8 @@ package entity
 
 import "time"
 
+const DeletedCommentPlaceholder = "삭제된 댓글"
+
 type CommentStatus string
 
 const (
@@ -41,6 +43,7 @@ func (c *Comment) Update(content string) {
 
 func (c *Comment) SoftDelete() {
 	now := time.Now()
+	c.Content = DeletedCommentPlaceholder
 	c.Status = CommentStatusDeleted
 	c.UpdatedAt = now
 	c.DeletedAt = &now
