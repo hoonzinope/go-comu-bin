@@ -597,7 +597,7 @@ func TestAttachmentService_GetPostAttachmentPreviewFile_AllowedForOwner(t *testi
 	assert.Equal(t, "hello", string(data))
 }
 
-func TestAttachmentService_CleanupOrphanAttachments_RemovesExpiredOrphans(t *testing.T) {
+func TestAttachmentService_CleanupAttachments_RemovesExpiredOrphans(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{}
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -619,7 +619,7 @@ func TestAttachmentService_CleanupOrphanAttachments_RemovesExpiredOrphans(t *tes
 	require.NoError(t, err)
 	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
-	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now(), time.Hour, 10)
+	deletedCount, err := svc.CleanupAttachments(context.Background(), time.Now(), time.Hour, 10)
 	require.NoError(t, err)
 	assert.Equal(t, 1, deletedCount)
 	assert.Equal(t, "posts/1/old.png", storage.deleteKey)
@@ -635,7 +635,7 @@ func TestAttachmentService_CleanupOrphanAttachments_RemovesExpiredOrphans(t *tes
 	assert.NotNil(t, referencedAfter)
 }
 
-func TestAttachmentService_CleanupOrphanAttachments_RemovesPendingDeleteAttachments(t *testing.T) {
+func TestAttachmentService_CleanupAttachments_RemovesPendingDeleteAttachments(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{}
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -646,7 +646,7 @@ func TestAttachmentService_CleanupOrphanAttachments_RemovesPendingDeleteAttachme
 	require.NoError(t, err)
 	require.NoError(t, svc.DeletePostAttachment(postID, attachmentID, userID))
 
-	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now().Add(2*time.Hour), time.Hour, 10)
+	deletedCount, err := svc.CleanupAttachments(context.Background(), time.Now().Add(2*time.Hour), time.Hour, 10)
 	require.NoError(t, err)
 	assert.Equal(t, 1, deletedCount)
 	assert.Equal(t, "posts/1/a.png", storage.deleteKey)
@@ -656,7 +656,7 @@ func TestAttachmentService_CleanupOrphanAttachments_RemovesPendingDeleteAttachme
 	assert.Nil(t, item)
 }
 
-func TestAttachmentService_CleanupOrphanAttachments_RespectsLimit(t *testing.T) {
+func TestAttachmentService_CleanupAttachments_RespectsLimit(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{}
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -673,7 +673,7 @@ func TestAttachmentService_CleanupOrphanAttachments_RespectsLimit(t *testing.T) 
 	require.NoError(t, err)
 	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
-	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now(), time.Hour, 1)
+	deletedCount, err := svc.CleanupAttachments(context.Background(), time.Now(), time.Hour, 1)
 	require.NoError(t, err)
 	assert.Equal(t, 1, deletedCount)
 
@@ -682,7 +682,7 @@ func TestAttachmentService_CleanupOrphanAttachments_RespectsLimit(t *testing.T) 
 	assert.Len(t, items, 1)
 }
 
-func TestAttachmentService_CleanupOrphanAttachments_StopsOnStorageDeleteError(t *testing.T) {
+func TestAttachmentService_CleanupAttachments_StopsOnStorageDeleteError(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{deleteErr: errors.New("boom")}
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -695,7 +695,7 @@ func TestAttachmentService_CleanupOrphanAttachments_StopsOnStorageDeleteError(t 
 	require.NoError(t, err)
 	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
 
-	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now(), time.Hour, 10)
+	deletedCount, err := svc.CleanupAttachments(context.Background(), time.Now(), time.Hour, 10)
 	require.Error(t, err)
 	assert.Equal(t, 0, deletedCount)
 

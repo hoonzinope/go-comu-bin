@@ -38,7 +38,7 @@ delivery:
 
 jobs:
   enabled: true
-  orphanAttachmentCleanup:
+  attachmentCleanup:
     enabled: true
     intervalSeconds: 600
     gracePeriodSeconds: 600
@@ -59,9 +59,9 @@ jobs:
 - `storage.object.secretKey`: provider가 `object`일 때 필수
 - `storage.attachment.maxUploadSizeBytes`: `> 0`
 - `storage.attachment.imageOptimization.jpegQuality`: `1..100`
-- `jobs.orphanAttachmentCleanup.intervalSeconds`: `> 0`
-- `jobs.orphanAttachmentCleanup.gracePeriodSeconds`: `> 0`
-- `jobs.orphanAttachmentCleanup.batchSize`: `> 0`
+- `jobs.attachmentCleanup.intervalSeconds`: `> 0`
+- `jobs.attachmentCleanup.gracePeriodSeconds`: `> 0`
+- `jobs.attachmentCleanup.batchSize`: `> 0`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
 
@@ -76,5 +76,5 @@ jobs:
 - attachment 최대 업로드 크기(bytes): `cfg.Storage.Attachment.MaxUploadSizeBytes`
 - attachment 이미지 최적화: `cfg.Storage.Attachment.ImageOptimization.Enabled`, `cfg.Storage.Attachment.ImageOptimization.JPEGQuality`
 - background jobs on/off: `cfg.Jobs.Enabled`
-- orphan attachment cleanup 주기/유예/배치 크기: `cfg.Jobs.OrphanAttachmentCleanup.*`
+- attachment cleanup 주기/유예/배치 크기: `cfg.Jobs.AttachmentCleanup.*`
   - 기본 유예는 `600`초이며, orphan와 `pending_delete` attachment 모두 같은 cleanup 주기를 사용합니다.

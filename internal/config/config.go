@@ -40,13 +40,13 @@ type Config struct {
 		} `yaml:"http"`
 	} `yaml:"delivery"`
 	Jobs struct {
-		Enabled                 bool `yaml:"enabled"`
-		OrphanAttachmentCleanup struct {
+		Enabled           bool `yaml:"enabled"`
+		AttachmentCleanup struct {
 			Enabled            bool `yaml:"enabled"`
 			IntervalSeconds    int  `yaml:"intervalSeconds"`
 			GracePeriodSeconds int  `yaml:"gracePeriodSeconds"`
 			BatchSize          int  `yaml:"batchSize"`
-		} `yaml:"orphanAttachmentCleanup"`
+		} `yaml:"attachmentCleanup"`
 	} `yaml:"jobs"`
 }
 
@@ -72,10 +72,10 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("storage.attachment.imageOptimization.enabled", true)
 	v.SetDefault("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.SetDefault("jobs.enabled", true)
-	v.SetDefault("jobs.orphanAttachmentCleanup.enabled", true)
-	v.SetDefault("jobs.orphanAttachmentCleanup.intervalSeconds", 600)
-	v.SetDefault("jobs.orphanAttachmentCleanup.gracePeriodSeconds", 600)
-	v.SetDefault("jobs.orphanAttachmentCleanup.batchSize", 50)
+	v.SetDefault("jobs.attachmentCleanup.enabled", true)
+	v.SetDefault("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.SetDefault("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.SetDefault("jobs.attachmentCleanup.batchSize", 50)
 
 	cfg := &Config{}
 	if err := v.UnmarshalExact(cfg); err != nil {
@@ -130,14 +130,14 @@ func validate(cfg *Config) error {
 	if cfg.Storage.Attachment.ImageOptimization.JPEGQuality < 1 || cfg.Storage.Attachment.ImageOptimization.JPEGQuality > 100 {
 		return fmt.Errorf("invalid storage.attachment.imageOptimization.jpegQuality: %d (must be 1..100)", cfg.Storage.Attachment.ImageOptimization.JPEGQuality)
 	}
-	if cfg.Jobs.OrphanAttachmentCleanup.IntervalSeconds <= 0 {
-		return fmt.Errorf("invalid jobs.orphanAttachmentCleanup.intervalSeconds: %d (must be > 0)", cfg.Jobs.OrphanAttachmentCleanup.IntervalSeconds)
+	if cfg.Jobs.AttachmentCleanup.IntervalSeconds <= 0 {
+		return fmt.Errorf("invalid jobs.attachmentCleanup.intervalSeconds: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.IntervalSeconds)
 	}
-	if cfg.Jobs.OrphanAttachmentCleanup.GracePeriodSeconds <= 0 {
-		return fmt.Errorf("invalid jobs.orphanAttachmentCleanup.gracePeriodSeconds: %d (must be > 0)", cfg.Jobs.OrphanAttachmentCleanup.GracePeriodSeconds)
+	if cfg.Jobs.AttachmentCleanup.GracePeriodSeconds <= 0 {
+		return fmt.Errorf("invalid jobs.attachmentCleanup.gracePeriodSeconds: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.GracePeriodSeconds)
 	}
-	if cfg.Jobs.OrphanAttachmentCleanup.BatchSize <= 0 {
-		return fmt.Errorf("invalid jobs.orphanAttachmentCleanup.batchSize: %d (must be > 0)", cfg.Jobs.OrphanAttachmentCleanup.BatchSize)
+	if cfg.Jobs.AttachmentCleanup.BatchSize <= 0 {
+		return fmt.Errorf("invalid jobs.attachmentCleanup.batchSize: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.BatchSize)
 	}
 	return nil
 }

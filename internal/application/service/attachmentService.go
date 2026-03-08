@@ -315,7 +315,7 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 	return nil
 }
 
-func (s *AttachmentService) CleanupOrphanAttachments(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
+func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
