@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -39,6 +41,59 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.True(t, cfg.Jobs.Enabled)
 	assert.True(t, cfg.Jobs.AttachmentCleanup.Enabled)
 	assert.Equal(t, 600, cfg.Jobs.AttachmentCleanup.IntervalSeconds)
+	assert.Equal(t, 600, cfg.Jobs.AttachmentCleanup.GracePeriodSeconds)
+}
+
+func TestLoad_LoadsConfigFileFromWorkingDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	configBody := []byte(`cache:
+  listTTLSeconds: 30
+  detailTTLSeconds: 60
+
+storage:
+  provider: "local"
+  local:
+    rootDir: "./data/uploads"
+  object:
+    endpoint: ""
+    bucket: ""
+    accessKey: ""
+    secretKey: ""
+    useSSL: false
+  attachment:
+    maxUploadSizeBytes: 10485760
+    imageOptimization:
+      enabled: true
+      jpegQuality: 82
+
+delivery:
+  http:
+    port: 18577
+    auth:
+      secret: "test-secret"
+
+jobs:
+  enabled: true
+  attachmentCleanup:
+    enabled: true
+    intervalSeconds: 600
+    gracePeriodSeconds: 600
+    batchSize: 50
+`)
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "config.yml"), configBody, 0o644))
+
+	originalWD, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(tempDir))
+	defer func() {
+		_ = os.Chdir(originalWD)
+	}()
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
+	assert.True(t, cfg.Jobs.AttachmentCleanup.Enabled)
 	assert.Equal(t, 600, cfg.Jobs.AttachmentCleanup.GracePeriodSeconds)
 }
 
@@ -178,7 +233,7 @@ func TestLoadFromViper_InvalidAttachmentJPEGQuality(t *testing.T) {
 	assert.Nil(t, cfg)
 }
 
-func TestLoadFromViper_InvalidOrphanCleanupInterval(t *testing.T) {
+func TestLoadFromViper_InvalidAttachmentCleanupInterval(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
 	v.Set("delivery.http.auth.secret", "test-secret")
