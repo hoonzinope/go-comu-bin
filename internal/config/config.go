@@ -11,6 +11,11 @@ type Config struct {
 		ListTTLSeconds   int `yaml:"listTTLSeconds"`
 		DetailTTLSeconds int `yaml:"detailTTLSeconds"`
 	} `yaml:"cache"`
+	Storage struct {
+		Local struct {
+			RootDir string `yaml:"rootDir"`
+		} `yaml:"local"`
+	} `yaml:"storage"`
 	Delivery struct {
 		HTTP struct {
 			Port int `yaml:"port"`
@@ -37,6 +42,7 @@ func Load() (*Config, error) {
 func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("cache.listTTLSeconds", 30)
 	v.SetDefault("cache.detailTTLSeconds", 30)
+	v.SetDefault("storage.local.rootDir", "./data/uploads")
 
 	cfg := &Config{}
 	if err := v.UnmarshalExact(cfg); err != nil {
@@ -63,6 +69,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Cache.DetailTTLSeconds <= 0 {
 		return fmt.Errorf("invalid cache.detailTTLSeconds: %d (must be > 0)", cfg.Cache.DetailTTLSeconds)
+	}
+	if cfg.Storage.Local.RootDir == "" {
+		return fmt.Errorf("invalid storage.local.rootDir: cannot be empty")
 	}
 	return nil
 }

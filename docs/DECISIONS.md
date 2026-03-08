@@ -323,3 +323,32 @@
 - `internal/application/service/postService.go`
 - `internal/delivery/http.go`
 - `docs/ROADMAP.md`
+
+## 2026-03-08 - 실제 파일 저장은 draft first + FileStorage 포트로 준비
+
+상태
+
+- decided
+
+배경
+
+- attachment 메타데이터는 추가됐지만, 실제 이미지 파일 저장 경로와 저장 어댑터 경계는 아직 없었다.
+
+결론
+
+- 현재 업로드 흐름은 `draft post`에 먼저 연결하는 방향을 기준으로 잡는다.
+- 미래에는 post 없이 선업로드 후 나중에 bind/event로 연결할 수 있도록 파일 저장은 별도 `FileStorage` 포트로 분리한다.
+- 1차 구현체는 local filesystem 어댑터로 시작한다.
+- 나중에 object storage 어댑터를 같은 포트 구현으로 추가한다.
+
+후속 작업
+
+- `FileStorage` 포트 추가
+- local filesystem 어댑터 추가
+- storage root config 추가
+
+관련 문서/코드
+
+- `internal/application/port`
+- `internal/infrastructure`
+- `internal/config/config.go`

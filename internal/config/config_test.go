@@ -14,6 +14,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 60)
+	v.Set("storage.local.rootDir", "./data/uploads")
 
 	cfg, err := loadFromViper(v)
 	require.NoError(t, err)
@@ -21,6 +22,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
 	assert.Equal(t, 30, cfg.Cache.ListTTLSeconds)
 	assert.Equal(t, 60, cfg.Cache.DetailTTLSeconds)
+	assert.Equal(t, "./data/uploads", cfg.Storage.Local.RootDir)
 }
 
 func TestLoadFromViper_InvalidPort(t *testing.T) {
@@ -30,6 +32,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		v.Set("delivery.http.auth.secret", "test-secret")
 		v.Set("cache.listTTLSeconds", 30)
 		v.Set("cache.detailTTLSeconds", 30)
+		v.Set("storage.local.rootDir", "./data/uploads")
 
 		cfg, err := loadFromViper(v)
 		require.Error(t, err)
@@ -42,6 +45,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		v.Set("delivery.http.auth.secret", "test-secret")
 		v.Set("cache.listTTLSeconds", 30)
 		v.Set("cache.detailTTLSeconds", 30)
+		v.Set("storage.local.rootDir", "./data/uploads")
 
 		cfg, err := loadFromViper(v)
 		require.Error(t, err)
@@ -55,6 +59,7 @@ func TestLoadFromViper_UnknownField(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.local.rootDir", "./data/uploads")
 	v.Set("delivery.http.unknown", true)
 
 	cfg, err := loadFromViper(v)
@@ -68,6 +73,20 @@ func TestLoadFromViper_InvalidCacheTTL(t *testing.T) {
 	v.Set("delivery.http.auth.secret", "test-secret")
 	v.Set("cache.listTTLSeconds", 0)
 	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.local.rootDir", "./data/uploads")
+
+	cfg, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+}
+
+func TestLoadFromViper_InvalidStorageRoot(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.local.rootDir", "")
 
 	cfg, err := loadFromViper(v)
 	require.Error(t, err)
