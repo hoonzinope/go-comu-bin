@@ -98,6 +98,9 @@ func (s *PostService) createPost(title, content string, authorID, boardID int64,
 }
 
 func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*model.PostList, error) {
+	if err := requirePositiveLimit(limit); err != nil {
+		return nil, err
+	}
 	cacheKey := key.PostList(boardID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		board, err := s.boardRepository.SelectBoardByID(boardID)
@@ -445,7 +448,7 @@ func extractAttachmentRefIDs(content string) []int64 {
 func attachmentsFromEntities(items []*entity.Attachment) []model.Attachment {
 	out := make([]model.Attachment, 0, len(items))
 	for _, item := range items {
-		if item.IsOrphaned() {
+		if item.IsOrphaned() || item.IsPendingDelete() {
 			continue
 		}
 		out = append(out, model.Attachment{

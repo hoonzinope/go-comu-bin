@@ -36,6 +36,9 @@ func NewBoardService(userRepository port.UserRepository, boardRepository port.Bo
 }
 
 func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, error) {
+	if err := requirePositiveLimit(limit); err != nil {
+		return nil, err
+	}
 	cacheKey := key.BoardList(limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
@@ -51,7 +54,7 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 
 		hasMore := false
 		var nextLastID *int64
-		if limit >= 0 && len(boards) > limit {
+		if len(boards) > limit {
 			hasMore = true
 			boards = boards[:limit]
 		}

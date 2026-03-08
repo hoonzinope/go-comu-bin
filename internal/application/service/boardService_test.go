@@ -52,6 +52,15 @@ func TestBoardService_GetBoards_Success(t *testing.T) {
 	assert.Len(t, list.Boards, 2)
 }
 
+func TestBoardService_GetBoards_InvalidLimit(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewBoardService(repositories.user, repositories.board, repositories.post, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.GetBoards(0, 0)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
 func TestBoardService_GetBoards_HasMoreAndNextCursor(t *testing.T) {
 	repositories := newTestRepositories()
 	seedBoard(repositories.board, "b1", "d1")

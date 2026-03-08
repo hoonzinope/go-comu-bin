@@ -101,6 +101,18 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	assert.Equal(t, list.Posts[len(list.Posts)-1].ID, *list.NextLastID)
 }
 
+func TestPostService_GetPostsList_InvalidLimit(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewPostService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.GetPostsList(boardID, 0, 0)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
 func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")

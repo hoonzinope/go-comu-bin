@@ -103,6 +103,19 @@ func TestCommentService_GetCommentsByPost_HasMoreAndNextCursor(t *testing.T) {
 	assert.Equal(t, list.Comments[len(list.Comments)-1].ID, *list.NextLastID)
 }
 
+func TestCommentService_GetCommentsByPost_InvalidLimit(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	seedComment(repositories.comment, userID, postID, "c1")
+	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, repositories.reaction, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err := svc.GetCommentsByPost(postID, 0, 0)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
 func TestCommentService_GetCommentsByPost_ReturnsPostNotFound_WhenPostDeleted(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")

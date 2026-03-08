@@ -85,6 +85,9 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 }
 
 func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64) (*model.CommentList, error) {
+	if err := requirePositiveLimit(limit); err != nil {
+		return nil, err
+	}
 	cacheKey := key.CommentList(postID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		post, err := s.postRepository.SelectPostByID(postID)
@@ -101,7 +104,7 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 		}
 		hasMore := false
 		var nextLastID *int64
-		if limit >= 0 && len(comments) > limit {
+		if len(comments) > limit {
 			hasMore = true
 			comments = comments[:limit]
 		}
