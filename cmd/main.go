@@ -77,6 +77,7 @@ func main() {
 		postRepository,
 		attachmentRepository,
 		fileStorage,
+		cache,
 		cfg.Storage.Attachment.MaxUploadSizeBytes,
 		service.ImageOptimizationConfig{
 			Enabled:     cfg.Storage.Attachment.ImageOptimization.Enabled,

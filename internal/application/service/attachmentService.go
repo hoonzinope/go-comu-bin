@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -33,6 +34,7 @@ type AttachmentService struct {
 	postRepository       port.PostRepository
 	attachmentRepository port.AttachmentRepository
 	fileStorage          port.FileStorage
+	cache                port.Cache
 	maxUploadSizeBytes   int64
 	imageOptimization    ImageOptimizationConfig
 	authorizationPolicy  policy.AuthorizationPolicy
@@ -52,19 +54,20 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
 	return NewAttachmentServiceWithOptions(
 		userRepository,
 		postRepository,
 		attachmentRepository,
 		fileStorage,
+		cache,
 		maxUploadSizeBytes,
 		ImageOptimizationConfig{Enabled: true, JPEGQuality: 82},
 		authorizationPolicy,
 	)
 }
 
-func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
 	}
@@ -76,6 +79,7 @@ func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRep
 		postRepository:       postRepository,
 		attachmentRepository: attachmentRepository,
 		fileStorage:          fileStorage,
+		cache:                cache,
 		maxUploadSizeBytes:   maxUploadSizeBytes,
 		imageOptimization:    imageOptimization,
 		authorizationPolicy:  authorizationPolicy,
@@ -110,6 +114,9 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 	id, err := s.attachmentRepository.Save(attachment)
 	if err != nil {
 		return 0, customError.WrapRepository("save attachment", err)
+	}
+	if err := s.cache.Delete(key.PostDetail(postID)); err != nil {
+		return 0, customError.WrapCache("invalidate post detail after create attachment", err)
 	}
 	return id, nil
 }
@@ -293,11 +300,19 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 	if attachment == nil || attachment.PostID != postID {
 		return customError.ErrInvalidInput
 	}
+	for _, referencedAttachmentID := range extractAttachmentRefIDs(post.Content) {
+		if referencedAttachmentID == attachmentID {
+			return customError.ErrInvalidInput
+		}
+	}
 	if err := s.fileStorage.Delete(attachment.StorageKey); err != nil {
 		return customError.Wrap(customError.ErrInternalServerError, "delete stored file", err)
 	}
 	if err := s.attachmentRepository.Delete(attachmentID); err != nil {
 		return customError.WrapRepository("delete attachment", err)
+	}
+	if err := s.cache.Delete(key.PostDetail(postID)); err != nil {
+		return customError.WrapCache("invalidate post detail after delete attachment", err)
 	}
 	return nil
 }
