@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -295,6 +296,36 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 		return customError.WrapRepository("delete attachment", err)
 	}
 	return nil
+}
+
+func (s *AttachmentService) CleanupOrphanAttachments(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if gracePeriod <= 0 || limit <= 0 {
+		return 0, nil
+	}
+	cutoff := now.Add(-gracePeriod)
+	items, err := s.attachmentRepository.SelectOrphansBefore(cutoff, limit)
+	if err != nil {
+		return 0, customError.WrapRepository("select orphan attachments for cleanup", err)
+	}
+	deletedCount := 0
+	for _, item := range items {
+		select {
+		case <-ctx.Done():
+			return deletedCount, ctx.Err()
+		default:
+		}
+		if err := s.fileStorage.Delete(item.StorageKey); err != nil {
+			return deletedCount, customError.Wrap(customError.ErrInternalServerError, "delete orphan attachment file", err)
+		}
+		if err := s.attachmentRepository.Delete(item.ID); err != nil {
+			return deletedCount, customError.WrapRepository("delete orphan attachment metadata", err)
+		}
+		deletedCount++
+	}
+	return deletedCount, nil
 }
 
 func buildAttachmentStorageKey(postID int64, fileName string) string {

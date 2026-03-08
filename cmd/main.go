@@ -12,9 +12,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
@@ -26,6 +28,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
+	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	objectstorage "github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/object"
@@ -41,6 +44,8 @@ func main() {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+	appCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	userRepository := inmemory.NewUserRepository()
 	boardRepository := inmemory.NewBoardRepository()
@@ -79,6 +84,7 @@ func main() {
 		},
 		authorizationPolicy,
 	)
+	startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase)
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)
@@ -142,4 +148,25 @@ func newFileStorage(cfg *config.Config) (port.FileStorage, error) {
 	default:
 		return nil, fmt.Errorf("unsupported storage provider: %s", cfg.Storage.Provider)
 	}
+}
+
+func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentService *service.AttachmentService) {
+	if !cfg.Jobs.Enabled {
+		return
+	}
+	runner := jobrunner.NewRunner(logger)
+	if cfg.Jobs.OrphanAttachmentCleanup.Enabled {
+		interval := time.Duration(cfg.Jobs.OrphanAttachmentCleanup.IntervalSeconds) * time.Second
+		gracePeriod := time.Duration(cfg.Jobs.OrphanAttachmentCleanup.GracePeriodSeconds) * time.Second
+		batchSize := cfg.Jobs.OrphanAttachmentCleanup.BatchSize
+		runner.Register(jobrunner.Job{
+			Name:     "orphan-attachment-cleanup",
+			Interval: interval,
+			Run: func(ctx context.Context) error {
+				_, err := attachmentService.CleanupOrphanAttachments(ctx, time.Now(), gracePeriod, batchSize)
+				return err
+			},
+		})
+	}
+	runner.Start(ctx)
 }

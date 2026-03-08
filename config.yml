@@ -23,3 +23,11 @@ delivery:
     port: 18577
     auth:
       secret: "commu-bin-secret-key"
+
+jobs:
+  enabled: true
+  orphanAttachmentCleanup:
+    enabled: true
+    intervalSeconds: 600
+    gracePeriodSeconds: 86400
+    batchSize: 50

@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"image"
 	"image/color"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -394,4 +396,90 @@ func TestAttachmentService_GetPostAttachmentPreviewFile_AllowedForOwner(t *testi
 	require.NoError(t, err)
 	assert.Equal(t, "posts/1/a.png", storage.openKey)
 	assert.Equal(t, "hello", string(data))
+}
+
+func TestAttachmentService_CleanupOrphanAttachments_RemovesExpiredOrphans(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	expired := entity.NewAttachment(postID, "old.png", "image/png", 5, "posts/1/old.png")
+	recent := entity.NewAttachment(postID, "recent.png", "image/png", 5, "posts/1/recent.png")
+	referenced := entity.NewAttachment(postID, "live.png", "image/png", 5, "posts/1/live.png")
+	referenced.MarkReferenced()
+	oldTime := time.Now().Add(-2 * time.Hour)
+	recentTime := time.Now().Add(-10 * time.Minute)
+	expired.OrphanedAt = &oldTime
+	recent.OrphanedAt = &recentTime
+	expiredID, err := repositories.attachment.Save(expired)
+	require.NoError(t, err)
+	recentID, err := repositories.attachment.Save(recent)
+	require.NoError(t, err)
+	referencedID, err := repositories.attachment.Save(referenced)
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now(), time.Hour, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 1, deletedCount)
+	assert.Equal(t, "posts/1/old.png", storage.deleteKey)
+
+	expiredAfter, err := repositories.attachment.SelectByID(expiredID)
+	require.NoError(t, err)
+	assert.Nil(t, expiredAfter)
+	recentAfter, err := repositories.attachment.SelectByID(recentID)
+	require.NoError(t, err)
+	assert.NotNil(t, recentAfter)
+	referencedAfter, err := repositories.attachment.SelectByID(referencedID)
+	require.NoError(t, err)
+	assert.NotNil(t, referencedAfter)
+}
+
+func TestAttachmentService_CleanupOrphanAttachments_RespectsLimit(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	first := entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png")
+	second := entity.NewAttachment(postID, "b.png", "image/png", 5, "posts/1/b.png")
+	oldTime := time.Now().Add(-2 * time.Hour)
+	first.OrphanedAt = &oldTime
+	second.OrphanedAt = &oldTime
+	_, err := repositories.attachment.Save(first)
+	require.NoError(t, err)
+	_, err = repositories.attachment.Save(second)
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now(), time.Hour, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, deletedCount)
+
+	items, err := repositories.attachment.SelectByPostID(postID)
+	require.NoError(t, err)
+	assert.Len(t, items, 1)
+}
+
+func TestAttachmentService_CleanupOrphanAttachments_StopsOnStorageDeleteError(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{deleteErr: errors.New("boom")}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	attachment := entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png")
+	oldTime := time.Now().Add(-2 * time.Hour)
+	attachment.OrphanedAt = &oldTime
+	attachmentID, err := repositories.attachment.Save(attachment)
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, storage, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	deletedCount, err := svc.CleanupOrphanAttachments(context.Background(), time.Now(), time.Hour, 10)
+	require.Error(t, err)
+	assert.Equal(t, 0, deletedCount)
+
+	stillThere, err := repositories.attachment.SelectByID(attachmentID)
+	require.NoError(t, err)
+	assert.NotNil(t, stillThere)
 }

@@ -450,3 +450,36 @@
 - `internal/application/service/attachmentService.go`
 - `internal/application/service/postService.go`
 - `internal/infrastructure/storage`
+
+## 2026-03-08 - 주기 작업은 공통 job runner 위에 올리고 orphan cleanup은 첫 작업으로 넣는다
+
+상태
+
+- decided
+
+배경
+
+- orphan attachment는 표시만 있고 실제 정리 경로는 아직 없다.
+- 하지만 orphan cleanup 하나만을 위한 ad-hoc ticker를 `main.go`에 직접 넣는 방식은 이후 배치 작업 확장에 불리하다.
+
+결론
+
+- 주기 작업은 공통 in-process job runner 위에 등록하는 방식으로 시작한다.
+- 현재 1차 작업은 `orphan attachment cleanup`이며, 이후 다른 정리 작업도 같은 runner에 추가할 수 있게 한다.
+- 작업별 on/off, 주기, grace period, batch size는 config로 관리한다.
+- orphan cleanup은 `orphaned_at + grace period`가 지난 attachment만 정리한다.
+- cleanup은 저장 파일 삭제 후 attachment 메타데이터 삭제까지 수행한다.
+- 변경 작업의 기본 순서는 `결정 문서 기록 -> TDD -> 구현 -> 테스트 통과 -> 문서 정합성 반영 -> 커밋/푸시`로 고정한다.
+
+후속 작업
+
+- 공통 job runner 추가
+- orphan cleanup 유스케이스 구현
+- jobs config 및 서버 시작 시 runner 등록
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `internal/application/service/attachmentService.go`
+- `internal/infrastructure/job`
+- `internal/config/config.go`
