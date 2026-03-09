@@ -88,6 +88,22 @@ func ReactionFromEntity(reaction *entity.Reaction) model.Reaction {
 	}
 }
 
+func TagFromEntity(tag *entity.Tag) model.Tag {
+	return model.Tag{
+		ID:        tag.ID,
+		Name:      tag.Name,
+		CreatedAt: tag.CreatedAt,
+	}
+}
+
+func TagsFromEntities(items []*entity.Tag) []model.Tag {
+	out := make([]model.Tag, 0, len(items))
+	for _, item := range items {
+		out = append(out, TagFromEntity(item))
+	}
+	return out
+}
+
 func ReactionsFromEntities(items []*entity.Reaction) []model.Reaction {
 	out := make([]model.Reaction, 0, len(items))
 	for _, item := range items {

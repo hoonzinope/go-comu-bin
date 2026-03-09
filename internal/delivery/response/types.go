@@ -37,10 +37,17 @@ type PostList struct {
 
 type PostDetail struct {
 	Post            *Post           `json:"post"`
+	Tags            []Tag           `json:"tags"`
 	Attachments     []Attachment    `json:"attachments"`
 	Comments        []CommentDetail `json:"comments"`
 	CommentsHasMore bool            `json:"comments_has_more"`
 	Reactions       []Reaction      `json:"reactions"`
+}
+
+type Tag struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Comment struct {

@@ -19,16 +19,18 @@ type BoardService struct {
 	userRepository      port.UserRepository
 	boardRepository     port.BoardRepository
 	postRepository      port.PostRepository
+	unitOfWork          port.UnitOfWork
 	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *BoardService {
+func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
 		postRepository:      postRepository,
+		unitOfWork:          unitOfWork,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
@@ -86,20 +88,27 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if strings.TrimSpace(name) == "" {
 		return 0, customError.ErrInvalidInput
 	}
-	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
-	if err != nil {
-		return 0, customError.WrapRepository("select user by id for create board", err)
-	}
-	if user == nil {
-		return 0, customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
-		return 0, err
-	}
 	newBoard := entity.NewBoard(name, description)
-	boardID, err := s.boardRepository.Save(newBoard)
+	var boardID int64
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		user, err := tx.UserRepository().SelectUserByID(userID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for create board", err)
+		}
+		if user == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+			return err
+		}
+		boardID, err = tx.BoardRepository().Save(newBoard)
+		if err != nil {
+			return customError.WrapRepository("save board", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return 0, customError.WrapRepository("save board", err)
+		return 0, err
 	}
 	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after create board")
 	return boardID, nil
@@ -110,27 +119,32 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if strings.TrimSpace(name) == "" {
 		return customError.ErrInvalidInput
 	}
-	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		user, err := tx.UserRepository().SelectUserByID(userID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for update board", err)
+		}
+		if user == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+			return err
+		}
+		existingBoard, err := tx.BoardRepository().SelectBoardByID(id)
+		if err != nil {
+			return customError.WrapRepository("select board by id for update board", err)
+		}
+		if existingBoard == nil {
+			return customError.ErrBoardNotFound
+		}
+		existingBoard.Update(name, description)
+		if err := tx.BoardRepository().Update(existingBoard); err != nil {
+			return customError.WrapRepository("update board", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return customError.WrapRepository("select user by id for update board", err)
-	}
-	if user == nil {
-		return customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 		return err
-	}
-	existingBoard, err := s.boardRepository.SelectBoardByID(id) // board 존재 여부 확인
-	if err != nil {
-		return customError.WrapRepository("select board by id for update board", err)
-	}
-	if existingBoard == nil {
-		return customError.ErrBoardNotFound
-	}
-	existingBoard.Update(name, description)
-	err = s.boardRepository.Update(existingBoard)
-	if err != nil {
-		return customError.WrapRepository("update board", err)
 	}
 	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after update board")
 	return nil
@@ -138,33 +152,38 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 
 func (s *BoardService) DeleteBoard(id, userID int64) error {
 	// 게시판 삭제 로직 구현
-	user, err := s.userRepository.SelectUserByID(userID) // user 존재 여부 확인
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		user, err := tx.UserRepository().SelectUserByID(userID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for delete board", err)
+		}
+		if user == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+			return err
+		}
+		existingBoard, err := tx.BoardRepository().SelectBoardByID(id)
+		if err != nil {
+			return customError.WrapRepository("select board by id for delete board", err)
+		}
+		if existingBoard == nil {
+			return customError.ErrBoardNotFound
+		}
+		hasPosts, err := tx.PostRepository().ExistsByBoardID(existingBoard.ID)
+		if err != nil {
+			return customError.WrapRepository("check board posts before delete board", err)
+		}
+		if hasPosts {
+			return customError.ErrBoardNotEmpty
+		}
+		if err := tx.BoardRepository().Delete(existingBoard.ID); err != nil {
+			return customError.WrapRepository("delete board", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return customError.WrapRepository("select user by id for delete board", err)
-	}
-	if user == nil {
-		return customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 		return err
-	}
-	existingBoard, err := s.boardRepository.SelectBoardByID(id) // board 존재 여부 확인
-	if err != nil {
-		return customError.WrapRepository("select board by id for delete board", err)
-	}
-	if existingBoard == nil {
-		return customError.ErrBoardNotFound
-	}
-	hasPosts, err := s.postRepository.ExistsByBoardID(existingBoard.ID)
-	if err != nil {
-		return customError.WrapRepository("check board posts before delete board", err)
-	}
-	if hasPosts {
-		return customError.ErrBoardNotEmpty
-	}
-	err = s.boardRepository.Delete(existingBoard.ID)
-	if err != nil {
-		return customError.WrapRepository("delete board", err)
 	}
 	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after delete board")
 	return nil

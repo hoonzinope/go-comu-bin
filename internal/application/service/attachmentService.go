@@ -34,6 +34,7 @@ type AttachmentService struct {
 	userRepository       port.UserRepository
 	postRepository       port.PostRepository
 	attachmentRepository port.AttachmentRepository
+	unitOfWork           port.UnitOfWork
 	fileStorage          port.FileStorage
 	cache                port.Cache
 	maxUploadSizeBytes   int64
@@ -55,11 +56,12 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
 	return NewAttachmentServiceWithOptions(
 		userRepository,
 		postRepository,
 		attachmentRepository,
+		unitOfWork,
 		fileStorage,
 		cache,
 		maxUploadSizeBytes,
@@ -68,7 +70,7 @@ func NewAttachmentService(userRepository port.UserRepository, postRepository por
 	)
 }
 
-func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
 	}
@@ -79,6 +81,7 @@ func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRep
 		userRepository:       userRepository,
 		postRepository:       postRepository,
 		attachmentRepository: attachmentRepository,
+		unitOfWork:           unitOfWork,
 		fileStorage:          fileStorage,
 		cache:                cache,
 		maxUploadSizeBytes:   maxUploadSizeBytes,
@@ -91,30 +94,37 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || strings.TrimSpace(storageKey) == "" || sizeBytes <= 0 {
 		return 0, customError.ErrInvalidInput
 	}
-	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
-	if err != nil {
-		return 0, customError.WrapRepository("select post by id including unpublished for create attachment", err)
-	}
-	if post == nil {
-		return 0, customError.ErrPostNotFound
-	}
-	requester, err := s.userRepository.SelectUserByID(userID)
-	if err != nil {
-		return 0, customError.WrapRepository("select user by id for create attachment", err)
-	}
-	if requester == nil {
-		return 0, customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
-		return 0, err
-	}
-	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
-		return 0, err
-	}
 	attachment := entity.NewAttachment(postID, fileName, contentType, sizeBytes, storageKey)
-	id, err := s.attachmentRepository.Save(attachment)
+	var id int64
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(postID)
+		if err != nil {
+			return customError.WrapRepository("select post by id including unpublished for create attachment", err)
+		}
+		if post == nil {
+			return customError.ErrPostNotFound
+		}
+		requester, err := tx.UserRepository().SelectUserByID(userID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for create attachment", err)
+		}
+		if requester == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+			return err
+		}
+		if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+			return err
+		}
+		id, err = tx.AttachmentRepository().Save(attachment)
+		if err != nil {
+			return customError.WrapRepository("save attachment", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return 0, customError.WrapRepository("save attachment", err)
+		return 0, err
 	}
 	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after create attachment")
 	return id, nil
@@ -275,41 +285,48 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(postID, attachmentID, u
 }
 
 func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID int64) error {
-	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
-	if err != nil {
-		return customError.WrapRepository("select post by id including unpublished for delete attachment", err)
-	}
-	if post == nil {
-		return customError.ErrPostNotFound
-	}
-	requester, err := s.userRepository.SelectUserByID(userID)
-	if err != nil {
-		return customError.WrapRepository("select user by id for delete attachment", err)
-	}
-	if requester == nil {
-		return customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
-		return err
-	}
-	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
-		return err
-	}
-	attachment, err := s.attachmentRepository.SelectByID(attachmentID)
-	if err != nil {
-		return customError.WrapRepository("select attachment by id for delete attachment", err)
-	}
-	if attachment == nil || attachment.PostID != postID {
-		return customError.ErrAttachmentNotFound
-	}
-	for _, referencedAttachmentID := range extractAttachmentRefIDs(post.Content) {
-		if referencedAttachmentID == attachmentID {
-			return customError.ErrInvalidInput
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(postID)
+		if err != nil {
+			return customError.WrapRepository("select post by id including unpublished for delete attachment", err)
 		}
-	}
-	attachment.MarkPendingDelete()
-	if err := s.attachmentRepository.Update(attachment); err != nil {
-		return customError.WrapRepository("mark attachment pending delete", err)
+		if post == nil {
+			return customError.ErrPostNotFound
+		}
+		requester, err := tx.UserRepository().SelectUserByID(userID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for delete attachment", err)
+		}
+		if requester == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+			return err
+		}
+		if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+			return err
+		}
+		attachment, err := tx.AttachmentRepository().SelectByID(attachmentID)
+		if err != nil {
+			return customError.WrapRepository("select attachment by id for delete attachment", err)
+		}
+		if attachment == nil || attachment.PostID != postID {
+			return customError.ErrAttachmentNotFound
+		}
+		for _, referencedAttachmentID := range extractAttachmentRefIDs(post.Content) {
+			if referencedAttachmentID == attachmentID {
+				return customError.ErrInvalidInput
+			}
+		}
+		updatedAttachment := *attachment
+		updatedAttachment.MarkPendingDelete()
+		if err := tx.AttachmentRepository().Update(&updatedAttachment); err != nil {
+			return customError.WrapRepository("mark attachment pending delete", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete attachment")
 	return nil

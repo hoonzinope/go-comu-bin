@@ -13,7 +13,7 @@ import (
 
 func TestUserService_SignUp_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
 	result, err := svc.SignUp("alice", "pw")
 	require.NoError(t, err)
@@ -22,7 +22,7 @@ func TestUserService_SignUp_Success(t *testing.T) {
 
 func TestUserService_SignUp_Duplicate(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp("alice", "pw")
 
 	_, err := svc.SignUp("alice", "pw2")
@@ -32,7 +32,7 @@ func TestUserService_SignUp_Duplicate(t *testing.T) {
 
 func TestUserService_SignUp_InvalidInput(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
 	_, err := svc.SignUp(" ", "pw")
 	require.Error(t, err)
@@ -41,7 +41,7 @@ func TestUserService_SignUp_InvalidInput(t *testing.T) {
 
 func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp("alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 
 func TestUserService_DeleteMe_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp("alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestUserService_DeleteMe_Success(t *testing.T) {
 
 func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
 	err := svc.DeleteMe(999, "pw")
 	require.Error(t, err)
@@ -74,7 +74,7 @@ func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 
 func TestUserService_DeleteMe_SucceedsEvenWhenUserHasPostsCommentsAndReactions(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp("alice", "pw")
 	_, _ = svc.SignUp("bob", "pw")
 	alice, err := repositories.user.SelectUserByUsername("alice")
@@ -96,7 +96,7 @@ func TestUserService_DeleteMe_SucceedsEvenWhenUserHasPostsCommentsAndReactions(t
 
 func TestUserService_DeleteMe_AllowsReuseOfUsernameAfterSoftDelete(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp("alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestUserService_DeleteMe_AllowsReuseOfUsernameAfterSoftDelete(t *testing.T)
 
 func TestUserService_DeleteMe_InvalidatesCredentialsAfterSoftDelete(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp("alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestUserService_DeleteMe_InvalidatesCredentialsAfterSoftDelete(t *testing.T
 
 func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
 	_, err := svc.VerifyCredentials("nope", "pw")
 	require.Error(t, err)
@@ -134,7 +134,7 @@ func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 
 func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp("alice", "pw")
 
 	_, err := svc.VerifyCredentials("alice", "wrong")
@@ -144,7 +144,7 @@ func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 
 func TestUserService_SuspendUser_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
 	target, err := repositories.user.SelectUserByID(targetID)
@@ -164,7 +164,7 @@ func TestUserService_SuspendUser_Success(t *testing.T) {
 
 func TestUserService_SuspendUser_ForbiddenForNonAdmin(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
 	target, err := repositories.user.SelectUserByID(targetID)
@@ -178,7 +178,7 @@ func TestUserService_SuspendUser_ForbiddenForNonAdmin(t *testing.T) {
 
 func TestUserService_UnsuspendUser_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
 	target, err := repositories.user.SelectUserByID(targetID)
@@ -198,7 +198,7 @@ func TestUserService_UnsuspendUser_Success(t *testing.T) {
 
 func TestUserService_GetUserSuspension_Success(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	target := entity.NewUser("alice", "pw")
 	until := time.Now().Add(7 * 24 * time.Hour)
@@ -220,7 +220,7 @@ func TestUserService_GetUserSuspension_Success(t *testing.T) {
 
 func TestUserService_GetUserSuspension_ForbiddenForNonAdmin(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := NewUserService(repositories.user, newTestPasswordHasher())
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	targetID := seedUser(repositories.user, "alice", "pw", "user")
 	target, err := repositories.user.SelectUserByID(targetID)

@@ -18,10 +18,11 @@ var _ port.CredentialVerifier = (*UserService)(nil)
 type UserService struct {
 	userRepository      port.UserRepository
 	passwordHasher      port.PasswordHasher
+	unitOfWork          port.UnitOfWork
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewUserService(userRepository port.UserRepository, passwordHasher port.PasswordHasher, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {
+func NewUserService(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {
 	var authorizationPolicy policy.AuthorizationPolicy = policy.NewRoleAuthorizationPolicy()
 	if len(authorizationPolicies) > 0 && authorizationPolicies[0] != nil {
 		authorizationPolicy = authorizationPolicies[0]
@@ -29,6 +30,7 @@ func NewUserService(userRepository port.UserRepository, passwordHasher port.Pass
 	return &UserService{
 		userRepository:      userRepository,
 		passwordHasher:      passwordHasher,
+		unitOfWork:          unitOfWork,
 		authorizationPolicy: authorizationPolicy,
 	}
 }
@@ -39,51 +41,57 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 	if strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
 		return "", customError.ErrInvalidInput
 	}
-	existingUser, err := s.userRepository.SelectUserByUsername(username)
-	if err != nil {
-		return "", customError.WrapRepository("select user by username for signup", err)
-	}
-	if existingUser != nil {
-		return "", customError.ErrUserAlreadyExists
-	}
-
 	hashedPassword, err := s.passwordHasher.Hash(password)
 	if err != nil {
 		return "", customError.Wrap(customError.ErrInternalServerError, "hash password for signup", err)
 	}
 	newUser := entity.NewUser(username, hashedPassword)
 
-	_, err = s.userRepository.Save(newUser)
-	if err != nil {
-		if errors.Is(err, customError.ErrUserAlreadyExists) {
-			return "", customError.ErrUserAlreadyExists
+	err = s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		existingUser, repoErr := tx.UserRepository().SelectUserByUsername(username)
+		if repoErr != nil {
+			return customError.WrapRepository("select user by username for signup", repoErr)
 		}
-		return "", customError.WrapRepository("save user for signup", err)
+		if existingUser != nil {
+			return customError.ErrUserAlreadyExists
+		}
+		_, repoErr = tx.UserRepository().Save(newUser)
+		if repoErr != nil {
+			if errors.Is(repoErr, customError.ErrUserAlreadyExists) {
+				return customError.ErrUserAlreadyExists
+			}
+			return customError.WrapRepository("save user for signup", repoErr)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	return "ok", nil
 }
 
 func (s *UserService) DeleteMe(userID int64, password string) error {
-	existingUser, err := s.userRepository.SelectUserByID(userID)
-	if err != nil {
-		return customError.WrapRepository("select user by id for delete me", err)
-	}
-	if existingUser == nil {
-		return customError.ErrUserNotFound
-	}
-	matched, err := s.passwordHasher.Matches(existingUser.Password, password)
-	if err != nil {
-		return customError.Wrap(customError.ErrInternalServerError, "compare password for delete me", err)
-	}
-	if !matched {
-		return customError.ErrInvalidCredential
-	}
-	existingUser.SoftDelete()
-	err = s.userRepository.Update(existingUser)
-	if err != nil {
-		return customError.WrapRepository("soft delete user for delete me", err)
-	}
-	return nil
+	return s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		existingUser, err := tx.UserRepository().SelectUserByID(userID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for delete me", err)
+		}
+		if existingUser == nil {
+			return customError.ErrUserNotFound
+		}
+		matched, err := s.passwordHasher.Matches(existingUser.Password, password)
+		if err != nil {
+			return customError.Wrap(customError.ErrInternalServerError, "compare password for delete me", err)
+		}
+		if !matched {
+			return customError.ErrInvalidCredential
+		}
+		existingUser.SoftDelete()
+		if err := tx.UserRepository().Update(existingUser); err != nil {
+			return customError.WrapRepository("soft delete user for delete me", err)
+		}
+		return nil
+	})
 }
 
 func (s *UserService) VerifyCredentials(username, password string) (int64, error) {
@@ -113,83 +121,95 @@ func (s *UserService) SuspendUser(adminID int64, targetUserUUID, reason string, 
 	if !ok {
 		return customError.ErrInvalidInput
 	}
-	admin, err := s.userRepository.SelectUserByID(adminID)
-	if err != nil {
-		return customError.WrapRepository("select admin by id for suspend user", err)
-	}
-	if admin == nil {
-		return customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
-		return err
-	}
-	target, err := s.userRepository.SelectUserByUUID(targetUserUUID)
-	if err != nil {
-		return customError.WrapRepository("select target user by uuid for suspend user", err)
-	}
-	if target == nil {
-		return customError.ErrUserNotFound
-	}
-	target.Suspend(strings.TrimSpace(reason), until)
-	if err := s.userRepository.Update(target); err != nil {
-		return customError.WrapRepository("update user suspension", err)
-	}
-	return nil
+	return s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		admin, err := tx.UserRepository().SelectUserByID(adminID)
+		if err != nil {
+			return customError.WrapRepository("select admin by id for suspend user", err)
+		}
+		if admin == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+			return err
+		}
+		target, err := tx.UserRepository().SelectUserByUUID(targetUserUUID)
+		if err != nil {
+			return customError.WrapRepository("select target user by uuid for suspend user", err)
+		}
+		if target == nil {
+			return customError.ErrUserNotFound
+		}
+		target.Suspend(strings.TrimSpace(reason), until)
+		if err := tx.UserRepository().Update(target); err != nil {
+			return customError.WrapRepository("update user suspension", err)
+		}
+		return nil
+	})
 }
 
 func (s *UserService) GetUserSuspension(adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
-	admin, err := s.userRepository.SelectUserByID(adminID)
+	var suspension *model.UserSuspension
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		admin, err := tx.UserRepository().SelectUserByID(adminID)
+		if err != nil {
+			return customError.WrapRepository("select admin by id for get user suspension", err)
+		}
+		if admin == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+			return err
+		}
+		target, err := tx.UserRepository().SelectUserByUUID(targetUserUUID)
+		if err != nil {
+			return customError.WrapRepository("select target user by uuid for get user suspension", err)
+		}
+		if target == nil {
+			return customError.ErrUserNotFound
+		}
+		if target.Status == entity.UserStatusSuspended && !target.IsSuspended() {
+			target.Unsuspend()
+			if err := tx.UserRepository().Update(target); err != nil {
+				return customError.WrapRepository("refresh expired user suspension", err)
+			}
+		}
+		suspension = &model.UserSuspension{
+			UserUUID:       target.UUID,
+			Status:         target.Status,
+			Reason:         target.SuspensionReason,
+			SuspendedUntil: target.SuspendedUntil,
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, customError.WrapRepository("select admin by id for get user suspension", err)
-	}
-	if admin == nil {
-		return nil, customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 		return nil, err
 	}
-	target, err := s.userRepository.SelectUserByUUID(targetUserUUID)
-	if err != nil {
-		return nil, customError.WrapRepository("select target user by uuid for get user suspension", err)
-	}
-	if target == nil {
-		return nil, customError.ErrUserNotFound
-	}
-	if target.Status == entity.UserStatusSuspended && !target.IsSuspended() {
-		target.Unsuspend()
-		if err := s.userRepository.Update(target); err != nil {
-			return nil, customError.WrapRepository("refresh expired user suspension", err)
-		}
-	}
-	return &model.UserSuspension{
-		UserUUID:       target.UUID,
-		Status:         target.Status,
-		Reason:         target.SuspensionReason,
-		SuspendedUntil: target.SuspendedUntil,
-	}, nil
+	return suspension, nil
 }
 
 func (s *UserService) UnsuspendUser(adminID int64, targetUserUUID string) error {
-	admin, err := s.userRepository.SelectUserByID(adminID)
-	if err != nil {
-		return customError.WrapRepository("select admin by id for unsuspend user", err)
-	}
-	if admin == nil {
-		return customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
-		return err
-	}
-	target, err := s.userRepository.SelectUserByUUID(targetUserUUID)
-	if err != nil {
-		return customError.WrapRepository("select target user by uuid for unsuspend user", err)
-	}
-	if target == nil {
-		return customError.ErrUserNotFound
-	}
-	target.Unsuspend()
-	if err := s.userRepository.Update(target); err != nil {
-		return customError.WrapRepository("clear user suspension", err)
-	}
-	return nil
+	return s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		admin, err := tx.UserRepository().SelectUserByID(adminID)
+		if err != nil {
+			return customError.WrapRepository("select admin by id for unsuspend user", err)
+		}
+		if admin == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+			return err
+		}
+		target, err := tx.UserRepository().SelectUserByUUID(targetUserUUID)
+		if err != nil {
+			return customError.WrapRepository("select target user by uuid for unsuspend user", err)
+		}
+		if target == nil {
+			return customError.ErrUserNotFound
+		}
+		target.Unsuspend()
+		if err := tx.UserRepository().Update(target); err != nil {
+			return customError.WrapRepository("clear user suspension", err)
+		}
+		return nil
+	})
 }

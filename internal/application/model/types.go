@@ -24,6 +24,12 @@ type Post struct {
 	UpdatedAt  time.Time
 }
 
+type Tag struct {
+	ID        int64
+	Name      string
+	CreatedAt time.Time
+}
+
 type Comment struct {
 	ID         int64
 	Content    string

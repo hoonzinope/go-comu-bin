@@ -22,6 +22,7 @@ var (
 	ErrBoardNotFound      = errors.New("board not found")
 	ErrBoardNotEmpty      = errors.New("board not empty")
 	ErrPostNotFound       = errors.New("post not found")
+	ErrTagNotFound        = errors.New("tag not found")
 	ErrAttachmentNotFound = errors.New("attachment not found")
 	ErrCommentNotFound    = errors.New("comment not found")
 	ErrReactionNotFound   = errors.New("reaction not found")
@@ -67,6 +68,8 @@ func Public(err error) error {
 		return ErrBoardNotEmpty
 	case errors.Is(err, ErrPostNotFound):
 		return ErrPostNotFound
+	case errors.Is(err, ErrTagNotFound):
+		return ErrTagNotFound
 	case errors.Is(err, ErrAttachmentNotFound):
 		return ErrAttachmentNotFound
 	case errors.Is(err, ErrCommentNotFound):

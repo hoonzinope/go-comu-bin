@@ -32,3 +32,20 @@ func TestAttachmentRepository_SaveListDelete(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, items)
 }
+
+func TestAttachmentRepository_SelectReturnsClone(t *testing.T) {
+	repo := NewAttachmentRepository()
+	id, err := repo.Save(entity.NewAttachment(1, "a.png", "image/png", 10, "a.png"))
+	require.NoError(t, err)
+
+	selected, err := repo.SelectByID(id)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+
+	selected.MarkPendingDelete()
+
+	again, err := repo.SelectByID(id)
+	require.NoError(t, err)
+	require.NotNil(t, again)
+	assert.False(t, again.IsPendingDelete())
+}

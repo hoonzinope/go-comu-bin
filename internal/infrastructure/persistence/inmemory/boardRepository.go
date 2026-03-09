@@ -11,15 +11,22 @@ import (
 var _ port.BoardRepository = (*BoardRepository)(nil)
 
 type BoardRepository struct {
-	mu      sync.RWMutex
-	boardDB struct {
+	mu          sync.RWMutex
+	coordinator *txCoordinator
+	boardDB     struct {
 		ID   int64
 		Data map[int64]*entity.Board
 	}
 }
 
+type boardRepositoryState struct {
+	ID   int64
+	Data map[int64]*entity.Board
+}
+
 func NewBoardRepository() *BoardRepository {
 	return &BoardRepository{
+		coordinator: newTxCoordinator(),
 		boardDB: struct {
 			ID   int64
 			Data map[int64]*entity.Board
@@ -30,17 +37,33 @@ func NewBoardRepository() *BoardRepository {
 	}
 }
 
+func (r *BoardRepository) attachCoordinator(coordinator *txCoordinator) {
+	r.coordinator = coordinator
+}
+
 func (r *BoardRepository) SelectBoardByID(id int64) (*entity.Board, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectBoardByID(id)
+}
+
+func (r *BoardRepository) selectBoardByID(id int64) (*entity.Board, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	if board, exists := r.boardDB.Data[id]; exists {
-		return board, nil
+		return cloneBoard(board), nil
 	}
 	return nil, nil
 }
 
 func (r *BoardRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Board, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectBoardList(limit, lastID)
+}
+
+func (r *BoardRepository) selectBoardList(limit int, lastID int64) ([]*entity.Board, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -53,7 +76,7 @@ func (r *BoardRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Bo
 		if lastID > 0 && board.ID >= lastID {
 			continue
 		}
-		boards = append(boards, board)
+		boards = append(boards, cloneBoard(board))
 	}
 	sort.Slice(boards, func(i, j int) bool {
 		return boards[i].ID > boards[j].ID
@@ -66,30 +89,83 @@ func (r *BoardRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Bo
 }
 
 func (r *BoardRepository) Save(board *entity.Board) (int64, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.save(board)
+}
+
+func (r *BoardRepository) save(board *entity.Board) (int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.boardDB.ID++
-	board.ID = r.boardDB.ID
-	r.boardDB.Data[board.ID] = board
-	return board.ID, nil
+	saved := cloneBoard(board)
+	saved.ID = r.boardDB.ID
+	r.boardDB.Data[saved.ID] = saved
+	board.ID = saved.ID
+	return saved.ID, nil
 }
 
 func (r *BoardRepository) Update(board *entity.Board) error {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.update(board)
+}
+
+func (r *BoardRepository) update(board *entity.Board) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if _, exists := r.boardDB.Data[board.ID]; exists {
-		r.boardDB.Data[board.ID] = board
+		r.boardDB.Data[board.ID] = cloneBoard(board)
 		return nil
 	}
 	return nil
 }
 
 func (r *BoardRepository) Delete(id int64) error {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.delete(id)
+}
+
+func (r *BoardRepository) delete(id int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	delete(r.boardDB.Data, id)
 	return nil
+}
+
+func (r *BoardRepository) snapshot() boardRepositoryState {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	state := boardRepositoryState{
+		ID:   r.boardDB.ID,
+		Data: make(map[int64]*entity.Board, len(r.boardDB.Data)),
+	}
+	for id, board := range r.boardDB.Data {
+		state.Data[id] = cloneBoard(board)
+	}
+	return state
+}
+
+func (r *BoardRepository) restore(state boardRepositoryState) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.boardDB.ID = state.ID
+	r.boardDB.Data = make(map[int64]*entity.Board, len(state.Data))
+	for id, board := range state.Data {
+		r.boardDB.Data[id] = cloneBoard(board)
+	}
+}
+
+func cloneBoard(board *entity.Board) *entity.Board {
+	if board == nil {
+		return nil
+	}
+	out := *board
+	return &out
 }

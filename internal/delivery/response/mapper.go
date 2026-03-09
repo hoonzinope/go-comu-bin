@@ -66,6 +66,7 @@ func PostDetailFromDTO(detail *model.PostDetail) *PostDetail {
 
 	return &PostDetail{
 		Post:            postPtrFromDTO(detail.Post),
+		Tags:            TagsFromDTO(detail.Tags),
 		Attachments:     attachments,
 		Comments:        comments,
 		CommentsHasMore: detail.CommentsHasMore,
@@ -104,6 +105,14 @@ func AttachmentsFromDTO(items []model.Attachment) []Attachment {
 	out := make([]Attachment, 0, len(items))
 	for _, item := range items {
 		out = append(out, attachmentFromDTO(item))
+	}
+	return out
+}
+
+func TagsFromDTO(items []model.Tag) []Tag {
+	out := make([]Tag, 0, len(items))
+	for _, item := range items {
+		out = append(out, tagFromDTO(item))
 	}
 	return out
 }
@@ -195,5 +204,13 @@ func attachmentFromDTO(attachment model.Attachment) Attachment {
 		FileURL:     fmt.Sprintf("/api/v1/posts/%d/attachments/%d/file", attachment.PostID, attachment.ID),
 		PreviewURL:  previewURL,
 		CreatedAt:   attachment.CreatedAt,
+	}
+}
+
+func tagFromDTO(tag model.Tag) Tag {
+	return Tag{
+		ID:        tag.ID,
+		Name:      tag.Name,
+		CreatedAt: tag.CreatedAt,
 	}
 }

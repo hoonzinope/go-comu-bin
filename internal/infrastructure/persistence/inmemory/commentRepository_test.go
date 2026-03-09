@@ -99,3 +99,20 @@ func TestCommentRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 	require.NoError(t, repo.Update(c))
 	require.NoError(t, repo.Delete(999))
 }
+
+func TestCommentRepository_SelectReturnsClone(t *testing.T) {
+	repo := NewCommentRepository()
+	id, err := repo.Save(testComment("hello", 1, 1))
+	require.NoError(t, err)
+
+	selected, err := repo.SelectCommentByID(id)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+
+	selected.Update("mutated outside repository")
+
+	again, err := repo.SelectCommentByID(id)
+	require.NoError(t, err)
+	require.NotNil(t, again)
+	assert.Equal(t, "hello", again.Content)
+}

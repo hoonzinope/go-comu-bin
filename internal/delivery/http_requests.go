@@ -26,8 +26,9 @@ type boardRequest struct {
 }
 
 type postRequest struct {
-	Title   string `json:"title" example:"hello"`
-	Content string `json:"content" example:"first post"`
+	Title   string   `json:"title" example:"hello"`
+	Content string   `json:"content" example:"first post"`
+	Tags    []string `json:"tags,omitempty" example:"go,backend"`
 }
 
 type commentRequest struct {

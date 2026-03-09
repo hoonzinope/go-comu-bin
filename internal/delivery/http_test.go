@@ -123,25 +123,26 @@ func (f *fakeBoardUseCase) DeleteBoard(id, userID int64) error {
 }
 
 type fakePostUseCase struct {
-	createPost      func(title, content string, authorID, boardID int64) (int64, error)
-	createDraftPost func(title, content string, authorID, boardID int64) (int64, error)
+	createPost      func(title, content string, tags []string, authorID, boardID int64) (int64, error)
+	createDraftPost func(title, content string, tags []string, authorID, boardID int64) (int64, error)
 	getPostsList    func(boardID int64, limit int, lastID int64) (*model.PostList, error)
+	getPostsByTag   func(tagName string, limit int, lastID int64) (*model.PostList, error)
 	getPostDetail   func(postID int64) (*model.PostDetail, error)
 	publishPost     func(id, authorID int64) error
-	updatePost      func(id, authorID int64, title, content string) error
+	updatePost      func(id, authorID int64, title, content string, tags []string) error
 	deletePost      func(id, authorID int64) error
 }
 
-func (f *fakePostUseCase) CreatePost(title, content string, authorID, boardID int64) (int64, error) {
+func (f *fakePostUseCase) CreatePost(title, content string, tags []string, authorID, boardID int64) (int64, error) {
 	if f.createPost != nil {
-		return f.createPost(title, content, authorID, boardID)
+		return f.createPost(title, content, tags, authorID, boardID)
 	}
 	return 1, nil
 }
 
-func (f *fakePostUseCase) CreateDraftPost(title, content string, authorID, boardID int64) (int64, error) {
+func (f *fakePostUseCase) CreateDraftPost(title, content string, tags []string, authorID, boardID int64) (int64, error) {
 	if f.createDraftPost != nil {
-		return f.createDraftPost(title, content, authorID, boardID)
+		return f.createDraftPost(title, content, tags, authorID, boardID)
 	}
 	return 1, nil
 }
@@ -149,6 +150,13 @@ func (f *fakePostUseCase) CreateDraftPost(title, content string, authorID, board
 func (f *fakePostUseCase) GetPostsList(boardID int64, limit int, lastID int64) (*model.PostList, error) {
 	if f.getPostsList != nil {
 		return f.getPostsList(boardID, limit, lastID)
+	}
+	return &model.PostList{}, nil
+}
+
+func (f *fakePostUseCase) GetPostsByTag(tagName string, limit int, lastID int64) (*model.PostList, error) {
+	if f.getPostsByTag != nil {
+		return f.getPostsByTag(tagName, limit, lastID)
 	}
 	return &model.PostList{}, nil
 }
@@ -167,9 +175,9 @@ func (f *fakePostUseCase) PublishPost(id, authorID int64) error {
 	return nil
 }
 
-func (f *fakePostUseCase) UpdatePost(id, authorID int64, title, content string) error {
+func (f *fakePostUseCase) UpdatePost(id, authorID int64, title, content string, tags []string) error {
 	if f.updatePost != nil {
-		return f.updatePost(id, authorID, title, content)
+		return f.updatePost(id, authorID, title, content, tags)
 	}
 	return nil
 }
@@ -426,9 +434,10 @@ func TestHandleCreateDraftPost_Success(t *testing.T) {
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			createDraftPost: func(title, content string, authorID, boardID int64) (int64, error) {
+			createDraftPost: func(title, content string, tags []string, authorID, boardID int64) (int64, error) {
 				assert.Equal(t, "draft", title)
 				assert.Equal(t, "content", content)
+				assert.Nil(t, tags)
 				assert.Equal(t, int64(1), authorID)
 				assert.Equal(t, int64(3), boardID)
 				return 9, nil
@@ -446,6 +455,36 @@ func TestHandleCreateDraftPost_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
 	assert.JSONEq(t, `{"id":9}`, rr.Body.String())
+}
+
+func TestHandleCreatePost_PassesTags(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{
+			createPost: func(title, content string, tags []string, authorID, boardID int64) (int64, error) {
+				assert.Equal(t, "hello", title)
+				assert.Equal(t, "body", content)
+				assert.Equal(t, []string{"go", "backend"}, tags)
+				assert.Equal(t, int64(1), authorID)
+				assert.Equal(t, int64(3), boardID)
+				return 11, nil
+			},
+		},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/3/posts", map[string]any{
+		"title":   "hello",
+		"content": "body",
+		"tags":    []string{"go", "backend"},
+	}, 1)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.JSONEq(t, `{"id":11}`, rr.Body.String())
 }
 
 func TestHandlePublishPost_Success(t *testing.T) {
@@ -989,6 +1028,43 @@ func TestHTTP_PostDetail_IncludesCommentsHasMore(t *testing.T) {
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"comments_has_more":true`)
+}
+
+func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
+	post := &fakePostUseCase{
+		getPostDetail: func(postID int64) (*model.PostDetail, error) {
+			return &model.PostDetail{
+				Post: &model.Post{ID: postID, Title: "hello"},
+				Tags: []model.Tag{{ID: 1, Name: "go"}},
+			}, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"tags":[{"id":1,"name":"go"`)
+}
+
+func TestHTTP_TagPosts_Success(t *testing.T) {
+	post := &fakePostUseCase{
+		getPostsByTag: func(tagName string, limit int, lastID int64) (*model.PostList, error) {
+			assert.Equal(t, "go", tagName)
+			assert.Equal(t, 10, limit)
+			assert.Equal(t, int64(0), lastID)
+			return &model.PostList{
+				Posts: []model.Post{{ID: 3, Title: "hello"}},
+				Limit: limit,
+			}, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/tags/go/posts?limit=10", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"posts":[{"id":3`)
 }
 
 func TestHTTP_NotFound(t *testing.T) {

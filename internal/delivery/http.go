@@ -85,6 +85,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.GET("/boards/:boardID/posts", h.handleBoardPostsGet)
 	v1.POST("/boards/:boardID/posts", h.authGinMiddleware, h.handleBoardPostsPost)
 	v1.POST("/boards/:boardID/posts/drafts", h.authGinMiddleware, h.handleBoardDraftPostsPost)
+	v1.GET("/tags/:tagName/posts", h.handleTagPostsGet)
 
 	v1.GET("/posts/:postID", h.handlePostDetailGet)
 	v1.POST("/posts/:postID/publish", h.authGinMiddleware, h.handlePostPublish)
@@ -550,7 +551,7 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreatePost(req.Title, req.Content, authorID, boardID)
+	postID, err := h.postUseCase.CreatePost(req.Title, req.Content, req.Tags, authorID, boardID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -591,12 +592,43 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreateDraftPost(req.Title, req.Content, authorID, boardID)
+	postID, err := h.postUseCase.CreateDraftPost(req.Title, req.Content, req.Tags, authorID, boardID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, idResponse{ID: postID})
+}
+
+// handleTagPostsGet godoc
+// @Summary List Posts by Tag
+// @Description Returns posts connected to a tag with cursor pagination.
+// @Tags Tag
+// @Produce json
+// @Param tagName path string true "Normalized tag name"
+// @Param limit query int false "Page size" minimum(1)
+// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Success 200 {object} response.PostList
+// @Failure 400 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /tags/{tagName}/posts [get]
+func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
+	tagName := c.Param("tagName")
+	if tagName == "" {
+		badRequest(c, errors.New("tagName is required"))
+		return
+	}
+	limit, lastID, ok := parseLimitLastID(c)
+	if !ok {
+		return
+	}
+	posts, err := h.postUseCase.GetPostsByTag(tagName, limit, lastID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.PostListFromDTO(posts))
 }
 
 // handlePostDetailGet godoc
@@ -881,7 +913,7 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content); err != nil {
+	if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content, req.Tags); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1278,6 +1310,8 @@ func statusForError(err error) int {
 	case errors.Is(err, customError.ErrBoardNotEmpty):
 		return http.StatusConflict
 	case errors.Is(err, customError.ErrPostNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, customError.ErrTagNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, customError.ErrCommentNotFound):
 		return http.StatusNotFound

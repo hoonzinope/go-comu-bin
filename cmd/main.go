@@ -50,6 +50,9 @@ func main() {
 	userRepository := inmemory.NewUserRepository()
 	boardRepository := inmemory.NewBoardRepository()
 	postRepository := inmemory.NewPostRepository()
+	tagRepository := inmemory.NewTagRepository()
+	postTagRepository := inmemory.NewPostTagRepository()
+	postRepository.AttachTagRepositories(tagRepository, postTagRepository)
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
@@ -66,16 +69,18 @@ func main() {
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository)
 
-	userUseCase := service.NewUserService(userRepository, passwordHasher)
-	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, cache, cachePolicy(cfg), authorizationPolicy)
-	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
-	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg), authorizationPolicy)
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, cache, cachePolicy(cfg))
+	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
+	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy)
+	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy)
+	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy)
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg))
 	attachmentUseCase := service.NewAttachmentServiceWithOptions(
 		userRepository,
 		postRepository,
 		attachmentRepository,
+		unitOfWork,
 		fileStorage,
 		cache,
 		cfg.Storage.Attachment.MaxUploadSizeBytes,

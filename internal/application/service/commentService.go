@@ -20,17 +20,19 @@ type CommentService struct {
 	postRepository      port.PostRepository
 	commentRepository   port.CommentRepository
 	reactionRepository  port.ReactionRepository
+	unitOfWork          port.UnitOfWork
 	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
-func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *CommentService {
+func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
 		commentRepository:   commentRepository,
 		reactionRepository:  reactionRepository,
+		unitOfWork:          unitOfWork,
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
@@ -42,42 +44,46 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 	if strings.TrimSpace(content) == "" {
 		return 0, customError.ErrInvalidInput
 	}
-	user, err := s.userRepository.SelectUserByID(authorID) // user 존재 여부 확인
-	if err != nil {
-		return 0, customError.WrapRepository("select user by id for create comment", err)
-	}
-	if user == nil {
-		return 0, customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.CanWrite(user); err != nil {
-		return 0, err
-	}
-	post, err := s.postRepository.SelectPostByID(postID) // post 존재 여부 확인
-	if err != nil {
-		return 0, customError.WrapRepository("select post by id for create comment", err)
-	}
-	if post == nil {
-		return 0, customError.ErrPostNotFound
-	}
-	if parentID != nil {
-		parent, err := s.commentRepository.SelectCommentByID(*parentID)
-		if err != nil {
-			return 0, customError.WrapRepository("select parent comment by id for create comment", err)
-		}
-		if parent == nil {
-			return 0, customError.ErrCommentNotFound
-		}
-		if parent.PostID != postID {
-			return 0, customError.ErrInvalidInput
-		}
-		if parent.ParentID != nil {
-			return 0, customError.ErrInvalidInput
-		}
-	}
 	newComment := entity.NewComment(content, authorID, postID, parentID)
-	commentID, err := s.commentRepository.Save(newComment)
+	var commentID int64
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		user, err := tx.UserRepository().SelectUserByID(authorID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for create comment", err)
+		}
+		if user == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.CanWrite(user); err != nil {
+			return err
+		}
+		post, err := tx.PostRepository().SelectPostByID(postID)
+		if err != nil {
+			return customError.WrapRepository("select post by id for create comment", err)
+		}
+		if post == nil {
+			return customError.ErrPostNotFound
+		}
+		if parentID != nil {
+			parent, err := tx.CommentRepository().SelectCommentByID(*parentID)
+			if err != nil {
+				return customError.WrapRepository("select parent comment by id for create comment", err)
+			}
+			if parent == nil {
+				return customError.ErrCommentNotFound
+			}
+			if parent.PostID != postID || parent.ParentID != nil {
+				return customError.ErrInvalidInput
+			}
+		}
+		commentID, err = tx.CommentRepository().Save(newComment)
+		if err != nil {
+			return customError.WrapRepository("save comment", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return 0, customError.WrapRepository("save comment", err)
+		return 0, err
 	}
 	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after create comment")
 	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after create comment")
@@ -155,67 +161,83 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if strings.TrimSpace(content) == "" {
 		return customError.ErrInvalidInput
 	}
-	comment, err := s.commentRepository.SelectCommentByID(id) // comment 존재 여부 확인
+	var postID int64
+	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		comment, err := tx.CommentRepository().SelectCommentByID(id)
+		if err != nil {
+			return customError.WrapRepository("select comment by id for update comment", err)
+		}
+		if comment == nil {
+			return customError.ErrCommentNotFound
+		}
+		requester, err := tx.UserRepository().SelectUserByID(authorID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for update comment", err)
+		}
+		if requester == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+			return err
+		}
+		if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
+			return err
+		}
+		updatedComment := *comment
+		updatedComment.Update(content)
+		if err := tx.CommentRepository().Update(&updatedComment); err != nil {
+			return customError.WrapRepository("update comment", err)
+		}
+		postID = updatedComment.PostID
+		return nil
+	})
 	if err != nil {
-		return customError.WrapRepository("select comment by id for update comment", err)
-	}
-	if comment == nil {
-		return customError.ErrCommentNotFound
-	}
-	requester, err := s.userRepository.SelectUserByID(authorID)
-	if err != nil {
-		return customError.WrapRepository("select user by id for update comment", err)
-	}
-	if requester == nil {
-		return customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 		return err
 	}
-	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
-		return err
-	}
-	comment.Update(content)
-	err = s.commentRepository.Update(comment)
-	if err != nil {
-		return customError.WrapRepository("update comment", err)
-	}
-	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(comment.PostID), "invalidate comment list after update comment")
-	bestEffortCacheDelete(s.cache, key.PostDetail(comment.PostID), "invalidate post detail after update comment")
+	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after update comment")
+	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after update comment")
 	return nil
 }
 
 func (s *CommentService) DeleteComment(id, authorID int64) error {
 	// 댓글 삭제 로직 구현
-	comment, err := s.commentRepository.SelectCommentByID(id) // comment 존재 여부 확인
-	if err != nil {
-		return customError.WrapRepository("select comment by id for delete comment", err)
-	}
-	if comment == nil {
-		return customError.ErrCommentNotFound
-	}
-	requester, err := s.userRepository.SelectUserByID(authorID)
-	if err != nil {
-		return customError.WrapRepository("select user by id for delete comment", err)
-	}
-	if requester == nil {
-		return customError.ErrUserNotFound
-	}
-	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+	var commentID, postID int64
+	if err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+		comment, err := tx.CommentRepository().SelectCommentByID(id)
+		if err != nil {
+			return customError.WrapRepository("select comment by id for delete comment", err)
+		}
+		if comment == nil {
+			return customError.ErrCommentNotFound
+		}
+		requester, err := tx.UserRepository().SelectUserByID(authorID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for delete comment", err)
+		}
+		if requester == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+			return err
+		}
+		if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
+			return err
+		}
+		if deleteErr := tx.CommentRepository().Delete(comment.ID); deleteErr != nil {
+			return customError.WrapRepository("delete comment", deleteErr)
+		}
+		if _, reactionErr := tx.ReactionRepository().DeleteByTarget(comment.ID, entity.ReactionTargetComment); reactionErr != nil {
+			return customError.WrapRepository("delete comment reactions", reactionErr)
+		}
+		commentID = comment.ID
+		postID = comment.PostID
+		return nil
+	}); err != nil {
 		return err
 	}
-	if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
-		return err
-	}
-	if err := s.commentRepository.Delete(comment.ID); err != nil {
-		return customError.WrapRepository("delete comment", err)
-	}
-	if _, err := s.reactionRepository.DeleteByTarget(comment.ID, entity.ReactionTargetComment); err != nil {
-		return customError.WrapRepository("delete comment reactions", err)
-	}
-	bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetComment), comment.ID), "invalidate comment reaction list after delete comment")
-	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(comment.PostID), "invalidate comment list after delete comment")
-	bestEffortCacheDelete(s.cache, key.PostDetail(comment.PostID), "invalidate post detail after delete comment")
+	bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetComment), commentID), "invalidate comment reaction list after delete comment")
+	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after delete comment")
+	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete comment")
 	return nil
 }
 

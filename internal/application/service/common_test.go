@@ -17,19 +17,34 @@ type testRepositories struct {
 	user       port.UserRepository
 	board      port.BoardRepository
 	post       port.PostRepository
+	tag        port.TagRepository
+	postTag    port.PostTagRepository
 	comment    port.CommentRepository
 	reaction   port.ReactionRepository
 	attachment port.AttachmentRepository
+	unitOfWork port.UnitOfWork
 }
 
 func newTestRepositories() testRepositories {
+	userRepository := inmemory.NewUserRepository()
+	boardRepository := inmemory.NewBoardRepository()
+	postRepository := inmemory.NewPostRepository()
+	tagRepository := inmemory.NewTagRepository()
+	postTagRepository := inmemory.NewPostTagRepository()
+	postRepository.AttachTagRepositories(tagRepository, postTagRepository)
+	commentRepository := inmemory.NewCommentRepository()
+	reactionRepository := inmemory.NewReactionRepository()
+	attachmentRepository := inmemory.NewAttachmentRepository()
 	return testRepositories{
-		user:       inmemory.NewUserRepository(),
-		board:      inmemory.NewBoardRepository(),
-		post:       inmemory.NewPostRepository(),
-		comment:    inmemory.NewCommentRepository(),
-		reaction:   inmemory.NewReactionRepository(),
-		attachment: inmemory.NewAttachmentRepository(),
+		user:       userRepository,
+		board:      boardRepository,
+		post:       postRepository,
+		tag:        tagRepository,
+		postTag:    postTagRepository,
+		comment:    commentRepository,
+		reaction:   reactionRepository,
+		attachment: attachmentRepository,
+		unitOfWork: inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository),
 	}
 }
 
@@ -46,6 +61,23 @@ func newTestCachePolicy() appcache.Policy {
 
 func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
 	return policy.NewRoleAuthorizationPolicy()
+}
+
+func newTestPostService(repositories testRepositories, cache port.Cache) *PostService {
+	return NewPostService(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		repositories.tag,
+		repositories.postTag,
+		repositories.attachment,
+		repositories.comment,
+		repositories.reaction,
+		repositories.unitOfWork,
+		cache,
+		newTestCachePolicy(),
+		newTestAuthorizationPolicy(),
+	)
 }
 
 func newTestPasswordHasher() port.PasswordHasher {

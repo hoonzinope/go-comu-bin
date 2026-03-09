@@ -25,6 +25,8 @@ func normalizeCacheLoadError(op string, err error) error {
 		return err
 	case errors.Is(err, customError.ErrPostNotFound):
 		return err
+	case errors.Is(err, customError.ErrTagNotFound):
+		return err
 	case errors.Is(err, customError.ErrCommentNotFound):
 		return err
 	case errors.Is(err, customError.ErrReactionNotFound):

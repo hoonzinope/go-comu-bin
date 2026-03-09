@@ -5,6 +5,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/porttest"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -98,4 +99,50 @@ func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 
 	require.NoError(t, repo.Update(p))
 	require.NoError(t, repo.Delete(999))
+}
+
+func TestPostRepository_SelectPublishedPostsByTagName_FiltersBeforePagination(t *testing.T) {
+	repo := NewPostRepository()
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	repo.AttachTagRepositories(tagRepo, postTagRepo)
+
+	tagID, err := tagRepo.Save(entity.NewTag("go"))
+	require.NoError(t, err)
+
+	publishedLowID := testPost("published-1", "content", 1, 1)
+	_, err = repo.Save(publishedLowID)
+	require.NoError(t, err)
+
+	draft := entity.NewDraftPost("draft", "content", 1, 1)
+	_, err = repo.Save(draft)
+	require.NoError(t, err)
+
+	publishedHighID := testPost("published-2", "content", 1, 1)
+	_, err = repo.Save(publishedHighID)
+	require.NoError(t, err)
+
+	deleted := testPost("deleted", "content", 1, 1)
+	deletedID, err := repo.Save(deleted)
+	require.NoError(t, err)
+	require.NoError(t, repo.Delete(deletedID))
+
+	require.NoError(t, postTagRepo.UpsertActive(publishedLowID.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(draft.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(publishedHighID.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(deletedID, tagID))
+
+	posts, err := repo.SelectPublishedPostsByTagName("go", 2, 0)
+	require.NoError(t, err)
+	require.Len(t, posts, 2)
+	assert.Equal(t, publishedHighID.ID, posts[0].ID)
+	assert.Equal(t, publishedLowID.ID, posts[1].ID)
+}
+
+func TestPostRepository_SelectPublishedPostsByTagName_WithoutTagDependenciesErrors(t *testing.T) {
+	repo := NewPostRepository()
+
+	posts, err := repo.SelectPublishedPostsByTagName("go", 10, 0)
+	require.Error(t, err)
+	assert.Nil(t, posts)
 }
