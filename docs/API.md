@@ -61,12 +61,16 @@
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - 생성 시점 본문에는 `attachment://{id}` 참조를 포함할 수 없습니다.
   - 첨부가 필요한 글은 먼저 draft를 만든 뒤 첨부 업로드와 본문 수정을 거쳐 publish 해야 합니다.
+  - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
+  - `tags`는 최대 10개, 각 항목 최대 30자이며, 앞뒤 공백 제거 후 영문 소문자로 정규화됩니다.
 - `POST /api/v1/boards/{boardID}/posts/drafts` (인증 필요)
   - 임시저장 글을 생성합니다.
   - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - 생성 시점 본문에는 `attachment://{id}` 참조를 포함할 수 없습니다.
+  - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
 - `GET /api/v1/posts/{postID}`
+  - 응답 본문에는 `tags` 목록이 포함됩니다.
   - 응답 본문에는 `attachments` 목록이 포함됩니다.
   - 응답의 `comments` 는 최신 공개 댓글 최대 10개만 포함합니다.
   - `comments_has_more=true` 면 상세에 포함되지 않은 추가 댓글이 더 있다는 뜻입니다.
@@ -79,10 +83,19 @@
 - `PUT /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
+  - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
 - `DELETE /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - 하위 댓글은 soft delete 처리됩니다.
   - 첨부는 orphan 처리되어 cleanup job 대상이 됩니다.
+
+## Tag
+
+- `GET /api/v1/tags/{tagName}/posts?limit=10&last_id=0`
+  - 응답 메타: `has_more`, `next_last_id`
+  - `tagName`은 내부적으로 앞뒤 공백 제거 후 영문 소문자로 정규화합니다.
+  - tag가 없으면 `404 Not Found`
+  - post 목록 응답에는 태그 정보가 포함되지 않습니다.
 
 ## Attachment
 

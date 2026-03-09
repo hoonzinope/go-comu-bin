@@ -72,6 +72,13 @@ definitions:
       content:
         example: first post
         type: string
+      tags:
+        example:
+        - go
+        - backend
+        items:
+          type: string
+        type: array
       title:
         example: hello
         type: string
@@ -240,6 +247,10 @@ definitions:
         items:
           $ref: '#/definitions/response.Reaction'
         type: array
+      tags:
+        items:
+          $ref: '#/definitions/response.Tag'
+        type: array
     type: object
   response.PostList:
     properties:
@@ -269,6 +280,15 @@ definitions:
       type:
         type: string
       user_uuid:
+        type: string
+    type: object
+  response.Tag:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
         type: string
     type: object
 info:
@@ -1395,6 +1415,47 @@ paths:
       summary: Sign up
       tags:
       - Auth
+  /tags/{tagName}/posts:
+    get:
+      description: Returns posts connected to a tag with cursor pagination.
+      parameters:
+      - description: Normalized tag name
+        in: path
+        name: tagName
+        required: true
+        type: string
+      - description: Page size
+        in: query
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Cursor id, fetch items with id < last_id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Posts by Tag
+      tags:
+      - Tag
   /users/{userUUID}/suspension:
     delete:
       description: Clear a user's suspension (admin only).

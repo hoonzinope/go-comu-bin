@@ -576,3 +576,107 @@
 - `internal/infrastructure/storage/localfs/fileStorage.go`
 - `internal/infrastructure/storage/object/fileStorage.go`
 - `internal/config/config.go`
+
+
+## 2026-03-09 - Tag 도메인은 Post 상세 확장 + 다중 저장소 쓰기 단위로 도입한다
+
+상태
+
+- decided
+
+배경
+
+- `Tag` 도메인을 `Post`와 N:M 관계로 도입하려고 한다.
+- 요구사항에는 태그 생성/재사용, 관계 soft delete 복구, post 삭제 시 관계 비활성화, post 상세 응답 포함, tag 클릭 기반 post 조회가 포함된다.
+- 현재 레포는 `PostService`가 `Post`, `Attachment`, `Comment`, `Reaction` 저장소를 직접 조합하지만, 여러 도메인 쓰기를 하나의 작업 단위로 묶는 추상화는 없다.
+- 현재 공개 API/DTO/Swagger에는 `tags` 입력 및 응답 계약이 없다.
+
+관찰
+
+- `postRequest`는 현재 `title`, `content`만 받으며 태그 입력을 표현하지 못한다.
+- `PostUseCase`, `PostDetail`, `response.PostDetail`에는 태그 개념이 없다.
+- 현재 post 상세 캐시는 태그 없는 완성형 DTO를 저장한다.
+- `PostRepository`만으로는 `Tag`, `PostTag` 생성/재사용/복구/비활성화 규칙을 표현하기 어렵다.
+- 현재 코드베이스는 `PostStatus`, `ReactionType`처럼 문자열 상태를 typed enum 상수로 관리하는 패턴을 사용한다.
+
+결론
+
+- `Tag`는 `Post`와 별도 도메인으로 두고, 연결은 `PostTag` 조인 도메인으로 관리한다.
+- `Tag`는 `id`, 정규화된 `name`, `created_at`을 가진다.
+- `Tag.name`은 저장 전에 `trim + lowercase`로 정규화하고, 정규화된 값 기준으로 애플리케이션과 저장소에서 모두 유일성을 보장한다.
+- `PostTag.status`는 raw string이 아니라 typed enum 상수(`active`, `deleted`)로 관리한다.
+- post 생성/수정 요청은 `tags[]`를 받을 수 있어야 한다.
+- `tags[]`는 최대 개수와 각 태그 최대 길이를 검증하고, 앞뒤 공백 제거, 소문자 정규화, 중복 제거 후 처리한다.
+- post 상세 응답과 상세 캐시는 `tags`를 포함한 완성형 DTO를 기준으로 한다.
+- post 목록 응답에는 태그를 포함하지 않는다.
+- post 수정 시 기존 관계는 diff 기반으로 처리한다.
+- 새 태그는 연결하고, 제거된 태그 관계는 `deleted`로 표시하며, 기존 `deleted` 관계가 다시 들어오면 `active`로 복구한다.
+- post 삭제 시 tag 자체는 삭제하지 않고 관련 `PostTag`만 `deleted`로 전환한다.
+- tag 클릭 use case는 태그 기준 post 목록 조회 API로 별도 제공한다.
+- 여러 저장소를 함께 갱신하는 post/tag 쓰기 유스케이스를 위해 저장소 구현과 분리된 `UnitOfWork`(또는 동등한 transaction manager) 포트를 도입한다.
+- 이 추상화는 RDB 전용 개념이 아니라, 다중 도메인 쓰기를 하나의 커밋/롤백 단위로 다루기 위한 application-level 경계로 본다.
+
+후속 작업
+
+- `Tag`, `PostTag` 엔티티 및 저장소 포트 추가
+- `UnitOfWork` 포트와 in-memory 구현 초안 추가
+- post create/update/delete 서비스에 tag 동기화 로직 연결
+- post detail DTO/응답/캐시/Swagger에 `tags` 반영
+- tag 기반 post 목록 조회 API 추가
+- tag 정규화/유니크/복구 규칙에 대한 계약 테스트 추가
+
+관련 문서/코드
+
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/postService.go`
+- `internal/application/port/post_usecase.go`
+- `internal/application/model/post_detail.go`
+- `internal/delivery/http_requests.go`
+- `internal/delivery/response/types.go`
+- `internal/application/cache/key/keys.go`
+
+## 2026-03-09 - Tag 기반 공개 조회는 PostRepository 책임으로 두고 In-Memory 저장소는 clone 반환을 원칙으로 한다
+
+상태
+
+- decided
+
+배경
+
+- tag 기반 post 조회를 어느 포트 책임으로 둘지와, in-memory 저장소가 내부 엔티티 포인터를 직접 반환하는 현재 패턴을 유지할지 판단이 필요했다.
+- `UnitOfWork`를 tx-bound repository 방식으로 바꾸면서 저장소 반환값과 서비스의 엔티티 변경 방식도 함께 정리할 필요가 있었다.
+
+관찰
+
+- `published posts by tag`는 입력은 tag지만, 실제 정책은 post 공개 여부와 pagination 규칙에 좌우된다.
+- `PostTagRepository`에 공개 조회 정책까지 밀어 넣으면 relation 생명주기와 post 공개 정책이 섞인다.
+- 현재 in-memory 저장소는 내부 포인터를 그대로 반환하고, 서비스가 lock 밖에서 엔티티를 직접 mutate하는 경로가 존재한다.
+
+결론
+
+- 현재 단계에서는 `published posts by tag`를 별도 query port로 분리하지 않고 `PostRepository` 책임으로 둔다.
+- 레포 규모가 커지면 이후 `PostQueryRepository` 같은 읽기 전용 포트로 확장할 수 있다.
+- in-memory 저장소는 전체 저장소(`User/Board/Post/Tag/PostTag/Comment/Reaction/Attachment`)에서 조회 시 clone을 반환하고, 서비스는 copy-on-write 방식으로 엔티티를 갱신한다.
+- 저장소 내부 객체를 직접 외부에 노출하는 패턴은 지양한다.
+- `UnitOfWork`는 특정 저장소 구현 세부가 아니라 애플리케이션의 명시적 tx 경계 포트로 유지한다.
+- 각 어댑터는 해당 포트를 자기 방식으로 구현한다.
+  - in-memory: tx-bound repository + snapshot rollback + tx 중 외부 접근 차단
+  - RDB: 실제 DB transaction + tx-bound repository
+- write use case는 `조회 -> 검증 -> 갱신`을 하나의 tx 안에서 처리하고, 캐시 삭제 호출만 tx 밖에서 best effort로 수행한다.
+- 캐시 무효화에 필요한 식별자 목록도 tx 안에서 확정한 뒤 밖으로 전달한다.
+
+후속 작업
+
+- `PostRepository.SelectPublishedPostsByTagName(...)` 추가
+- tag 조회 서비스가 해당 포트를 사용하도록 정리
+- in-memory 저장소 clone 반환 패턴을 전체 저장소로 확장
+- write service 전반을 `조회 -> 검증 -> 갱신` tx 패턴으로 정리
+
+관련 문서/코드
+
+- `internal/application/port/post_repository.go`
+- `internal/application/service/postService.go`
+- `internal/infrastructure/persistence/inmemory/postRepository.go`
+- `internal/application/service/commentService.go`
+- `internal/application/service/attachmentService.go`

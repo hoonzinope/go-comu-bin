@@ -1732,6 +1732,67 @@ const docTemplate = `{
                 }
             }
         },
+        "/tags/{tagName}/posts": {
+            "get": {
+                "description": "Returns posts connected to a tag with cursor pagination.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tag"
+                ],
+                "summary": "List Posts by Tag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Normalized tag name",
+                        "name": "tagName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "Cursor id, fetch items with id \u003c last_id",
+                        "name": "last_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.PostList"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me": {
             "delete": {
                 "security": [
@@ -2094,6 +2155,16 @@ const docTemplate = `{
                     "type": "string",
                     "example": "first post"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "go",
+                        "backend"
+                    ]
+                },
                 "title": {
                     "type": "string",
                     "example": "hello"
@@ -2346,6 +2417,12 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/response.Reaction"
                     }
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/response.Tag"
+                    }
                 }
             }
         },
@@ -2391,6 +2468,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.Tag": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
                     "type": "string"
                 }
             }
