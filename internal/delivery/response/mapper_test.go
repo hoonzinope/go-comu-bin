@@ -81,3 +81,40 @@ func TestAttachmentFromDTOUsesProvidedPreviewURL(t *testing.T) {
 
 	assert.Equal(t, "/custom-preview", item.PreviewURL)
 }
+
+func TestListMappers(t *testing.T) {
+	now := time.Unix(20, 0)
+	boardList := BoardListFromDTO(&model.BoardList{
+		Boards:     []model.Board{{ID: 1, Name: "free", Description: "desc", CreatedAt: now}},
+		Limit:      10,
+		LastID:     5,
+		HasMore:    true,
+		NextLastID: int64Ptr(3),
+	})
+	postList := PostListFromDTO(&model.PostList{
+		Posts:      []model.Post{{ID: 2, Title: "t", Content: "c", AuthorUUID: "u", BoardID: 1, CreatedAt: now, UpdatedAt: now}},
+		Limit:      10,
+		LastID:     4,
+		HasMore:    true,
+		NextLastID: int64Ptr(2),
+	})
+	commentList := CommentListFromDTO(&model.CommentList{
+		Comments:   []model.Comment{{ID: 3, Content: "nice", AuthorUUID: "u", PostID: 2, CreatedAt: now}},
+		Limit:      10,
+		LastID:     1,
+		HasMore:    false,
+		NextLastID: nil,
+	})
+
+	assert.Len(t, boardList.Boards, 1)
+	assert.Len(t, postList.Posts, 1)
+	assert.Len(t, commentList.Comments, 1)
+	assert.Len(t, ReactionsFromDTO([]model.Reaction{{ID: 1, TargetType: entity.ReactionTargetPost, Type: entity.ReactionTypeLike}}), 1)
+	assert.Len(t, AttachmentsFromDTO([]model.Attachment{{ID: 1, PostID: 2, FileName: "a.png"}}), 1)
+	assert.Equal(t, "go", TagsFromDTO([]model.Tag{{ID: 1, Name: "go"}})[0].Name)
+	assert.Equal(t, "free", boardList.Boards[0].Name)
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
+}
