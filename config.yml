@@ -22,7 +22,13 @@ delivery:
   http:
     port: 18577
     auth:
-      secret: "commu-bin-secret-key"
+      secret: ""
+
+admin:
+  bootstrap:
+    enabled: false
+    username: ""
+    password: ""
 
 jobs:
   enabled: true

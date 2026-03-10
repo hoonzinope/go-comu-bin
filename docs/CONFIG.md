@@ -7,6 +7,13 @@
 - `./config.yml`
 - `./config/config.yml`
 
+환경 변수도 함께 읽습니다.
+
+- 예: `DELIVERY_HTTP_AUTH_SECRET`
+- 예: `ADMIN_BOOTSTRAP_ENABLED`
+- 예: `ADMIN_BOOTSTRAP_USERNAME`
+- 예: `ADMIN_BOOTSTRAP_PASSWORD`
+
 ## 예시
 
 ```yaml
@@ -34,7 +41,13 @@ delivery:
   http:
     port: 18577
     auth:
-      secret: "commu-bin-secret-key"
+      secret: "replace-with-real-secret"
+
+admin:
+  bootstrap:
+    enabled: false
+    username: ""
+    password: ""
 
 jobs:
   enabled: true
@@ -49,6 +62,11 @@ jobs:
 
 - `delivery.http.port`: `1..65535`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
+- `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
+- `admin.bootstrap.enabled`: 기본 `false`
+- `admin.bootstrap.username`: bootstrap enabled일 때 필수
+- `admin.bootstrap.password`: bootstrap enabled일 때 필수
+- `admin.bootstrap.password`: placeholder 값 금지 (`admin`)
 - `cache.listTTLSeconds`: `> 0`
 - `cache.detailTTLSeconds`: `> 0`
 - `storage.local.rootDir`: 필수(빈 값 불가)
@@ -69,6 +87,7 @@ jobs:
 
 - 포트: `cmd/main.go` -> `cfg.Delivery.HTTP.Port`
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
+- bootstrap admin: `cmd/main.go` -> `cfg.Admin.Bootstrap.*`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`
 - 파일 저장 provider: `cfg.Storage.Provider`
@@ -78,3 +97,9 @@ jobs:
 - background jobs on/off: `cfg.Jobs.Enabled`
 - attachment cleanup 주기/유예/배치 크기: `cfg.Jobs.AttachmentCleanup.*`
   - 기본 유예는 `600`초이며, orphan와 `pending_delete` attachment 모두 같은 cleanup 주기를 사용합니다.
+
+## 운영 메모
+
+- 커밋된 `config.yml`은 샘플로 취급합니다.
+- 실제 실행 전에는 `delivery.http.auth.secret`를 반드시 실값으로 넣어야 합니다.
+- bootstrap admin이 필요할 때만 `admin.bootstrap.enabled=true`로 켜고, 일회성 강한 비밀번호를 설정한 뒤 다시 끄는 것을 기본으로 합니다.

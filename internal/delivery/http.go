@@ -178,6 +178,10 @@ func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
+		return
+	}
 	token, err := h.sessionUseCase.Login(req.Username, req.Password)
 	if err != nil {
 		writeUseCaseError(c, err)

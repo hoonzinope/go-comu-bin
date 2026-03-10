@@ -2,15 +2,26 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/viper"
 )
+
+const placeholderJWTSecret = "commu-bin-secret-key"
+const placeholderBootstrapPassword = "admin"
 
 type Config struct {
 	Cache struct {
 		ListTTLSeconds   int `yaml:"listTTLSeconds"`
 		DetailTTLSeconds int `yaml:"detailTTLSeconds"`
 	} `yaml:"cache"`
+	Admin struct {
+		Bootstrap struct {
+			Enabled  bool   `yaml:"enabled"`
+			Username string `yaml:"username"`
+			Password string `yaml:"password"`
+		} `yaml:"bootstrap"`
+	} `yaml:"admin"`
 	Storage struct {
 		Provider string `yaml:"provider"`
 		Local    struct {
@@ -55,6 +66,8 @@ func Load() (*Config, error) {
 	v.SetConfigName("config")
 	v.AddConfigPath(".")
 	v.AddConfigPath("./config")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, err
@@ -66,6 +79,7 @@ func Load() (*Config, error) {
 func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("cache.listTTLSeconds", 30)
 	v.SetDefault("cache.detailTTLSeconds", 30)
+	v.SetDefault("admin.bootstrap.enabled", false)
 	v.SetDefault("storage.provider", "local")
 	v.SetDefault("storage.local.rootDir", "./data/uploads")
 	v.SetDefault("storage.attachment.maxUploadSizeBytes", int64(10<<20))
@@ -96,6 +110,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Delivery.HTTP.Auth.Secret == "" {
 		return fmt.Errorf("invalid delivery.http.auth.secret: cannot be empty")
+	}
+	if cfg.Delivery.HTTP.Auth.Secret == placeholderJWTSecret {
+		return fmt.Errorf("invalid delivery.http.auth.secret: placeholder secret is not allowed")
 	}
 	if cfg.Cache.ListTTLSeconds <= 0 {
 		return fmt.Errorf("invalid cache.listTTLSeconds: %d (must be > 0)", cfg.Cache.ListTTLSeconds)
@@ -138,6 +155,17 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Jobs.AttachmentCleanup.BatchSize <= 0 {
 		return fmt.Errorf("invalid jobs.attachmentCleanup.batchSize: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.BatchSize)
+	}
+	if cfg.Admin.Bootstrap.Enabled {
+		if strings.TrimSpace(cfg.Admin.Bootstrap.Username) == "" {
+			return fmt.Errorf("invalid admin.bootstrap.username: cannot be empty when bootstrap is enabled")
+		}
+		if strings.TrimSpace(cfg.Admin.Bootstrap.Password) == "" {
+			return fmt.Errorf("invalid admin.bootstrap.password: cannot be empty when bootstrap is enabled")
+		}
+		if strings.TrimSpace(cfg.Admin.Bootstrap.Password) == placeholderBootstrapPassword {
+			return fmt.Errorf("invalid admin.bootstrap.password: placeholder password is not allowed")
+		}
 	}
 	return nil
 }

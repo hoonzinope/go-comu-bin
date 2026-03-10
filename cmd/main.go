@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
@@ -61,8 +62,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := seedAdmin(userRepository); err != nil {
-		slog.Error("failed to seed admin user", "error", err)
+	if err := ensureBootstrapAdmin(cfg, userRepository); err != nil {
+		slog.Error("failed to ensure bootstrap admin user", "error", err)
 		os.Exit(1)
 	}
 	cache := cacheInMemory.NewInMemoryCache()
@@ -96,7 +97,7 @@ func main() {
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	sessionUseCase := service.NewSessionService(userUseCase, tokenProvider, sessionRepository)
+	sessionUseCase := service.NewSessionService(userUseCase, userRepository, tokenProvider, sessionRepository)
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
 		SessionUseCase:    sessionUseCase,
@@ -115,13 +116,26 @@ func main() {
 	}
 }
 
-func seedAdmin(userRepository port.UserRepository) error {
-	passwordHasher := auth.NewBcryptPasswordHasher(0)
-	hashedPassword, err := passwordHasher.Hash("admin")
+func ensureBootstrapAdmin(cfg *config.Config, userRepository port.UserRepository) error {
+	if cfg == nil || !cfg.Admin.Bootstrap.Enabled {
+		return nil
+	}
+	username := strings.TrimSpace(cfg.Admin.Bootstrap.Username)
+	password := cfg.Admin.Bootstrap.Password
+	existingUser, err := userRepository.SelectUserByUsername(username)
 	if err != nil {
 		return err
 	}
-	admin := entity.NewAdmin("admin", hashedPassword)
+	if existingUser != nil {
+		return nil
+	}
+
+	passwordHasher := auth.NewBcryptPasswordHasher(0)
+	hashedPassword, err := passwordHasher.Hash(password)
+	if err != nil {
+		return err
+	}
+	admin := entity.NewAdmin(username, hashedPassword)
 	_, err = userRepository.Save(admin)
 	return err
 }

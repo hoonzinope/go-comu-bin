@@ -1,5 +1,9 @@
 # AGENTS.md instructions for /Users/hoonzi/go-proj/commu-bin
 
+## Work sequence
+- For change work in this repository, the default sequence is fixed:
+  `결정 문서 기록 -> TDD -> 구현 -> 테스트 통과 -> 문서 정합성 반영 -> 커밋/푸시`
+
 ## Skills
 A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used for this repository. Each entry includes a name, description, and file path so the agent can open the source for full instructions when using a specific skill.
 

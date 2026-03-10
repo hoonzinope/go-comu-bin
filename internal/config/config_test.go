@@ -14,6 +14,9 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
 	v.Set("delivery.http.auth.secret", "test-secret")
+	v.Set("admin.bootstrap.enabled", true)
+	v.Set("admin.bootstrap.username", "admin")
+	v.Set("admin.bootstrap.password", "strong-admin-password")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 60)
 	v.Set("storage.provider", "local")
@@ -33,6 +36,8 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
 	assert.Equal(t, 30, cfg.Cache.ListTTLSeconds)
 	assert.Equal(t, 60, cfg.Cache.DetailTTLSeconds)
+	assert.True(t, cfg.Admin.Bootstrap.Enabled)
+	assert.Equal(t, "admin", cfg.Admin.Bootstrap.Username)
 	assert.Equal(t, "local", cfg.Storage.Provider)
 	assert.Equal(t, "./data/uploads", cfg.Storage.Local.RootDir)
 	assert.Equal(t, int64(10<<20), cfg.Storage.Attachment.MaxUploadSizeBytes)
@@ -72,6 +77,12 @@ delivery:
     auth:
       secret: "test-secret"
 
+admin:
+  bootstrap:
+    enabled: true
+    username: "admin"
+    password: "strong-admin-password"
+
 jobs:
   enabled: true
   attachmentCleanup:
@@ -95,6 +106,7 @@ jobs:
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
 	assert.True(t, cfg.Jobs.AttachmentCleanup.Enabled)
 	assert.Equal(t, 600, cfg.Jobs.AttachmentCleanup.GracePeriodSeconds)
+	assert.True(t, cfg.Admin.Bootstrap.Enabled)
 }
 
 func TestLoadFromViper_InvalidPort(t *testing.T) {
@@ -275,4 +287,44 @@ func TestLoadFromViper_ObjectStorageConfig(t *testing.T) {
 	require.NotNil(t, cfg)
 	assert.Equal(t, "object", cfg.Storage.Provider)
 	assert.Equal(t, "attachments", cfg.Storage.Object.Bucket)
+}
+
+func TestLoadFromViper_RejectsPlaceholderJWTSecret(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "commu-bin-secret-key")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.Set("jobs.attachmentCleanup.batchSize", 50)
+
+	cfg, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+}
+
+func TestLoadFromViper_RequiresBootstrapCredentialsWhenEnabled(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret")
+	v.Set("admin.bootstrap.enabled", true)
+	v.Set("admin.bootstrap.username", "admin")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.Set("jobs.attachmentCleanup.batchSize", 50)
+
+	cfg, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
 }

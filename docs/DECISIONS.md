@@ -680,3 +680,46 @@
 - `internal/infrastructure/persistence/inmemory/postRepository.go`
 - `internal/application/service/commentService.go`
 - `internal/application/service/attachmentService.go`
+
+## 2026-03-10 - bootstrap admin과 인증 비밀값은 명시적 설정으로만 연다
+
+상태
+
+- decided
+
+배경
+
+- 현재 구성 루트는 서버 시작 시 고정 `admin/admin` 계정을 자동 시드한다.
+- 기본 `config.yml`에는 고정 JWT secret 값이 들어 있어, 설정 파일을 그대로 사용할 경우 보안상 취약하다.
+- 계정 삭제 후 세션 정리 실패를 허용하는 현재 정책은 deleted user가 기존 토큰으로 잠시 재인증될 여지를 남긴다.
+
+관찰
+
+- 학습용/로컬 편의 기능과 배포 가능한 기본 동작이 같은 경로에 섞여 있다.
+- 인증 경계는 현재 `JWT 유효성 + 세션 캐시 존재`만 확인하고 사용자 생명주기를 다시 확인하지 않는다.
+- 로그인 핸들러는 다른 JSON 엔드포인트와 다르게 transport validation을 건너뛴다.
+
+결론
+
+- admin bootstrap은 기본 비활성화하고, config에서 명시적으로 `enabled` 했을 때만 수행한다.
+- bootstrap admin의 `username`, `password`는 config에서 받되, 빈 값과 알려진 기본값(`admin`) 같은 placeholder는 허용하지 않는다.
+- JWT secret도 committed default를 두지 않고, placeholder/빈 값이면 시작 실패로 처리한다.
+- 토큰 검증 시 세션 캐시뿐 아니라 사용자 존재/삭제 상태도 다시 확인해 deleted user의 stale session을 차단한다.
+- 로그인 요청도 signup과 동일하게 request validation을 먼저 수행한다.
+
+후속 작업
+
+- config에 bootstrap admin 섹션 추가 및 검증 규칙 반영
+- `cmd/main.go`의 unconditional seed 제거
+- `SessionService` 토큰 검증에 사용자 상태 확인 추가
+- login handler 요청 검증 테스트/구현 추가
+- 운영 문서에서 secret/bootstrap 설정법 갱신
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `config.yml`
+- `docs/ARCHITECTURE.md`
+- `docs/CONFIG.md`
+- `internal/application/service/sessionService.go`
+- `internal/delivery/http.go`

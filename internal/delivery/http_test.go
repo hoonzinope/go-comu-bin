@@ -77,6 +77,42 @@ func (f *fakeUserUseCase) VerifyCredentials(username, password string) (int64, e
 	return 1, nil
 }
 
+func (f *fakeUserUseCase) Save(user *entity.User) (int64, error) {
+	return 1, nil
+}
+
+func (f *fakeUserUseCase) SelectUserByUsername(username string) (*entity.User, error) {
+	return &entity.User{ID: 1, Name: username, Status: entity.UserStatusActive}, nil
+}
+
+func (f *fakeUserUseCase) SelectUserByUUID(userUUID string) (*entity.User, error) {
+	return &entity.User{ID: 1, UUID: userUUID, Status: entity.UserStatusActive}, nil
+}
+
+func (f *fakeUserUseCase) SelectUserByID(id int64) (*entity.User, error) {
+	return &entity.User{ID: id, Name: "user", Status: entity.UserStatusActive}, nil
+}
+
+func (f *fakeUserUseCase) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
+	return &entity.User{ID: id, Name: "user", Status: entity.UserStatusActive}, nil
+}
+
+func (f *fakeUserUseCase) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+	out := make(map[int64]*entity.User, len(ids))
+	for _, id := range ids {
+		out[id] = &entity.User{ID: id, Name: "user", Status: entity.UserStatusActive}
+	}
+	return out, nil
+}
+
+func (f *fakeUserUseCase) Update(user *entity.User) error {
+	return nil
+}
+
+func (f *fakeUserUseCase) Delete(id int64) error {
+	return nil
+}
+
 type fakeAccountUseCase struct {
 	deleteMyAccount func(userID int64, password string) error
 }
@@ -287,6 +323,7 @@ var testSessionRepository port.SessionRepository
 type authUserPort interface {
 	port.UserUseCase
 	port.CredentialVerifier
+	port.UserRepository
 }
 
 func (f *fakeReactionUseCase) SetReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
@@ -321,7 +358,7 @@ func newTestHandler(
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:    sessionUseCase,
 		UserUseCase:       user,
@@ -926,6 +963,17 @@ func TestHTTP_UserLogin_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Header().Get("Authorization"), "Bearer ")
+}
+
+func TestHTTP_UserLogin_BadRequest_WhenUsernameMissing(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/login", map[string]string{
+		"password": "pw",
+	})
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"username and password are required"}`, rr.Body.String())
 }
 
 func TestHTTP_UserLogout_Success(t *testing.T) {

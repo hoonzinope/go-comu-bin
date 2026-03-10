@@ -17,6 +17,7 @@ go run ./cmd
 ```
 
 기본 설정은 루트의 `config.yml`을 사용합니다.
+실행 전 `delivery.http.auth.secret`에는 실제 비밀값을 넣어야 합니다.
 
 Swagger UI는 서버 실행 후 [http://localhost:18577/swagger/index.html](http://localhost:18577/swagger/index.html) 에서 확인할 수 있습니다.
 

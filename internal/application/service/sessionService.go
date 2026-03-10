@@ -9,13 +9,15 @@ var _ port.SessionUseCase = (*SessionService)(nil)
 
 type SessionService struct {
 	credentialVerifier port.CredentialVerifier
+	userRepository     port.UserRepository
 	tokenPort          port.TokenProvider
 	sessionRepository  port.SessionRepository
 }
 
-func NewSessionService(credentialVerifier port.CredentialVerifier, tokenPort port.TokenProvider, sessionRepository port.SessionRepository) *SessionService {
+func NewSessionService(credentialVerifier port.CredentialVerifier, userRepository port.UserRepository, tokenPort port.TokenProvider, sessionRepository port.SessionRepository) *SessionService {
 	return &SessionService{
 		credentialVerifier: credentialVerifier,
+		userRepository:     userRepository,
 		tokenPort:          tokenPort,
 		sessionRepository:  sessionRepository,
 	}
@@ -67,6 +69,13 @@ func (s *SessionService) ValidateTokenToId(token string) (int64, error) {
 		return 0, customError.WrapRepository("lookup session", err)
 	}
 	if !exists {
+		return 0, customError.ErrInvalidToken
+	}
+	user, err := s.userRepository.SelectUserByID(userID)
+	if err != nil {
+		return 0, customError.WrapRepository("select user by id for validate token", err)
+	}
+	if user == nil {
 		return 0, customError.ErrInvalidToken
 	}
 

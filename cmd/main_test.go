@@ -16,7 +16,8 @@ import (
 )
 
 type stubUserRepository struct {
-	save func(user *entity.User) (int64, error)
+	selectUserByUsername func(username string) (*entity.User, error)
+	save                 func(user *entity.User) (int64, error)
 }
 
 func (r *stubUserRepository) Save(user *entity.User) (int64, error) {
@@ -27,6 +28,9 @@ func (r *stubUserRepository) Save(user *entity.User) (int64, error) {
 }
 
 func (r *stubUserRepository) SelectUserByUsername(username string) (*entity.User, error) {
+	if r.selectUserByUsername != nil {
+		return r.selectUserByUsername(username)
+	}
 	return nil, nil
 }
 
@@ -54,10 +58,14 @@ func (r *stubUserRepository) Delete(id int64) error {
 	return nil
 }
 
-func TestSeedAdmin_ReturnsError_WhenSaveFails(t *testing.T) {
+func TestEnsureBootstrapAdmin_ReturnsError_WhenSaveFails(t *testing.T) {
 	expected := errors.New("save failed")
+	cfg := &config.Config{}
+	cfg.Admin.Bootstrap.Enabled = true
+	cfg.Admin.Bootstrap.Username = "admin"
+	cfg.Admin.Bootstrap.Password = "strong-admin-password"
 
-	err := seedAdmin(&stubUserRepository{
+	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
 		save: func(user *entity.User) (int64, error) {
 			require.Equal(t, "admin", user.Name)
 			require.NotEmpty(t, user.Password)
@@ -67,6 +75,42 @@ func TestSeedAdmin_ReturnsError_WhenSaveFails(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, expected)
+}
+
+func TestEnsureBootstrapAdmin_SkipsWhenDisabled(t *testing.T) {
+	cfg := &config.Config{}
+	called := false
+
+	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
+		save: func(user *entity.User) (int64, error) {
+			called = true
+			return 1, nil
+		},
+	})
+
+	require.NoError(t, err)
+	assert.False(t, called)
+}
+
+func TestEnsureBootstrapAdmin_SkipsWhenUserAlreadyExists(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Admin.Bootstrap.Enabled = true
+	cfg.Admin.Bootstrap.Username = "admin"
+	cfg.Admin.Bootstrap.Password = "strong-admin-password"
+
+	calledSave := false
+	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
+		selectUserByUsername: func(username string) (*entity.User, error) {
+			return &entity.User{ID: 1, Name: username}, nil
+		},
+		save: func(user *entity.User) (int64, error) {
+			calledSave = true
+			return 1, nil
+		},
+	})
+
+	require.NoError(t, err)
+	assert.False(t, calledSave)
 }
 
 type stubAttachmentCleanupUseCase struct{}

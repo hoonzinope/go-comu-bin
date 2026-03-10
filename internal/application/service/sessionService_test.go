@@ -20,7 +20,7 @@ func TestSessionService_Login_Success(t *testing.T) {
 
 	cache := cacheInMemory.NewInMemoryCache()
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+	svc := NewSessionService(userService, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	token, err := svc.Login("alice", "pw")
 	require.NoError(t, err)
@@ -42,7 +42,7 @@ func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 
 	cache := cacheInMemory.NewInMemoryCache()
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+	svc := NewSessionService(userService, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	token, err := svc.Login("alice", "pw")
 	require.NoError(t, err)
@@ -65,11 +65,35 @@ func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	require.NoError(t, sessionRepository.Save(userID, token, tokenProvider.TTLSeconds()))
 
-	svc := NewSessionService(userService, tokenProvider, sessionRepository)
+	svc := NewSessionService(userService, repositories.user, tokenProvider, sessionRepository)
 
 	gotUserID, err := svc.ValidateTokenToId(token)
 	require.NoError(t, err)
 	assert.Equal(t, userID, gotUserID)
+}
+
+func TestSessionService_ValidateTokenToId_DeletedUser(t *testing.T) {
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	_, err := userService.SignUp("alice", "pw")
+	require.NoError(t, err)
+	userID, err := userService.VerifyCredentials("alice", "pw")
+	require.NoError(t, err)
+
+	cache := cacheInMemory.NewInMemoryCache()
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(userID)
+	require.NoError(t, err)
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	require.NoError(t, sessionRepository.Save(userID, token, tokenProvider.TTLSeconds()))
+
+	require.NoError(t, userService.DeleteMe(userID, "pw"))
+
+	svc := NewSessionService(userService, repositories.user, tokenProvider, sessionRepository)
+
+	_, err = svc.ValidateTokenToId(token)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidToken))
 }
 
 func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
@@ -80,7 +104,7 @@ func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 
 	cache := cacheInMemory.NewInMemoryCache()
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+	svc := NewSessionService(userService, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	token1, err := svc.Login("alice", "pw")
 	require.NoError(t, err)
@@ -109,7 +133,7 @@ func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails
 	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
 		setWithTTLErr: newCacheFailure(nil),
 	})
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+	svc := NewSessionService(userService, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	_, err = svc.Login("alice", "pw")
 	require.Error(t, err)
@@ -131,7 +155,7 @@ func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t
 	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
 		deleteErr: newCacheFailure(nil),
 	})
-	svc := NewSessionService(userService, tokenProvider, sessionRepository)
+	svc := NewSessionService(userService, repositories.user, tokenProvider, sessionRepository)
 
 	err = svc.Logout(token)
 	require.Error(t, err)
@@ -150,7 +174,7 @@ func TestSessionService_InvalidateUserSessions_ReturnsRepositoryFailure_WhenSess
 	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
 		deleteByPrefixErr: newCacheFailure(nil),
 	})
-	svc := NewSessionService(userService, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+	svc := NewSessionService(userService, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
 
 	err = svc.InvalidateUserSessions(userID)
 	require.Error(t, err)
