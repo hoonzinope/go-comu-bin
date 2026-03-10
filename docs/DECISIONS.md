@@ -837,3 +837,37 @@
 - `internal/config/config.go`
 - `internal/delivery/http.go`
 - `cmd/main.go`
+
+## 2026-03-10 - PostDetail read assembly는 service에서 query component로 분리한다
+
+상태
+
+- decided
+
+배경
+
+- `PostService.GetPostDetail`은 cache orchestration 외에도 post, tags, attachments, comments, reactions, user UUID expansion까지 직접 조립하고 있었다.
+- 현재 in-memory 구현에서는 동작하지만, 읽기 경로 최적화와 비즈니스 규칙이 한 메서드에 같이 커지는 구조였다.
+
+관찰
+
+- `GetPostDetail`의 핵심 use case 책임은 cache boundary와 공개 contract 유지이지, 세부 read assembly 자체는 아니다.
+- read model 조립을 별도 component로 분리하면 서비스는 orchestration에 집중하고, 조회 최적화나 projection 규칙은 query 쪽에서 독립적으로 다룰 수 있다.
+
+결론
+
+- `PostService.GetPostDetail`은 cache/use case 경계를 유지하고, 실제 read assembly는 별도 `postDetailQuery` component가 담당한다.
+- post/comment/reaction projection 규칙은 query와 service가 공통 helper를 공유해 중복 없이 유지한다.
+- 외부 use case contract와 응답 스키마는 변경하지 않는다.
+
+후속 작업
+
+- post detail read assembly helper를 query component로 이동
+- query component 직접 테스트 추가
+- 아키텍처 문서에 read-side query helper 사용 원칙 반영
+
+관련 문서/코드
+
+- `internal/application/service/postService.go`
+- `internal/application/service/post_detail_query.go`
+- `docs/ARCHITECTURE.md`

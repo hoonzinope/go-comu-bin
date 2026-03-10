@@ -446,6 +446,31 @@ func TestPostService_GetPostDetail_ExposesCommentPreviewHasMore(t *testing.T) {
 	assert.True(t, detail.CommentsHasMore)
 }
 
+func TestPostDetailQuery_Load_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "body")
+	seedComment(repositories.comment, userID, postID, "comment")
+
+	query := newPostDetailQuery(
+		repositories.user,
+		repositories.post,
+		repositories.tag,
+		repositories.postTag,
+		repositories.attachment,
+		repositories.comment,
+		repositories.reaction,
+	)
+
+	detail, err := query.Load(postID)
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	require.NotNil(t, detail.Post)
+	assert.Equal(t, postID, detail.Post.ID)
+	assert.Len(t, detail.Comments, 1)
+}
+
 func TestPostService_UpdatePost_MarksUnusedAttachmentsAsOrphaned(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")

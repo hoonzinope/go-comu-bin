@@ -40,6 +40,7 @@ flowchart LR
 
 - Delivery는 쿼리 파라미터/헤더를 해석하고 UseCase만 호출한다.
 - Application은 필요한 read assembly를 수행하되, repository를 반복 호출하는 N+1 패턴은 가능한 포트 확장이나 query helper로 흡수한다.
+- read path가 커지는 경우 service 안에 계속 누적하지 않고, `postDetailQuery` 같은 read-side query component로 분리한다.
 - Infrastructure는 batched read 같은 조회 최적화를 구현 세부로 숨긴다.
 
 ## 요청 흐름
