@@ -25,9 +25,10 @@ type CommentService struct {
 	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
+	logger              port.Logger
 }
 
-func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *CommentService {
+func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
@@ -37,6 +38,7 @@ func NewCommentService(userRepository port.UserRepository, postRepository port.P
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
+		logger:              resolveLogger(logger),
 	}
 }
 
@@ -86,8 +88,8 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 	if err != nil {
 		return 0, err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after create comment")
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after create comment")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.CommentListPrefix(postID), "invalidate comment list after create comment")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after create comment")
 	return commentID, nil
 }
 
@@ -199,8 +201,8 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after update comment")
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after update comment")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.CommentListPrefix(postID), "invalidate comment list after update comment")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after update comment")
 	return nil
 }
 
@@ -240,8 +242,8 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	}); err != nil {
 		return err
 	}
-	bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetComment), commentID), "invalidate comment reaction list after delete comment")
-	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after delete comment")
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete comment")
+	bestEffortCacheDelete(s.cache, s.logger, key.ReactionList(string(entity.ReactionTargetComment), commentID), "invalidate comment reaction list after delete comment")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.CommentListPrefix(postID), "invalidate comment list after delete comment")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after delete comment")
 	return nil
 }

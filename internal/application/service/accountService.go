@@ -1,22 +1,20 @@
 package service
 
-import (
-	"log/slog"
-
-	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-)
+import "github.com/hoonzinope/go-comu-bin/internal/application/port"
 
 var _ port.AccountUseCase = (*AccountService)(nil)
 
 type AccountService struct {
 	userUseCase    port.UserUseCase
 	sessionUseCase port.SessionUseCase
+	logger         port.Logger
 }
 
-func NewAccountService(userUseCase port.UserUseCase, sessionUseCase port.SessionUseCase) *AccountService {
+func NewAccountService(userUseCase port.UserUseCase, sessionUseCase port.SessionUseCase, logger ...port.Logger) *AccountService {
 	return &AccountService{
 		userUseCase:    userUseCase,
 		sessionUseCase: sessionUseCase,
+		logger:         resolveLogger(logger),
 	}
 }
 
@@ -25,7 +23,7 @@ func (s *AccountService) DeleteMyAccount(userID int64, password string) error {
 		return err
 	}
 	if err := s.sessionUseCase.InvalidateUserSessions(userID); err != nil {
-		slog.Warn("failed to invalidate deleted user sessions", "user_id", userID, "error", err)
+		s.logger.Warn("failed to invalidate deleted user sessions", "user_id", userID, "error", err)
 	}
 	return nil
 }

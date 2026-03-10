@@ -23,9 +23,10 @@ type BoardService struct {
 	cache               port.Cache
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
+	logger              port.Logger
 }
 
-func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *BoardService {
+func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
@@ -34,6 +35,7 @@ func NewBoardService(userRepository port.UserRepository, boardRepository port.Bo
 		cache:               cache,
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
+		logger:              resolveLogger(logger),
 	}
 }
 
@@ -110,7 +112,7 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if err != nil {
 		return 0, err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after create board")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.BoardListPrefix(), "invalidate board list after create board")
 	return boardID, nil
 }
 
@@ -146,7 +148,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after update board")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.BoardListPrefix(), "invalidate board list after update board")
 	return nil
 }
 
@@ -185,6 +187,6 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, key.BoardListPrefix(), "invalidate board list after delete board")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.BoardListPrefix(), "invalidate board list after delete board")
 	return nil
 }

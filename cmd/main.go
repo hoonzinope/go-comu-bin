@@ -30,6 +30,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	objectstorage "github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/object"
@@ -69,13 +70,14 @@ func main() {
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
+	appLogger := logging.NewSlogLogger(logger)
 	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
-	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy)
-	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy)
-	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy)
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg))
+	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy, appLogger)
+	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy, appLogger)
+	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy, appLogger)
+	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), appLogger)
 	attachmentUseCase := service.NewAttachmentServiceWithOptions(
 		userRepository,
 		postRepository,
@@ -89,6 +91,7 @@ func main() {
 			JPEGQuality: cfg.Storage.Attachment.ImageOptimization.JPEGQuality,
 		},
 		authorizationPolicy,
+		appLogger,
 	)
 	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase); err != nil {
 		slog.Error("failed to start background jobs", "error", err)
@@ -98,16 +101,17 @@ func main() {
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	sessionUseCase := service.NewSessionService(userUseCase, userRepository, tokenProvider, sessionRepository)
-	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
+	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase, appLogger)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
-		SessionUseCase:    sessionUseCase,
-		UserUseCase:       userUseCase,
-		AccountUseCase:    accountUseCase,
-		BoardUseCase:      boardUseCase,
-		PostUseCase:       postUseCase,
-		CommentUseCase:    commentUseCase,
-		ReactionUseCase:   reactionUseCase,
-		AttachmentUseCase: attachmentUseCase,
+		SessionUseCase:           sessionUseCase,
+		UserUseCase:              userUseCase,
+		AccountUseCase:           accountUseCase,
+		BoardUseCase:             boardUseCase,
+		PostUseCase:              postUseCase,
+		CommentUseCase:           commentUseCase,
+		ReactionUseCase:          reactionUseCase,
+		AttachmentUseCase:        attachmentUseCase,
+		AttachmentUploadMaxBytes: cfg.Storage.Attachment.MaxUploadSizeBytes,
 	})
 	slog.Info("server started", "addr", server.Addr)
 	if err := server.ListenAndServe(); err != nil {

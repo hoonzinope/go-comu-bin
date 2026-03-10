@@ -673,6 +673,51 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 	assert.JSONEq(t, `{"id":8,"embed_markdown":"![a.png](attachment://8)","preview_url":"/api/v1/posts/3/attachments/8/preview"}`, rr.Body.String())
 }
 
+func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testing.T) {
+	called := false
+	user := &fakeUserUseCase{}
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	handler := NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:  sessionUseCase,
+		UserUseCase:     user,
+		AccountUseCase:  &fakeAccountUseCase{},
+		BoardUseCase:    &fakeBoardUseCase{},
+		PostUseCase:     &fakePostUseCase{},
+		CommentUseCase:  &fakeCommentUseCase{},
+		ReactionUseCase: &fakeReactionUseCase{},
+		AttachmentUseCase: &fakeAttachmentUseCase{
+			uploadPostAttachment: func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+				called = true
+				return nil, nil
+			},
+		},
+		AttachmentUploadMaxBytes: 4,
+	}).Handler
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "a.png")
+	require.NoError(t, err)
+	_, err = part.Write(bytes.Repeat([]byte("a"), int(multipartRequestOverheadBytes*2)))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/posts/3/attachments/upload", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	token, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.False(t, called)
+}
+
 func TestHandleGetAttachmentFile_Success(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{},

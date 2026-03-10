@@ -7,7 +7,7 @@
 - `./config.yml`
 - `./config/config.yml`
 
-환경 변수도 함께 읽습니다.
+환경 변수도 함께 읽습니다. 설정 파일이 없어도 환경 변수만으로 부팅할 수 있습니다.
 
 - 예: `DELIVERY_HTTP_AUTH_SECRET`
 - 예: `ADMIN_BOOTSTRAP_ENABLED`
@@ -93,6 +93,7 @@ jobs:
 - 파일 저장 provider: `cfg.Storage.Provider`
 - object storage endpoint/bucket: `cfg.Storage.Object.Endpoint`, `cfg.Storage.Object.Bucket`
 - attachment 최대 업로드 크기(bytes): `cfg.Storage.Attachment.MaxUploadSizeBytes`
+  - HTTP 레이어는 multipart body 크기를 먼저 제한하고, service 레이어는 파일 스트림 크기를 다시 검증합니다.
 - attachment 이미지 최적화: `cfg.Storage.Attachment.ImageOptimization.Enabled`, `cfg.Storage.Attachment.ImageOptimization.JPEGQuality`
 - background jobs on/off: `cfg.Jobs.Enabled`
 - attachment cleanup 주기/유예/배치 크기: `cfg.Jobs.AttachmentCleanup.*`

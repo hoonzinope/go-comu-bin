@@ -109,6 +109,32 @@ jobs:
 	assert.True(t, cfg.Admin.Bootstrap.Enabled)
 }
 
+func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
+	tempDir := t.TempDir()
+	originalWD, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(tempDir))
+	defer func() {
+		_ = os.Chdir(originalWD)
+	}()
+
+	t.Setenv("DELIVERY_HTTP_PORT", "18577")
+	t.Setenv("DELIVERY_HTTP_AUTH_SECRET", "env-secret")
+	t.Setenv("STORAGE_PROVIDER", "local")
+	t.Setenv("STORAGE_LOCAL_ROOTDIR", "./data/uploads")
+	t.Setenv("STORAGE_ATTACHMENT_MAXUPLOADSIZEBYTES", "10485760")
+	t.Setenv("STORAGE_ATTACHMENT_IMAGEOPTIMIZATION_JPEGQUALITY", "82")
+	t.Setenv("JOBS_ATTACHMENTCLEANUP_INTERVALSECONDS", "600")
+	t.Setenv("JOBS_ATTACHMENTCLEANUP_GRACEPERIODSECONDS", "600")
+	t.Setenv("JOBS_ATTACHMENTCLEANUP_BATCHSIZE", "50")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
+	assert.Equal(t, "env-secret", cfg.Delivery.HTTP.Auth.Secret)
+}
+
 func TestLoadFromViper_InvalidPort(t *testing.T) {
 	t.Run("port_is_zero", func(t *testing.T) {
 		v := viper.New()

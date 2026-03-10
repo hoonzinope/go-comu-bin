@@ -22,39 +22,44 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+const multipartRequestOverheadBytes int64 = 1 << 20
+
 type HTTPHandler struct {
-	sessionUseCase    port.SessionUseCase
-	userUseCase       port.UserUseCase
-	accountUseCase    port.AccountUseCase
-	boardUseCase      port.BoardUseCase
-	postUseCase       port.PostUseCase
-	commentUseCase    port.CommentUseCase
-	reactionUseCase   port.ReactionUseCase
-	attachmentUseCase port.AttachmentUseCase
-	authGinMiddleware gin.HandlerFunc
+	sessionUseCase           port.SessionUseCase
+	userUseCase              port.UserUseCase
+	accountUseCase           port.AccountUseCase
+	boardUseCase             port.BoardUseCase
+	postUseCase              port.PostUseCase
+	commentUseCase           port.CommentUseCase
+	reactionUseCase          port.ReactionUseCase
+	attachmentUseCase        port.AttachmentUseCase
+	attachmentUploadMaxBytes int64
+	authGinMiddleware        gin.HandlerFunc
 }
 
 type HTTPDependencies struct {
-	SessionUseCase    port.SessionUseCase
-	UserUseCase       port.UserUseCase
-	AccountUseCase    port.AccountUseCase
-	BoardUseCase      port.BoardUseCase
-	PostUseCase       port.PostUseCase
-	CommentUseCase    port.CommentUseCase
-	ReactionUseCase   port.ReactionUseCase
-	AttachmentUseCase port.AttachmentUseCase
+	SessionUseCase           port.SessionUseCase
+	UserUseCase              port.UserUseCase
+	AccountUseCase           port.AccountUseCase
+	BoardUseCase             port.BoardUseCase
+	PostUseCase              port.PostUseCase
+	CommentUseCase           port.CommentUseCase
+	ReactionUseCase          port.ReactionUseCase
+	AttachmentUseCase        port.AttachmentUseCase
+	AttachmentUploadMaxBytes int64
 }
 
 func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 	return &HTTPHandler{
-		sessionUseCase:    deps.SessionUseCase,
-		userUseCase:       deps.UserUseCase,
-		accountUseCase:    deps.AccountUseCase,
-		boardUseCase:      deps.BoardUseCase,
-		postUseCase:       deps.PostUseCase,
-		commentUseCase:    deps.CommentUseCase,
-		reactionUseCase:   deps.ReactionUseCase,
-		attachmentUseCase: deps.AttachmentUseCase,
+		sessionUseCase:           deps.SessionUseCase,
+		userUseCase:              deps.UserUseCase,
+		accountUseCase:           deps.AccountUseCase,
+		boardUseCase:             deps.BoardUseCase,
+		postUseCase:              deps.PostUseCase,
+		commentUseCase:           deps.CommentUseCase,
+		reactionUseCase:          deps.ReactionUseCase,
+		attachmentUseCase:        deps.AttachmentUseCase,
+		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
 		authGinMiddleware: middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
 			writeHTTPError(c, status, err)
 		}),
@@ -116,6 +121,9 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
 	r := gin.New()
 	r.Use(gin.Recovery())
+	if deps.AttachmentUploadMaxBytes > 0 {
+		r.MaxMultipartMemory = deps.AttachmentUploadMaxBytes + multipartRequestOverheadBytes
+	}
 	handler := NewHTTPHandler(deps)
 	handler.RegisterRoutes(r)
 	return &http.Server{Addr: addr, Handler: r}
@@ -712,9 +720,24 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if h.attachmentUploadMaxBytes > 0 {
+		if c.Request.ContentLength > h.attachmentUploadMaxBytes+multipartRequestOverheadBytes {
+			badRequest(c, errors.New("file too large"))
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.attachmentUploadMaxBytes+multipartRequestOverheadBytes)
+	}
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
+		if isMultipartBodyTooLarge(err) {
+			badRequest(c, errors.New("file too large"))
+			return
+		}
 		badRequest(c, errors.New("file is required"))
+		return
+	}
+	if h.attachmentUploadMaxBytes > 0 && fileHeader.Size > h.attachmentUploadMaxBytes {
+		badRequest(c, errors.New("file too large"))
 		return
 	}
 	file, err := fileHeader.Open()
@@ -1424,4 +1447,12 @@ func attachmentContentDisposition(fileName string) string {
 		return "inline"
 	}
 	return value
+}
+
+func isMultipartBodyTooLarge(err error) bool {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "too large")
 }

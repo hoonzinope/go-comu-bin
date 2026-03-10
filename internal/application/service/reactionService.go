@@ -22,9 +22,10 @@ type ReactionService struct {
 	unitOfWork         port.UnitOfWork
 	cache              port.Cache
 	cachePolicy        appcache.Policy
+	logger             port.Logger
 }
 
-func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy) *ReactionService {
+func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
 	return &ReactionService{
 		userRepository:     userRepository,
 		postRepository:     postRepository,
@@ -33,6 +34,7 @@ func NewReactionService(userRepository port.UserRepository, postRepository port.
 		unitOfWork:         unitOfWork,
 		cache:              cache,
 		cachePolicy:        cachePolicy,
+		logger:             resolveLogger(logger),
 	}
 }
 
@@ -146,9 +148,9 @@ func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([
 }
 
 func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType, detailPostID *int64) {
-	bestEffortCacheDelete(s.cache, key.ReactionList(string(targetType), targetID), "invalidate reaction list")
+	bestEffortCacheDelete(s.cache, s.logger, key.ReactionList(string(targetType), targetID), "invalidate reaction list")
 	if detailPostID != nil {
-		bestEffortCacheDelete(s.cache, key.PostDetail(*detailPostID), "invalidate post detail after reaction")
+		bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(*detailPostID), "invalidate post detail after reaction")
 	}
 }
 

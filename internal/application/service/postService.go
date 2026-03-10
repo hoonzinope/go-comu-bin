@@ -38,11 +38,12 @@ type PostService struct {
 	cache                port.Cache
 	cachePolicy          appcache.Policy
 	authorizationPolicy  policy.AuthorizationPolicy
+	logger               port.Logger
 }
 
 var attachmentEmbedPattern = regexp.MustCompile(`!\[[^\]]*]\(attachment://([0-9]+)\)`)
 
-func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy) *PostService {
+func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
 	return &PostService{
 		userRepository:       userRepository,
 		boardRepository:      boardRepository,
@@ -56,6 +57,7 @@ func NewPostService(userRepository port.UserRepository, boardRepository port.Boa
 		cache:                cache,
 		cachePolicy:          cachePolicy,
 		authorizationPolicy:  authorizationPolicy,
+		logger:               resolveLogger(logger),
 	}
 }
 
@@ -115,7 +117,7 @@ func (s *PostService) createPost(title, content string, tags []string, authorID,
 		return 0, err
 	}
 	if !draft {
-		bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(boardID), "invalidate post list after create post")
+		bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.PostListPrefix(boardID), "invalidate post list after create post")
 		s.invalidateTagPostListCaches(normalizedTags)
 	}
 	return postID, nil
@@ -335,8 +337,8 @@ func (s *PostService) PublishPost(id, authorID int64) error {
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(boardID), "invalidate post list after publish post")
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after publish post")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.PostListPrefix(boardID), "invalidate post list after publish post")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after publish post")
 	s.invalidateTagPostListCaches(currentTags)
 	return nil
 }
@@ -492,8 +494,8 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string, tags
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after update post")
-	bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(boardID), "invalidate post list after update post")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after update post")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.PostListPrefix(boardID), "invalidate post list after update post")
 	s.invalidateTagPostListCaches(unionTagNames(currentTagNames, normalizedTags))
 	return nil
 }
@@ -562,13 +564,13 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete post")
-	bestEffortCacheDeleteByPrefix(s.cache, key.PostListPrefix(boardID), "invalidate post list after delete post")
-	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after delete post")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after delete post")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.PostListPrefix(boardID), "invalidate post list after delete post")
+	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.CommentListPrefix(postID), "invalidate comment list after delete post")
 	for _, commentID := range commentIDs {
-		bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetComment), commentID), "invalidate comment reaction list after delete post")
+		bestEffortCacheDelete(s.cache, s.logger, key.ReactionList(string(entity.ReactionTargetComment), commentID), "invalidate comment reaction list after delete post")
 	}
-	bestEffortCacheDelete(s.cache, key.ReactionList(string(entity.ReactionTargetPost), postID), "invalidate post reaction list after delete post")
+	bestEffortCacheDelete(s.cache, s.logger, key.ReactionList(string(entity.ReactionTargetPost), postID), "invalidate post reaction list after delete post")
 	s.invalidateTagPostListCaches(currentTagNames)
 	return nil
 }
@@ -736,7 +738,7 @@ func (s *PostService) getOrCreateTagID(tx port.TxScope, tagName string) (int64, 
 
 func (s *PostService) invalidateTagPostListCaches(tagNames []string) {
 	for _, tagName := range tagNames {
-		bestEffortCacheDeleteByPrefix(s.cache, key.TagPostListPrefix(tagName), "invalidate tag post list")
+		bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.TagPostListPrefix(tagName), "invalidate tag post list")
 	}
 }
 

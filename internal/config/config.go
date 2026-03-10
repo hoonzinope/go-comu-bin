@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -68,12 +69,45 @@ func Load() (*Config, error) {
 	v.AddConfigPath("./config")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+	bindEnv(v,
+		"cache.listTTLSeconds",
+		"cache.detailTTLSeconds",
+		"admin.bootstrap.enabled",
+		"admin.bootstrap.username",
+		"admin.bootstrap.password",
+		"storage.provider",
+		"storage.local.rootDir",
+		"storage.object.endpoint",
+		"storage.object.bucket",
+		"storage.object.accessKey",
+		"storage.object.secretKey",
+		"storage.object.useSSL",
+		"storage.attachment.maxUploadSizeBytes",
+		"storage.attachment.imageOptimization.enabled",
+		"storage.attachment.imageOptimization.jpegQuality",
+		"delivery.http.port",
+		"delivery.http.auth.secret",
+		"jobs.enabled",
+		"jobs.attachmentCleanup.enabled",
+		"jobs.attachmentCleanup.intervalSeconds",
+		"jobs.attachmentCleanup.gracePeriodSeconds",
+		"jobs.attachmentCleanup.batchSize",
+	)
 
 	if err := v.ReadInConfig(); err != nil {
-		return nil, err
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		if !errors.As(err, &configFileNotFoundError) {
+			return nil, err
+		}
 	}
 
 	return loadFromViper(v)
+}
+
+func bindEnv(v *viper.Viper, keys ...string) {
+	for _, key := range keys {
+		_ = v.BindEnv(key)
+	}
 }
 
 func loadFromViper(v *viper.Viper) (*Config, error) {

@@ -40,6 +40,7 @@ type AttachmentService struct {
 	maxUploadSizeBytes   int64
 	imageOptimization    ImageOptimizationConfig
 	authorizationPolicy  policy.AuthorizationPolicy
+	logger               port.Logger
 }
 
 type ImageOptimizationConfig struct {
@@ -56,7 +57,7 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
 	return NewAttachmentServiceWithOptions(
 		userRepository,
 		postRepository,
@@ -67,10 +68,11 @@ func NewAttachmentService(userRepository port.UserRepository, postRepository por
 		maxUploadSizeBytes,
 		ImageOptimizationConfig{Enabled: true, JPEGQuality: 82},
 		authorizationPolicy,
+		resolveLogger(logger),
 	)
 }
 
-func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy) *AttachmentService {
+func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
 	}
@@ -87,6 +89,7 @@ func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRep
 		maxUploadSizeBytes:   maxUploadSizeBytes,
 		imageOptimization:    imageOptimization,
 		authorizationPolicy:  authorizationPolicy,
+		logger:               resolveLogger(logger),
 	}
 }
 
@@ -126,7 +129,7 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 	if err != nil {
 		return 0, err
 	}
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after create attachment")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after create attachment")
 	return id, nil
 }
 
@@ -331,7 +334,7 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete attachment")
+	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after delete attachment")
 	return nil
 }
 

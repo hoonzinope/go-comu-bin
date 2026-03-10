@@ -723,3 +723,43 @@
 - `docs/CONFIG.md`
 - `internal/application/service/sessionService.go`
 - `internal/delivery/http.go`
+
+## 2026-03-10 - upload 제한은 HTTP와 service 양쪽에서 강제하고 config는 env-only도 허용한다
+
+상태
+
+- decided
+
+배경
+
+- attachment 업로드는 서비스 레이어에서 파일 크기를 검사하지만, multipart 파싱 이전의 HTTP 경계 제한은 아직 없었다.
+- 설정 문서는 환경 변수 기반 구성을 안내하지만, 실제 로더는 config 파일이 없으면 실패했다.
+- application 서비스는 운영 로그를 남기기 위해 전역 `slog`에 직접 의존하고 있었다.
+
+관찰
+
+- 업로드 한도는 resource control 성격이 강해서 delivery와 service 둘 다에서 막아야 한다.
+- env-only 실행은 컨테이너/배포 환경에서 유용하며, 현재 문서도 그 방향을 암묵적으로 기대한다.
+- 로깅은 필요하지만 application이 concrete logger를 직접 알 필요는 없다.
+
+결론
+
+- attachment 업로드 한도는 `HTTP body/multipart 파싱 전 제한 + service stream 제한`의 이중 경계로 적용한다.
+- `Config.Load()`는 config 파일이 없어도 환경 변수와 default만으로 로드 가능해야 한다.
+- application 서비스는 전역 logger 대신 logger port에만 의존한다.
+- composition root가 실제 logger adapter를 주입하고, 테스트/기본 경로는 noop logger를 사용한다.
+
+후속 작업
+
+- HTTP server/dependencies에 upload max bytes 설정 연결
+- config loader에서 file-not-found를 non-fatal 처리하고 회귀 테스트 추가
+- logger port/noop/slog adapter 추가 및 service 생성자 정리
+- docs에서 env-only 설정과 업로드 제한 규칙 명시
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `internal/application/service/attachmentService.go`
+- `internal/config/config.go`
+- `internal/application/service/cache_invalidation.go`
+- `internal/application/service/accountService.go`
