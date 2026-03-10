@@ -7,6 +7,39 @@
 - Domain 중심 설계
 - interface/implementation 분리
 
+## 레이어 구조
+
+```mermaid
+flowchart LR
+    HTTP["Delivery (HTTP / middleware / response)"]
+    UC["UseCase Port"]
+    APP["Application Service / Policy / Cache Rule / Read Assembly"]
+    PORT["Repository / External Port"]
+    INFRA["Infrastructure Adapter (inmemory / auth / cache / storage)"]
+    DOMAIN["Domain Entity"]
+
+    HTTP --> UC
+    UC --> APP
+    APP --> DOMAIN
+    APP --> PORT
+    PORT --> INFRA
+```
+
+- `delivery`
+  - HTTP 파싱, 인증 미들웨어 연결, status/header/response 직렬화만 담당한다.
+- `application`
+  - 유스케이스 orchestration, 권한 판정, 캐시 정책, tx 경계, read model 조립을 담당한다.
+- `domain`
+  - 엔티티 상태와 도메인 규칙을 가진다.
+- `infrastructure`
+  - 저장소, 캐시, 토큰, 파일 저장소 같은 외부 구현체를 제공한다.
+
+읽기 경로에서도 동일한 경계를 유지한다.
+
+- Delivery는 쿼리 파라미터/헤더를 해석하고 UseCase만 호출한다.
+- Application은 필요한 read assembly를 수행하되, repository를 반복 호출하는 N+1 패턴은 가능한 포트 확장이나 query helper로 흡수한다.
+- Infrastructure는 batched read 같은 조회 최적화를 구현 세부로 숨긴다.
+
 ## 요청 흐름
 
 `HTTP Delivery -> UseCase Port -> Service -> Repository Port -> InMemory Adapter`

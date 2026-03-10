@@ -274,6 +274,9 @@ func (r reactionTxRepository) GetUserTargetReaction(userID, targetID int64, targ
 func (r reactionTxRepository) GetByTarget(targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error) {
 	return r.repo.getByTarget(targetID, targetType)
 }
+func (r reactionTxRepository) GetByTargets(targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
+	return r.repo.getByTargets(targetIDs, targetType)
+}
 
 type attachmentTxRepository struct{ repo *AttachmentRepository }
 

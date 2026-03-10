@@ -8,4 +8,5 @@ type ReactionRepository interface {
 	DeleteByTarget(targetID int64, targetType entity.ReactionTargetType) (int, error)
 	GetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error)
 	GetByTarget(targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error)
+	GetByTargets(targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error)
 }
