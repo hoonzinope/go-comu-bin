@@ -182,14 +182,16 @@ func validate(cfg *Config) error {
 	if cfg.Storage.Attachment.ImageOptimization.JPEGQuality < 1 || cfg.Storage.Attachment.ImageOptimization.JPEGQuality > 100 {
 		return fmt.Errorf("invalid storage.attachment.imageOptimization.jpegQuality: %d (must be 1..100)", cfg.Storage.Attachment.ImageOptimization.JPEGQuality)
 	}
-	if cfg.Jobs.AttachmentCleanup.IntervalSeconds <= 0 {
-		return fmt.Errorf("invalid jobs.attachmentCleanup.intervalSeconds: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.IntervalSeconds)
-	}
-	if cfg.Jobs.AttachmentCleanup.GracePeriodSeconds <= 0 {
-		return fmt.Errorf("invalid jobs.attachmentCleanup.gracePeriodSeconds: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.GracePeriodSeconds)
-	}
-	if cfg.Jobs.AttachmentCleanup.BatchSize <= 0 {
-		return fmt.Errorf("invalid jobs.attachmentCleanup.batchSize: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.BatchSize)
+	if cfg.Jobs.Enabled && cfg.Jobs.AttachmentCleanup.Enabled {
+		if cfg.Jobs.AttachmentCleanup.IntervalSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.attachmentCleanup.intervalSeconds: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.IntervalSeconds)
+		}
+		if cfg.Jobs.AttachmentCleanup.GracePeriodSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.attachmentCleanup.gracePeriodSeconds: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.GracePeriodSeconds)
+		}
+		if cfg.Jobs.AttachmentCleanup.BatchSize <= 0 {
+			return fmt.Errorf("invalid jobs.attachmentCleanup.batchSize: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.BatchSize)
+		}
 	}
 	if cfg.Admin.Bootstrap.Enabled {
 		if strings.TrimSpace(cfg.Admin.Bootstrap.Username) == "" {

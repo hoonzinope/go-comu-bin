@@ -22,3 +22,7 @@ func NewSlogLogger(logger *slog.Logger) *SlogLogger {
 func (l *SlogLogger) Warn(msg string, args ...any) {
 	l.logger.Warn(msg, args...)
 }
+
+func (l *SlogLogger) Error(msg string, args ...any) {
+	l.logger.Error(msg, args...)
+}

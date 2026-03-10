@@ -383,7 +383,7 @@ func buildAttachmentStorageKey(postID int64, fileName string) string {
 }
 
 func buildAttachmentEmbedMarkdown(fileName string, attachmentID int64) string {
-	return fmt.Sprintf("![%s](attachment://%d)", fileName, attachmentID)
+	return fmt.Sprintf("![%s](attachment://%d)", markdownSafeAttachmentAltText(fileName), attachmentID)
 }
 
 func buildAttachmentPreviewURL(postID, attachmentID int64) string {
@@ -480,6 +480,23 @@ func sanitizeAttachmentFileName(fileName string) string {
 		return "file"
 	}
 	return sanitized
+}
+
+func markdownSafeAttachmentAltText(fileName string) string {
+	alt := strings.TrimSpace(fileName)
+	alt = strings.NewReplacer(
+		`\`, `\\`,
+		`[`, `\[`,
+		`]`, `\]`,
+		`(`, `\(`,
+		`)`, `\)`,
+		"\r", " ",
+		"\n", " ",
+	).Replace(alt)
+	if alt == "" {
+		return "attachment"
+	}
+	return alt
 }
 
 func newAttachmentKeySuffix() (string, error) {

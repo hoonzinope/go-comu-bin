@@ -800,3 +800,40 @@
 - `internal/delivery/middleware/authMiddleware.go`
 - `internal/application/service/sessionService.go`
 - `internal/config/config.go`
+
+## 2026-03-10 - embed 출력과 background job config, delivery logger 경계를 실제 구현과 맞춘다
+
+상태
+
+- decided
+
+배경
+
+- attachment upload 응답은 `embed_markdown`에 raw filename을 그대로 넣어 Markdown 문법을 깨뜨릴 수 있다.
+- config loader는 `jobs.enabled=false`여도 cleanup job 세부 설정을 계속 강제한다.
+- 아키텍처 문서는 delivery 로깅이 composition root에서 주입된 logger를 쓴다고 설명하지만, 실제 구현은 아직 전역 `slog`에 직접 의존한다.
+
+관찰
+
+- user-controlled filename을 다른 문법으로 재직렬화할 때는 출력 escaping 규칙이 필요하다.
+- feature flag로 완전히 비활성화된 기능의 세부 설정까지 강제하면 runtime contract와 validation contract가 어긋난다.
+- logger port migration은 application까지만 끝난 상태라 delivery 경계가 문서와 구현 사이에서 어긋난다.
+
+결론
+
+- `embed_markdown`은 raw filename 대신 Markdown-safe alt text를 사용한다.
+- `jobs.attachmentCleanup.*` 검증은 `jobs.enabled && jobs.attachmentCleanup.enabled`일 때만 강제한다.
+- delivery는 `HTTPDependencies`로 logger를 받아 request failure 로깅에도 같은 경계를 사용한다.
+
+후속 작업
+
+- attachment service 테스트에 Markdown metacharacter filename 케이스 추가
+- config 테스트에 jobs disabled 시 relaxed validation 케이스 추가
+- delivery 테스트/구성 루트에 logger dependency 연결
+
+관련 문서/코드
+
+- `internal/application/service/attachmentService.go`
+- `internal/config/config.go`
+- `internal/delivery/http.go`
+- `cmd/main.go`

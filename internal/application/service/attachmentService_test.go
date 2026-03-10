@@ -381,6 +381,21 @@ func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.
 	assert.Equal(t, int64(len(png)), items[0].SizeBytes)
 }
 
+func TestAttachmentService_UploadPostAttachment_EscapesMarkdownInEmbed(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	png := testPNGBytes()
+	upload, err := svc.UploadPostAttachment(postID, userID, "a](b.png", "image/png", bytes.NewReader(png))
+	require.NoError(t, err)
+	require.NotNil(t, upload)
+	assert.Equal(t, "![a\\]\\(b.png](attachment://"+strconv.FormatInt(upload.ID, 10)+")", upload.EmbedMarkdown)
+}
+
 func TestAttachmentService_UploadPostAttachment_InvalidatesPostDetailCache(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{}

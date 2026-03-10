@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -23,6 +22,12 @@ import (
 )
 
 const multipartRequestOverheadBytes int64 = 1 << 20
+const httpLoggerContextKey = "http_logger"
+
+type noopLogger struct{}
+
+func (noopLogger) Warn(string, ...any)  {}
+func (noopLogger) Error(string, ...any) {}
 
 type HTTPHandler struct {
 	sessionUseCase           port.SessionUseCase
@@ -34,6 +39,7 @@ type HTTPHandler struct {
 	reactionUseCase          port.ReactionUseCase
 	attachmentUseCase        port.AttachmentUseCase
 	attachmentUploadMaxBytes int64
+	logger                   port.Logger
 	authGinMiddleware        gin.HandlerFunc
 }
 
@@ -47,10 +53,15 @@ type HTTPDependencies struct {
 	ReactionUseCase          port.ReactionUseCase
 	AttachmentUseCase        port.AttachmentUseCase
 	AttachmentUploadMaxBytes int64
+	Logger                   port.Logger
 }
 
 func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
-	return &HTTPHandler{
+	logger := deps.Logger
+	if logger == nil {
+		logger = noopLogger{}
+	}
+	handler := &HTTPHandler{
 		sessionUseCase:           deps.SessionUseCase,
 		userUseCase:              deps.UserUseCase,
 		accountUseCase:           deps.AccountUseCase,
@@ -60,19 +71,25 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		reactionUseCase:          deps.ReactionUseCase,
 		attachmentUseCase:        deps.AttachmentUseCase,
 		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
-		authGinMiddleware: middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
-			writeHTTPError(c, status, err)
-		}),
+		logger:                   logger,
 	}
+	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
+		writeHTTPError(handler.logger, c, status, err)
+	})
+	return handler
 }
 
 func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
+	r.Use(func(c *gin.Context) {
+		c.Set(httpLoggerContextKey, h.logger)
+		c.Next()
+	})
 	r.HandleMethodNotAllowed = true
 	r.NoMethod(func(c *gin.Context) {
-		writeHTTPError(c, http.StatusMethodNotAllowed, customError.ErrMethodNotAllowed)
+		writeHTTPError(h.logger, c, http.StatusMethodNotAllowed, customError.ErrMethodNotAllowed)
 	})
 	r.NoRoute(func(c *gin.Context) {
-		writeHTTPError(c, http.StatusNotFound, customError.ErrNotFound)
+		writeHTTPError(h.logger, c, http.StatusNotFound, customError.ErrNotFound)
 	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -1305,10 +1322,10 @@ func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetID int64, tar
 
 func writeUseCaseError(c *gin.Context, err error) {
 	publicErr := customError.Public(err)
-	writeHTTPError(c, statusForError(err), publicErr)
+	writeHTTPError(loggerFromContext(c), c, statusForError(err), publicErr)
 }
 
-func writeHTTPError(c *gin.Context, status int, err error) {
+func writeHTTPError(logger port.Logger, c *gin.Context, status int, err error) {
 	publicErr := customError.Public(err)
 	logAttrs := []any{
 		"method", c.Request.Method,
@@ -1324,11 +1341,22 @@ func writeHTTPError(c *gin.Context, status int, err error) {
 		logAttrs = append(logAttrs, "user_id", userID)
 	}
 	if status >= http.StatusInternalServerError {
-		slog.Error("request failed", logAttrs...)
+		logger.Error("request failed", logAttrs...)
 	} else {
-		slog.Warn("request failed", logAttrs...)
+		logger.Warn("request failed", logAttrs...)
 	}
 	c.AbortWithStatusJSON(status, errorResponse{Error: publicErr.Error()})
+}
+
+func loggerFromContext(c *gin.Context) port.Logger {
+	if c != nil {
+		if v, ok := c.Get(httpLoggerContextKey); ok {
+			if logger, ok := v.(port.Logger); ok && logger != nil {
+				return logger
+			}
+		}
+	}
+	return noopLogger{}
 }
 
 func statusForError(err error) int {

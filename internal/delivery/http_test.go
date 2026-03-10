@@ -124,6 +124,14 @@ func (f *fakeAccountUseCase) DeleteMyAccount(userID int64, password string) erro
 	return nil
 }
 
+type spyLogger struct {
+	warns  int
+	errors int
+}
+
+func (l *spyLogger) Warn(string, ...any)  { l.warns++ }
+func (l *spyLogger) Error(string, ...any) { l.errors++ }
+
 type fakeBoardUseCase struct {
 	getBoards   func(limit int, lastID int64) (*model.BoardList, error)
 	createBoard func(userID int64, name, description string) (int64, error)
@@ -1440,4 +1448,29 @@ func TestHTTP_NotFound(t *testing.T) {
 	rr := doJSONRequest(t, handler, http.MethodGet, "/unknown", nil)
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 	assert.JSONEq(t, `{"error":"not found"}`, rr.Body.String())
+}
+
+func TestHTTP_NotFound_UsesInjectedLogger(t *testing.T) {
+	user := &fakeUserUseCase{}
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	logger := &spyLogger{}
+	handler := NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:    sessionUseCase,
+		UserUseCase:       user,
+		AccountUseCase:    &fakeAccountUseCase{},
+		BoardUseCase:      &fakeBoardUseCase{},
+		PostUseCase:       &fakePostUseCase{},
+		CommentUseCase:    &fakeCommentUseCase{},
+		ReactionUseCase:   &fakeReactionUseCase{},
+		AttachmentUseCase: &fakeAttachmentUseCase{},
+		Logger:            logger,
+	}).Handler
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/unknown", nil)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.Equal(t, 1, logger.warns)
+	assert.Equal(t, 0, logger.errors)
 }

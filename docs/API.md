@@ -123,6 +123,7 @@
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
   - 응답에는 본문에 바로 넣을 수 있는 `embed_markdown`이 포함됩니다.
+  - `embed_markdown`의 alt text는 filename을 그대로 노출하되, Markdown-safe 형태로 escape 됩니다.
   - 메타데이터 저장에 실패하면 이미 저장한 파일은 즉시 롤백을 시도합니다.
   - 허용 타입: `image/png`, `image/jpeg`, `image/jpg`, `image/gif`, `image/webp`
   - 최대 크기: `storage.attachment.maxUploadSizeBytes` 설정값

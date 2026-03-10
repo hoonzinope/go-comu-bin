@@ -112,6 +112,7 @@ func main() {
 		ReactionUseCase:          reactionUseCase,
 		AttachmentUseCase:        attachmentUseCase,
 		AttachmentUploadMaxBytes: cfg.Storage.Attachment.MaxUploadSizeBytes,
+		Logger:                   appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)
 	if err := server.ListenAndServe(); err != nil {

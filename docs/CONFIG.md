@@ -77,9 +77,9 @@ jobs:
 - `storage.object.secretKey`: provider가 `object`일 때 필수
 - `storage.attachment.maxUploadSizeBytes`: `> 0`
 - `storage.attachment.imageOptimization.jpegQuality`: `1..100`
-- `jobs.attachmentCleanup.intervalSeconds`: `> 0`
-- `jobs.attachmentCleanup.gracePeriodSeconds`: `> 0`
-- `jobs.attachmentCleanup.batchSize`: `> 0`
+- `jobs.attachmentCleanup.intervalSeconds`: `jobs.enabled=true` 이고 `jobs.attachmentCleanup.enabled=true`일 때 `> 0`
+- `jobs.attachmentCleanup.gracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.attachmentCleanup.enabled=true`일 때 `> 0`
+- `jobs.attachmentCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.attachmentCleanup.enabled=true`일 때 `> 0`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
 
