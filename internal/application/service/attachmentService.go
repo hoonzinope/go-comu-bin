@@ -134,8 +134,11 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || content == nil {
 		return nil, customError.ErrInvalidInput
 	}
-	data, err := io.ReadAll(content)
+	data, err := readUploadContent(content, s.maxUploadSizeBytes)
 	if err != nil {
+		if errors.Is(err, errAttachmentTooLarge) {
+			return nil, customError.ErrInvalidInput
+		}
 		return nil, customError.Wrap(customError.ErrInternalServerError, "read upload content", err)
 	}
 	if err := validateAttachmentUpload(fileName, contentType, data, s.maxUploadSizeBytes); err != nil {
@@ -482,4 +485,21 @@ func newAttachmentKeySuffix() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+var errAttachmentTooLarge = errors.New("attachment too large")
+
+func readUploadContent(content io.Reader, maxUploadSizeBytes int64) ([]byte, error) {
+	if maxUploadSizeBytes <= 0 {
+		return io.ReadAll(content)
+	}
+	limited := &io.LimitedReader{R: content, N: maxUploadSizeBytes + 1}
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxUploadSizeBytes {
+		return nil, errAttachmentTooLarge
+	}
+	return data, nil
 }

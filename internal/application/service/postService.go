@@ -203,68 +203,7 @@ func (s *PostService) GetPostsByTag(tagName string, limit int, lastID int64) (*m
 func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 	cacheKey := key.PostDetail(id)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.DetailTTLSeconds, func() (interface{}, error) {
-		post, err := s.postRepository.SelectPostByID(id)
-		if err != nil {
-			return nil, customError.WrapRepository("select post by id for post detail", err)
-		}
-		if post == nil {
-			return nil, customError.ErrPostNotFound
-		}
-		reactions, err := s.reactionRepository.GetByTarget(post.ID, entity.ReactionTargetPost)
-		if err != nil {
-			return nil, customError.WrapRepository("select post reactions for post detail", err)
-		}
-		comments, commentsHasMore, err := s.visibleCommentsForDetail(post.ID, commentDefaultLimit)
-		if err != nil {
-			return nil, err
-		}
-
-		commentDetails := make([]*model.CommentDetail, len(comments))
-		for i, comment := range comments {
-			commentReactions, err := s.reactionRepository.GetByTarget(comment.ID, entity.ReactionTargetComment)
-			if err != nil {
-				return nil, customError.WrapRepository("select comment reactions for post detail", err)
-			}
-			commentModel, err := s.commentFromEntity(comment)
-			if err != nil {
-				return nil, err
-			}
-			commentReactionModels, err := s.reactionsFromEntities(commentReactions)
-			if err != nil {
-				return nil, err
-			}
-			commentDetails[i] = &model.CommentDetail{
-				Comment:   commentModel,
-				Reactions: commentReactionModels,
-			}
-		}
-
-		postModel, err := s.postFromEntity(post)
-		if err != nil {
-			return nil, err
-		}
-		tags, err := s.tagsForPost(post.ID)
-		if err != nil {
-			return nil, err
-		}
-		attachmentEntities, err := s.attachmentRepository.SelectByPostID(post.ID)
-		if err != nil {
-			return nil, customError.WrapRepository("select attachments for post detail", err)
-		}
-		attachments := attachmentsFromEntities(attachmentEntities)
-		reactionModels, err := s.reactionsFromEntities(reactions)
-		if err != nil {
-			return nil, err
-		}
-
-		return &model.PostDetail{
-			Post:            postModel,
-			Tags:            tags,
-			Attachments:     attachments,
-			Comments:        commentDetails,
-			CommentsHasMore: commentsHasMore,
-			Reactions:       reactionModels,
-		}, nil
+		return s.loadPostDetail(id)
 	})
 	if err != nil {
 		return nil, normalizeCacheLoadError("load post detail cache", err)
@@ -274,6 +213,79 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 		return nil, customError.Mark(customError.ErrCacheFailure, "decode post detail cache payload")
 	}
 	return detail, nil
+}
+
+func (s *PostService) loadPostDetail(id int64) (*model.PostDetail, error) {
+	post, err := s.postRepository.SelectPostByID(id)
+	if err != nil {
+		return nil, customError.WrapRepository("select post by id for post detail", err)
+	}
+	if post == nil {
+		return nil, customError.ErrPostNotFound
+	}
+
+	postReactions, err := s.reactionRepository.GetByTarget(post.ID, entity.ReactionTargetPost)
+	if err != nil {
+		return nil, customError.WrapRepository("select post reactions for post detail", err)
+	}
+	comments, commentsHasMore, err := s.visibleCommentsForDetail(post.ID, commentDefaultLimit)
+	if err != nil {
+		return nil, err
+	}
+	commentIDs := make([]int64, 0, len(comments))
+	for _, comment := range comments {
+		commentIDs = append(commentIDs, comment.ID)
+	}
+	commentReactionsByID, err := s.reactionRepository.GetByTargets(commentIDs, entity.ReactionTargetComment)
+	if err != nil {
+		return nil, customError.WrapRepository("select comment reactions for post detail", err)
+	}
+	userUUIDs, err := s.userUUIDsForPostDetail(post, comments, postReactions, commentReactionsByID)
+	if err != nil {
+		return nil, err
+	}
+
+	commentDetails := make([]*model.CommentDetail, len(comments))
+	for i, comment := range comments {
+		commentModel, err := s.commentModelFromEntity(comment, userUUIDs)
+		if err != nil {
+			return nil, err
+		}
+		commentReactionModels, err := s.reactionsFromEntitiesWithUUIDs(commentReactionsByID[comment.ID], userUUIDs)
+		if err != nil {
+			return nil, err
+		}
+		commentDetails[i] = &model.CommentDetail{
+			Comment:   commentModel,
+			Reactions: commentReactionModels,
+		}
+	}
+
+	postModel, err := s.postModelFromEntity(post, userUUIDs)
+	if err != nil {
+		return nil, err
+	}
+	tags, err := s.tagsForPost(post.ID)
+	if err != nil {
+		return nil, err
+	}
+	attachmentEntities, err := s.attachmentRepository.SelectByPostID(post.ID)
+	if err != nil {
+		return nil, customError.WrapRepository("select attachments for post detail", err)
+	}
+	reactionModels, err := s.reactionsFromEntitiesWithUUIDs(postReactions, userUUIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.PostDetail{
+		Post:            &postModel,
+		Tags:            tags,
+		Attachments:     attachmentsFromEntities(attachmentEntities),
+		Comments:        commentDetails,
+		CommentsHasMore: commentsHasMore,
+		Reactions:       reactionModels,
+	}, nil
 }
 
 func (s *PostService) PublishPost(id, authorID int64) error {
@@ -357,6 +369,22 @@ func (s *PostService) postFromEntity(post *entity.Post) (*model.Post, error) {
 	return &postModel, nil
 }
 
+func (s *PostService) userUUIDsForPostDetail(post *entity.Post, comments []*entity.Comment, postReactions []*entity.Reaction, commentReactionsByID map[int64][]*entity.Reaction) (map[int64]string, error) {
+	userIDs := []int64{post.AuthorID}
+	for _, comment := range comments {
+		userIDs = append(userIDs, comment.AuthorID)
+	}
+	for _, reaction := range postReactions {
+		userIDs = append(userIDs, reaction.UserID)
+	}
+	for _, reactions := range commentReactionsByID {
+		for _, reaction := range reactions {
+			userIDs = append(userIDs, reaction.UserID)
+		}
+	}
+	return userUUIDsByIDs(s.userRepository, userIDs)
+}
+
 func (s *PostService) postModelFromEntity(post *entity.Post, authorUUIDs map[int64]string) (model.Post, error) {
 	authorUUID, ok := authorUUIDs[post.AuthorID]
 	if !ok {
@@ -372,6 +400,10 @@ func (s *PostService) commentFromEntity(comment *entity.Comment) (*model.Comment
 	if err != nil {
 		return nil, err
 	}
+	return s.commentModelFromEntity(comment, authorUUIDs)
+}
+
+func (s *PostService) commentModelFromEntity(comment *entity.Comment, authorUUIDs map[int64]string) (*model.Comment, error) {
 	authorUUID, ok := authorUUIDs[comment.AuthorID]
 	if !ok {
 		return nil, customError.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
@@ -386,6 +418,10 @@ func (s *PostService) reactionsFromEntities(reactions []*entity.Reaction) ([]mod
 	if err != nil {
 		return nil, err
 	}
+	return s.reactionsFromEntitiesWithUUIDs(reactions, userUUIDs)
+}
+
+func (s *PostService) reactionsFromEntitiesWithUUIDs(reactions []*entity.Reaction, userUUIDs map[int64]string) ([]model.Reaction, error) {
 	out := make([]model.Reaction, 0, len(reactions))
 	for _, reaction := range reactions {
 		userUUID, ok := userUUIDs[reaction.UserID]

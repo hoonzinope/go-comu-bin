@@ -36,9 +36,8 @@ func NewUserService(userRepository port.UserRepository, passwordHasher port.Pass
 }
 
 func (s *UserService) SignUp(username, password string) (string, error) {
-	// 회원가입 로직 구현
-	// duplicate username check
-	if strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
+	username = normalizeUsername(username)
+	if username == "" || strings.TrimSpace(password) == "" {
 		return "", customError.ErrInvalidInput
 	}
 	hashedPassword, err := s.passwordHasher.Hash(password)
@@ -95,6 +94,10 @@ func (s *UserService) DeleteMe(userID int64, password string) error {
 }
 
 func (s *UserService) VerifyCredentials(username, password string) (int64, error) {
+	username = normalizeUsername(username)
+	if username == "" {
+		return 0, customError.ErrInvalidCredential
+	}
 	existingUser, err := s.userRepository.SelectUserByUsername(username)
 	if err != nil {
 		return 0, customError.WrapRepository("select user by username for verify credentials", err)
@@ -214,4 +217,8 @@ func (s *UserService) UnsuspendUser(adminID int64, targetUserUUID string) error 
 		}
 		return nil
 	})
+}
+
+func normalizeUsername(username string) string {
+	return strings.TrimSpace(username)
 }

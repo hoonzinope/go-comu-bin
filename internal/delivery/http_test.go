@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -670,6 +671,36 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 	assert.Equal(t, "hello", rr.Body.String())
 }
 
+func TestHandleGetAttachmentFile_EscapesContentDispositionFilename(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			getPostAttachmentFile: func(postID, attachmentID int64) (*model.AttachmentFile, error) {
+				return &model.AttachmentFile{
+					FileName:    "a\"b.png",
+					ContentType: "image/png",
+					SizeBytes:   5,
+					Content:     io.NopCloser(strings.NewReader("hello")),
+				}, nil
+			},
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	mediaType, params, err := mime.ParseMediaType(rr.Header().Get("Content-Disposition"))
+	require.NoError(t, err)
+	assert.Equal(t, "inline", mediaType)
+	assert.Equal(t, "a\"b.png", params["filename"])
+}
+
 func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{},
@@ -699,6 +730,25 @@ func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
 	assert.Equal(t, http.StatusNotModified, rr.Code)
 	assert.Empty(t, rr.Body.String())
 	assert.Equal(t, "\"att-8-5-0\"", rr.Header().Get("ETag"))
+}
+
+func TestHandleGetAttachmentFile_NotFound(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.JSONEq(t, `{"error":"attachment not found"}`, rr.Body.String())
 }
 
 func TestHandleGetAttachmentPreview_Success(t *testing.T) {
@@ -740,6 +790,67 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 	assert.Equal(t, "private, no-store", rr.Header().Get("Cache-Control"))
 	assert.Contains(t, rr.Header().Get("Content-Disposition"), "a.png")
 	assert.Equal(t, "hello", rr.Body.String())
+}
+
+func TestHandleGetAttachmentPreview_EscapesContentDispositionFilename(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			getPostAttachmentPreviewFile: func(postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+				return &model.AttachmentFile{
+					FileName:    "a\"b.png",
+					ContentType: "image/png",
+					SizeBytes:   5,
+					Content:     io.NopCloser(strings.NewReader("hello")),
+				}, nil
+			},
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/preview", nil)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	mediaType, params, err := mime.ParseMediaType(rr.Header().Get("Content-Disposition"))
+	require.NoError(t, err)
+	assert.Equal(t, "inline", mediaType)
+	assert.Equal(t, "a\"b.png", params["filename"])
+}
+
+func TestHandleGetAttachmentPreview_NotFound(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/preview", nil)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.JSONEq(t, `{"error":"attachment not found"}`, rr.Body.String())
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
@@ -805,6 +916,27 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, rr.Code)
 }
 
+func TestHTTP_UserLogin_Success(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/login", map[string]string{
+		"username": "alice",
+		"password": "pw",
+	})
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Header().Get("Authorization"), "Bearer ")
+}
+
+func TestHTTP_UserLogout_Success(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/logout", map[string]any{}, 1)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.JSONEq(t, `{"logout":"ok"}`, rr.Body.String())
+}
+
 func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
 	reaction := &fakeReactionUseCase{
 		setReaction: func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
@@ -867,6 +999,17 @@ func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
+func TestHTTP_UserSignUp_TrailingJSONRejected(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(`{"username":"alice","password":"pw"}{"extra":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
 func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 	account := &fakeAccountUseCase{
 		deleteMyAccount: func(userID int64, password string) error {
@@ -908,6 +1051,135 @@ func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 		"description": "desc",
 	}, 2)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+func TestHTTP_BoardDelete_Success(t *testing.T) {
+	board := &fakeBoardUseCase{
+		deleteBoard: func(id, userID int64) error {
+			assert.Equal(t, int64(3), id)
+			assert.Equal(t, int64(1), userID)
+			return nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, board, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/boards/3", nil, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_BoardPostsGet_Success(t *testing.T) {
+	post := &fakePostUseCase{
+		getPostsList: func(boardID int64, limit int, lastID int64) (*model.PostList, error) {
+			assert.Equal(t, int64(3), boardID)
+			assert.Equal(t, 2, limit)
+			assert.Equal(t, int64(9), lastID)
+			return &model.PostList{
+				Posts: []model.Post{{ID: 4, Title: "hello", Content: "world", AuthorUUID: "user-uuid", BoardID: 3}},
+				Limit: limit, LastID: lastID, HasMore: false,
+			}, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/boards/3/posts?limit=2&last_id=9", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"author_uuid":"user-uuid"`)
+}
+
+func TestHTTP_PostDetailPut_Success(t *testing.T) {
+	post := &fakePostUseCase{
+		updatePost: func(id, authorID int64, title, content string, tags []string) error {
+			assert.Equal(t, int64(3), id)
+			assert.Equal(t, int64(1), authorID)
+			assert.Equal(t, "hello", title)
+			assert.Equal(t, "world", content)
+			assert.Equal(t, []string{"go"}, tags)
+			return nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/posts/3", map[string]any{
+		"title":   "hello",
+		"content": "world",
+		"tags":    []string{"go"},
+	}, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_PostDetailDelete_Success(t *testing.T) {
+	post := &fakePostUseCase{
+		deletePost: func(id, authorID int64) error {
+			assert.Equal(t, int64(3), id)
+			assert.Equal(t, int64(1), authorID)
+			return nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/3", nil, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_PostCommentsGet_Success(t *testing.T) {
+	comment := &fakeCommentUseCase{
+		getCommentsByPost: func(postID int64, limit int, lastID int64) (*model.CommentList, error) {
+			assert.Equal(t, int64(3), postID)
+			assert.Equal(t, 2, limit)
+			assert.Equal(t, int64(9), lastID)
+			return &model.CommentList{
+				Comments: []model.Comment{{ID: 4, Content: "nice", AuthorUUID: "user-uuid", PostID: 3}},
+				Limit:    limit, LastID: lastID,
+			}, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, comment, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/comments?limit=2&last_id=9", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"author_uuid":"user-uuid"`)
+}
+
+func TestHTTP_CommentPut_Success(t *testing.T) {
+	comment := &fakeCommentUseCase{
+		updateComment: func(id, authorID int64, content string) error {
+			assert.Equal(t, int64(3), id)
+			assert.Equal(t, int64(1), authorID)
+			assert.Equal(t, "updated", content)
+			return nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, comment, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/comments/3", map[string]any{
+		"content": "updated",
+	}, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_CommentDelete_Success(t *testing.T) {
+	comment := &fakeCommentUseCase{
+		deleteComment: func(id, authorID int64) error {
+			assert.Equal(t, int64(3), id)
+			assert.Equal(t, int64(1), authorID)
+			return nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, comment, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/comments/3", nil, 1)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_BoardGet_BadLimit(t *testing.T) {

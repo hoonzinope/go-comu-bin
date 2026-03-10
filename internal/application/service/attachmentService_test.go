@@ -23,6 +23,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type countingReader struct {
+	data      []byte
+	offset    int
+	readBytes int
+}
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	if r.offset >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.offset:])
+	r.offset += n
+	r.readBytes += n
+	return n, nil
+}
+
 type spyFileStorage struct {
 	savedKey     string
 	savedContent string
@@ -550,6 +566,22 @@ func TestAttachmentService_UploadPostAttachment_UsesConfiguredMaxSize(t *testing
 	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
+
+func TestAttachmentService_UploadPostAttachment_StopsReadingAfterConfiguredLimit(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, newTestCache(), 4, newTestAuthorizationPolicy())
+
+	reader := &countingReader{data: append(testPNGBytes(), bytes.Repeat([]byte{1}, 1024)...)}
+	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", reader)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.Equal(t, 5, reader.readBytes)
+	assert.Empty(t, storage.savedKey)
 }
 
 func TestAttachmentService_UploadPostAttachment_UsesUniqueSanitizedStorageKey(t *testing.T) {

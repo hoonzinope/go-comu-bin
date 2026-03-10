@@ -115,6 +115,26 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 		require.Len(t, otherTarget, 1)
 	})
 
+	t.Run("get by targets groups reactions per target", func(t *testing.T) {
+		repo := newRepository()
+
+		_, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		require.NoError(t, err)
+		_, _, _, err = repo.SetUserTargetReaction(8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
+		require.NoError(t, err)
+		_, _, _, err = repo.SetUserTargetReaction(9, 11, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		require.NoError(t, err)
+		_, _, _, err = repo.SetUserTargetReaction(10, 12, entity.ReactionTargetComment, entity.ReactionTypeLike)
+		require.NoError(t, err)
+
+		grouped, err := repo.GetByTargets([]int64{10, 11, 99}, entity.ReactionTargetPost)
+		require.NoError(t, err)
+		require.Len(t, grouped[10], 2)
+		require.Len(t, grouped[11], 1)
+		_, exists := grouped[99]
+		assert.False(t, exists)
+	})
+
 	t.Run("concurrent set preserves uniqueness", func(t *testing.T) {
 		repo := newRepository()
 

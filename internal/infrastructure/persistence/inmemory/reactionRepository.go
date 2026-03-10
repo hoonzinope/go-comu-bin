@@ -153,6 +153,34 @@ func (r *ReactionRepository) getByTarget(targetID int64, targetType entity.React
 	return reactions, nil
 }
 
+func (r *ReactionRepository) GetByTargets(targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.getByTargets(targetIDs, targetType)
+}
+
+func (r *ReactionRepository) getByTargets(targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	targetSet := make(map[int64]struct{}, len(targetIDs))
+	for _, targetID := range targetIDs {
+		targetSet[targetID] = struct{}{}
+	}
+
+	out := make(map[int64][]*entity.Reaction, len(targetSet))
+	for _, reaction := range r.reactionDB.Data {
+		if reaction.TargetType != targetType {
+			continue
+		}
+		if _, ok := targetSet[reaction.TargetID]; !ok {
+			continue
+		}
+		out[reaction.TargetID] = append(out[reaction.TargetID], cloneReaction(reaction))
+	}
+	return out, nil
+}
+
 func userTargetKey(userID, targetID int64, targetType entity.ReactionTargetType) string {
 	return string(targetType) + ":" + strconv.FormatInt(targetID, 10) + ":" + strconv.FormatInt(userID, 10)
 }
