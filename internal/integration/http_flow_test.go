@@ -123,10 +123,9 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 
 	userRepository := inmemory.NewUserRepository()
 	boardRepository := inmemory.NewBoardRepository()
-	postRepository := inmemory.NewPostRepository()
 	tagRepository := inmemory.NewTagRepository()
 	postTagRepository := inmemory.NewPostTagRepository()
-	postRepository.AttachTagRepositories(tagRepository, postTagRepository)
+	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()

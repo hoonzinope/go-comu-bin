@@ -30,7 +30,7 @@ type postRepositoryState struct {
 	Data map[int64]*entity.Post
 }
 
-func NewPostRepository() *PostRepository {
+func NewPostRepository(tagRepository *TagRepository, postTagRepository *PostTagRepository) *PostRepository {
 	return &PostRepository{
 		coordinator: newTxCoordinator(),
 		postDB: struct {
@@ -40,16 +40,13 @@ func NewPostRepository() *PostRepository {
 			ID:   0,
 			Data: make(map[int64]*entity.Post),
 		},
+		tagRepository:     tagRepository,
+		postTagRepository: postTagRepository,
 	}
 }
 
 func (r *PostRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
-}
-
-func (r *PostRepository) AttachTagRepositories(tagRepository *TagRepository, postTagRepository *PostTagRepository) {
-	r.tagRepository = tagRepository
-	r.postTagRepository = postTagRepository
 }
 
 func (r *PostRepository) Save(post *entity.Post) (int64, error) {

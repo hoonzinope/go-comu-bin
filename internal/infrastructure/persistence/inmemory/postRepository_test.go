@@ -12,12 +12,12 @@ import (
 
 func TestPostRepositoryContract(t *testing.T) {
 	porttest.RunPostRepositoryContractTests(t, func() port.PostRepository {
-		return NewPostRepository()
+		return NewPostRepository(nil, nil)
 	})
 }
 
 func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
-	repo := NewPostRepository()
+	repo := NewPostRepository(nil, nil)
 	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
 	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
 	_, _ = repo.Save(testPost("p3", "c3", 2, 2))
@@ -30,7 +30,7 @@ func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
 }
 
 func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
-	repo := NewPostRepository()
+	repo := NewPostRepository(nil, nil)
 	id, err := repo.Save(testPost("title", "content", 1, 1))
 	require.NoError(t, err)
 
@@ -54,7 +54,7 @@ func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
 }
 
 func TestPostRepository_Delete_SoftDeletesAndExcludesFromList(t *testing.T) {
-	repo := NewPostRepository()
+	repo := NewPostRepository(nil, nil)
 	id, err := repo.Save(testPost("title", "content", 1, 1))
 	require.NoError(t, err)
 
@@ -70,7 +70,7 @@ func TestPostRepository_Delete_SoftDeletesAndExcludesFromList(t *testing.T) {
 }
 
 func TestPostRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
-	repo := NewPostRepository()
+	repo := NewPostRepository(nil, nil)
 	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
 	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
 
@@ -80,7 +80,7 @@ func TestPostRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
 }
 
 func TestPostRepository_PaginationWithCursor_ReturnsNextChunk(t *testing.T) {
-	repo := NewPostRepository()
+	repo := NewPostRepository(nil, nil)
 	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
 	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
 	_, _ = repo.Save(testPost("p3", "c3", 1, 1))
@@ -93,7 +93,7 @@ func TestPostRepository_PaginationWithCursor_ReturnsNextChunk(t *testing.T) {
 }
 
 func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
-	repo := NewPostRepository()
+	repo := NewPostRepository(nil, nil)
 	p := testPost("x", "y", 1, 1)
 	p.ID = 999
 
@@ -102,10 +102,9 @@ func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 }
 
 func TestPostRepository_SelectPublishedPostsByTagName_FiltersBeforePagination(t *testing.T) {
-	repo := NewPostRepository()
 	tagRepo := NewTagRepository()
 	postTagRepo := NewPostTagRepository()
-	repo.AttachTagRepositories(tagRepo, postTagRepo)
+	repo := NewPostRepository(tagRepo, postTagRepo)
 
 	tagID, err := tagRepo.Save(entity.NewTag("go"))
 	require.NoError(t, err)
@@ -140,7 +139,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_FiltersBeforePagination(t 
 }
 
 func TestPostRepository_SelectPublishedPostsByTagName_WithoutTagDependenciesErrors(t *testing.T) {
-	repo := NewPostRepository()
+	repo := NewPostRepository(nil, nil)
 
 	posts, err := repo.SelectPublishedPostsByTagName("go", 10, 0)
 	require.Error(t, err)
