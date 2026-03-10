@@ -61,4 +61,6 @@ coverage.xml
 tmp/
 
 # codex
+.agents/
 .codex/
+.documents/
