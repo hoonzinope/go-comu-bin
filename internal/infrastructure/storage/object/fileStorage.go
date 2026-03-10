@@ -1,7 +1,6 @@
 package object
 
 import (
-	"bytes"
 	"context"
 	"io"
 
@@ -39,11 +38,11 @@ func NewFileStorageWithClient(client objectClient, bucket string) *FileStorage {
 }
 
 func (s *FileStorage) Save(key string, content io.Reader) error {
-	data, err := io.ReadAll(content)
-	if err != nil {
-		return err
+	size := int64(-1)
+	if sized, ok := content.(interface{ Len() int }); ok {
+		size = int64(sized.Len())
 	}
-	_, err = s.client.PutObject(context.Background(), s.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{})
+	_, err := s.client.PutObject(context.Background(), s.bucket, key, content, size, minio.PutObjectOptions{})
 	return err
 }
 

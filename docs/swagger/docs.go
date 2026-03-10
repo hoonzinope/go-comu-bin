@@ -186,7 +186,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/delivery.attachmentUploadResponse"
+                            "$ref": "#/definitions/delivery.idResponse"
                         }
                     },
                     "400": {
@@ -1107,7 +1107,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
+                            "$ref": "#/definitions/delivery.attachmentUploadResponse"
                         }
                     },
                     "400": {

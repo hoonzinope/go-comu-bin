@@ -15,13 +15,15 @@ type fakeObjectClient struct {
 	putBucket string
 	putKey    string
 	putBody   string
+	putSize   int64
+	putReader io.Reader
 	getBucket string
 	getKey    string
 	delBucket string
 	delKey    string
 }
 
-func (f *fakeObjectClient) PutObject(_ context.Context, bucketName, objectName string, reader io.Reader, _ int64, _ minio.PutObjectOptions) (minio.UploadInfo, error) {
+func (f *fakeObjectClient) PutObject(_ context.Context, bucketName, objectName string, reader io.Reader, objectSize int64, _ minio.PutObjectOptions) (minio.UploadInfo, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return minio.UploadInfo{}, err
@@ -29,6 +31,8 @@ func (f *fakeObjectClient) PutObject(_ context.Context, bucketName, objectName s
 	f.putBucket = bucketName
 	f.putKey = objectName
 	f.putBody = string(data)
+	f.putSize = objectSize
+	f.putReader = reader
 	return minio.UploadInfo{}, nil
 }
 
@@ -56,4 +60,15 @@ func TestFileStorage_SaveAndDelete(t *testing.T) {
 	require.NoError(t, storage.Delete("posts/1/a.png"))
 	assert.Equal(t, "attachments", client.delBucket)
 	assert.Equal(t, "posts/1/a.png", client.delKey)
+}
+
+func TestFileStorage_Save_UsesSizedReaderWithoutCopyWhenAvailable(t *testing.T) {
+	client := &fakeObjectClient{}
+	storage := NewFileStorageWithClient(client, "attachments")
+	reader := bytes.NewReader([]byte("hello"))
+
+	require.NoError(t, storage.Save("posts/1/a.png", reader))
+
+	assert.Same(t, reader, client.putReader)
+	assert.EqualValues(t, 5, client.putSize)
 }

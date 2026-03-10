@@ -420,7 +420,7 @@ func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body boardRequest true "Create board payload"
-// @Success 201 {object} attachmentUploadResponse
+// @Success 201 {object} idResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
@@ -721,7 +721,7 @@ func (h *HTTPHandler) handlePostAttachmentsGet(c *gin.Context) {
 // @Security BearerAuth
 // @Param postID path int true "Post ID"
 // @Param file formData file true "Attachment file"
-// @Success 201 {object} idResponse
+// @Success 201 {object} attachmentUploadResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse

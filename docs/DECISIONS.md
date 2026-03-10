@@ -907,3 +907,38 @@
 - `Makefile`
 - `README.md`
 - `docs/API.md`
+
+## 2026-03-10 - Swagger source annotation과 object storage upload path를 실제 계약에 맞춘다
+
+상태
+
+- decided
+
+배경
+
+- Swagger 산출물 검증을 추가한 뒤에는 generated docs drift뿐 아니라 source annotation 자체의 정확성도 중요해졌다.
+- attachment upload는 서비스 계층에서 이미 size-bound buffering을 한 번 수행하므로, backend adapter가 같은 payload를 다시 full copy하면 메모리 피크가 불필요하게 커진다.
+
+관찰
+
+- 일부 handler의 Swagger `@Success` annotation이 실제 응답 DTO와 어긋나면 생성 산출물도 일관되게 틀린 계약을 노출한다.
+- object storage adapter는 `PutObject` 직전에 `io.ReadAll`로 전체 파일을 다시 읽고 있다.
+
+결론
+
+- Swagger source annotation은 handler가 실제로 반환하는 response DTO와 정확히 일치시킨다.
+- attachment upload의 object backend 경로는 가능한 경우 원본 reader와 known size를 그대로 `PutObject`에 전달해 추가 full copy를 피한다.
+- 이 두 계약은 테스트로 고정한다.
+
+후속 작업
+
+- Swagger response schema 회귀 테스트 추가
+- object storage adapter 전달 방식 회귀 테스트 추가
+- handler annotation 수정 및 swagger regenerate
+- object storage adapter 최적화
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `docs/swagger/`
+- `internal/infrastructure/storage/object/fileStorage.go`

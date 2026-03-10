@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -122,6 +124,52 @@ func (f *fakeAccountUseCase) DeleteMyAccount(userID int64, password string) erro
 		return f.deleteMyAccount(userID, password)
 	}
 	return nil
+}
+
+func TestSwaggerContracts_ResponseSchemasMatchHandlers(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "swagger", "swagger.json"))
+	require.NoError(t, err)
+
+	var spec map[string]any
+	require.NoError(t, json.Unmarshal(data, &spec))
+
+	paths, ok := spec["paths"].(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(
+		t,
+		"#/definitions/delivery.idResponse",
+		swaggerResponseSchemaRef(t, paths, "/boards", "post", "201"),
+	)
+	assert.Equal(
+		t,
+		"#/definitions/delivery.attachmentUploadResponse",
+		swaggerResponseSchemaRef(t, paths, "/posts/{postID}/attachments/upload", "post", "201"),
+	)
+}
+
+func swaggerResponseSchemaRef(t *testing.T, paths map[string]any, path, method, status string) string {
+	t.Helper()
+
+	pathItem, ok := paths[path].(map[string]any)
+	require.True(t, ok, "missing swagger path: %s", path)
+
+	operation, ok := pathItem[method].(map[string]any)
+	require.True(t, ok, "missing swagger method %s %s", method, path)
+
+	responses, ok := operation["responses"].(map[string]any)
+	require.True(t, ok, "missing swagger responses for %s %s", method, path)
+
+	response, ok := responses[status].(map[string]any)
+	require.True(t, ok, "missing swagger response %s for %s %s", status, method, path)
+
+	schema, ok := response["schema"].(map[string]any)
+	require.True(t, ok, "missing swagger schema %s for %s %s", status, method, path)
+
+	ref, ok := schema["$ref"].(string)
+	require.True(t, ok, "missing swagger schema ref %s for %s %s", status, method, path)
+
+	return ref
 }
 
 type spyLogger struct {

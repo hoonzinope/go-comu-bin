@@ -6,10 +6,14 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 cd "$repo_root"
 
+before_status=$(git status --porcelain -- docs/swagger)
+
 make swagger
 
-if ! git diff --quiet -- docs/swagger; then
-  echo "Swagger output is out of date. Run 'make swagger' and commit docs/swagger changes."
+after_status=$(git status --porcelain -- docs/swagger)
+
+if [ "$before_status" != "$after_status" ]; then
+  echo "Swagger output is out of date. Run 'make swagger' and review docs/swagger changes."
   git diff -- docs/swagger
   exit 1
 fi
