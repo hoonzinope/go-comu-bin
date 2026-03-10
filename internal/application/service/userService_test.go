@@ -30,6 +30,30 @@ func TestUserService_SignUp_Duplicate(t *testing.T) {
 	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
 }
 
+func TestUserService_SignUp_TrimsUsernameBeforePersist(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+
+	_, err := svc.SignUp(" alice ", "pw")
+	require.NoError(t, err)
+
+	user, err := repositories.user.SelectUserByUsername("alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, "alice", user.Name)
+}
+
+func TestUserService_SignUp_DuplicateAfterWhitespaceNormalization(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	_, err := svc.SignUp("alice", "pw")
+	require.NoError(t, err)
+
+	_, err = svc.SignUp(" alice ", "pw2")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
+}
+
 func TestUserService_SignUp_InvalidInput(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
@@ -140,6 +164,17 @@ func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	_, err := svc.VerifyCredentials("alice", "wrong")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
+}
+
+func TestUserService_VerifyCredentials_TrimsUsername(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	_, err := svc.SignUp("alice", "pw")
+	require.NoError(t, err)
+
+	userID, err := svc.VerifyCredentials(" alice ", "pw")
+	require.NoError(t, err)
+	assert.NotZero(t, userID)
 }
 
 func TestUserService_SuspendUser_Success(t *testing.T) {

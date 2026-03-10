@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -774,7 +775,7 @@ func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
 			return
 		}
 	}
-	c.Header("Content-Disposition", "inline; filename=\""+file.FileName+"\"")
+	c.Header("Content-Disposition", attachmentContentDisposition(file.FileName))
 	c.DataFromReader(http.StatusOK, file.SizeBytes, file.ContentType, file.Content, nil)
 }
 
@@ -812,7 +813,7 @@ func (h *HTTPHandler) handlePostAttachmentPreviewGet(c *gin.Context) {
 	}
 	defer file.Content.Close()
 	c.Header("Cache-Control", "private, no-store")
-	c.Header("Content-Disposition", "inline; filename=\""+file.FileName+"\"")
+	c.Header("Content-Disposition", attachmentContentDisposition(file.FileName))
 	c.DataFromReader(http.StatusOK, file.SizeBytes, file.ContentType, file.Content, nil)
 }
 
@@ -1319,6 +1320,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, customError.ErrTagNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, customError.ErrAttachmentNotFound):
+		return http.StatusNotFound
 	case errors.Is(err, customError.ErrCommentNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, customError.ErrReactionNotFound):
@@ -1398,9 +1401,23 @@ func decodeJSON(c *gin.Context, dst any) error {
 	if err := dec.Decode(dst); err != nil {
 		return err
 	}
-	return nil
+	if err := dec.Decode(&struct{}{}); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	return errors.New("invalid JSON body")
 }
 
 func badRequest(c *gin.Context, err error) {
 	c.JSON(http.StatusBadRequest, errorResponse{Error: err.Error()})
+}
+
+func attachmentContentDisposition(fileName string) string {
+	value := mime.FormatMediaType("inline", map[string]string{"filename": fileName})
+	if value == "" {
+		return "inline"
+	}
+	return value
 }

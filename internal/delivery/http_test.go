@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -670,6 +671,36 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 	assert.Equal(t, "hello", rr.Body.String())
 }
 
+func TestHandleGetAttachmentFile_EscapesContentDispositionFilename(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			getPostAttachmentFile: func(postID, attachmentID int64) (*model.AttachmentFile, error) {
+				return &model.AttachmentFile{
+					FileName:    "a\"b.png",
+					ContentType: "image/png",
+					SizeBytes:   5,
+					Content:     io.NopCloser(strings.NewReader("hello")),
+				}, nil
+			},
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	mediaType, params, err := mime.ParseMediaType(rr.Header().Get("Content-Disposition"))
+	require.NoError(t, err)
+	assert.Equal(t, "inline", mediaType)
+	assert.Equal(t, "a\"b.png", params["filename"])
+}
+
 func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{},
@@ -699,6 +730,25 @@ func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
 	assert.Equal(t, http.StatusNotModified, rr.Code)
 	assert.Empty(t, rr.Body.String())
 	assert.Equal(t, "\"att-8-5-0\"", rr.Header().Get("ETag"))
+}
+
+func TestHandleGetAttachmentFile_NotFound(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.JSONEq(t, `{"error":"attachment not found"}`, rr.Body.String())
 }
 
 func TestHandleGetAttachmentPreview_Success(t *testing.T) {
@@ -740,6 +790,67 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 	assert.Equal(t, "private, no-store", rr.Header().Get("Cache-Control"))
 	assert.Contains(t, rr.Header().Get("Content-Disposition"), "a.png")
 	assert.Equal(t, "hello", rr.Body.String())
+}
+
+func TestHandleGetAttachmentPreview_EscapesContentDispositionFilename(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{
+			getPostAttachmentPreviewFile: func(postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+				return &model.AttachmentFile{
+					FileName:    "a\"b.png",
+					ContentType: "image/png",
+					SizeBytes:   5,
+					Content:     io.NopCloser(strings.NewReader("hello")),
+				}, nil
+			},
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/preview", nil)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	mediaType, params, err := mime.ParseMediaType(rr.Header().Get("Content-Disposition"))
+	require.NoError(t, err)
+	assert.Equal(t, "inline", mediaType)
+	assert.Equal(t, "a\"b.png", params["filename"])
+}
+
+func TestHandleGetAttachmentPreview_NotFound(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/preview", nil)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.JSONEq(t, `{"error":"attachment not found"}`, rr.Body.String())
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
@@ -864,6 +975,17 @@ func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
 		"password": "pw",
 		"extra":    "unknown",
 	})
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHTTP_UserSignUp_TrailingJSONRejected(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(`{"username":"alice","password":"pw"}{"extra":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
