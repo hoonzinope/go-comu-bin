@@ -8,6 +8,7 @@
 
 - UI: `GET /swagger/index.html`
 - 스펙 생성: `make swagger` (`docs/swagger` 산출물 갱신)
+- 정합성 검증: `make verify` 또는 `./scripts/verify-swagger.sh`
 
 모든 엔드포인트는 `/api/v1` prefix를 사용합니다.
 

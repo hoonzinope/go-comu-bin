@@ -871,3 +871,39 @@
 - `internal/application/service/postService.go`
 - `internal/application/service/post_detail_query.go`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-10 - Swagger 검증은 명시적 품질 게이트에만 포함한다
+
+상태
+
+- decided
+
+배경
+
+- Swagger 산출물(`docs/swagger`)은 public API 문서 surface지만, 런타임 필수 자산은 아니다.
+- 매 커밋/실행/테스트마다 swagger 재생성을 강제하면 개발 루프를 불필요하게 느리게 만들 수 있다.
+- 반대로 아무 검증도 없으면 annotation과 generated docs가 쉽게 드리프트한다.
+
+관찰
+
+- 이 저장소는 이미 `테스트 -> 문서 정합성 반영` 순서를 중시하므로, Swagger도 최종 검증 단계에 포함하는 것이 자연스럽다.
+- 특정 CI 또는 Git hosting 기능에 의존하지 않는 로컬 검증 진입점이 있으면 환경 독립적으로 같은 규칙을 적용할 수 있다.
+
+결론
+
+- Swagger 검증은 일상 개발 루프 전체에 강제하지 않고 `make verify` 같은 명시적 품질 게이트에만 포함한다.
+- 로컬에서 선택적으로 사용할 수 있는 git hook 스크립트는 제공하되 자동 설치는 하지 않는다.
+- 검증 스크립트는 `make swagger` 실행 후 `docs/swagger` diff가 남는지 검사하는 방식으로 유지한다.
+
+후속 작업
+
+- `scripts/verify-swagger.sh` 추가
+- `make verify`에 test/vet/swagger verification 연결
+- 선택적 `githooks/pre-commit` 및 설치 스크립트 추가
+- README와 문서에 사용법 반영
+
+관련 문서/코드
+
+- `Makefile`
+- `README.md`
+- `docs/API.md`

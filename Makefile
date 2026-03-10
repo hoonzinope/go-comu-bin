@@ -3,13 +3,15 @@ BIN_DIR := bin
 BIN_PATH := $(BIN_DIR)/$(APP_NAME)
 MAIN_PKG := ./cmd
 
-.PHONY: help build run swagger test test-unit test-integration clean
+.PHONY: help build run swagger verify verify-swagger test test-unit test-integration clean
 
 help:
 	@echo "Available targets:"
 	@echo "  make build            Build single binary -> $(BIN_PATH)"
 	@echo "  make run              Build and run binary"
 	@echo "  make swagger          Generate OpenAPI docs (docs/swagger)"
+	@echo "  make verify-swagger   Verify docs/swagger is in sync"
+	@echo "  make verify           Run tests, vet, and swagger verification"
 	@echo "  make test             Run all tests"
 	@echo "  make test-unit        Run unit tests"
 	@echo "  make test-integration Run integration tests"
@@ -24,6 +26,13 @@ run: build
 
 swagger:
 	go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g cmd/main.go -o docs/swagger --parseInternal
+
+verify-swagger:
+	./scripts/verify-swagger.sh
+
+verify: test
+	go vet ./...
+	./scripts/verify-swagger.sh
 
 test:
 	go test ./...

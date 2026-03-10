@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+
+set -eu
+
+exec "$(git rev-parse --show-toplevel)/scripts/verify-swagger.sh"

@@ -53,5 +53,9 @@ make help
 make build
 make run
 make swagger
+make verify
 make test
 ```
+
+Swagger 정합성 검증은 일상 개발 루프에 강제하지 않고, 명시적 품질 게이트인 `make verify`에만 포함합니다.
+선택적으로 로컬 pre-commit 훅을 설치하려면 `./scripts/install-githooks.sh`를 실행하면 됩니다.
