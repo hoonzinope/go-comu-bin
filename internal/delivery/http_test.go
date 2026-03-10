@@ -981,6 +981,7 @@ func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/signup", nil)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
 }
 
 func TestHTTP_UserSignUp_Conflict(t *testing.T) {
@@ -1353,6 +1354,7 @@ func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/1/reactions/me", nil)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
 }
 
 func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
@@ -1437,4 +1439,5 @@ func TestHTTP_NotFound(t *testing.T) {
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/unknown", nil)
 	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.JSONEq(t, `{"error":"not found"}`, rr.Body.String())
 }

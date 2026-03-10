@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -63,7 +65,7 @@ func TestAuthWithSessionRejectsInvalidToken(t *testing.T) {
 	r := gin.New()
 	r.Use(AuthWithSession(stubSessionUseCase{
 		validate: func(token string) (int64, error) {
-			return 0, assert.AnError
+			return 0, customError.ErrInvalidToken
 		},
 	}, func(c *gin.Context, status int, err error) {
 		c.AbortWithStatus(status)
@@ -78,4 +80,26 @@ func TestAuthWithSessionRejectsInvalidToken(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func TestAuthWithSessionReturnsInternalServerErrorOnRepositoryFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AuthWithSession(stubSessionUseCase{
+		validate: func(token string) (int64, error) {
+			return 0, customError.WrapRepository("lookup session", errors.New("cache down"))
+		},
+	}, func(c *gin.Context, status int, err error) {
+		c.AbortWithStatus(status)
+	}))
+	r.GET("/", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer abc")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 }

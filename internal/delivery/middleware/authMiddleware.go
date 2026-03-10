@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -19,13 +20,26 @@ func AuthWithSession(sessionUseCase port.SessionUseCase, writeError func(*gin.Co
 
 		userID, err := sessionUseCase.ValidateTokenToId(token)
 		if err != nil {
-			writeError(c, http.StatusUnauthorized, err)
+			writeError(c, statusForAuthError(err), err)
 			return
 		}
 
 		c.Set("user_id", userID)
 		c.Set("auth_token", token)
 		c.Next()
+	}
+}
+
+func statusForAuthError(err error) int {
+	switch {
+	case errors.Is(err, customError.ErrMissingAuthHeader):
+		return http.StatusUnauthorized
+	case errors.Is(err, customError.ErrInvalidToken):
+		return http.StatusUnauthorized
+	case errors.Is(err, customError.ErrUnauthorized):
+		return http.StatusUnauthorized
+	default:
+		return http.StatusInternalServerError
 	}
 }
 

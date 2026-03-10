@@ -142,10 +142,11 @@ func validate(cfg *Config) error {
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("invalid delivery.http.port: %d (must be 1..65535)", port)
 	}
-	if cfg.Delivery.HTTP.Auth.Secret == "" {
+	secret := strings.TrimSpace(cfg.Delivery.HTTP.Auth.Secret)
+	if secret == "" {
 		return fmt.Errorf("invalid delivery.http.auth.secret: cannot be empty")
 	}
-	if cfg.Delivery.HTTP.Auth.Secret == placeholderJWTSecret {
+	if secret == placeholderJWTSecret {
 		return fmt.Errorf("invalid delivery.http.auth.secret: placeholder secret is not allowed")
 	}
 	if cfg.Cache.ListTTLSeconds <= 0 {

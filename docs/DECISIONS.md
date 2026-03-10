@@ -763,3 +763,40 @@
 - `internal/config/config.go`
 - `internal/application/service/cache_invalidation.go`
 - `internal/application/service/accountService.go`
+
+## 2026-03-10 - delivery 에러 분류는 transport/auth/internal 실패를 구분한다
+
+상태
+
+- decided
+
+배경
+
+- framework-level `404/405`는 현재 올바른 status를 내려도 body는 `internal server error`로 응답된다.
+- auth middleware는 invalid token과 repository/cache failure를 모두 `401 Unauthorized`로 처리한다.
+- config 검증은 placeholder secret은 거부하지만 공백-only secret은 허용한다.
+
+관찰
+
+- transport miss와 use case/internal failure는 같은 에러 분류가 아니다.
+- 인증 실패와 인증 경계 내부 장애를 같은 status로 숨기면 운영 문제를 진단하기 어려워진다.
+- secret 검증은 trim 후 빈 값도 거부해야 bootstrap credential 검증과 같은 강도를 유지한다.
+
+결론
+
+- `NoRoute`, `NoMethod`는 public sentinel error를 사용해 status/body/log 의미를 일치시킨다.
+- auth middleware는 `missing/invalid token -> 401`, `repository/cache failure -> 500`으로 구분한다.
+- JWT secret 검증은 `strings.TrimSpace(...)` 기준으로 수행한다.
+
+후속 작업
+
+- delivery 테스트에 `404/405` body 검증 추가
+- auth middleware 테스트에 infra failure -> `500` 분기 추가
+- config 테스트에 whitespace-only secret 거부 케이스 추가
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `internal/delivery/middleware/authMiddleware.go`
+- `internal/application/service/sessionService.go`
+- `internal/config/config.go`

@@ -20,6 +20,8 @@ func TestPublicMapsKnownErrors(t *testing.T) {
 	assert.ErrorIs(t, Public(WrapRepository("lookup", ErrAttachmentNotFound)), ErrAttachmentNotFound)
 	assert.ErrorIs(t, Public(WrapToken("issue", ErrInvalidToken)), ErrInvalidToken)
 	assert.ErrorIs(t, Public(WrapCache("load", ErrForbidden)), ErrForbidden)
+	assert.ErrorIs(t, Public(ErrNotFound), ErrNotFound)
+	assert.ErrorIs(t, Public(ErrMethodNotAllowed), ErrMethodNotAllowed)
 }
 
 func TestPublicFallsBackToInternalServerError(t *testing.T) {

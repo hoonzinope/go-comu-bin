@@ -11,6 +11,8 @@ var (
 	ErrForbidden           = errors.New("forbidden")
 	ErrUnauthorized        = errors.New("unauthorized")
 	ErrInvalidInput        = errors.New("invalid input")
+	ErrNotFound            = errors.New("not found")
+	ErrMethodNotAllowed    = errors.New("method not allowed")
 	ErrInvalidCredential   = errors.New("invalid credential")
 	ErrMissingAuthHeader   = errors.New("missing Authorization header")
 	ErrInvalidToken        = errors.New("invalid token")
@@ -82,6 +84,10 @@ func Public(err error) error {
 		return ErrUserSuspended
 	case errors.Is(err, ErrInvalidInput):
 		return ErrInvalidInput
+	case errors.Is(err, ErrNotFound):
+		return ErrNotFound
+	case errors.Is(err, ErrMethodNotAllowed):
+		return ErrMethodNotAllowed
 	case errors.Is(err, ErrUnauthorized):
 		return ErrUnauthorized
 	case errors.Is(err, ErrMissingAuthHeader):

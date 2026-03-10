@@ -69,10 +69,10 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.HandleMethodNotAllowed = true
 	r.NoMethod(func(c *gin.Context) {
-		writeHTTPError(c, http.StatusMethodNotAllowed, errors.New("method not allowed"))
+		writeHTTPError(c, http.StatusMethodNotAllowed, customError.ErrMethodNotAllowed)
 	})
 	r.NoRoute(func(c *gin.Context) {
-		writeHTTPError(c, http.StatusNotFound, errors.New("not found"))
+		writeHTTPError(c, http.StatusNotFound, customError.ErrNotFound)
 	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
