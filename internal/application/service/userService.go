@@ -167,17 +167,19 @@ func (s *UserService) GetUserSuspension(adminID int64, targetUserUUID string) (*
 		if target == nil {
 			return customError.ErrUserNotFound
 		}
-		if target.Status == entity.UserStatusSuspended && !target.IsSuspended() {
-			target.Unsuspend()
-			if err := tx.UserRepository().Update(target); err != nil {
-				return customError.WrapRepository("refresh expired user suspension", err)
-			}
+		status := target.Status
+		reason := target.SuspensionReason
+		suspendedUntil := target.SuspendedUntil
+		if status == entity.UserStatusSuspended && !target.IsSuspended() {
+			status = entity.UserStatusActive
+			reason = ""
+			suspendedUntil = nil
 		}
 		suspension = &model.UserSuspension{
 			UserUUID:       target.UUID,
-			Status:         target.Status,
-			Reason:         target.SuspensionReason,
-			SuspendedUntil: target.SuspendedUntil,
+			Status:         status,
+			Reason:         reason,
+			SuspendedUntil: suspendedUntil,
 		}
 		return nil
 	})

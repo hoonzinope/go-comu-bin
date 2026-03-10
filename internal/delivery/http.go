@@ -54,17 +54,19 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		commentUseCase:    deps.CommentUseCase,
 		reactionUseCase:   deps.ReactionUseCase,
 		attachmentUseCase: deps.AttachmentUseCase,
-		authGinMiddleware: middleware.AuthWithSession(deps.SessionUseCase),
+		authGinMiddleware: middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
+			writeHTTPError(c, status, err)
+		}),
 	}
 }
 
 func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.HandleMethodNotAllowed = true
 	r.NoMethod(func(c *gin.Context) {
-		c.JSON(http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		writeHTTPError(c, http.StatusMethodNotAllowed, errors.New("method not allowed"))
 	})
 	r.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, errorResponse{Error: "not found"})
+		writeHTTPError(c, http.StatusNotFound, errors.New("not found"))
 	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -1275,7 +1277,11 @@ func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetID int64, tar
 
 func writeUseCaseError(c *gin.Context, err error) {
 	publicErr := customError.Public(err)
-	status := statusForError(err)
+	writeHTTPError(c, statusForError(err), publicErr)
+}
+
+func writeHTTPError(c *gin.Context, status int, err error) {
+	publicErr := customError.Public(err)
 	logAttrs := []any{
 		"method", c.Request.Method,
 		"path", c.FullPath(),
@@ -1294,7 +1300,7 @@ func writeUseCaseError(c *gin.Context, err error) {
 	} else {
 		slog.Warn("request failed", logAttrs...)
 	}
-	c.JSON(status, errorResponse{Error: publicErr.Error()})
+	c.AbortWithStatusJSON(status, errorResponse{Error: publicErr.Error()})
 }
 
 func statusForError(err error) int {

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -8,17 +9,17 @@ import (
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
 
-func AuthWithSession(sessionUseCase port.SessionUseCase) gin.HandlerFunc {
+func AuthWithSession(sessionUseCase port.SessionUseCase, writeError func(*gin.Context, int, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, err := extractToken(c.GetHeader("Authorization"))
 		if err != nil {
-			c.AbortWithStatusJSON(401, gin.H{"error": customError.Public(err).Error()})
+			writeError(c, http.StatusUnauthorized, err)
 			return
 		}
 
 		userID, err := sessionUseCase.ValidateTokenToId(token)
 		if err != nil {
-			c.AbortWithStatusJSON(401, gin.H{"error": customError.Public(err).Error()})
+			writeError(c, http.StatusUnauthorized, err)
 			return
 		}
 
