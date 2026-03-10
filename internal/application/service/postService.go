@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"regexp"
 	"sort"
 	"strconv"
@@ -329,9 +330,13 @@ func (s *PostService) PublishPost(id, authorID int64) error {
 }
 
 func (s *PostService) postsFromEntities(posts []*entity.Post) ([]model.Post, error) {
+	authorUUIDs, err := userUUIDsForPosts(s.userRepository, posts)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]model.Post, 0, len(posts))
 	for _, post := range posts {
-		postModel, err := s.postModelFromEntity(post)
+		postModel, err := s.postModelFromEntity(post, authorUUIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -341,17 +346,21 @@ func (s *PostService) postsFromEntities(posts []*entity.Post) ([]model.Post, err
 }
 
 func (s *PostService) postFromEntity(post *entity.Post) (*model.Post, error) {
-	postModel, err := s.postModelFromEntity(post)
+	authorUUIDs, err := userUUIDsByIDs(s.userRepository, []int64{post.AuthorID})
+	if err != nil {
+		return nil, err
+	}
+	postModel, err := s.postModelFromEntity(post, authorUUIDs)
 	if err != nil {
 		return nil, err
 	}
 	return &postModel, nil
 }
 
-func (s *PostService) postModelFromEntity(post *entity.Post) (model.Post, error) {
-	authorUUID, err := userUUIDByID(s.userRepository, post.AuthorID)
-	if err != nil {
-		return model.Post{}, err
+func (s *PostService) postModelFromEntity(post *entity.Post, authorUUIDs map[int64]string) (model.Post, error) {
+	authorUUID, ok := authorUUIDs[post.AuthorID]
+	if !ok {
+		return model.Post{}, customError.WrapRepository("select users by ids including deleted", errors.New("post author not found"))
 	}
 	out := mapper.PostFromEntity(post)
 	out.AuthorUUID = authorUUID
@@ -359,9 +368,13 @@ func (s *PostService) postModelFromEntity(post *entity.Post) (model.Post, error)
 }
 
 func (s *PostService) commentFromEntity(comment *entity.Comment) (*model.Comment, error) {
-	authorUUID, err := userUUIDByID(s.userRepository, comment.AuthorID)
+	authorUUIDs, err := userUUIDsByIDs(s.userRepository, []int64{comment.AuthorID})
 	if err != nil {
 		return nil, err
+	}
+	authorUUID, ok := authorUUIDs[comment.AuthorID]
+	if !ok {
+		return nil, customError.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
 	}
 	out := mapper.CommentFromEntity(comment)
 	out.AuthorUUID = authorUUID
@@ -369,11 +382,15 @@ func (s *PostService) commentFromEntity(comment *entity.Comment) (*model.Comment
 }
 
 func (s *PostService) reactionsFromEntities(reactions []*entity.Reaction) ([]model.Reaction, error) {
+	userUUIDs, err := userUUIDsForReactions(s.userRepository, reactions)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]model.Reaction, 0, len(reactions))
 	for _, reaction := range reactions {
-		userUUID, err := userUUIDByID(s.userRepository, reaction.UserID)
-		if err != nil {
-			return nil, err
+		userUUID, ok := userUUIDs[reaction.UserID]
+		if !ok {
+			return nil, customError.WrapRepository("select users by ids including deleted", errors.New("reaction user not found"))
 		}
 		reactionModel := mapper.ReactionFromEntity(reaction)
 		reactionModel.UserUUID = userUUID

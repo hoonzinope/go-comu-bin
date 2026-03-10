@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
@@ -143,11 +144,15 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 }
 
 func (s *CommentService) commentsFromEntities(comments []*entity.Comment) ([]model.Comment, error) {
+	authorUUIDs, err := userUUIDsForComments(s.userRepository, comments)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]model.Comment, 0, len(comments))
 	for _, comment := range comments {
-		authorUUID, err := userUUIDByID(s.userRepository, comment.AuthorID)
-		if err != nil {
-			return nil, err
+		authorUUID, ok := authorUUIDs[comment.AuthorID]
+		if !ok {
+			return nil, customError.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
 		}
 		commentModel := mapper.CommentFromEntity(comment)
 		commentModel.AuthorUUID = authorUUID

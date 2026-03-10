@@ -144,4 +144,23 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.NotNil(t, includingDeleted)
 		assert.Equal(t, user.UUID, includingDeleted.UUID)
 	})
+
+	t.Run("select users by ids including deleted returns unique requested users", func(t *testing.T) {
+		repo := newRepository()
+
+		aliceID, err := repo.Save(entity.NewUser("alice", "pw"))
+		require.NoError(t, err)
+		bob := entity.NewUser("bob", "pw")
+		bobID, err := repo.Save(bob)
+		require.NoError(t, err)
+		bob.ID = bobID
+		bob.SoftDelete()
+		require.NoError(t, repo.Update(bob))
+
+		users, err := repo.SelectUsersByIDsIncludingDeleted([]int64{bobID, aliceID, bobID, 999})
+		require.NoError(t, err)
+		require.Len(t, users, 2)
+		assert.Equal(t, "alice", users[aliceID].Name)
+		assert.Equal(t, bob.UUID, users[bobID].UUID)
+	})
 }

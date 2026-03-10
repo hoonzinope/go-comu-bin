@@ -36,6 +36,10 @@ func (r *stubUserRepository) SelectUserByIDIncludingDeleted(id int64) (*entity.U
 	return nil, nil
 }
 
+func (r *stubUserRepository) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+	return map[int64]*entity.User{}, nil
+}
+
 func (r *stubUserRepository) Update(user *entity.User) error {
 	return nil
 }

@@ -132,6 +132,28 @@ func (r *UserRepository) selectUserByIDIncludingDeleted(id int64) (*entity.User,
 	return nil, nil
 }
 
+func (r *UserRepository) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectUsersByIDsIncludingDeleted(ids)
+}
+
+func (r *UserRepository) selectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[int64]*entity.User, len(ids))
+	for _, id := range ids {
+		if _, exists := out[id]; exists {
+			continue
+		}
+		if user, exists := r.userDB.Data[id]; exists {
+			out[id] = cloneUser(user)
+		}
+	}
+	return out, nil
+}
+
 func (r *UserRepository) Update(user *entity.User) error {
 	r.coordinator.enter()
 	defer r.coordinator.exit()

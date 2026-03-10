@@ -150,6 +150,9 @@ func (r userTxRepository) SelectUserByID(id int64) (*entity.User, error) {
 func (r userTxRepository) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
 	return r.repo.selectUserByIDIncludingDeleted(id)
 }
+func (r userTxRepository) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+	return r.repo.selectUsersByIDsIncludingDeleted(ids)
+}
 func (r userTxRepository) Update(user *entity.User) error {
 	return r.repo.update(user)
 }

@@ -32,3 +32,20 @@ func TestUserRepository_SelectReturnsClone(t *testing.T) {
 	require.NotNil(t, again)
 	assert.Equal(t, "alice", again.Name)
 }
+
+func TestUserRepository_SelectUsersByIDsIncludingDeleted_ReturnsClones(t *testing.T) {
+	repo := NewUserRepository()
+	id, err := repo.Save(entity.NewUser("alice", "pw"))
+	require.NoError(t, err)
+
+	users, err := repo.SelectUsersByIDsIncludingDeleted([]int64{id})
+	require.NoError(t, err)
+	require.Contains(t, users, id)
+
+	users[id].Name = "mutated"
+
+	again, err := repo.SelectUsersByIDsIncludingDeleted([]int64{id})
+	require.NoError(t, err)
+	require.Contains(t, again, id)
+	assert.Equal(t, "alice", again[id].Name)
+}

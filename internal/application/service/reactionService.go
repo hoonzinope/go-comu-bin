@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
@@ -126,11 +128,15 @@ func (s *ReactionService) withReactionTransaction(userID, targetID int64, target
 }
 
 func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([]model.Reaction, error) {
+	userUUIDs, err := userUUIDsForReactions(s.userRepository, reactions)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]model.Reaction, 0, len(reactions))
 	for _, reaction := range reactions {
-		userUUID, err := userUUIDByID(s.userRepository, reaction.UserID)
-		if err != nil {
-			return nil, err
+		userUUID, ok := userUUIDs[reaction.UserID]
+		if !ok {
+			return nil, customError.WrapRepository("select users by ids including deleted", errors.New("reaction user not found"))
 		}
 		reactionModel := mapper.ReactionFromEntity(reaction)
 		reactionModel.UserUUID = userUUID
