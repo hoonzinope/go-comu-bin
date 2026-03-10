@@ -130,6 +130,24 @@ func (r *CommentRepository) selectCommentsIncludingDeleted(postID int64) ([]*ent
 	return comments, nil
 }
 
+func (r *CommentRepository) SelectVisibleComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectVisibleComments(postID, limit, lastID)
+}
+
+func (r *CommentRepository) selectVisibleComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	comments, err := r.selectCommentsIncludingDeleted(postID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := filterVisibleCommentsForRepository(comments, lastID)
+	if limit > 0 && len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+	return filtered, nil
+}
+
 func (r *CommentRepository) Update(comment *entity.Comment) error {
 	r.coordinator.enter()
 	defer r.coordinator.exit()
@@ -206,4 +224,28 @@ func cloneComment(comment *entity.Comment) *entity.Comment {
 		out.DeletedAt = &deletedAt
 	}
 	return &out
+}
+
+func filterVisibleCommentsForRepository(comments []*entity.Comment, lastID int64) []*entity.Comment {
+	activeChildParentIDs := make(map[int64]struct{})
+	for _, comment := range comments {
+		if comment.Status == entity.CommentStatusActive && comment.ParentID != nil {
+			activeChildParentIDs[*comment.ParentID] = struct{}{}
+		}
+	}
+
+	filtered := make([]*entity.Comment, 0, len(comments))
+	for _, comment := range comments {
+		if lastID > 0 && comment.ID >= lastID {
+			continue
+		}
+		if comment.Status == entity.CommentStatusActive {
+			filtered = append(filtered, comment)
+			continue
+		}
+		if _, ok := activeChildParentIDs[comment.ID]; ok {
+			filtered = append(filtered, comment)
+		}
+	}
+	return filtered
 }

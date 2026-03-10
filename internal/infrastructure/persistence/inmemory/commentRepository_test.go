@@ -5,6 +5,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/porttest"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -115,4 +116,19 @@ func TestCommentRepository_SelectReturnsClone(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, again)
 	assert.Equal(t, "hello", again.Content)
+}
+
+func TestCommentRepository_SelectVisibleComments_AppliesTombstoneFilteringAndLimit(t *testing.T) {
+	repo := NewCommentRepository()
+	parentID, err := repo.Save(testComment("parent", 1, 1))
+	require.NoError(t, err)
+	require.NoError(t, repo.Delete(parentID))
+
+	_, err = repo.Save(entity.NewComment("reply", 2, 1, &parentID))
+	require.NoError(t, err)
+
+	visible, err := repo.SelectVisibleComments(1, 1, 0)
+	require.NoError(t, err)
+	require.Len(t, visible, 1)
+	assert.Equal(t, entity.CommentStatusActive, visible[0].Status)
 }

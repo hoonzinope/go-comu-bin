@@ -104,9 +104,9 @@ func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64
 			return nil, customError.ErrPostNotFound
 		}
 
-		comments, err := s.visibleCommentsByPost(postID, limit, lastID)
+		comments, err := s.commentRepository.SelectVisibleComments(postID, limit+1, lastID)
 		if err != nil {
-			return nil, err
+			return nil, customError.WrapRepository("select visible comments by post", err)
 		}
 		hasMore := false
 		var nextLastID *int64
@@ -239,16 +239,4 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 	bestEffortCacheDeleteByPrefix(s.cache, key.CommentListPrefix(postID), "invalidate comment list after delete comment")
 	bestEffortCacheDelete(s.cache, key.PostDetail(postID), "invalidate post detail after delete comment")
 	return nil
-}
-
-func (s *CommentService) visibleCommentsByPost(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
-	comments, err := s.commentRepository.SelectCommentsIncludingDeleted(postID)
-	if err != nil {
-		return nil, customError.WrapRepository("select comments by post including deleted", err)
-	}
-	filtered := filterVisibleComments(comments, lastID)
-	if limit > 0 && len(filtered) > limit+1 {
-		filtered = filtered[:limit+1]
-	}
-	return filtered, nil
 }

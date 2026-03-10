@@ -829,15 +829,14 @@ func (s *PostService) orphanPostAttachments(repo port.AttachmentRepository, post
 }
 
 func (s *PostService) visibleCommentsForDetail(postID int64, limit int) ([]*entity.Comment, bool, error) {
-	comments, err := s.commentRepository.SelectCommentsIncludingDeleted(postID)
+	comments, err := s.commentRepository.SelectVisibleComments(postID, limit+1, 0)
 	if err != nil {
-		return nil, false, customError.WrapRepository("select comments for post detail including deleted", err)
+		return nil, false, customError.WrapRepository("select visible comments for post detail", err)
 	}
-	filtered := filterVisibleComments(comments, 0)
 	hasMore := false
-	if limit > 0 && len(filtered) > limit {
+	if limit > 0 && len(comments) > limit {
 		hasMore = true
-		filtered = filtered[:limit]
+		comments = comments[:limit]
 	}
-	return filtered, hasMore, nil
+	return comments, hasMore, nil
 }

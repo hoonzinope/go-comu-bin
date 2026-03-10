@@ -244,6 +244,9 @@ func (r commentTxRepository) SelectComments(postID int64, limit int, lastID int6
 func (r commentTxRepository) SelectCommentsIncludingDeleted(postID int64) ([]*entity.Comment, error) {
 	return r.repo.selectCommentsIncludingDeleted(postID)
 }
+func (r commentTxRepository) SelectVisibleComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	return r.repo.selectVisibleComments(postID, limit, lastID)
+}
 func (r commentTxRepository) Update(comment *entity.Comment) error {
 	return r.repo.update(comment)
 }

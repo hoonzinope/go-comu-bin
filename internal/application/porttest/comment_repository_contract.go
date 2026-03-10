@@ -92,4 +92,22 @@ func RunCommentRepositoryContractTests(t *testing.T, newRepository func() port.C
 		require.Len(t, comments, 1)
 		assert.Equal(t, firstID, comments[0].ID)
 	})
+
+	t.Run("select visible comments keeps deleted parent tombstone when active reply exists", func(t *testing.T) {
+		repo := newRepository()
+
+		parentID, err := repo.Save(entity.NewComment("parent", 1, 10, nil))
+		require.NoError(t, err)
+		require.NoError(t, repo.Delete(parentID))
+
+		_, err = repo.Save(entity.NewComment("reply", 2, 10, &parentID))
+		require.NoError(t, err)
+
+		visible, err := repo.SelectVisibleComments(10, 10, 0)
+		require.NoError(t, err)
+		require.Len(t, visible, 2)
+		assert.Equal(t, entity.CommentStatusActive, visible[0].Status)
+		assert.Equal(t, parentID, visible[1].ID)
+		assert.Equal(t, entity.CommentStatusDeleted, visible[1].Status)
+	})
 }
