@@ -2,6 +2,7 @@ package inprocess
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 )
@@ -15,9 +16,16 @@ type EventBus struct {
 	logger      port.Logger
 	queue       chan []port.DomainEvent
 	workerCount int
+	enqueued    atomic.Uint64
+	dropped     atomic.Uint64
 }
 
 type Option func(*EventBus)
+
+type Stats struct {
+	EnqueuedCount uint64
+	DroppedCount  uint64
+}
 
 const (
 	defaultQueueSize   = 256
@@ -69,7 +77,9 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 	copied := append([]port.DomainEvent(nil), events...)
 	select {
 	case b.queue <- copied:
+		b.enqueued.Add(1)
 	default:
+		b.dropped.Add(1)
 		b.warn("event queue full; dropping events", "count", len(copied))
 	}
 }
@@ -120,4 +130,14 @@ func (b *EventBus) warn(msg string, args ...any) {
 		return
 	}
 	b.logger.Warn(msg, args...)
+}
+
+func (b *EventBus) Stats() Stats {
+	if b == nil {
+		return Stats{}
+	}
+	return Stats{
+		EnqueuedCount: b.enqueued.Load(),
+		DroppedCount:  b.dropped.Load(),
+	}
 }

@@ -22,7 +22,7 @@ import (
 )
 
 const multipartRequestOverheadBytes int64 = 1 << 20
-const maxJSONBodyBytes int64 = 1 << 20
+const defaultMaxJSONBodyBytes int64 = 1 << 20
 const httpLoggerContextKey = "http_logger"
 
 type noopLogger struct{}
@@ -40,6 +40,7 @@ type HTTPHandler struct {
 	reactionUseCase          port.ReactionUseCase
 	attachmentUseCase        port.AttachmentUseCase
 	attachmentUploadMaxBytes int64
+	maxJSONBodyBytes         int64
 	logger                   port.Logger
 	authGinMiddleware        gin.HandlerFunc
 }
@@ -54,6 +55,7 @@ type HTTPDependencies struct {
 	ReactionUseCase          port.ReactionUseCase
 	AttachmentUseCase        port.AttachmentUseCase
 	AttachmentUploadMaxBytes int64
+	MaxJSONBodyBytes         int64
 	Logger                   port.Logger
 }
 
@@ -72,12 +74,20 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		reactionUseCase:          deps.ReactionUseCase,
 		attachmentUseCase:        deps.AttachmentUseCase,
 		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
+		maxJSONBodyBytes:         resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
 		logger:                   logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
 		writeHTTPError(handler.logger, c, status, err)
 	})
 	return handler
+}
+
+func resolveMaxJSONBodyBytes(size int64) int64 {
+	if size <= 0 {
+		return defaultMaxJSONBodyBytes
+	}
+	return size
 }
 
 func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
@@ -170,7 +180,7 @@ func (h *HTTPHandler) requireAuthUserID(c *gin.Context) (int64, bool) {
 // @Router /signup [post]
 func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 	var req userCredentialRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -200,7 +210,7 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 // @Router /auth/login [post]
 func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 	var req userCredentialRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -263,7 +273,7 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		return
 	}
 	var req passwordOnlyRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -342,7 +352,7 @@ func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
 		return
 	}
 	var req userSuspensionRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -433,7 +443,7 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 		return
 	}
 	var req boardRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -472,7 +482,7 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 	}
 
 	var req boardRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -576,7 +586,7 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 		return
 	}
 	var req postRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -617,7 +627,7 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 		return
 	}
 	var req postRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -953,7 +963,7 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 		return
 	}
 	var req postRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -1053,7 +1063,7 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 		return
 	}
 	var req commentRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -1096,7 +1106,7 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 		return
 	}
 	var req commentRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -1288,7 +1298,7 @@ func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, target
 		return
 	}
 	var req reactionRequest
-	if err := decodeJSON(c, &req); err != nil {
+	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
 	}
@@ -1450,10 +1460,10 @@ func parsePathID(c *gin.Context, paramName, resourceName string) (int64, bool) {
 	return id, true
 }
 
-func decodeJSON(c *gin.Context, dst any) error {
+func (h *HTTPHandler) decodeJSON(c *gin.Context, dst any) error {
 	defer c.Request.Body.Close()
-	if maxJSONBodyBytes > 0 {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxJSONBodyBytes)
+	if h != nil && h.maxJSONBodyBytes > 0 {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.maxJSONBodyBytes)
 	}
 	dec := json.NewDecoder(c.Request.Body)
 	dec.DisallowUnknownFields()

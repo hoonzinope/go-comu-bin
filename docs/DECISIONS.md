@@ -279,6 +279,46 @@
 - `internal/infrastructure/persistence/inmemory/unitOfWork.go`
 - `internal/infrastructure/job/inprocess/runner_test.go`
 
+## 2026-03-11 - 운영 튜닝 가능성 강화(JSON 제한/이벤트 버스 설정/쓰기 병렬 계측)
+
+상태
+
+- decided
+
+배경
+
+- 안정성 보강 이후에도 운영 관점에서 제한값/처리량을 환경별로 조정할 수 있는 지점이 부족했다.
+- 특히 JSON 바디 제한과 이벤트 버스 큐/워커 수가 코드 기본값에 고정되어 있어 서비스 프로파일별 튜닝이 어렵다.
+- UoW의 write 직렬화는 구조적으로 남아 있어, 개선 전/후를 비교할 수 있는 기준 벤치가 필요하다.
+
+관찰
+
+- JSON 바디 제한은 현재 delivery 내부 상수로 적용된다.
+- 이벤트 버스 queue/worker 기본값은 코드에 있으나 config에서 조절하지 않는다.
+- UoW는 write 트랜잭션을 전역 mutex로 직렬화한다.
+
+결론
+
+- JSON 바디 상한은 config로 승격한다.
+- 이벤트 버스 queue size / worker count를 config로 노출한다.
+- 이벤트 드롭을 테스트 가능/관측 가능하게 stats를 제공한다.
+- UoW는 즉시 동시화 구조를 바꾸기보다 병렬 write 벤치마크를 먼저 도입해 기준선을 만든다.
+
+후속 작업
+
+- `delivery.http.maxJSONBodyBytes` 설정 추가 및 문서 반영
+- `event.inprocess.queueSize`, `event.inprocess.workerCount` 설정 추가 및 wiring
+- 이벤트 버스 드롭 카운터 테스트/노출 추가
+- UoW 병렬 벤치마크 추가
+
+관련 문서/코드
+
+- `internal/config/config.go`
+- `cmd/main.go`
+- `internal/delivery/http.go`
+- `internal/infrastructure/event/inprocess/event_bus.go`
+- `internal/infrastructure/persistence/inmemory/*`
+
 ## 2026-03-08 - 삭제/공개 조회 일관성과 suspension 식별자 계약 정리
 
 상태

@@ -74,7 +74,11 @@ func main() {
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logging.NewSlogLogger(logger)
 	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository)
-	eventBus := eventInProcess.NewEventBus(appLogger)
+	eventBus := eventInProcess.NewEventBus(
+		appLogger,
+		eventInProcess.WithQueueSize(cfg.Event.InProcess.QueueSize),
+		eventInProcess.WithWorkerCount(cfg.Event.InProcess.WorkerCount),
+	)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	eventBus.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	eventBus.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
@@ -122,6 +126,7 @@ func main() {
 		ReactionUseCase:          reactionUseCase,
 		AttachmentUseCase:        attachmentUseCase,
 		AttachmentUploadMaxBytes: cfg.Storage.Attachment.MaxUploadSizeBytes,
+		MaxJSONBodyBytes:         cfg.Delivery.HTTP.MaxJSONBodyBytes,
 		Logger:                   appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)

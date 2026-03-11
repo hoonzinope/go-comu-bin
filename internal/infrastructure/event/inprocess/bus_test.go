@@ -132,5 +132,6 @@ func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return logger.WarnCount() >= 1
 	}, time.Second, 10*time.Millisecond)
+	assert.GreaterOrEqual(t, bus.Stats().DroppedCount, uint64(1))
 	close(release)
 }

@@ -1163,7 +1163,7 @@ func TestHTTP_UserSignUp_TrailingJSONRejected(t *testing.T) {
 func TestHTTP_UserSignUp_OversizedJSONRejected(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	hugeUsername := strings.Repeat("a", int(maxJSONBodyBytes))
+	hugeUsername := strings.Repeat("a", int(defaultMaxJSONBodyBytes))
 	body := `{"username":"` + hugeUsername + `","password":"pw"}`
 	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")

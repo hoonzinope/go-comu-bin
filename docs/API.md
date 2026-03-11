@@ -3,6 +3,7 @@
 인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용합니다.
 로그인 성공 시 응답 헤더 `Authorization`에 `Bearer <token>` 형식으로 토큰이 반환됩니다.
 `Bearer` 스킴이 아니면 인증 실패(`401`)로 처리합니다.
+JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad Request`로 거부합니다.
 
 ## OpenAPI / Swagger
 

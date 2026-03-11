@@ -40,8 +40,14 @@ storage:
 delivery:
   http:
     port: 18577
+    maxJSONBodyBytes: 1048576
     auth:
       secret: "replace-with-real-secret"
+
+event:
+  inprocess:
+    queueSize: 256
+    workerCount: 1
 
 admin:
   bootstrap:
@@ -61,8 +67,11 @@ jobs:
 ## 검증 규칙
 
 - `delivery.http.port`: `1..65535`
+- `delivery.http.maxJSONBodyBytes`: `> 0`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
+- `event.inprocess.queueSize`: `> 0`
+- `event.inprocess.workerCount`: `> 0`
 - `admin.bootstrap.enabled`: 기본 `false`
 - `admin.bootstrap.username`: bootstrap enabled일 때 필수
 - `admin.bootstrap.password`: bootstrap enabled일 때 필수
@@ -86,7 +95,10 @@ jobs:
 ## 사용 위치
 
 - 포트: `cmd/main.go` -> `cfg.Delivery.HTTP.Port`
+- JSON body 최대 크기(bytes): `cmd/main.go` -> `cfg.Delivery.HTTP.MaxJSONBodyBytes`
+  - JSON API 요청 바디가 이 값을 초과하면 `400 Bad Request (request body too large)`를 반환합니다.
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
+- 이벤트 버스 큐/워커: `cmd/main.go` -> `cfg.Event.InProcess.QueueSize`, `cfg.Event.InProcess.WorkerCount`
 - bootstrap admin: `cmd/main.go` -> `cfg.Admin.Bootstrap.*`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`

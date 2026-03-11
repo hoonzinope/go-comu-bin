@@ -45,12 +45,19 @@ type Config struct {
 	} `yaml:"storage"`
 	Delivery struct {
 		HTTP struct {
-			Port int `yaml:"port"`
-			Auth struct {
+			Port             int   `yaml:"port"`
+			MaxJSONBodyBytes int64 `yaml:"maxJSONBodyBytes"`
+			Auth             struct {
 				Secret string `yaml:"secret"`
 			} `yaml:"auth"`
 		} `yaml:"http"`
 	} `yaml:"delivery"`
+	Event struct {
+		InProcess struct {
+			QueueSize   int `yaml:"queueSize"`
+			WorkerCount int `yaml:"workerCount"`
+		} `yaml:"inprocess"`
+	} `yaml:"event"`
 	Jobs struct {
 		Enabled           bool `yaml:"enabled"`
 		AttachmentCleanup struct {
@@ -86,7 +93,10 @@ func Load() (*Config, error) {
 		"storage.attachment.imageOptimization.enabled",
 		"storage.attachment.imageOptimization.jpegQuality",
 		"delivery.http.port",
+		"delivery.http.maxJSONBodyBytes",
 		"delivery.http.auth.secret",
+		"event.inprocess.queueSize",
+		"event.inprocess.workerCount",
 		"jobs.enabled",
 		"jobs.attachmentCleanup.enabled",
 		"jobs.attachmentCleanup.intervalSeconds",
@@ -119,6 +129,9 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.SetDefault("storage.attachment.imageOptimization.enabled", true)
 	v.SetDefault("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.SetDefault("delivery.http.maxJSONBodyBytes", int64(1<<20))
+	v.SetDefault("event.inprocess.queueSize", 256)
+	v.SetDefault("event.inprocess.workerCount", 1)
 	v.SetDefault("jobs.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.intervalSeconds", 600)
@@ -141,6 +154,9 @@ func validate(cfg *Config) error {
 	port := cfg.Delivery.HTTP.Port
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("invalid delivery.http.port: %d (must be 1..65535)", port)
+	}
+	if cfg.Delivery.HTTP.MaxJSONBodyBytes <= 0 {
+		return fmt.Errorf("invalid delivery.http.maxJSONBodyBytes: %d (must be > 0)", cfg.Delivery.HTTP.MaxJSONBodyBytes)
 	}
 	secret := strings.TrimSpace(cfg.Delivery.HTTP.Auth.Secret)
 	if secret == "" {
@@ -181,6 +197,12 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Storage.Attachment.ImageOptimization.JPEGQuality < 1 || cfg.Storage.Attachment.ImageOptimization.JPEGQuality > 100 {
 		return fmt.Errorf("invalid storage.attachment.imageOptimization.jpegQuality: %d (must be 1..100)", cfg.Storage.Attachment.ImageOptimization.JPEGQuality)
+	}
+	if cfg.Event.InProcess.QueueSize <= 0 {
+		return fmt.Errorf("invalid event.inprocess.queueSize: %d (must be > 0)", cfg.Event.InProcess.QueueSize)
+	}
+	if cfg.Event.InProcess.WorkerCount <= 0 {
+		return fmt.Errorf("invalid event.inprocess.workerCount: %d (must be > 0)", cfg.Event.InProcess.WorkerCount)
 	}
 	if cfg.Jobs.Enabled && cfg.Jobs.AttachmentCleanup.Enabled {
 		if cfg.Jobs.AttachmentCleanup.IntervalSeconds <= 0 {

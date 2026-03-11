@@ -21,8 +21,14 @@ storage:
 delivery:
   http:
     port: 18577
+    maxJSONBodyBytes: 1048576
     auth:
       secret: ""
+
+event:
+  inprocess:
+    queueSize: 256
+    workerCount: 1
 
 admin:
   bootstrap:
