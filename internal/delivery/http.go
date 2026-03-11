@@ -22,6 +22,7 @@ import (
 )
 
 const multipartRequestOverheadBytes int64 = 1 << 20
+const maxJSONBodyBytes int64 = 1 << 20
 const httpLoggerContextKey = "http_logger"
 
 type noopLogger struct{}
@@ -1451,12 +1452,23 @@ func parsePathID(c *gin.Context, paramName, resourceName string) (int64, bool) {
 
 func decodeJSON(c *gin.Context, dst any) error {
 	defer c.Request.Body.Close()
+	if maxJSONBodyBytes > 0 {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxJSONBodyBytes)
+	}
 	dec := json.NewDecoder(c.Request.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return errors.New("request body too large")
+		}
 		return err
 	}
 	if err := dec.Decode(&struct{}{}); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return errors.New("request body too large")
+		}
 		if errors.Is(err, io.EOF) {
 			return nil
 		}

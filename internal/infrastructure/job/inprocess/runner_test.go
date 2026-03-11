@@ -32,13 +32,31 @@ func (t *stubTicker) Stop() {
 }
 
 type stubTickerFactory struct {
+	mu      sync.Mutex
 	tickers []*stubTicker
 }
 
 func (f *stubTickerFactory) New(time.Duration) ticker {
 	ticker := newStubTicker()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.tickers = append(f.tickers, ticker)
 	return ticker
+}
+
+func (f *stubTickerFactory) Len() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.tickers)
+}
+
+func (f *stubTickerFactory) At(i int) *stubTicker {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if i < 0 || i >= len(f.tickers) {
+		return nil
+	}
+	return f.tickers[i]
 }
 
 func TestRunner_Start_RunsRegisteredJobOnTick(t *testing.T) {
@@ -59,9 +77,11 @@ func TestRunner_Start_RunsRegisteredJobOnTick(t *testing.T) {
 
 	runner.Start(ctx)
 	require.Eventually(t, func() bool {
-		return len(factory.tickers) == 1
+		return factory.Len() == 1
 	}, time.Second, 10*time.Millisecond)
-	factory.tickers[0].ch <- time.Now()
+	ticker := factory.At(0)
+	require.NotNil(t, ticker)
+	ticker.ch <- time.Now()
 
 	select {
 	case <-runCh:
@@ -83,14 +103,16 @@ func TestRunner_Start_StopsTickerOnContextDone(t *testing.T) {
 
 	runner.Start(ctx)
 	require.Eventually(t, func() bool {
-		return len(factory.tickers) == 1
+		return factory.Len() == 1
 	}, time.Second, 10*time.Millisecond)
 	cancel()
 	time.Sleep(10 * time.Millisecond)
 
-	factory.tickers[0].mu.Lock()
-	stopped := factory.tickers[0].stopped
-	factory.tickers[0].mu.Unlock()
+	ticker := factory.At(0)
+	require.NotNil(t, ticker)
+	ticker.mu.Lock()
+	stopped := ticker.stopped
+	ticker.mu.Unlock()
 	assert.True(t, stopped)
 }
 

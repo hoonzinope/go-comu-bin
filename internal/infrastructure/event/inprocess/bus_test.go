@@ -109,3 +109,28 @@ func TestEventBus_LogsHandlerError(t *testing.T) {
 		return logger.WarnCount() >= 1
 	}, time.Second, 10*time.Millisecond)
 }
+
+func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
+	logger := &spyLogger{}
+	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1))
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+		close(started)
+		<-release
+		return nil
+	}})
+
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+	<-started
+
+	// First buffered publish should enter queue, second one should overflow and be dropped.
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+
+	require.Eventually(t, func() bool {
+		return logger.WarnCount() >= 1
+	}, time.Second, 10*time.Millisecond)
+	close(release)
+}

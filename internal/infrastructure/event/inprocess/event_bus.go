@@ -10,15 +10,49 @@ var _ port.EventBus = (*EventBus)(nil)
 var _ port.EventPublisher = (*EventBus)(nil)
 
 type EventBus struct {
-	mu       sync.RWMutex
-	handlers map[string][]port.EventHandler
-	logger   port.Logger
+	mu          sync.RWMutex
+	handlers    map[string][]port.EventHandler
+	logger      port.Logger
+	queue       chan []port.DomainEvent
+	workerCount int
 }
 
-func NewEventBus(logger port.Logger) *EventBus {
-	return &EventBus{
-		handlers: make(map[string][]port.EventHandler),
-		logger:   logger,
+type Option func(*EventBus)
+
+const (
+	defaultQueueSize   = 256
+	defaultWorkerCount = 1
+)
+
+func NewEventBus(logger port.Logger, opts ...Option) *EventBus {
+	bus := &EventBus{
+		handlers:    make(map[string][]port.EventHandler),
+		logger:      logger,
+		queue:       make(chan []port.DomainEvent, defaultQueueSize),
+		workerCount: defaultWorkerCount,
+	}
+	for _, opt := range opts {
+		opt(bus)
+	}
+	for i := 0; i < bus.workerCount; i++ {
+		go bus.worker()
+	}
+	return bus
+}
+
+func WithQueueSize(size int) Option {
+	return func(b *EventBus) {
+		if size > 0 {
+			b.queue = make(chan []port.DomainEvent, size)
+		}
+	}
+}
+
+func WithWorkerCount(count int) Option {
+	return func(b *EventBus) {
+		if count > 0 {
+			b.workerCount = count
+		}
 	}
 }
 
@@ -32,7 +66,18 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 	if len(events) == 0 {
 		return
 	}
-	go b.dispatch(events)
+	copied := append([]port.DomainEvent(nil), events...)
+	select {
+	case b.queue <- copied:
+	default:
+		b.warn("event queue full; dropping events", "count", len(copied))
+	}
+}
+
+func (b *EventBus) worker() {
+	for events := range b.queue {
+		b.dispatch(events)
+	}
 }
 
 func (b *EventBus) dispatch(events []port.DomainEvent) {
@@ -62,10 +107,17 @@ func (b *EventBus) handlersFor(eventName string) []port.EventHandler {
 func (b *EventBus) callHandler(handler port.EventHandler, event port.DomainEvent) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			b.logger.Warn("event handler panic", "event", event.EventName(), "panic", recovered)
+			b.warn("event handler panic", "event", event.EventName(), "panic", recovered)
 		}
 	}()
 	if err := handler.Handle(event); err != nil {
-		b.logger.Warn("event handler failed", "event", event.EventName(), "error", err)
+		b.warn("event handler failed", "event", event.EventName(), "error", err)
 	}
+}
+
+func (b *EventBus) warn(msg string, args ...any) {
+	if b == nil || b.logger == nil {
+		return
+	}
+	b.logger.Warn(msg, args...)
 }

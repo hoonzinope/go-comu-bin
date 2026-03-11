@@ -1160,6 +1160,20 @@ func TestHTTP_UserSignUp_TrailingJSONRejected(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
+func TestHTTP_UserSignUp_OversizedJSONRejected(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	hugeUsername := strings.Repeat("a", int(maxJSONBodyBytes))
+	body := `{"username":"` + hugeUsername + `","password":"pw"}`
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "request body too large")
+}
+
 func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 	account := &fakeAccountUseCase{
 		deleteMyAccount: func(userID int64, password string) error {

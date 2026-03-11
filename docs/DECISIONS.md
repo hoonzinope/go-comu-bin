@@ -238,6 +238,47 @@
 - `internal/application/service/postService.go`
 - `internal/delivery/http.go`
 
+## 2026-03-11 - 운영 안정성 보강(요청 크기 경계/이벤트 백프레셔/UoW 비용/레이스 안정화)
+
+상태
+
+- decided
+
+배경
+
+- 기능 정확성 테스트(`go test ./...`)는 통과하지만, 운영 트래픽/데이터가 증가할 때 리소스 소모와 동시성 안정성 측면의 보강이 필요했다.
+- 품질 점검 중 JSON 요청 바디 상한 부재, 이벤트 발행 고루틴 폭증 가능성, in-memory UoW 전체 스냅샷 비용, `-race` 기준 테스트 유틸 레이스가 확인됐다.
+
+관찰
+
+- `decodeJSON`는 strict decode를 수행하지만 바디 크기 상한을 강제하지 않는다.
+- in-process event bus는 publish 호출마다 비동기 고루틴을 생성한다.
+- in-memory `UnitOfWork`는 트랜잭션마다 모든 저장소 상태를 깊은 복사한다.
+- `runner_test`의 `stubTickerFactory`가 동시 접근 보호 없이 슬라이스를 읽고 쓴다.
+
+결론
+
+- JSON 엔드포인트에 공통 요청 바디 상한을 도입한다.
+- 이벤트 버스는 bounded queue + 고정 worker 기반으로 바꿔 백프레셔를 둔다.
+- UoW는 write가 발생한 저장소만 lazy snapshot 하도록 변경한다.
+- 레이스 감지 기준에서 신뢰 가능한 테스트가 되도록 테스트 유틸 동기화를 추가한다.
+
+후속 작업
+
+- delivery JSON oversize 거부 테스트 추가
+- event bus queue full 드롭/로그 테스트 추가
+- UoW lazy snapshot 반영 후 기존 트랜잭션 회귀 테스트 통과 확인
+- `go test -race ./...` 통과 확인
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `internal/delivery/http_test.go`
+- `internal/infrastructure/event/inprocess/event_bus.go`
+- `internal/infrastructure/event/inprocess/bus_test.go`
+- `internal/infrastructure/persistence/inmemory/unitOfWork.go`
+- `internal/infrastructure/job/inprocess/runner_test.go`
+
 ## 2026-03-08 - 삭제/공개 조회 일관성과 suspension 식별자 계약 정리
 
 상태
