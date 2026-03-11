@@ -1181,3 +1181,38 @@
 - `internal/infrastructure/persistence/inmemory/tagRepository.go`
 - `internal/infrastructure/persistence/inmemory/postTagRepository.go`
 - `internal/infrastructure/event/inprocess/event_bus.go`
+
+## 2026-03-11 - EventBus shutdown 신호 분리 및 태그 조회 경로 읽기 최적화
+
+상태
+
+- decided
+
+배경
+
+- 이벤트 큐 포화 상황에서 publish가 enqueue timeout 대기 중일 때, 종료 시점 동작을 더 명확히 제어할 필요가 있었다.
+- 태그 기반 게시글 조회는 coordinator 경계 일관성을 맞추는 과정에서 postTag relation 전체를 clone/sort하는 비용이 커졌다.
+
+관찰
+
+- 기존 구현은 publish 경로가 timeout 기반 대기만 사용해 close 신호와 독립적으로 대기 해제가 어려웠다.
+- `SelectPublishedPostsByTagName`는 active relation 전체를 materialize한 뒤 postID set으로 재가공했다.
+
+결론
+
+- EventBus는 `closeCh` 기반 shutdown 신호를 도입해, close 이후 대기 중 publish를 즉시 해제/드롭한다.
+- worker는 close 신호 수신 후 queue를 drain하고 종료한다.
+- 태그 기반 조회는 `PostTagRepository`의 postID set 전용 read helper를 사용해 clone/sort 경로를 제거한다.
+- 두 변경은 기존 기능 정책(큐 포화 시 block+timeout+drop, tx coordinator 경계 유지)을 유지한다.
+
+후속 작업
+
+- close 경계(포화 큐 + 동시 close/publish) 회귀 테스트 유지
+- tag relation 대량 데이터 기준 벤치마크 추가 여부 검토
+
+관련 문서/코드
+
+- `internal/infrastructure/event/inprocess/event_bus.go`
+- `internal/infrastructure/event/inprocess/bus_test.go`
+- `internal/infrastructure/persistence/inmemory/postRepository.go`
+- `internal/infrastructure/persistence/inmemory/postTagRepository.go`

@@ -154,18 +154,7 @@ func (r *PostRepository) selectPublishedPostsByTagName(tagName string, limit int
 		return []*entity.Post{}, nil
 	}
 
-	maxLimit := int(^uint(0) >> 1)
-	activePostTags, err := r.postTagRepository.SelectActiveByTagID(tag.ID, maxLimit, 0)
-	if err != nil {
-		return nil, err
-	}
-	activePostIDs := make(map[int64]struct{}, len(activePostTags))
-	for _, postTag := range activePostTags {
-		if postTag == nil {
-			continue
-		}
-		activePostIDs[postTag.PostID] = struct{}{}
-	}
+	activePostIDs := r.postTagRepository.SelectActivePostIDSetByTagID(tag.ID)
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()

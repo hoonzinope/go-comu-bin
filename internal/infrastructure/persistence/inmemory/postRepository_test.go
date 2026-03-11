@@ -211,3 +211,68 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhileTagTransactionL
 		t.Fatal("query did not resume after tx lock release")
 	}
 }
+
+func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhilePostTagTransactionLockHeld(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	repo := NewPostRepository(tagRepo, postTagRepo)
+	uow := NewUnitOfWork(
+		NewUserRepository(),
+		NewBoardRepository(),
+		repo,
+		tagRepo,
+		postTagRepo,
+		NewCommentRepository(),
+		NewReactionRepository(),
+		NewAttachmentRepository(),
+	)
+
+	tagID, err := tagRepo.Save(entity.NewTag("go"))
+	require.NoError(t, err)
+	post := testPost("published", "content", 1, 1)
+	_, err = repo.Save(post)
+	require.NoError(t, err)
+	require.NoError(t, postTagRepo.UpsertActive(post.ID, tagID))
+
+	txStarted := make(chan struct{})
+	txRelease := make(chan struct{})
+	txDone := make(chan error, 1)
+	go func() {
+		err := uow.WithinTransaction(func(tx port.TxScope) error {
+			if err := tx.PostTagRepository().UpsertActive(post.ID, tagID); err != nil {
+				return err
+			}
+			close(txStarted)
+			<-txRelease
+			return nil
+		})
+		txDone <- err
+	}()
+	<-txStarted
+
+	queryDone := make(chan struct{})
+	go func() {
+		_, _ = repo.SelectPublishedPostsByTagName("go", 10, 0)
+		close(queryDone)
+	}()
+
+	select {
+	case <-queryDone:
+		t.Fatal("tag-based query should block while postTag repository tx lock is held")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	close(txRelease)
+	select {
+	case err := <-txDone:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("transaction did not complete")
+	}
+
+	select {
+	case <-queryDone:
+	case <-time.After(time.Second):
+		t.Fatal("query did not resume after tx lock release")
+	}
+}

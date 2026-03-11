@@ -19,8 +19,9 @@ type EventBus struct {
 	workerCount    int
 	enqueueTimeout time.Duration
 	after          func(time.Duration) <-chan time.Time
-	lifecycleMu    sync.RWMutex
-	closed         bool
+	closeOnce      sync.Once
+	closeCh        chan struct{}
+	closed         atomic.Bool
 	wg             sync.WaitGroup
 	enqueued       atomic.Uint64
 	dropped        atomic.Uint64
@@ -47,6 +48,7 @@ func NewEventBus(logger port.Logger, opts ...Option) *EventBus {
 		workerCount:    defaultWorkerCount,
 		enqueueTimeout: defaultEnqueueTimeout,
 		after:          time.After,
+		closeCh:        make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(bus)
@@ -93,14 +95,16 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 		return
 	}
 	copied := append([]port.DomainEvent(nil), events...)
-	b.lifecycleMu.RLock()
-	defer b.lifecycleMu.RUnlock()
-	if b.closed {
+	if b.closed.Load() {
 		b.dropped.Add(1)
 		b.warn("event bus closed; dropping events", "count", len(copied))
 		return
 	}
 	select {
+	case <-b.closeCh:
+		b.dropped.Add(1)
+		b.warn("event bus closed; dropping events", "count", len(copied))
+		return
 	case b.queue <- copied:
 		b.enqueued.Add(1)
 		return
@@ -108,6 +112,9 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 	}
 	timeout := b.enqueueTimeout
 	select {
+	case <-b.closeCh:
+		b.dropped.Add(1)
+		b.warn("event bus closed; dropping events", "count", len(copied))
 	case b.queue <- copied:
 		b.enqueued.Add(1)
 	case <-b.after(timeout):
@@ -118,8 +125,20 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 
 func (b *EventBus) worker() {
 	defer b.wg.Done()
-	for events := range b.queue {
-		b.dispatch(events)
+	for {
+		select {
+		case <-b.closeCh:
+			for {
+				select {
+				case events := <-b.queue:
+					b.dispatch(events)
+				default:
+					return
+				}
+			}
+		case events := <-b.queue:
+			b.dispatch(events)
+		}
 	}
 }
 
@@ -179,13 +198,9 @@ func (b *EventBus) Close() {
 	if b == nil {
 		return
 	}
-	b.lifecycleMu.Lock()
-	if b.closed {
-		b.lifecycleMu.Unlock()
-		return
-	}
-	b.closed = true
-	close(b.queue)
-	b.lifecycleMu.Unlock()
-	b.wg.Wait()
+	b.closeOnce.Do(func() {
+		b.closed.Store(true)
+		close(b.closeCh)
+		b.wg.Wait()
+	})
 }

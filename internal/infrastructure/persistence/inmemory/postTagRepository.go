@@ -93,7 +93,13 @@ func (r *PostTagRepository) selectActiveByTagID(tagID int64, limit int, lastID i
 	return items, nil
 }
 
-func (r *PostTagRepository) activePostIDsByTagID(tagID int64) map[int64]struct{} {
+func (r *PostTagRepository) SelectActivePostIDSetByTagID(tagID int64) map[int64]struct{} {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectActivePostIDSetByTagID(tagID)
+}
+
+func (r *PostTagRepository) selectActivePostIDSetByTagID(tagID int64) map[int64]struct{} {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

@@ -238,3 +238,57 @@ func TestEventBus_Publish_DoesNotCreateTimeoutTimerWhenQueueHasCapacity(t *testi
 	}, time.Second, 10*time.Millisecond)
 	assert.Equal(t, int64(0), afterCalls.Load())
 }
+
+func TestEventBus_CloseDoesNotWaitForEnqueueTimeout(t *testing.T) {
+	logger := &spyLogger{}
+	timeout := 1500 * time.Millisecond
+	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(timeout))
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+		close(started)
+		<-release
+		return nil
+	}})
+
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+	<-started
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+
+	publishDone := make(chan struct{})
+	go func() {
+		bus.Publish(testEvent{name: "test", at: time.Now()})
+		close(publishDone)
+	}()
+
+	select {
+	case <-publishDone:
+		t.Fatal("publish should block while queue is full")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	closeDone := make(chan time.Duration, 1)
+	go func() {
+		begin := time.Now()
+		bus.Close()
+		closeDone <- time.Since(begin)
+	}()
+
+	select {
+	case <-publishDone:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("blocked publish did not unblock promptly after close signal")
+	}
+
+	close(release)
+
+	select {
+	case elapsed := <-closeDone:
+		if elapsed >= timeout {
+			t.Fatalf("close waited for enqueue timeout: elapsed=%s timeout=%s", elapsed, timeout)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("close did not return promptly")
+	}
+}
