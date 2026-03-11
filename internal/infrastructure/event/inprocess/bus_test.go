@@ -3,6 +3,7 @@ package inprocess
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -217,4 +218,23 @@ func TestEventBus_PublishAfterClose_IsDropped(t *testing.T) {
 	stats := bus.Stats()
 	assert.Equal(t, uint64(1), stats.DroppedCount)
 	assert.GreaterOrEqual(t, logger.WarnCount(), 1)
+}
+
+func TestEventBus_Publish_DoesNotCreateTimeoutTimerWhenQueueHasCapacity(t *testing.T) {
+	logger := &spyLogger{}
+	bus := NewEventBus(logger, WithQueueSize(4), WithWorkerCount(1), WithEnqueueTimeout(time.Second))
+	defer bus.Close()
+
+	var afterCalls atomic.Int64
+	bus.after = func(d time.Duration) <-chan time.Time {
+		afterCalls.Add(1)
+		return time.After(d)
+	}
+
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+
+	require.Eventually(t, func() bool {
+		return bus.Stats().EnqueuedCount >= 1
+	}, time.Second, 10*time.Millisecond)
+	assert.Equal(t, int64(0), afterCalls.Load())
 }

@@ -18,6 +18,7 @@ type EventBus struct {
 	queue          chan []port.DomainEvent
 	workerCount    int
 	enqueueTimeout time.Duration
+	after          func(time.Duration) <-chan time.Time
 	lifecycleMu    sync.RWMutex
 	closed         bool
 	wg             sync.WaitGroup
@@ -45,6 +46,7 @@ func NewEventBus(logger port.Logger, opts ...Option) *EventBus {
 		queue:          make(chan []port.DomainEvent, defaultQueueSize),
 		workerCount:    defaultWorkerCount,
 		enqueueTimeout: defaultEnqueueTimeout,
+		after:          time.After,
 	}
 	for _, opt := range opts {
 		opt(bus)
@@ -98,11 +100,17 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 		b.warn("event bus closed; dropping events", "count", len(copied))
 		return
 	}
+	select {
+	case b.queue <- copied:
+		b.enqueued.Add(1)
+		return
+	default:
+	}
 	timeout := b.enqueueTimeout
 	select {
 	case b.queue <- copied:
 		b.enqueued.Add(1)
-	case <-time.After(timeout):
+	case <-b.after(timeout):
 		b.dropped.Add(1)
 		b.warn("event queue enqueue timeout; dropping events", "count", len(copied), "timeout", timeout)
 	}

@@ -139,9 +139,6 @@ func (r *PostRepository) SelectPublishedPostsByTagName(tagName string, limit int
 }
 
 func (r *PostRepository) selectPublishedPostsByTagName(tagName string, limit int, lastID int64) ([]*entity.Post, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	if limit <= 0 {
 		return []*entity.Post{}, nil
 	}
@@ -149,14 +146,30 @@ func (r *PostRepository) selectPublishedPostsByTagName(tagName string, limit int
 		return nil, errors.New("post repository tag dependencies are not attached")
 	}
 
-	tag, err := r.tagRepository.selectByName(tagName)
+	tag, err := r.tagRepository.SelectByName(tagName)
 	if err != nil {
 		return nil, err
 	}
 	if tag == nil {
 		return []*entity.Post{}, nil
 	}
-	activePostIDs := r.postTagRepository.activePostIDsByTagID(tag.ID)
+
+	maxLimit := int(^uint(0) >> 1)
+	activePostTags, err := r.postTagRepository.SelectActiveByTagID(tag.ID, maxLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+	activePostIDs := make(map[int64]struct{}, len(activePostTags))
+	for _, postTag := range activePostTags {
+		if postTag == nil {
+			continue
+		}
+		activePostIDs[postTag.PostID] = struct{}{}
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	posts := make([]*entity.Post, 0, limit)
 	for _, post := range r.postDB.Data {
 		if post.Status != entity.PostStatusPublished {

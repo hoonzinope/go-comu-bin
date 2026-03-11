@@ -1143,3 +1143,41 @@
 - `docs/ROADMAP.md`
 - `docs/ARCHITECTURE.md`
 - `internal/application/service`
+
+## 2026-03-11 - in-memory 교차 저장소 조회는 coordinator 경계를 우회하지 않는다
+
+상태
+
+- decided
+
+배경
+
+- 최근 lock granularity 개선 후에도 태그 기반 게시글 조회 경로에서 교차 저장소 내부 메서드 직접 호출이 남아 있었다.
+- 이 경로는 coordinator 진입을 건너뛰어 tx 락이 의도한 외부 read 차단 의미론을 일부 무력화할 수 있다.
+- 동시에 event bus enqueue는 정상 경로에서도 timeout 타이머를 매 호출 생성해 고빈도 publish 비용이 커진다.
+
+관찰
+
+- `PostRepository.selectPublishedPostsByTagName`가 `TagRepository.selectByName`, `PostTagRepository.activePostIDsByTagID`를 직접 호출한다.
+- 내부 메서드 호출은 `coordinator.enter()`를 통과하지 않는다.
+- `EventBus.Publish`는 queue 여유 상태에서도 `time.After(timeout)`를 생성한다.
+
+결론
+
+- 교차 저장소 조회는 내부 메서드 직접 호출을 지양하고, coordinator 경계를 포함한 public 계약(또는 동등한 query port)을 사용한다.
+- event bus publish는 fast-path enqueue를 먼저 시도하고, queue 포화 시에만 timeout 타이머 경로로 진입한다.
+- 기존 기능 정책(block + timeout + drop)은 유지한다.
+
+후속 작업
+
+- tag 기반 post 조회 경로를 coordinator 일관 경계로 정리
+- tx 중 동시 read 경쟁 회귀 테스트 추가
+- publish hot-path의 타이머 생성 회피 테스트 추가
+- 관련 단위 테스트/레이스 테스트 재검증
+
+관련 문서/코드
+
+- `internal/infrastructure/persistence/inmemory/postRepository.go`
+- `internal/infrastructure/persistence/inmemory/tagRepository.go`
+- `internal/infrastructure/persistence/inmemory/postTagRepository.go`
+- `internal/infrastructure/event/inprocess/event_bus.go`
