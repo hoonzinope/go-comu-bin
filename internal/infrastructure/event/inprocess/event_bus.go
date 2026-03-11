@@ -16,6 +16,9 @@ type EventBus struct {
 	logger      port.Logger
 	queue       chan []port.DomainEvent
 	workerCount int
+	lifecycleMu sync.RWMutex
+	closed      bool
+	wg          sync.WaitGroup
 	enqueued    atomic.Uint64
 	dropped     atomic.Uint64
 }
@@ -43,6 +46,7 @@ func NewEventBus(logger port.Logger, opts ...Option) *EventBus {
 		opt(bus)
 	}
 	for i := 0; i < bus.workerCount; i++ {
+		bus.wg.Add(1)
 		go bus.worker()
 	}
 	return bus
@@ -75,6 +79,13 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 		return
 	}
 	copied := append([]port.DomainEvent(nil), events...)
+	b.lifecycleMu.RLock()
+	defer b.lifecycleMu.RUnlock()
+	if b.closed {
+		b.dropped.Add(1)
+		b.warn("event bus closed; dropping events", "count", len(copied))
+		return
+	}
 	select {
 	case b.queue <- copied:
 		b.enqueued.Add(1)
@@ -85,6 +96,7 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 }
 
 func (b *EventBus) worker() {
+	defer b.wg.Done()
 	for events := range b.queue {
 		b.dispatch(events)
 	}
@@ -140,4 +152,19 @@ func (b *EventBus) Stats() Stats {
 		EnqueuedCount: b.enqueued.Load(),
 		DroppedCount:  b.dropped.Load(),
 	}
+}
+
+func (b *EventBus) Close() {
+	if b == nil {
+		return
+	}
+	b.lifecycleMu.Lock()
+	if b.closed {
+		b.lifecycleMu.Unlock()
+		return
+	}
+	b.closed = true
+	close(b.queue)
+	b.lifecycleMu.Unlock()
+	b.wg.Wait()
 }

@@ -319,6 +319,43 @@
 - `internal/infrastructure/event/inprocess/event_bus.go`
 - `internal/infrastructure/persistence/inmemory/*`
 
+## 2026-03-11 - EventBus 종료 경계와 아키텍처 문서 동기화
+
+상태
+
+- decided
+
+배경
+
+- 이벤트 버스가 worker goroutine을 상시 유지하지만 종료 API가 없어 graceful shutdown 경계가 불명확했다.
+- 운영 문서(`CONFIG`, `API`)에는 최신 정책이 반영됐지만, 아키텍처 문서에는 일부 런타임 정책(이벤트 큐 포화 드롭, JSON 바디 제한 책임)이 충분히 명시되지 않았다.
+
+관찰
+
+- EventBus는 queue 기반 비동기 처리만 제공하고 lifecycle close가 없다.
+- 큐 포화 시 drop + warn 정책을 사용한다.
+- JSON 바디 제한은 delivery 경계에서 적용되고 설정으로 조절 가능하다.
+
+결론
+
+- EventBus에 `Close()`를 추가해 worker lifecycle을 명시적으로 종료할 수 있게 한다.
+- `Close()` 이후 publish는 drop으로 처리하고, stats/warn로 관측 가능하게 유지한다.
+- `docs/ARCHITECTURE.md`에 이벤트 포화 정책과 JSON 제한 책임/설정 키를 반영한다.
+- UoW 동시성 개선은 의미론 리스크를 줄이기 위해 벤치마크 계측을 우선하고, 구조 변경은 다음 단계로 분리한다.
+
+후속 작업
+
+- EventBus close 동작/종료 후 publish 정책 테스트 추가
+- composition root 종료 경로에서 EventBus close 호출
+- 아키텍처 문서에 runtime 정책(드롭/제한) 반영
+
+관련 문서/코드
+
+- `internal/infrastructure/event/inprocess/event_bus.go`
+- `internal/infrastructure/event/inprocess/bus_test.go`
+- `cmd/main.go`
+- `docs/ARCHITECTURE.md`
+
 ## 2026-03-08 - 삭제/공개 조회 일관성과 suspension 식별자 계약 정리
 
 상태

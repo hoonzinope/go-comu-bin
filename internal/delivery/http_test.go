@@ -424,6 +424,33 @@ func newTestHandler(
 		CommentUseCase:    comment,
 		ReactionUseCase:   reaction,
 		AttachmentUseCase: attachment,
+		MaxJSONBodyBytes:  defaultMaxJSONBodyBytes,
+	}).Handler
+}
+
+func newTestHandlerWithJSONLimit(
+	user authUserPort,
+	account port.AccountUseCase,
+	board port.BoardUseCase,
+	post port.PostUseCase,
+	comment port.CommentUseCase,
+	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
+	maxJSONBodyBytes int64,
+) http.Handler {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:    sessionUseCase,
+		UserUseCase:       user,
+		AccountUseCase:    account,
+		BoardUseCase:      board,
+		PostUseCase:       post,
+		CommentUseCase:    comment,
+		ReactionUseCase:   reaction,
+		AttachmentUseCase: attachment,
+		MaxJSONBodyBytes:  maxJSONBodyBytes,
 	}).Handler
 }
 
@@ -1166,6 +1193,27 @@ func TestHTTP_UserSignUp_OversizedJSONRejected(t *testing.T) {
 	hugeUsername := strings.Repeat("a", int(defaultMaxJSONBodyBytes))
 	body := `{"username":"` + hugeUsername + `","password":"pw"}`
 	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "request body too large")
+}
+
+func TestHTTP_UserSignUp_OversizedJSONRejected_WithConfiguredLimit(t *testing.T) {
+	handler := newTestHandlerWithJSONLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		80,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(`{"username":"alice","password":"`+strings.Repeat("p", 128)+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)

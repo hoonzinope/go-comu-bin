@@ -13,8 +13,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -130,8 +132,10 @@ func main() {
 		Logger:                   appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)
-	if err := server.ListenAndServe(); err != nil {
-		slog.Error("server stopped", "error", err)
+	err = server.ListenAndServe()
+	eventBus.Close()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("server stopped with error", "error", err)
 		os.Exit(1)
 	}
 }

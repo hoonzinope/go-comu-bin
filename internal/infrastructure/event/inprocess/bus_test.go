@@ -135,3 +135,50 @@ func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 	assert.GreaterOrEqual(t, bus.Stats().DroppedCount, uint64(1))
 	close(release)
 }
+
+func TestEventBus_Close_WaitsForInFlightHandlers(t *testing.T) {
+	logger := &spyLogger{}
+	bus := NewEventBus(logger, WithQueueSize(4), WithWorkerCount(1))
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+		close(started)
+		<-release
+		return nil
+	}})
+
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+	<-started
+
+	closed := make(chan struct{})
+	go func() {
+		bus.Close()
+		close(closed)
+	}()
+
+	select {
+	case <-closed:
+		t.Fatal("close returned before in-flight handler finished")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("close did not return after handler completed")
+	}
+}
+
+func TestEventBus_PublishAfterClose_IsDropped(t *testing.T) {
+	logger := &spyLogger{}
+	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1))
+	bus.Close()
+
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+
+	stats := bus.Stats()
+	assert.Equal(t, uint64(1), stats.DroppedCount)
+	assert.GreaterOrEqual(t, logger.WarnCount(), 1)
+}
