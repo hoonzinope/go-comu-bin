@@ -120,13 +120,18 @@ func (s *PostService) createPost(title, content string, tags []string, authorID,
 		if saveErr != nil {
 			return customError.WrapRepository("save post", saveErr)
 		}
-		return s.upsertPostTags(tx, postID, normalizedTags)
+		if err := s.upsertPostTags(tx, postID, normalizedTags); err != nil {
+			return err
+		}
+		if !draft {
+			if err := appendEventsToOutbox(tx, appevent.NewPostChanged("created", postID, boardID, normalizedTags, nil)); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return 0, err
-	}
-	if !draft {
-		s.eventPublisher.Publish(appevent.NewPostChanged("created", postID, boardID, normalizedTags, nil))
 	}
 	return postID, nil
 }
@@ -267,12 +272,14 @@ func (s *PostService) PublishPost(id, authorID int64) error {
 		}
 		boardID = post.BoardID
 		postID = post.ID
+		if err := appendEventsToOutbox(tx, appevent.NewPostChanged("published", postID, boardID, currentTags, nil)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewPostChanged("published", postID, boardID, currentTags, nil))
 	return nil
 }
 
@@ -372,12 +379,14 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string, tags
 		}
 		postID = post.ID
 		boardID = post.BoardID
+		if err := appendEventsToOutbox(tx, appevent.NewPostChanged("updated", postID, boardID, unionTagNames(currentTagNames, normalizedTags), nil)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewPostChanged("updated", postID, boardID, unionTagNames(currentTagNames, normalizedTags), nil))
 	return nil
 }
 
@@ -440,12 +449,14 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 		}
 		postID = post.ID
 		boardID = post.BoardID
+		if err := appendEventsToOutbox(tx, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, commentIDs)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, commentIDs))
 	return nil
 }
 

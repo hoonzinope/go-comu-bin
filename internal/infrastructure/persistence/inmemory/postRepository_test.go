@@ -160,6 +160,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhileTagTransactionL
 		NewCommentRepository(),
 		NewReactionRepository(),
 		NewAttachmentRepository(),
+		NewOutboxRepository(),
 	)
 
 	tagID, err := tagRepo.Save(entity.NewTag("go"))
@@ -225,6 +226,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhilePostTagTransact
 		NewCommentRepository(),
 		NewReactionRepository(),
 		NewAttachmentRepository(),
+		NewOutboxRepository(),
 	)
 
 	tagID, err := tagRepo.Save(entity.NewTag("go"))

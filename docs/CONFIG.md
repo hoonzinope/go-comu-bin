@@ -45,10 +45,12 @@ delivery:
       secret: "replace-with-real-secret"
 
 event:
-  inprocess:
-    queueSize: 256
+  outbox:
     workerCount: 1
-    enqueueTimeoutMillis: 100
+    batchSize: 100
+    pollIntervalMillis: 100
+    maxAttempts: 5
+    baseBackoffMillis: 200
 
 admin:
   bootstrap:
@@ -71,9 +73,11 @@ jobs:
 - `delivery.http.maxJSONBodyBytes`: `> 0`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
-- `event.inprocess.queueSize`: `> 0`
-- `event.inprocess.workerCount`: `> 0`
-- `event.inprocess.enqueueTimeoutMillis`: `> 0`
+- `event.outbox.workerCount`: `> 0`
+- `event.outbox.batchSize`: `> 0`
+- `event.outbox.pollIntervalMillis`: `> 0`
+- `event.outbox.maxAttempts`: `> 0`
+- `event.outbox.baseBackoffMillis`: `> 0`
 - `admin.bootstrap.enabled`: 기본 `false`
 - `admin.bootstrap.username`: bootstrap enabled일 때 필수
 - `admin.bootstrap.password`: bootstrap enabled일 때 필수
@@ -100,9 +104,12 @@ jobs:
 - JSON body 최대 크기(bytes): `cmd/main.go` -> `cfg.Delivery.HTTP.MaxJSONBodyBytes`
   - JSON API 요청 바디가 이 값을 초과하면 `400 Bad Request (request body too large)`를 반환합니다.
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
-- 이벤트 버스 큐/워커: `cmd/main.go` -> `cfg.Event.InProcess.QueueSize`, `cfg.Event.InProcess.WorkerCount`
-- 이벤트 버스 enqueue timeout(ms): `cmd/main.go` -> `cfg.Event.InProcess.EnqueueTimeoutMillis`
-  - 큐가 가득 찼을 때 publish는 timeout까지 block 후 실패하면 drop + warn 처리합니다.
+- outbox relay 워커 수: `cmd/main.go` -> `cfg.Event.Outbox.WorkerCount`
+- outbox relay 배치 크기: `cmd/main.go` -> `cfg.Event.Outbox.BatchSize`
+- outbox relay polling 주기(ms): `cmd/main.go` -> `cfg.Event.Outbox.PollIntervalMillis`
+- outbox retry 최대 횟수: `cmd/main.go` -> `cfg.Event.Outbox.MaxAttempts`
+- outbox retry base backoff(ms): `cmd/main.go` -> `cfg.Event.Outbox.BaseBackoffMillis`
+  - 전달은 at-least-once이며, 실패 이벤트는 backoff 재시도 후 `dead` 상태로 남깁니다.
 - bootstrap admin: `cmd/main.go` -> `cfg.Admin.Bootstrap.*`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`

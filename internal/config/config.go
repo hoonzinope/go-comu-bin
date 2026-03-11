@@ -53,11 +53,13 @@ type Config struct {
 		} `yaml:"http"`
 	} `yaml:"delivery"`
 	Event struct {
-		InProcess struct {
-			QueueSize            int `yaml:"queueSize"`
-			WorkerCount          int `yaml:"workerCount"`
-			EnqueueTimeoutMillis int `yaml:"enqueueTimeoutMillis"`
-		} `yaml:"inprocess"`
+		Outbox struct {
+			WorkerCount        int `yaml:"workerCount"`
+			BatchSize          int `yaml:"batchSize"`
+			PollIntervalMillis int `yaml:"pollIntervalMillis"`
+			MaxAttempts        int `yaml:"maxAttempts"`
+			BaseBackoffMillis  int `yaml:"baseBackoffMillis"`
+		} `yaml:"outbox"`
 	} `yaml:"event"`
 	Jobs struct {
 		Enabled           bool `yaml:"enabled"`
@@ -96,9 +98,11 @@ func Load() (*Config, error) {
 		"delivery.http.port",
 		"delivery.http.maxJSONBodyBytes",
 		"delivery.http.auth.secret",
-		"event.inprocess.queueSize",
-		"event.inprocess.workerCount",
-		"event.inprocess.enqueueTimeoutMillis",
+		"event.outbox.workerCount",
+		"event.outbox.batchSize",
+		"event.outbox.pollIntervalMillis",
+		"event.outbox.maxAttempts",
+		"event.outbox.baseBackoffMillis",
 		"jobs.enabled",
 		"jobs.attachmentCleanup.enabled",
 		"jobs.attachmentCleanup.intervalSeconds",
@@ -132,9 +136,11 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("storage.attachment.imageOptimization.enabled", true)
 	v.SetDefault("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.SetDefault("delivery.http.maxJSONBodyBytes", int64(1<<20))
-	v.SetDefault("event.inprocess.queueSize", 256)
-	v.SetDefault("event.inprocess.workerCount", 1)
-	v.SetDefault("event.inprocess.enqueueTimeoutMillis", 100)
+	v.SetDefault("event.outbox.workerCount", 1)
+	v.SetDefault("event.outbox.batchSize", 100)
+	v.SetDefault("event.outbox.pollIntervalMillis", 100)
+	v.SetDefault("event.outbox.maxAttempts", 5)
+	v.SetDefault("event.outbox.baseBackoffMillis", 200)
 	v.SetDefault("jobs.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.intervalSeconds", 600)
@@ -201,14 +207,20 @@ func validate(cfg *Config) error {
 	if cfg.Storage.Attachment.ImageOptimization.JPEGQuality < 1 || cfg.Storage.Attachment.ImageOptimization.JPEGQuality > 100 {
 		return fmt.Errorf("invalid storage.attachment.imageOptimization.jpegQuality: %d (must be 1..100)", cfg.Storage.Attachment.ImageOptimization.JPEGQuality)
 	}
-	if cfg.Event.InProcess.QueueSize <= 0 {
-		return fmt.Errorf("invalid event.inprocess.queueSize: %d (must be > 0)", cfg.Event.InProcess.QueueSize)
+	if cfg.Event.Outbox.WorkerCount <= 0 {
+		return fmt.Errorf("invalid event.outbox.workerCount: %d (must be > 0)", cfg.Event.Outbox.WorkerCount)
 	}
-	if cfg.Event.InProcess.WorkerCount <= 0 {
-		return fmt.Errorf("invalid event.inprocess.workerCount: %d (must be > 0)", cfg.Event.InProcess.WorkerCount)
+	if cfg.Event.Outbox.BatchSize <= 0 {
+		return fmt.Errorf("invalid event.outbox.batchSize: %d (must be > 0)", cfg.Event.Outbox.BatchSize)
 	}
-	if cfg.Event.InProcess.EnqueueTimeoutMillis <= 0 {
-		return fmt.Errorf("invalid event.inprocess.enqueueTimeoutMillis: %d (must be > 0)", cfg.Event.InProcess.EnqueueTimeoutMillis)
+	if cfg.Event.Outbox.PollIntervalMillis <= 0 {
+		return fmt.Errorf("invalid event.outbox.pollIntervalMillis: %d (must be > 0)", cfg.Event.Outbox.PollIntervalMillis)
+	}
+	if cfg.Event.Outbox.MaxAttempts <= 0 {
+		return fmt.Errorf("invalid event.outbox.maxAttempts: %d (must be > 0)", cfg.Event.Outbox.MaxAttempts)
+	}
+	if cfg.Event.Outbox.BaseBackoffMillis <= 0 {
+		return fmt.Errorf("invalid event.outbox.baseBackoffMillis: %d (must be > 0)", cfg.Event.Outbox.BaseBackoffMillis)
 	}
 	if cfg.Jobs.Enabled && cfg.Jobs.AttachmentCleanup.Enabled {
 		if cfg.Jobs.AttachmentCleanup.IntervalSeconds <= 0 {

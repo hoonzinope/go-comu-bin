@@ -114,12 +114,14 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 		if err != nil {
 			return customError.WrapRepository("save board", err)
 		}
+		if err := appendEventsToOutbox(tx, appevent.NewBoardChanged("created", boardID)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return 0, err
 	}
-	s.eventPublisher.Publish(appevent.NewBoardChanged("created", boardID))
 	return boardID, nil
 }
 
@@ -150,12 +152,14 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 		if err := tx.BoardRepository().Update(existingBoard); err != nil {
 			return customError.WrapRepository("update board", err)
 		}
+		if err := appendEventsToOutbox(tx, appevent.NewBoardChanged("updated", id)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewBoardChanged("updated", id))
 	return nil
 }
 
@@ -189,11 +193,13 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 		if err := tx.BoardRepository().Delete(existingBoard.ID); err != nil {
 			return customError.WrapRepository("delete board", err)
 		}
+		if err := appendEventsToOutbox(tx, appevent.NewBoardChanged("deleted", id)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewBoardChanged("deleted", id))
 	return nil
 }

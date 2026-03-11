@@ -1,0 +1,204 @@
+package inmemory
+
+import (
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+)
+
+var _ port.OutboxStore = (*OutboxRepository)(nil)
+
+type OutboxRepository struct {
+	mu          sync.RWMutex
+	coordinator *txCoordinator
+	data        map[string]port.OutboxMessage
+	order       []string
+}
+
+type outboxRepositoryState struct {
+	Data  map[string]port.OutboxMessage
+	Order []string
+}
+
+func NewOutboxRepository() *OutboxRepository {
+	return &OutboxRepository{
+		coordinator: newTxCoordinator(),
+		data:        make(map[string]port.OutboxMessage),
+		order:       make([]string, 0),
+	}
+}
+
+func (r *OutboxRepository) attachCoordinator(coordinator *txCoordinator) {
+	r.coordinator = coordinator
+}
+
+func (r *OutboxRepository) Append(messages ...port.OutboxMessage) error {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.append(messages...)
+}
+
+func (r *OutboxRepository) append(messages ...port.OutboxMessage) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now()
+	for _, message := range messages {
+		if message.ID == "" {
+			continue
+		}
+		if _, exists := r.data[message.ID]; exists {
+			continue
+		}
+		copied := cloneOutboxMessage(message)
+		if copied.OccurredAt.IsZero() {
+			copied.OccurredAt = now
+		}
+		if copied.NextAttemptAt.IsZero() {
+			copied.NextAttemptAt = copied.OccurredAt
+		}
+		if copied.Status == "" {
+			copied.Status = port.OutboxStatusPending
+		}
+		r.data[copied.ID] = copied
+		r.order = append(r.order, copied.ID)
+	}
+	return nil
+}
+
+func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMessage, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if limit <= 0 {
+		return []port.OutboxMessage{}, nil
+	}
+	ready := make([]port.OutboxMessage, 0, limit)
+	for _, id := range r.order {
+		message, exists := r.data[id]
+		if !exists {
+			continue
+		}
+		if message.Status != port.OutboxStatusPending {
+			continue
+		}
+		if message.NextAttemptAt.After(now) {
+			continue
+		}
+		message.Status = port.OutboxStatusProcessing
+		message.AttemptCount++
+		r.data[id] = message
+		ready = append(ready, cloneOutboxMessage(message))
+		if len(ready) >= limit {
+			break
+		}
+	}
+	return ready, nil
+}
+
+func (r *OutboxRepository) MarkSucceeded(ids ...string) error {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if len(ids) == 0 {
+		return nil
+	}
+	deleted := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		delete(r.data, id)
+		deleted[id] = struct{}{}
+	}
+	if len(deleted) == 0 {
+		return nil
+	}
+	filtered := r.order[:0]
+	for _, id := range r.order {
+		if _, removed := deleted[id]; removed {
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+	r.order = filtered
+	return nil
+}
+
+func (r *OutboxRepository) MarkRetry(id string, nextAttemptAt time.Time, err string) error {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	message, exists := r.data[id]
+	if !exists {
+		return nil
+	}
+	message.Status = port.OutboxStatusPending
+	message.NextAttemptAt = nextAttemptAt
+	message.LastError = strings.TrimSpace(err)
+	r.data[id] = message
+	return nil
+}
+
+func (r *OutboxRepository) MarkDead(id string, err string) error {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	message, exists := r.data[id]
+	if !exists {
+		return nil
+	}
+	message.Status = port.OutboxStatusDead
+	message.LastError = strings.TrimSpace(err)
+	r.data[id] = message
+	return nil
+}
+
+func (r *OutboxRepository) snapshot() outboxRepositoryState {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	state := outboxRepositoryState{
+		Data:  make(map[string]port.OutboxMessage, len(r.data)),
+		Order: make([]string, len(r.order)),
+	}
+	for id, message := range r.data {
+		state.Data[id] = cloneOutboxMessage(message)
+	}
+	copy(state.Order, r.order)
+	return state
+}
+
+func (r *OutboxRepository) restore(state outboxRepositoryState) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.data = make(map[string]port.OutboxMessage, len(state.Data))
+	for id, message := range state.Data {
+		r.data[id] = cloneOutboxMessage(message)
+	}
+	r.order = make([]string, len(state.Order))
+	copy(r.order, state.Order)
+}
+
+func cloneOutboxMessage(message port.OutboxMessage) port.OutboxMessage {
+	copied := message
+	if message.Payload != nil {
+		copied.Payload = append([]byte(nil), message.Payload...)
+	}
+	return copied
+}

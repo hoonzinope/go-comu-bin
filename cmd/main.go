@@ -32,7 +32,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
-	eventInProcess "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/inprocess"
+	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
@@ -61,6 +61,7 @@ func main() {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	outboxRepository := inmemory.NewOutboxRepository()
 	fileStorage, err := newFileStorage(cfg)
 	if err != nil {
 		slog.Error("failed to initialize file storage", "error", err)
@@ -75,25 +76,34 @@ func main() {
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logging.NewSlogLogger(logger)
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository)
-	eventBus := eventInProcess.NewEventBus(
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository)
+	eventSerializer := appevent.NewJSONEventSerializer()
+	outboxRelay := eventOutbox.NewRelay(
+		outboxRepository,
+		eventSerializer,
 		appLogger,
-		eventInProcess.WithQueueSize(cfg.Event.InProcess.QueueSize),
-		eventInProcess.WithWorkerCount(cfg.Event.InProcess.WorkerCount),
-		eventInProcess.WithEnqueueTimeout(time.Duration(cfg.Event.InProcess.EnqueueTimeoutMillis)*time.Millisecond),
+		eventOutbox.RelayConfig{
+			WorkerCount:  cfg.Event.Outbox.WorkerCount,
+			BatchSize:    cfg.Event.Outbox.BatchSize,
+			PollInterval: time.Duration(cfg.Event.Outbox.PollIntervalMillis) * time.Millisecond,
+			MaxAttempts:  cfg.Event.Outbox.MaxAttempts,
+			BaseBackoff:  time.Duration(cfg.Event.Outbox.BaseBackoffMillis) * time.Millisecond,
+		},
 	)
+	outboxPublisher := eventOutbox.NewPublisher(outboxRepository, eventSerializer, appLogger)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
-	eventBus.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
+	outboxRelay.Start(appCtx)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
-	boardUseCase := service.NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), authorizationPolicy, appLogger)
-	postUseCase := service.NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), authorizationPolicy, appLogger)
-	commentUseCase := service.NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), authorizationPolicy, appLogger)
-	reactionUseCase := service.NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), appLogger)
+	boardUseCase := service.NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), authorizationPolicy, appLogger)
+	postUseCase := service.NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), authorizationPolicy, appLogger)
+	commentUseCase := service.NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), authorizationPolicy, appLogger)
+	reactionUseCase := service.NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), appLogger)
 	attachmentUseCase := service.NewAttachmentServiceWithPublisher(
 		userRepository,
 		postRepository,
@@ -101,7 +111,7 @@ func main() {
 		unitOfWork,
 		fileStorage,
 		cache,
-		eventBus,
+		outboxPublisher,
 		cfg.Storage.Attachment.MaxUploadSizeBytes,
 		service.ImageOptimizationConfig{
 			Enabled:     cfg.Storage.Attachment.ImageOptimization.Enabled,
@@ -134,7 +144,8 @@ func main() {
 	})
 	slog.Info("server started", "addr", server.Addr)
 	err = server.ListenAndServe()
-	eventBus.Close()
+	cancel()
+	outboxRelay.Wait()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped with error", "error", err)
 		os.Exit(1)

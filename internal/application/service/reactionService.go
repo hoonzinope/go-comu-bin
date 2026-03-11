@@ -46,10 +46,15 @@ func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRep
 }
 
 func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
-	created, changed, detailPostID, err := s.withReactionTransaction(UserID, TargetID, TargetType, func(tx port.TxScope) (bool, bool, error) {
+	created, changed, err := s.withReactionTransaction(UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
 		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(UserID, TargetID, TargetType, ReactionType)
 		if err != nil {
 			return false, false, customError.WrapRepository("set user target reaction", err)
+		}
+		if (created || changed) && detailPostID != nil {
+			if err := appendEventsToOutbox(tx, appevent.NewReactionChanged("set", TargetType, TargetID, *detailPostID)); err != nil {
+				return false, false, err
+			}
 		}
 		return created, changed, nil
 	})
@@ -59,17 +64,19 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 	if !created && !changed {
 		return false, nil
 	}
-	if detailPostID != nil {
-		s.eventPublisher.Publish(appevent.NewReactionChanged("set", TargetType, TargetID, *detailPostID))
-	}
 	return created, nil
 }
 
 func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType) error {
-	deleted, _, detailPostID, err := s.withReactionTransaction(UserID, TargetID, TargetType, func(tx port.TxScope) (bool, bool, error) {
+	deleted, _, err := s.withReactionTransaction(UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
 		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(UserID, TargetID, TargetType)
 		if err != nil {
 			return false, false, customError.WrapRepository("delete user target reaction", err)
+		}
+		if deleted && detailPostID != nil {
+			if err := appendEventsToOutbox(tx, appevent.NewReactionChanged("unset", TargetType, TargetID, *detailPostID)); err != nil {
+				return false, false, err
+			}
 		}
 		return deleted, deleted, nil
 	})
@@ -78,9 +85,6 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 	}
 	if !deleted {
 		return nil
-	}
-	if detailPostID != nil {
-		s.eventPublisher.Publish(appevent.NewReactionChanged("unset", TargetType, TargetID, *detailPostID))
 	}
 	return nil
 }
@@ -111,10 +115,9 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 	return reactions, nil
 }
 
-func (s *ReactionService) withReactionTransaction(userID, targetID int64, targetType entity.ReactionTargetType, mutate func(tx port.TxScope) (bool, bool, error)) (bool, bool, *int64, error) {
+func (s *ReactionService) withReactionTransaction(userID, targetID int64, targetType entity.ReactionTargetType, mutate func(tx port.TxScope, detailPostID *int64) (bool, bool, error)) (bool, bool, error) {
 	var created bool
 	var changed bool
-	var detailPostID *int64
 	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(userID)
 		if err != nil {
@@ -127,17 +130,16 @@ func (s *ReactionService) withReactionTransaction(userID, targetID int64, target
 		if err != nil {
 			return err
 		}
-		created, changed, err = mutate(tx)
+		created, changed, err = mutate(tx, postID)
 		if err != nil {
 			return err
 		}
-		detailPostID = postID
 		return nil
 	})
 	if err != nil {
-		return false, false, nil, err
+		return false, false, err
 	}
-	return created, changed, detailPostID, nil
+	return created, changed, nil
 }
 
 func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([]model.Reaction, error) {

@@ -18,6 +18,7 @@ func BenchmarkUnitOfWork_WithinTransactionParallelSaveUser(b *testing.B) {
 	commentRepository := NewCommentRepository()
 	reactionRepository := NewReactionRepository()
 	attachmentRepository := NewAttachmentRepository()
+	outboxRepository := NewOutboxRepository()
 	unitOfWork := NewUnitOfWork(
 		userRepository,
 		boardRepository,
@@ -27,6 +28,7 @@ func BenchmarkUnitOfWork_WithinTransactionParallelSaveUser(b *testing.B) {
 		commentRepository,
 		reactionRepository,
 		attachmentRepository,
+		outboxRepository,
 	)
 
 	var seq int64

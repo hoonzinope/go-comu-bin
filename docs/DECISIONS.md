@@ -1216,3 +1216,46 @@
 - `internal/infrastructure/event/inprocess/bus_test.go`
 - `internal/infrastructure/persistence/inmemory/postRepository.go`
 - `internal/infrastructure/persistence/inmemory/postTagRepository.go`
+
+## 2026-03-11 - in-process publish를 outbox append + relay로 전환
+
+상태
+
+- decided
+
+배경
+
+- 현재 서비스는 트랜잭션 성공 후 in-process publisher로 즉시 이벤트를 enqueue한다.
+- 이 방식은 프로세스 생명주기에 의존해 내구성 있는 비동기 전달 경계로 확장하기 어렵다.
+- 로드맵은 outbox 포트 설계 후 SQLite/MQ 어댑터로 확장 가능한 구조를 요구한다.
+
+관찰
+
+- 서비스별 write 유스케이스는 tx 밖에서 `EventPublisher.Publish(...)`를 호출한다.
+- UnitOfWork tx scope에는 outbox 저장 경계가 없다.
+- 캐시 무효화 소비자는 이미 이벤트 핸들러 형태로 분리되어 있어 relay 소비 경로로 재사용 가능하다.
+
+결론
+
+- 서비스 표준 발행 경로를 `tx 내부 outbox append`로 단일화한다.
+- outbox 전달은 in-memory store + relay worker로 1차 구현한다.
+- 전달 보장은 at-least-once(재시도/백오프/최대시도 초과 시 dead 상태 보존)로 고정한다.
+- 기존 즉시 in-process publish 경로는 제거하고, relay가 이벤트 핸들러를 호출하는 구조로 치환한다.
+
+후속 작업
+
+- application port에 outbox 메시지/저장소/직렬화 포트 추가
+- UoW tx scope에 outbox append 경계 추가 및 rollback 결합
+- 서비스 이벤트 발행을 tx 내부 append로 이동
+- outbox relay worker 구현 및 lifecycle wiring
+- 설정/문서/테스트 정합성 반영
+
+관련 문서/코드
+
+- `internal/application/port/*`
+- `internal/application/service/*`
+- `internal/infrastructure/persistence/inmemory/*`
+- `internal/infrastructure/event/*`
+- `cmd/main.go`
+- `docs/ARCHITECTURE.md`
+- `docs/CONFIG.md`

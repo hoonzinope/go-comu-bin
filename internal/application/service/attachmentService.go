@@ -131,12 +131,14 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 		if err != nil {
 			return customError.WrapRepository("save attachment", err)
 		}
+		if err := appendEventsToOutbox(tx, appevent.NewAttachmentChanged("created", id, postID)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return 0, err
 	}
-	s.eventPublisher.Publish(appevent.NewAttachmentChanged("created", id, postID))
 	return id, nil
 }
 
@@ -336,12 +338,14 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 		if err := tx.AttachmentRepository().Update(&updatedAttachment); err != nil {
 			return customError.WrapRepository("mark attachment pending delete", err)
 		}
+		if err := appendEventsToOutbox(tx, appevent.NewAttachmentChanged("deleted", attachmentID, postID)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewAttachmentChanged("deleted", attachmentID, postID))
 	return nil
 }
 

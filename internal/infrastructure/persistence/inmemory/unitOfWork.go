@@ -21,6 +21,7 @@ type UnitOfWork struct {
 	commentRepository    *CommentRepository
 	reactionRepository   *ReactionRepository
 	attachmentRepository *AttachmentRepository
+	outboxRepository     *OutboxRepository
 }
 
 type txScope struct {
@@ -32,9 +33,10 @@ type txScope struct {
 	commentRepository    port.CommentRepository
 	reactionRepository   port.ReactionRepository
 	attachmentRepository port.AttachmentRepository
+	outboxAppender       port.OutboxAppender
 }
 
-func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository) *UnitOfWork {
+func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository, outboxRepository *OutboxRepository) *UnitOfWork {
 	userRepository.attachCoordinator(newTxCoordinator())
 	boardRepository.attachCoordinator(newTxCoordinator())
 	postRepository.attachCoordinator(newTxCoordinator())
@@ -43,6 +45,7 @@ func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardReposit
 	commentRepository.attachCoordinator(newTxCoordinator())
 	reactionRepository.attachCoordinator(newTxCoordinator())
 	attachmentRepository.attachCoordinator(newTxCoordinator())
+	outboxRepository.attachCoordinator(newTxCoordinator())
 
 	return &UnitOfWork{
 		userRepository:       userRepository,
@@ -53,6 +56,7 @@ func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardReposit
 		commentRepository:    commentRepository,
 		reactionRepository:   reactionRepository,
 		attachmentRepository: attachmentRepository,
+		outboxRepository:     outboxRepository,
 	}
 }
 
@@ -77,6 +81,8 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		reactionSnapshotted   bool
 		attachmentState       attachmentRepositoryState
 		attachmentSnapshotted bool
+		outboxState           outboxRepositoryState
+		outboxSnapshotted     bool
 		userLocked            bool
 		boardLocked           bool
 		postLocked            bool
@@ -85,8 +91,12 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		commentLocked         bool
 		reactionLocked        bool
 		attachmentLocked      bool
+		outboxLocked          bool
 	)
 	defer func() {
+		if outboxLocked {
+			u.outboxRepository.coordinator.unlock()
+		}
 		if attachmentLocked {
 			u.attachmentRepository.coordinator.unlock()
 		}
@@ -201,6 +211,17 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		attachmentState = u.attachmentRepository.snapshot()
 		attachmentSnapshotted = true
 	}
+	captureOutbox := func() {
+		if !outboxLocked {
+			u.outboxRepository.coordinator.lock()
+			outboxLocked = true
+		}
+		if outboxSnapshotted {
+			return
+		}
+		outboxState = u.outboxRepository.snapshot()
+		outboxSnapshotted = true
+	}
 
 	tx := &txScope{
 		userRepository:       userTxRepository{repo: u.userRepository, beforeWrite: captureUser},
@@ -211,6 +232,7 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		commentRepository:    commentTxRepository{repo: u.commentRepository, beforeWrite: captureComment},
 		reactionRepository:   reactionTxRepository{repo: u.reactionRepository, beforeWrite: captureReaction},
 		attachmentRepository: attachmentTxRepository{repo: u.attachmentRepository, beforeWrite: captureAttachment},
+		outboxAppender:       outboxTxAppender{repo: u.outboxRepository, beforeWrite: captureOutbox},
 	}
 	if err := fn(tx); err != nil {
 		if userSnapshotted {
@@ -236,6 +258,9 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		}
 		if attachmentSnapshotted {
 			u.attachmentRepository.restore(attachmentState)
+		}
+		if outboxSnapshotted {
+			u.outboxRepository.restore(outboxState)
 		}
 		return err
 	}
@@ -272,6 +297,10 @@ func (t *txScope) ReactionRepository() port.ReactionRepository {
 
 func (t *txScope) AttachmentRepository() port.AttachmentRepository {
 	return t.attachmentRepository
+}
+
+func (t *txScope) Outbox() port.OutboxAppender {
+	return t.outboxAppender
 }
 
 type postTxRepository struct {
@@ -504,6 +533,11 @@ type attachmentTxRepository struct {
 	beforeWrite func()
 }
 
+type outboxTxAppender struct {
+	repo        *OutboxRepository
+	beforeWrite func()
+}
+
 func (r attachmentTxRepository) Save(attachment *entity.Attachment) (int64, error) {
 	if r.beforeWrite != nil {
 		r.beforeWrite()
@@ -530,4 +564,11 @@ func (r attachmentTxRepository) Delete(id int64) error {
 		r.beforeWrite()
 	}
 	return r.repo.delete(id)
+}
+
+func (r outboxTxAppender) Append(messages ...port.OutboxMessage) error {
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.append(messages...)
 }

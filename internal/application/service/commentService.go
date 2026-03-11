@@ -90,12 +90,14 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 		if err != nil {
 			return customError.WrapRepository("save comment", err)
 		}
+		if err := appendEventsToOutbox(tx, appevent.NewCommentChanged("created", commentID, postID)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return 0, err
 	}
-	s.eventPublisher.Publish(appevent.NewCommentChanged("created", commentID, postID))
 	return commentID, nil
 }
 
@@ -202,12 +204,14 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 			return customError.WrapRepository("update comment", err)
 		}
 		postID = updatedComment.PostID
+		if err := appendEventsToOutbox(tx, appevent.NewCommentChanged("updated", id, postID)); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewCommentChanged("updated", id, postID))
 	return nil
 }
 
@@ -243,10 +247,12 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 		}
 		commentID = comment.ID
 		postID = comment.PostID
+		if err := appendEventsToOutbox(tx, appevent.NewCommentChanged("deleted", commentID, postID)); err != nil {
+			return err
+		}
 		return nil
 	}); err != nil {
 		return err
 	}
-	s.eventPublisher.Publish(appevent.NewCommentChanged("deleted", commentID, postID))
 	return nil
 }
