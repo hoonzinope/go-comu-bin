@@ -942,3 +942,34 @@
 - `internal/delivery/http.go`
 - `docs/swagger/`
 - `internal/infrastructure/storage/object/fileStorage.go`
+
+## 2026-03-11 - Swagger 검증은 파일 상태가 아니라 diff 본문을 비교한다
+
+상태
+
+- decided
+
+배경
+
+- `scripts/verify-swagger.sh`는 `docs/swagger`의 상태 문자열(`git status --porcelain`) 전후 비교로 정합성을 판단했다.
+- 이 방식은 `docs/swagger`가 이미 수정된 dirty worktree에서 추가 변경이 생겨도 상태 문자열이 동일하면 놓칠 수 있다.
+
+관찰
+
+- `make swagger` 실행 전후 모두 `M docs/swagger/...`처럼 같은 상태 줄이 유지되면 실제 내용 변경 여부를 판별할 수 없다.
+- 목표는 "현재 작업 트리가 깨끗한가"가 아니라 "생성 실행으로 추가 변화가 생겼는가"를 감지하는 것이다.
+
+결론
+
+- 검증 기준을 상태 문자열 비교에서 `git diff -- docs/swagger` 본문 전후 비교로 변경한다.
+- dirty worktree에서도 생성 실행으로 diff 본문이 바뀌면 검증 실패로 처리한다.
+
+후속 작업
+
+- `scripts/verify-swagger.sh` 비교 로직 수정
+- `make verify`로 회귀 확인
+
+관련 문서/코드
+
+- `scripts/verify-swagger.sh`
+- `Makefile`
