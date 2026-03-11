@@ -80,6 +80,7 @@ func main() {
 		appLogger,
 		eventInProcess.WithQueueSize(cfg.Event.InProcess.QueueSize),
 		eventInProcess.WithWorkerCount(cfg.Event.InProcess.WorkerCount),
+		eventInProcess.WithEnqueueTimeout(time.Duration(cfg.Event.InProcess.EnqueueTimeoutMillis)*time.Millisecond),
 	)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	eventBus.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)

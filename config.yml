@@ -29,6 +29,7 @@ event:
   inprocess:
     queueSize: 256
     workerCount: 1
+    enqueueTimeoutMillis: 100
 
 admin:
   bootstrap:

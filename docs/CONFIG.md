@@ -48,6 +48,7 @@ event:
   inprocess:
     queueSize: 256
     workerCount: 1
+    enqueueTimeoutMillis: 100
 
 admin:
   bootstrap:
@@ -72,6 +73,7 @@ jobs:
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
 - `event.inprocess.queueSize`: `> 0`
 - `event.inprocess.workerCount`: `> 0`
+- `event.inprocess.enqueueTimeoutMillis`: `> 0`
 - `admin.bootstrap.enabled`: 기본 `false`
 - `admin.bootstrap.username`: bootstrap enabled일 때 필수
 - `admin.bootstrap.password`: bootstrap enabled일 때 필수
@@ -99,6 +101,8 @@ jobs:
   - JSON API 요청 바디가 이 값을 초과하면 `400 Bad Request (request body too large)`를 반환합니다.
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
 - 이벤트 버스 큐/워커: `cmd/main.go` -> `cfg.Event.InProcess.QueueSize`, `cfg.Event.InProcess.WorkerCount`
+- 이벤트 버스 enqueue timeout(ms): `cmd/main.go` -> `cfg.Event.InProcess.EnqueueTimeoutMillis`
+  - 큐가 가득 찼을 때 publish는 timeout까지 block 후 실패하면 drop + warn 처리합니다.
 - bootstrap admin: `cmd/main.go` -> `cfg.Admin.Bootstrap.*`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`

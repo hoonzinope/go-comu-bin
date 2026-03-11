@@ -13,7 +13,6 @@ var _ port.TxScope = (*txScope)(nil)
 
 type UnitOfWork struct {
 	mu                   sync.Mutex
-	coordinator          *txCoordinator
 	userRepository       *UserRepository
 	boardRepository      *BoardRepository
 	postRepository       *PostRepository
@@ -36,18 +35,16 @@ type txScope struct {
 }
 
 func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository) *UnitOfWork {
-	coordinator := newTxCoordinator()
-	userRepository.attachCoordinator(coordinator)
-	boardRepository.attachCoordinator(coordinator)
-	postRepository.attachCoordinator(coordinator)
-	tagRepository.attachCoordinator(coordinator)
-	postTagRepo.attachCoordinator(coordinator)
-	commentRepository.attachCoordinator(coordinator)
-	reactionRepository.attachCoordinator(coordinator)
-	attachmentRepository.attachCoordinator(coordinator)
+	userRepository.attachCoordinator(newTxCoordinator())
+	boardRepository.attachCoordinator(newTxCoordinator())
+	postRepository.attachCoordinator(newTxCoordinator())
+	tagRepository.attachCoordinator(newTxCoordinator())
+	postTagRepo.attachCoordinator(newTxCoordinator())
+	commentRepository.attachCoordinator(newTxCoordinator())
+	reactionRepository.attachCoordinator(newTxCoordinator())
+	attachmentRepository.attachCoordinator(newTxCoordinator())
 
 	return &UnitOfWork{
-		coordinator:          coordinator,
 		userRepository:       userRepository,
 		boardRepository:      boardRepository,
 		postRepository:       postRepository,
@@ -62,9 +59,6 @@ func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardReposit
 func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-
-	u.coordinator.lock()
-	defer u.coordinator.unlock()
 
 	var (
 		postState             postRepositoryState
@@ -83,9 +77,47 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		reactionSnapshotted   bool
 		attachmentState       attachmentRepositoryState
 		attachmentSnapshotted bool
+		userLocked            bool
+		boardLocked           bool
+		postLocked            bool
+		tagLocked             bool
+		postTagLocked         bool
+		commentLocked         bool
+		reactionLocked        bool
+		attachmentLocked      bool
 	)
+	defer func() {
+		if attachmentLocked {
+			u.attachmentRepository.coordinator.unlock()
+		}
+		if reactionLocked {
+			u.reactionRepository.coordinator.unlock()
+		}
+		if commentLocked {
+			u.commentRepository.coordinator.unlock()
+		}
+		if postTagLocked {
+			u.postTagRepo.coordinator.unlock()
+		}
+		if tagLocked {
+			u.tagRepository.coordinator.unlock()
+		}
+		if postLocked {
+			u.postRepository.coordinator.unlock()
+		}
+		if boardLocked {
+			u.boardRepository.coordinator.unlock()
+		}
+		if userLocked {
+			u.userRepository.coordinator.unlock()
+		}
+	}()
 
 	capturePost := func() {
+		if !postLocked {
+			u.postRepository.coordinator.lock()
+			postLocked = true
+		}
 		if postSnapshotted {
 			return
 		}
@@ -93,6 +125,10 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		postSnapshotted = true
 	}
 	captureUser := func() {
+		if !userLocked {
+			u.userRepository.coordinator.lock()
+			userLocked = true
+		}
 		if userSnapshotted {
 			return
 		}
@@ -100,6 +136,10 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		userSnapshotted = true
 	}
 	captureBoard := func() {
+		if !boardLocked {
+			u.boardRepository.coordinator.lock()
+			boardLocked = true
+		}
 		if boardSnapshotted {
 			return
 		}
@@ -107,6 +147,10 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		boardSnapshotted = true
 	}
 	captureTag := func() {
+		if !tagLocked {
+			u.tagRepository.coordinator.lock()
+			tagLocked = true
+		}
 		if tagSnapshotted {
 			return
 		}
@@ -114,6 +158,10 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		tagSnapshotted = true
 	}
 	capturePostTag := func() {
+		if !postTagLocked {
+			u.postTagRepo.coordinator.lock()
+			postTagLocked = true
+		}
 		if postTagSnapshotted {
 			return
 		}
@@ -121,6 +169,10 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		postTagSnapshotted = true
 	}
 	captureComment := func() {
+		if !commentLocked {
+			u.commentRepository.coordinator.lock()
+			commentLocked = true
+		}
 		if commentSnapshotted {
 			return
 		}
@@ -128,6 +180,10 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		commentSnapshotted = true
 	}
 	captureReaction := func() {
+		if !reactionLocked {
+			u.reactionRepository.coordinator.lock()
+			reactionLocked = true
+		}
 		if reactionSnapshotted {
 			return
 		}
@@ -135,6 +191,10 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 		reactionSnapshotted = true
 	}
 	captureAttachment := func() {
+		if !attachmentLocked {
+			u.attachmentRepository.coordinator.lock()
+			attachmentLocked = true
+		}
 		if attachmentSnapshotted {
 			return
 		}

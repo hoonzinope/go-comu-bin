@@ -54,8 +54,9 @@ type Config struct {
 	} `yaml:"delivery"`
 	Event struct {
 		InProcess struct {
-			QueueSize   int `yaml:"queueSize"`
-			WorkerCount int `yaml:"workerCount"`
+			QueueSize            int `yaml:"queueSize"`
+			WorkerCount          int `yaml:"workerCount"`
+			EnqueueTimeoutMillis int `yaml:"enqueueTimeoutMillis"`
 		} `yaml:"inprocess"`
 	} `yaml:"event"`
 	Jobs struct {
@@ -97,6 +98,7 @@ func Load() (*Config, error) {
 		"delivery.http.auth.secret",
 		"event.inprocess.queueSize",
 		"event.inprocess.workerCount",
+		"event.inprocess.enqueueTimeoutMillis",
 		"jobs.enabled",
 		"jobs.attachmentCleanup.enabled",
 		"jobs.attachmentCleanup.intervalSeconds",
@@ -132,6 +134,7 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("delivery.http.maxJSONBodyBytes", int64(1<<20))
 	v.SetDefault("event.inprocess.queueSize", 256)
 	v.SetDefault("event.inprocess.workerCount", 1)
+	v.SetDefault("event.inprocess.enqueueTimeoutMillis", 100)
 	v.SetDefault("jobs.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.intervalSeconds", 600)
@@ -203,6 +206,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Event.InProcess.WorkerCount <= 0 {
 		return fmt.Errorf("invalid event.inprocess.workerCount: %d (must be > 0)", cfg.Event.InProcess.WorkerCount)
+	}
+	if cfg.Event.InProcess.EnqueueTimeoutMillis <= 0 {
+		return fmt.Errorf("invalid event.inprocess.enqueueTimeoutMillis: %d (must be > 0)", cfg.Event.InProcess.EnqueueTimeoutMillis)
 	}
 	if cfg.Jobs.Enabled && cfg.Jobs.AttachmentCleanup.Enabled {
 		if cfg.Jobs.AttachmentCleanup.IntervalSeconds <= 0 {

@@ -112,7 +112,7 @@ func TestEventBus_LogsHandlerError(t *testing.T) {
 
 func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1))
+	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(20*time.Millisecond))
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -134,6 +134,42 @@ func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 	assert.GreaterOrEqual(t, bus.Stats().DroppedCount, uint64(1))
 	close(release)
+}
+
+func TestEventBus_PublishBlocksUntilQueueHasSpace(t *testing.T) {
+	logger := &spyLogger{}
+	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(time.Second))
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+		close(started)
+		<-release
+		return nil
+	}})
+
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+	<-started
+	bus.Publish(testEvent{name: "test", at: time.Now()})
+
+	done := make(chan struct{})
+	go func() {
+		bus.Publish(testEvent{name: "test", at: time.Now()})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("publish should block while queue is full")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("publish did not proceed after queue drained")
+	}
 }
 
 func TestEventBus_Close_WaitsForInFlightHandlers(t *testing.T) {

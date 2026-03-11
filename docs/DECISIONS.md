@@ -309,6 +309,7 @@
 - `delivery.http.maxJSONBodyBytes` 설정 추가 및 문서 반영
 - `event.inprocess.queueSize`, `event.inprocess.workerCount` 설정 추가 및 wiring
 - 이벤트 버스 드롭 카운터 테스트/노출 추가
+- 이벤트 큐 포화 시 block + timeout 정책 도입 및 설정화
 - UoW 병렬 벤치마크 추가
 
 관련 문서/코드
@@ -333,15 +334,16 @@
 관찰
 
 - EventBus는 queue 기반 비동기 처리만 제공하고 lifecycle close가 없다.
-- 큐 포화 시 drop + warn 정책을 사용한다.
+- 큐 포화 시 block + timeout 후 drop + warn 정책으로 전환한다.
 - JSON 바디 제한은 delivery 경계에서 적용되고 설정으로 조절 가능하다.
 
 결론
 
 - EventBus에 `Close()`를 추가해 worker lifecycle을 명시적으로 종료할 수 있게 한다.
 - `Close()` 이후 publish는 drop으로 처리하고, stats/warn로 관측 가능하게 유지한다.
+- 이벤트 큐 포화 동작은 `block -> timeout -> drop`으로 명시한다.
 - `docs/ARCHITECTURE.md`에 이벤트 포화 정책과 JSON 제한 책임/설정 키를 반영한다.
-- UoW 동시성 개선은 의미론 리스크를 줄이기 위해 벤치마크 계측을 우선하고, 구조 변경은 다음 단계로 분리한다.
+- UoW는 전역 coordinator lock 대신 repository 단위 coordinator lock으로 바꿔 lock granularity를 개선한다.
 
 후속 작업
 

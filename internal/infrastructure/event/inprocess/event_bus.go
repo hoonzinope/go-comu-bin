@@ -3,6 +3,7 @@ package inprocess
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 )
@@ -11,16 +12,17 @@ var _ port.EventBus = (*EventBus)(nil)
 var _ port.EventPublisher = (*EventBus)(nil)
 
 type EventBus struct {
-	mu          sync.RWMutex
-	handlers    map[string][]port.EventHandler
-	logger      port.Logger
-	queue       chan []port.DomainEvent
-	workerCount int
-	lifecycleMu sync.RWMutex
-	closed      bool
-	wg          sync.WaitGroup
-	enqueued    atomic.Uint64
-	dropped     atomic.Uint64
+	mu             sync.RWMutex
+	handlers       map[string][]port.EventHandler
+	logger         port.Logger
+	queue          chan []port.DomainEvent
+	workerCount    int
+	enqueueTimeout time.Duration
+	lifecycleMu    sync.RWMutex
+	closed         bool
+	wg             sync.WaitGroup
+	enqueued       atomic.Uint64
+	dropped        atomic.Uint64
 }
 
 type Option func(*EventBus)
@@ -31,16 +33,18 @@ type Stats struct {
 }
 
 const (
-	defaultQueueSize   = 256
-	defaultWorkerCount = 1
+	defaultQueueSize      = 256
+	defaultWorkerCount    = 1
+	defaultEnqueueTimeout = 100 * time.Millisecond
 )
 
 func NewEventBus(logger port.Logger, opts ...Option) *EventBus {
 	bus := &EventBus{
-		handlers:    make(map[string][]port.EventHandler),
-		logger:      logger,
-		queue:       make(chan []port.DomainEvent, defaultQueueSize),
-		workerCount: defaultWorkerCount,
+		handlers:       make(map[string][]port.EventHandler),
+		logger:         logger,
+		queue:          make(chan []port.DomainEvent, defaultQueueSize),
+		workerCount:    defaultWorkerCount,
+		enqueueTimeout: defaultEnqueueTimeout,
 	}
 	for _, opt := range opts {
 		opt(bus)
@@ -68,6 +72,14 @@ func WithWorkerCount(count int) Option {
 	}
 }
 
+func WithEnqueueTimeout(timeout time.Duration) Option {
+	return func(b *EventBus) {
+		if timeout > 0 {
+			b.enqueueTimeout = timeout
+		}
+	}
+}
+
 func (b *EventBus) Subscribe(eventName string, handler port.EventHandler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -86,12 +98,13 @@ func (b *EventBus) Publish(events ...port.DomainEvent) {
 		b.warn("event bus closed; dropping events", "count", len(copied))
 		return
 	}
+	timeout := b.enqueueTimeout
 	select {
 	case b.queue <- copied:
 		b.enqueued.Add(1)
-	default:
+	case <-time.After(timeout):
 		b.dropped.Add(1)
-		b.warn("event queue full; dropping events", "count", len(copied))
+		b.warn("event queue enqueue timeout; dropping events", "count", len(copied), "timeout", timeout)
 	}
 }
 
