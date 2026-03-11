@@ -841,6 +841,37 @@
 - `config.yml`
 - `docs/ARCHITECTURE.md`
 - `docs/CONFIG.md`
+
+## 2026-03-11 - ROADMAP 상태 표기를 outbox 전환 기준으로 동기화
+
+상태
+
+- decided
+
+배경
+
+- `in-process publish -> outbox append + relay` 전환이 완료되었지만, `docs/ROADMAP.md`의 Step 4/5 상태 표기가 과거 계획 기준으로 남아 있었다.
+- 문서상 현재 상태와 다음 우선순위가 어긋나면 후속 작업(특히 SQLite outbox adapter 전환)의 착수 지점이 불명확해진다.
+
+관찰
+
+- ROADMAP Step 4는 여전히 "in-process event bus 도입" 수준으로 표현되어 있다.
+- 실제 코드는 tx 내부 outbox append, relay retry/backoff/dead 정책까지 반영되어 있다.
+
+결론
+
+- ROADMAP은 Step 4를 "outbox 경로 전환 완료(인-memory relay)" 기준으로 갱신한다.
+- Step 5에는 다음 내구화 범위(SQLite outbox table + relay/CDC, MQ bridge 선택)를 명시한다.
+- 남은 항목은 "done/remaining" 기준으로 분리해 현재 단계와 후속 단계를 명확히 구분한다.
+
+후속 작업
+
+- SQLite outbox adapter 도입 시 ROADMAP Step 5 진행 상태 업데이트
+- dead 이벤트 재처리 운영 경로 확정 후 문서 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
 - `internal/application/service/sessionService.go`
 - `internal/delivery/http.go`
 
