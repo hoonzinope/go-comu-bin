@@ -21,6 +21,7 @@ import (
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
@@ -29,6 +30,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
+	eventInProcess "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/inprocess"
 	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
@@ -72,19 +74,27 @@ func main() {
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logging.NewSlogLogger(logger)
 	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository)
+	eventBus := eventInProcess.NewEventBus(appLogger)
+	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
+	eventBus.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
-	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy, appLogger)
-	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy, appLogger)
-	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), authorizationPolicy, appLogger)
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy(cfg), appLogger)
-	attachmentUseCase := service.NewAttachmentServiceWithOptions(
+	boardUseCase := service.NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), authorizationPolicy, appLogger)
+	postUseCase := service.NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), authorizationPolicy, appLogger)
+	commentUseCase := service.NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), authorizationPolicy, appLogger)
+	reactionUseCase := service.NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, cachePolicy(cfg), appLogger)
+	attachmentUseCase := service.NewAttachmentServiceWithPublisher(
 		userRepository,
 		postRepository,
 		attachmentRepository,
 		unitOfWork,
 		fileStorage,
 		cache,
+		eventBus,
 		cfg.Storage.Attachment.MaxUploadSizeBytes,
 		service.ImageOptimizationConfig{
 			Enabled:     cfg.Storage.Attachment.ImageOptimization.Enabled,

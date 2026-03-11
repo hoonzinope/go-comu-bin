@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
@@ -102,7 +103,7 @@ func TestBoardService_DeleteBoard_RejectsNonEmptyBoard(t *testing.T) {
 func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewBoardServiceWithPublisher(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, cache, newTestEventPublisher(cache), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	seedBoard(repositories.board, "b1", "d1")
@@ -116,9 +117,11 @@ func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 	_, err = svc.CreateBoard(adminID, "b2", "d2")
 	require.NoError(t, err)
 
-	_, ok, err = cache.Get(key.BoardList(10, 0))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	require.Eventually(t, func() bool {
+		_, ok, err = cache.Get(key.BoardList(10, 0))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestBoardService_CreateBoard_Succeeds_WhenInvalidationFails(t *testing.T) {

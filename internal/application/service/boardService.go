@@ -5,6 +5,7 @@ import (
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
@@ -21,18 +22,24 @@ type BoardService struct {
 	postRepository      port.PostRepository
 	unitOfWork          port.UnitOfWork
 	cache               port.Cache
+	eventPublisher      port.EventPublisher
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 	logger              port.Logger
 }
 
 func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
+	return NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
+}
+
+func NewBoardServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, eventPublisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
 		postRepository:      postRepository,
 		unitOfWork:          unitOfWork,
 		cache:               cache,
+		eventPublisher:      resolveEventPublisher(eventPublisher),
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
 		logger:              resolveLogger(logger),
@@ -112,7 +119,7 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	if err != nil {
 		return 0, err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.BoardListPrefix(), "invalidate board list after create board")
+	s.eventPublisher.Publish(appevent.NewBoardChanged("created", boardID))
 	return boardID, nil
 }
 
@@ -148,7 +155,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.BoardListPrefix(), "invalidate board list after update board")
+	s.eventPublisher.Publish(appevent.NewBoardChanged("updated", id))
 	return nil
 }
 
@@ -187,6 +194,6 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDeleteByPrefix(s.cache, s.logger, key.BoardListPrefix(), "invalidate board list after delete board")
+	s.eventPublisher.Publish(appevent.NewBoardChanged("deleted", id))
 	return nil
 }

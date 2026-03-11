@@ -2,14 +2,19 @@ package service
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
+	eventInProcess "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/inprocess"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
 
@@ -63,7 +68,8 @@ func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
 }
 
 func newTestPostService(repositories testRepositories, cache port.Cache) *PostService {
-	return NewPostService(
+	eventPublisher := newTestEventPublisher(cache)
+	return NewPostServiceWithPublisher(
 		repositories.user,
 		repositories.board,
 		repositories.post,
@@ -74,9 +80,22 @@ func newTestPostService(repositories testRepositories, cache port.Cache) *PostSe
 		repositories.reaction,
 		repositories.unitOfWork,
 		cache,
+		eventPublisher,
 		newTestCachePolicy(),
 		newTestAuthorizationPolicy(),
 	)
+}
+
+func newTestEventPublisher(cache port.Cache) port.EventPublisher {
+	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	bus := eventInProcess.NewEventBus(logger)
+	handler := appevent.NewCacheInvalidationHandler(cache, logger)
+	bus.Subscribe(appevent.EventNameBoardChanged, handler)
+	bus.Subscribe(appevent.EventNamePostChanged, handler)
+	bus.Subscribe(appevent.EventNameCommentChanged, handler)
+	bus.Subscribe(appevent.EventNameReactionChanged, handler)
+	bus.Subscribe(appevent.EventNameAttachmentChanged, handler)
+	return bus
 }
 
 func newTestPasswordHasher() port.PasswordHasher {

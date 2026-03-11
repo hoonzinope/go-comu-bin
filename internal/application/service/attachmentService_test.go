@@ -260,7 +260,7 @@ func TestAttachmentService_DeletePostAttachment_InvalidatesPostDetailCache(t *te
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
 	attachmentID, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "attachments/a.png")
 	require.NoError(t, err)
 	require.NoError(t, cache.Set(key.PostDetail(postID), "stale"))
@@ -268,9 +268,11 @@ func TestAttachmentService_DeletePostAttachment_InvalidatesPostDetailCache(t *te
 	err = svc.DeletePostAttachment(postID, attachmentID, userID)
 	require.NoError(t, err)
 
-	_, ok, err := cache.Get(key.PostDetail(postID))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	require.Eventually(t, func() bool {
+		_, ok, err := cache.Get(key.PostDetail(postID))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestAttachmentService_DeletePostAttachment_RejectsReferencedAttachment(t *testing.T) {
@@ -404,14 +406,16 @@ func TestAttachmentService_UploadPostAttachment_InvalidatesPostDetailCache(t *te
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	require.NoError(t, cache.Set(key.PostDetail(postID), "stale"))
-	svc := NewAttachmentService(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
 
 	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
 	require.NoError(t, err)
 
-	_, ok, err := cache.Get(key.PostDetail(postID))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	require.Eventually(t, func() bool {
+		_, ok, err := cache.Get(key.PostDetail(postID))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestAttachmentService_UploadPostAttachment_DeletesStoredFileWhenMetadataSaveFails(t *testing.T) {

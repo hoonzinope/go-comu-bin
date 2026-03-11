@@ -973,3 +973,53 @@
 
 - `scripts/verify-swagger.sh`
 - `Makefile`
+
+## 2026-03-11 - EDA 1차 최소 세트로 캐시 무효화를 이벤트 소비 지점으로 수렴한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 write 유스케이스는 서비스마다 `best effort` 캐시 무효화 호출이 분산되어 있다.
+- 로드맵은 이벤트 기반 무효화 또는 중앙 집중식 정책으로의 전환을 요구한다.
+- `Notification`, `PointHistory` 확장을 위해서는 얇은 이벤트 경계가 먼저 필요하다.
+
+관찰
+
+- 기존 원칙은 `repository write 성공이 기준 성공`이며, 캐시 무효화 실패는 write 실패로 승격하지 않는다.
+- 현재 코드에서 무효화 책임이 `Board/Post/Comment/Reaction/Attachment` 서비스 전반에 퍼져 있어 누락 리스크가 있다.
+- 1차 목표는 outbox/외부 브로커가 아니라 in-process 경계 고정과 캐시 무효화 책임 수렴이다.
+
+결론
+
+- 1차 EDA는 `in-process` 범위에서만 도입한다. outbox/외부 MQ는 포함하지 않는다.
+- 이벤트 발행 시점은 `UnitOfWork` 트랜잭션 성공(커밋) 이후로 고정한다.
+- 디스패치는 비동기(in-process)로 수행한다.
+- 실패 정책은 기존과 동일하게 유지한다.
+  - write 성공 우선
+  - 이벤트 핸들러 실패/패닉 및 캐시 무효화 실패는 구조화 warn log로만 남긴다.
+- 최소 이벤트 타입 세트는 아래 5종으로 고정한다.
+  - `BoardChanged` `{operation, boardID}`
+  - `PostChanged` `{operation, postID, boardID, tagNames, deletedCommentIDs}`
+  - `CommentChanged` `{operation, commentID, postID}`
+  - `ReactionChanged` `{operation, targetType, targetID, postID}`
+  - `AttachmentChanged` `{operation, attachmentID, postID}`
+- operation 값은 `created|updated|deleted|published|set|unset` 중 도메인에 필요한 값만 사용한다.
+- `deletedCommentIDs`는 `PostChanged(operation=deleted)`에서만 채운다.
+
+후속 작업
+
+- application port에 `DomainEvent`, `EventPublisher`, `EventBus`, `EventHandler` 계약 추가
+- in-process 비동기 event bus 구현 및 panic/error 보호 로깅
+- 단일 `CacheInvalidationHandler` 도입 후 서비스 직접 캐시 삭제 제거
+- 서비스는 tx 밖에서 이벤트만 발행하도록 전환
+- 이벤트/버스/캐시핸들러 및 서비스 회귀 테스트 추가
+- 아키텍처 문서에 이벤트 기반 무효화 흐름 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/ARCHITECTURE.md`
+- `internal/application/service`

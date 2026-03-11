@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
@@ -164,12 +165,16 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 
 	require.NoError(t, postSvc.UpdatePost(postID, userID, "new", "new-content", nil))
 
-	_, ok, err := cache.Get(key.PostDetail(postID))
-	require.NoError(t, err)
-	assert.False(t, ok)
-	_, ok, err = cache.Get(key.PostList(boardID, 10, 0))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	require.Eventually(t, func() bool {
+		_, ok, err := cache.Get(key.PostDetail(postID))
+		require.NoError(t, err)
+		if ok {
+			return false
+		}
+		_, ok, err = cache.Get(key.PostList(boardID, 10, 0))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestPostService_UpdatePost_SucceedsWhenCacheInvalidationFails(t *testing.T) {

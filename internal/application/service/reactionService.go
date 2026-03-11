@@ -5,6 +5,7 @@ import (
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -21,11 +22,16 @@ type ReactionService struct {
 	reactionRepository port.ReactionRepository
 	unitOfWork         port.UnitOfWork
 	cache              port.Cache
+	eventPublisher     port.EventPublisher
 	cachePolicy        appcache.Policy
 	logger             port.Logger
 }
 
 func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
+	return NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, logger...)
+}
+
+func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, eventPublisher port.EventPublisher, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
 	return &ReactionService{
 		userRepository:     userRepository,
 		postRepository:     postRepository,
@@ -33,6 +39,7 @@ func NewReactionService(userRepository port.UserRepository, postRepository port.
 		reactionRepository: reactionRepository,
 		unitOfWork:         unitOfWork,
 		cache:              cache,
+		eventPublisher:     resolveEventPublisher(eventPublisher),
 		cachePolicy:        cachePolicy,
 		logger:             resolveLogger(logger),
 	}
@@ -52,7 +59,9 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 	if !created && !changed {
 		return false, nil
 	}
-	s.invalidateReactionCaches(TargetID, TargetType, detailPostID)
+	if detailPostID != nil {
+		s.eventPublisher.Publish(appevent.NewReactionChanged("set", TargetType, TargetID, *detailPostID))
+	}
 	return created, nil
 }
 
@@ -70,7 +79,9 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 	if !deleted {
 		return nil
 	}
-	s.invalidateReactionCaches(TargetID, TargetType, detailPostID)
+	if detailPostID != nil {
+		s.eventPublisher.Publish(appevent.NewReactionChanged("unset", TargetType, TargetID, *detailPostID))
+	}
 	return nil
 }
 
@@ -145,13 +156,6 @@ func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([
 		out = append(out, reactionModel)
 	}
 	return out, nil
-}
-
-func (s *ReactionService) invalidateReactionCaches(targetID int64, targetType entity.ReactionTargetType, detailPostID *int64) {
-	bestEffortCacheDelete(s.cache, s.logger, key.ReactionList(string(targetType), targetID), "invalidate reaction list")
-	if detailPostID != nil {
-		bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(*detailPostID), "invalidate post detail after reaction")
-	}
 }
 
 func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, targetType entity.ReactionTargetType) (*int64, error) {

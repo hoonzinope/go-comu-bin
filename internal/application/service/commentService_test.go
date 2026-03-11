@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
@@ -133,7 +134,7 @@ func TestCommentService_GetCommentsByPost_ReturnsPostNotFound_WhenPostDeleted(t 
 func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	commentSvc := NewCommentService(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestCachePolicy(), newTestAuthorizationPolicy())
+	commentSvc := NewCommentServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(cache), newTestCachePolicy(), newTestAuthorizationPolicy())
 	postSvc := newTestPostService(repositories, cache)
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
@@ -148,12 +149,16 @@ func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	_, err = commentSvc.CreateComment("new-comment", userID, postID, nil)
 	require.NoError(t, err)
 
-	_, ok, err := cache.Get(key.PostDetail(postID))
-	require.NoError(t, err)
-	assert.False(t, ok)
-	_, ok, err = cache.Get(key.CommentList(postID, 10, 0))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	require.Eventually(t, func() bool {
+		_, ok, err := cache.Get(key.PostDetail(postID))
+		require.NoError(t, err)
+		if ok {
+			return false
+		}
+		_, ok, err = cache.Get(key.CommentList(postID, 10, 0))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestCommentService_CreateComment_SucceedsWhenCacheInvalidationFails(t *testing.T) {

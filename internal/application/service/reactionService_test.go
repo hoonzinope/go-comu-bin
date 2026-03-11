@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
@@ -48,7 +49,7 @@ func TestReactionService_GetReactionsByTarget_AndDeleteByOwner(t *testing.T) {
 func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -64,9 +65,11 @@ func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	_, ok, err = cache.Get(key.ReactionList("post", postID))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	require.Eventually(t, func() bool {
+		_, ok, err = cache.Get(key.ReactionList("post", postID))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
 
 	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
@@ -96,7 +99,7 @@ func TestReactionService_SetReaction_SucceedsWhenCacheInvalidationFails(t *testi
 func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -119,7 +122,7 @@ func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
 func TestReactionService_SetReaction_NoOpWhenSameType(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -193,7 +196,7 @@ func TestReactionService_DeleteReaction_DoesNotRemoveOtherUsersReaction(t *testi
 func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -210,12 +213,16 @@ func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testi
 
 	require.NoError(t, reactionSvc.DeleteReaction(userID, commentID, entity.ReactionTargetComment))
 
-	_, ok, err := cache.Get(key.ReactionList("comment", commentID))
-	require.NoError(t, err)
-	assert.False(t, ok)
-	_, ok, err = cache.Get(key.PostDetail(postID))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	require.Eventually(t, func() bool {
+		_, ok, err := cache.Get(key.ReactionList("comment", commentID))
+		require.NoError(t, err)
+		if ok {
+			return false
+		}
+		_, ok, err = cache.Get(key.PostDetail(postID))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestReactionService_GetReactionsByTarget_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {

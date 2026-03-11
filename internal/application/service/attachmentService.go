@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
+	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -37,6 +37,7 @@ type AttachmentService struct {
 	unitOfWork           port.UnitOfWork
 	fileStorage          port.FileStorage
 	cache                port.Cache
+	eventPublisher       port.EventPublisher
 	maxUploadSizeBytes   int64
 	imageOptimization    ImageOptimizationConfig
 	authorizationPolicy  policy.AuthorizationPolicy
@@ -58,13 +59,14 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
-	return NewAttachmentServiceWithOptions(
+	return NewAttachmentServiceWithPublisher(
 		userRepository,
 		postRepository,
 		attachmentRepository,
 		unitOfWork,
 		fileStorage,
 		cache,
+		nil,
 		maxUploadSizeBytes,
 		ImageOptimizationConfig{Enabled: true, JPEGQuality: 82},
 		authorizationPolicy,
@@ -73,6 +75,10 @@ func NewAttachmentService(userRepository port.UserRepository, postRepository por
 }
 
 func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
+	return NewAttachmentServiceWithPublisher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
+}
+
+func NewAttachmentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, eventPublisher port.EventPublisher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
 	}
@@ -86,6 +92,7 @@ func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRep
 		unitOfWork:           unitOfWork,
 		fileStorage:          fileStorage,
 		cache:                cache,
+		eventPublisher:       resolveEventPublisher(eventPublisher),
 		maxUploadSizeBytes:   maxUploadSizeBytes,
 		imageOptimization:    imageOptimization,
 		authorizationPolicy:  authorizationPolicy,
@@ -129,7 +136,7 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 	if err != nil {
 		return 0, err
 	}
-	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after create attachment")
+	s.eventPublisher.Publish(appevent.NewAttachmentChanged("created", id, postID))
 	return id, nil
 }
 
@@ -334,7 +341,7 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 	if err != nil {
 		return err
 	}
-	bestEffortCacheDelete(s.cache, s.logger, key.PostDetail(postID), "invalidate post detail after delete attachment")
+	s.eventPublisher.Publish(appevent.NewAttachmentChanged("deleted", attachmentID, postID))
 	return nil
 }
 

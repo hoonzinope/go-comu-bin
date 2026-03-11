@@ -5,17 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
+	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
+	eventInProcess "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/inprocess"
+	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	"github.com/stretchr/testify/assert"
@@ -134,6 +138,14 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository)
+	appLogger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	eventBus := eventInProcess.NewEventBus(appLogger)
+	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
+	eventBus.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
+	eventBus.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	passwordHasher := auth.NewBcryptPasswordHasher(4)
 	hashedAdminPassword, err := passwordHasher.Hash("admin")
 	require.NoError(t, err)
@@ -142,11 +154,11 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	require.NoError(t, err)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
-	boardUseCase := service.NewBoardService(userRepository, boardRepository, postRepository, unitOfWork, cache, testCachePolicy(), authorizationPolicy)
-	postUseCase := service.NewPostService(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, testCachePolicy(), authorizationPolicy)
-	commentUseCase := service.NewCommentService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, testCachePolicy(), authorizationPolicy)
-	reactionUseCase := service.NewReactionService(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, testCachePolicy())
-	attachmentUseCase := service.NewAttachmentService(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, 10<<20, authorizationPolicy)
+	boardUseCase := service.NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, eventBus, testCachePolicy(), authorizationPolicy)
+	postUseCase := service.NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, testCachePolicy(), authorizationPolicy)
+	commentUseCase := service.NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, testCachePolicy(), authorizationPolicy)
+	reactionUseCase := service.NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, testCachePolicy())
+	attachmentUseCase := service.NewAttachmentServiceWithPublisher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, eventBus, 10<<20, service.ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)
