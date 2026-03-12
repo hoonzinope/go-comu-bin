@@ -15,6 +15,7 @@ type OutboxRepository struct {
 	coordinator *txCoordinator
 	data        map[string]port.OutboxMessage
 	order       []string
+	cfg         outboxConfig
 }
 
 type outboxRepositoryState struct {
@@ -22,11 +23,35 @@ type outboxRepositoryState struct {
 	Order []string
 }
 
-func NewOutboxRepository() *OutboxRepository {
+type outboxConfig struct {
+	processingTimeout time.Duration
+}
+
+type OutboxRepositoryOption func(*outboxConfig)
+
+func WithProcessingTimeout(timeout time.Duration) OutboxRepositoryOption {
+	return func(cfg *outboxConfig) {
+		if timeout > 0 {
+			cfg.processingTimeout = timeout
+		}
+	}
+}
+
+func NewOutboxRepository(opts ...OutboxRepositoryOption) *OutboxRepository {
+	cfg := outboxConfig{
+		processingTimeout: 30 * time.Second,
+	}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&cfg)
+	}
 	return &OutboxRepository{
 		coordinator: newTxCoordinator(),
 		data:        make(map[string]port.OutboxMessage),
 		order:       make([]string, 0),
+		cfg:         cfg,
 	}
 }
 
@@ -84,6 +109,17 @@ func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMe
 		if !exists {
 			continue
 		}
+		if message.Status == port.OutboxStatusDead {
+			continue
+		}
+		if message.Status == port.OutboxStatusProcessing {
+			if message.NextAttemptAt.After(now) {
+				continue
+			}
+			// stale processing reclaim
+			message.Status = port.OutboxStatusPending
+			r.data[id] = message
+		}
 		if message.Status != port.OutboxStatusPending {
 			continue
 		}
@@ -92,6 +128,7 @@ func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMe
 		}
 		message.Status = port.OutboxStatusProcessing
 		message.AttemptCount++
+		message.NextAttemptAt = now.Add(r.cfg.processingTimeout)
 		r.data[id] = message
 		ready = append(ready, cloneOutboxMessage(message))
 		if len(ready) >= limit {
@@ -165,6 +202,15 @@ func (r *OutboxRepository) MarkDead(id string, err string) error {
 	message.Status = port.OutboxStatusDead
 	message.LastError = strings.TrimSpace(err)
 	r.data[id] = message
+	// dead 메시지는 보존하되 polling hot-path 스캔에서 제외한다.
+	filtered := r.order[:0]
+	for _, itemID := range r.order {
+		if itemID == id {
+			continue
+		}
+		filtered = append(filtered, itemID)
+	}
+	r.order = filtered
 	return nil
 }
 

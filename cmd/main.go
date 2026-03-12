@@ -18,7 +18,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
@@ -143,12 +145,48 @@ func main() {
 		Logger:                   appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)
-	err = server.ListenAndServe()
-	cancel()
-	outboxRelay.Wait()
+	signalCtx, stopSignal := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignal()
+	serverErrCh := make(chan error, 1)
+	go func() {
+		serverErrCh <- server.ListenAndServe()
+	}()
+	select {
+	case err = <-serverErrCh:
+		cancel()
+		outboxRelay.Wait()
+	case <-signalCtx.Done():
+		slog.Info("shutdown signal received")
+		gracefulShutdown(server, outboxRelay, cancel, 5*time.Second, logger)
+		err = <-serverErrCh
+	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped with error", "error", err)
 		os.Exit(1)
+	}
+}
+
+type httpShutdowner interface {
+	Shutdown(ctx context.Context) error
+}
+
+type relayWaiter interface {
+	Wait()
+}
+
+func gracefulShutdown(server httpShutdowner, relay relayWaiter, cancel context.CancelFunc, timeout time.Duration, logger *slog.Logger) {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), timeout)
+	defer shutdownCancel()
+	if server != nil {
+		if err := server.Shutdown(shutdownCtx); err != nil && logger != nil {
+			logger.Warn("http server shutdown failed", "error", err)
+		}
+	}
+	if cancel != nil {
+		cancel()
+	}
+	if relay != nil {
+		relay.Wait()
 	}
 }
 

@@ -82,6 +82,38 @@ func TestOutboxRepository_MarkSucceededRemovesMessage(t *testing.T) {
 	assert.Empty(t, ready)
 }
 
+func TestOutboxRepository_ReclaimsStaleProcessingMessage(t *testing.T) {
+	repo := NewOutboxRepository(WithProcessingTimeout(20 * time.Millisecond))
+	now := time.Now()
+	require.NoError(t, repo.Append(port.OutboxMessage{
+		ID:            "m1",
+		EventName:     "post.changed",
+		Payload:       []byte(`{"x":1}`),
+		OccurredAt:    now,
+		NextAttemptAt: now,
+		Status:        port.OutboxStatusPending,
+	}))
+
+	firstBatch, err := repo.FetchReady(1, now)
+	require.NoError(t, err)
+	require.Len(t, firstBatch, 1)
+	assert.Equal(t, 1, firstBatch[0].AttemptCount)
+	assert.Equal(t, port.OutboxStatusProcessing, firstBatch[0].Status)
+
+	// 아직 lease timeout 이내이므로 재수거되지 않는다.
+	none, err := repo.FetchReady(1, now.Add(10*time.Millisecond))
+	require.NoError(t, err)
+	assert.Empty(t, none)
+
+	// lease timeout 이후에는 stale processing을 reclaim 후 재수거한다.
+	reclaimed, err := repo.FetchReady(1, now.Add(25*time.Millisecond))
+	require.NoError(t, err)
+	require.Len(t, reclaimed, 1)
+	assert.Equal(t, "m1", reclaimed[0].ID)
+	assert.Equal(t, 2, reclaimed[0].AttemptCount)
+	assert.Equal(t, port.OutboxStatusProcessing, reclaimed[0].Status)
+}
+
 func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 	userRepository := NewUserRepository()
 	boardRepository := NewBoardRepository()

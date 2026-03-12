@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,4 +172,41 @@ func TestStartBackgroundJobs_ReturnsNilWhenCleanupJobDisabled(t *testing.T) {
 
 	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{})
 	require.NoError(t, err)
+}
+
+type stubHTTPShutdowner struct {
+	called int32
+	err    error
+}
+
+func (s *stubHTTPShutdowner) Shutdown(ctx context.Context) error {
+	atomic.AddInt32(&s.called, 1)
+	return s.err
+}
+
+type stubRelayWaiter struct {
+	called int32
+}
+
+func (s *stubRelayWaiter) Wait() {
+	atomic.AddInt32(&s.called, 1)
+}
+
+func TestGracefulShutdown_CallsServerShutdownAndRelayWait(t *testing.T) {
+	server := &stubHTTPShutdowner{}
+	relay := &stubRelayWaiter{}
+	cancelCalled := int32(0)
+	cancel := func() { atomic.AddInt32(&cancelCalled, 1) }
+
+	gracefulShutdown(
+		server,
+		relay,
+		cancel,
+		50*time.Millisecond,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&cancelCalled))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&server.called))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&relay.called))
 }

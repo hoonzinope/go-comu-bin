@@ -1290,3 +1290,41 @@
 - `cmd/main.go`
 - `docs/ARCHITECTURE.md`
 - `docs/CONFIG.md`
+
+## 2026-03-12 - outbox relay 복구/종료 경계 강화
+
+상태
+
+- decided
+
+배경
+
+- outbox 기반 전환 후에도 worker 비정상 종료 시 `processing` 상태 메시지 복구 규칙이 없어 전달이 정체될 수 있었다.
+- dead 메시지 보존 정책과 선형 스캔 polling이 결합되어 메시지 누적 시 relay hot path 비용이 증가한다.
+- 서버 종료는 `ListenAndServe` 반환 이후에만 relay stop/wait를 수행해 운영 환경 graceful shutdown 경계가 약했다.
+
+관찰
+
+- `FetchReady`는 `pending`만 대상으로 claim하며, claim 후 상태 복구(lease timeout reclaim)가 없다.
+- dead 메시지는 삭제하지 않고 보존하지만, polling 대상 순서에도 남아 반복 스캔된다.
+- `main`에는 signal 기반 `http.Server.Shutdown` 경로가 없다.
+
+결론
+
+- outbox claim은 lease timeout 기반 reclaim을 포함해 stale `processing`을 다시 `pending`으로 복구한다.
+- dead 메시지는 보존하되 relay polling 순서에서는 분리해 hot path 스캔 비용을 줄인다.
+- 서버는 signal 기반 graceful shutdown(`Shutdown -> relay cancel -> relay wait`) 경계를 명시한다.
+
+후속 작업
+
+- outbox reclaim/claim 회귀 테스트 추가
+- shutdown 경계 단위 테스트 추가
+- ARCHITECTURE/ROADMAP에 운영 경계 업데이트
+
+관련 문서/코드
+
+- `internal/infrastructure/persistence/inmemory/outboxRepository.go`
+- `internal/infrastructure/event/outbox/relay.go`
+- `cmd/main.go`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
