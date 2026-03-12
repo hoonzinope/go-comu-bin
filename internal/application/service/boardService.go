@@ -22,28 +22,33 @@ type BoardService struct {
 	postRepository      port.PostRepository
 	unitOfWork          port.UnitOfWork
 	cache               port.Cache
-	eventPublisher      port.EventPublisher
+	actionDispatcher    port.ActionHookDispatcher
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 	logger              port.Logger
 }
 
 func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
-	return NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
+	return NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewBoardServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, eventPublisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
+func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
 		postRepository:      postRepository,
 		unitOfWork:          unitOfWork,
 		cache:               cache,
-		eventPublisher:      resolveEventPublisher(eventPublisher),
+		actionDispatcher:    resolveActionDispatcher(actionDispatcher),
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
 		logger:              resolveLogger(logger),
 	}
+}
+
+// Deprecated: use NewBoardServiceWithActionDispatcher.
+func NewBoardServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
+	return NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
 }
 
 func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, error) {
@@ -114,7 +119,7 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 		if err != nil {
 			return customError.WrapRepository("save board", err)
 		}
-		if err := appendEventsToOutbox(tx, appevent.NewBoardChanged("created", boardID)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("created", boardID)); err != nil {
 			return err
 		}
 		return nil
@@ -152,7 +157,7 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 		if err := tx.BoardRepository().Update(existingBoard); err != nil {
 			return customError.WrapRepository("update board", err)
 		}
-		if err := appendEventsToOutbox(tx, appevent.NewBoardChanged("updated", id)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("updated", id)); err != nil {
 			return err
 		}
 		return nil
@@ -193,7 +198,7 @@ func (s *BoardService) DeleteBoard(id, userID int64) error {
 		if err := tx.BoardRepository().Delete(existingBoard.ID); err != nil {
 			return customError.WrapRepository("delete board", err)
 		}
-		if err := appendEventsToOutbox(tx, appevent.NewBoardChanged("deleted", id)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("deleted", id)); err != nil {
 			return err
 		}
 		return nil

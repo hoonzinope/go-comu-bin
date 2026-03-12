@@ -14,11 +14,24 @@ import (
 var defaultEventSerializer port.EventSerializer = appevent.NewJSONEventSerializer()
 
 func appendEventsToOutbox(tx port.TxScope, events ...port.DomainEvent) error {
+	return dispatchDomainActions(tx, nil, events...)
+}
+
+func dispatchDomainActions(tx port.TxScope, dispatcher port.ActionHookDispatcher, events ...port.DomainEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
 	if tx == nil || len(events) == 0 {
+		if dispatcher != nil {
+			dispatcher.Dispatch(events...)
+		}
 		return nil
 	}
 	outbox := tx.Outbox()
 	if outbox == nil {
+		if dispatcher != nil {
+			dispatcher.Dispatch(events...)
+		}
 		return nil
 	}
 	messages := make([]port.OutboxMessage, 0, len(events))

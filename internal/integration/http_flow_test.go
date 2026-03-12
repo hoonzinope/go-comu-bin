@@ -150,7 +150,6 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		MaxAttempts:  5,
 		BaseBackoff:  10 * time.Millisecond,
 	})
-	outboxPublisher := eventOutbox.NewPublisher(outboxRepository, eventSerializer, appLogger)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
@@ -171,11 +170,11 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	require.NoError(t, err)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
-	boardUseCase := service.NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, outboxPublisher, testCachePolicy(), authorizationPolicy)
-	postUseCase := service.NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, testCachePolicy(), authorizationPolicy)
-	commentUseCase := service.NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, testCachePolicy(), authorizationPolicy)
-	reactionUseCase := service.NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, testCachePolicy())
-	attachmentUseCase := service.NewAttachmentServiceWithPublisher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, outboxPublisher, 10<<20, service.ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, authorizationPolicy)
+	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy())
+	attachmentUseCase := service.NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, 10<<20, service.ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)

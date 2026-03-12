@@ -1368,3 +1368,37 @@
 - `cmd/main.go`
 - `docs/ARCHITECTURE.md`
 - `docs/ROADMAP.md`
+
+## 2026-03-12 - 이벤트 발행 경계를 action dispatch 용어로 정리
+
+상태
+
+- decided
+
+배경
+
+- outbox 경로가 표준이 된 이후에도 서비스 계층의 `eventPublisher` 명칭은 향후 action/filter hook 확장 의도를 드러내지 못했다.
+- 동시에 일부 경계에서는 tx outbox가 없는 환경(테스트/확장 어댑터)에서 이벤트 전달 fallback 전략이 필요했다.
+
+관찰
+
+- 서비스 write 경로는 `tx.Outbox().Append`를 사용하지만 필드/생성자 이름은 여전히 `eventPublisher` 중심이다.
+- action hook 확장 로드맵 관점에서는 "이벤트 퍼블리셔"보다 "도메인 액션 디스패치" 용어가 의도에 가깝다.
+
+결론
+
+- 서비스 계층 용어를 `actionDispatcher`로 정리한다.
+- 공통 helper는 `dispatchDomainActions(tx, dispatcher, events...)`로 통일한다.
+- dispatch 규칙은 다음으로 고정한다.
+  - tx outbox가 있으면 outbox append 우선
+  - outbox가 없으면 dispatcher fallback publish
+
+후속 작업
+
+- 다음 단계에서 filter/action hook 포트 구체화
+- 서비스 생성자 naming(`WithPublisher`)은 호환성 고려 후 단계적으로 정리
+
+관련 문서/코드
+
+- `internal/application/service/*Service.go`
+- `internal/application/service/outbox_events.go`

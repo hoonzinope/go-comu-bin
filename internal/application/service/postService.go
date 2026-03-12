@@ -36,7 +36,7 @@ type PostService struct {
 	reactionRepository   port.ReactionRepository
 	unitOfWork           port.UnitOfWork
 	cache                port.Cache
-	eventPublisher       port.EventPublisher
+	actionDispatcher     port.ActionHookDispatcher
 	cachePolicy          appcache.Policy
 	authorizationPolicy  policy.AuthorizationPolicy
 	logger               port.Logger
@@ -46,10 +46,10 @@ type PostService struct {
 var attachmentEmbedPattern = regexp.MustCompile(`!\[[^\]]*]\(attachment://([0-9]+)\)`)
 
 func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
-	return NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
+	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewPostServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, eventPublisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
+func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
 	svc := &PostService{
 		userRepository:       userRepository,
 		boardRepository:      boardRepository,
@@ -61,13 +61,18 @@ func NewPostServiceWithPublisher(userRepository port.UserRepository, boardReposi
 		reactionRepository:   reactionRepository,
 		unitOfWork:           unitOfWork,
 		cache:                cache,
-		eventPublisher:       resolveEventPublisher(eventPublisher),
+		actionDispatcher:     resolveActionDispatcher(actionDispatcher),
 		cachePolicy:          cachePolicy,
 		authorizationPolicy:  authorizationPolicy,
 		logger:               resolveLogger(logger),
 	}
 	svc.postDetailQuery = newPostDetailQuery(userRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository)
 	return svc
+}
+
+// Deprecated: use NewPostServiceWithActionDispatcher.
+func NewPostServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
+	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
 }
 
 func (s *PostService) CreatePost(title, content string, tags []string, authorID, boardID int64) (int64, error) {
@@ -124,7 +129,7 @@ func (s *PostService) createPost(title, content string, tags []string, authorID,
 			return err
 		}
 		if !draft {
-			if err := appendEventsToOutbox(tx, appevent.NewPostChanged("created", postID, boardID, normalizedTags, nil)); err != nil {
+			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("created", postID, boardID, normalizedTags, nil)); err != nil {
 				return err
 			}
 		}
@@ -272,7 +277,7 @@ func (s *PostService) PublishPost(id, authorID int64) error {
 		}
 		boardID = post.BoardID
 		postID = post.ID
-		if err := appendEventsToOutbox(tx, appevent.NewPostChanged("published", postID, boardID, currentTags, nil)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("published", postID, boardID, currentTags, nil)); err != nil {
 			return err
 		}
 		return nil
@@ -379,7 +384,7 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string, tags
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := appendEventsToOutbox(tx, appevent.NewPostChanged("updated", postID, boardID, unionTagNames(currentTagNames, normalizedTags), nil)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("updated", postID, boardID, unionTagNames(currentTagNames, normalizedTags), nil)); err != nil {
 			return err
 		}
 		return nil
@@ -449,7 +454,7 @@ func (s *PostService) DeletePost(id, authorID int64) error {
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := appendEventsToOutbox(tx, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, commentIDs)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, commentIDs)); err != nil {
 			return err
 		}
 		return nil

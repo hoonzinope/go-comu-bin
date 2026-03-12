@@ -37,7 +37,7 @@ type AttachmentService struct {
 	unitOfWork           port.UnitOfWork
 	fileStorage          port.FileStorage
 	cache                port.Cache
-	eventPublisher       port.EventPublisher
+	actionDispatcher     port.ActionHookDispatcher
 	maxUploadSizeBytes   int64
 	imageOptimization    ImageOptimizationConfig
 	authorizationPolicy  policy.AuthorizationPolicy
@@ -59,7 +59,7 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
-	return NewAttachmentServiceWithPublisher(
+	return NewAttachmentServiceWithActionDispatcher(
 		userRepository,
 		postRepository,
 		attachmentRepository,
@@ -75,10 +75,10 @@ func NewAttachmentService(userRepository port.UserRepository, postRepository por
 }
 
 func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
-	return NewAttachmentServiceWithPublisher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
+	return NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
 }
 
-func NewAttachmentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, eventPublisher port.EventPublisher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
+func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
 	}
@@ -92,12 +92,17 @@ func NewAttachmentServiceWithPublisher(userRepository port.UserRepository, postR
 		unitOfWork:           unitOfWork,
 		fileStorage:          fileStorage,
 		cache:                cache,
-		eventPublisher:       resolveEventPublisher(eventPublisher),
+		actionDispatcher:     resolveActionDispatcher(actionDispatcher),
 		maxUploadSizeBytes:   maxUploadSizeBytes,
 		imageOptimization:    imageOptimization,
 		authorizationPolicy:  authorizationPolicy,
 		logger:               resolveLogger(logger),
 	}
+}
+
+// Deprecated: use NewAttachmentServiceWithActionDispatcher.
+func NewAttachmentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, publisher port.EventPublisher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
+	return NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, wrapEventPublisherAsActionDispatcher(publisher), maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
 }
 
 func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
@@ -131,7 +136,7 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 		if err != nil {
 			return customError.WrapRepository("save attachment", err)
 		}
-		if err := appendEventsToOutbox(tx, appevent.NewAttachmentChanged("created", id, postID)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewAttachmentChanged("created", id, postID)); err != nil {
 			return err
 		}
 		return nil
@@ -338,7 +343,7 @@ func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID in
 		if err := tx.AttachmentRepository().Update(&updatedAttachment); err != nil {
 			return customError.WrapRepository("mark attachment pending delete", err)
 		}
-		if err := appendEventsToOutbox(tx, appevent.NewAttachmentChanged("deleted", attachmentID, postID)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewAttachmentChanged("deleted", attachmentID, postID)); err != nil {
 			return err
 		}
 		return nil

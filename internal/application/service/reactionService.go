@@ -22,16 +22,16 @@ type ReactionService struct {
 	reactionRepository port.ReactionRepository
 	unitOfWork         port.UnitOfWork
 	cache              port.Cache
-	eventPublisher     port.EventPublisher
+	actionDispatcher   port.ActionHookDispatcher
 	cachePolicy        appcache.Policy
 	logger             port.Logger
 }
 
 func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
-	return NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, logger...)
+	return NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, logger...)
 }
 
-func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, eventPublisher port.EventPublisher, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
+func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
 	return &ReactionService{
 		userRepository:     userRepository,
 		postRepository:     postRepository,
@@ -39,10 +39,15 @@ func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRep
 		reactionRepository: reactionRepository,
 		unitOfWork:         unitOfWork,
 		cache:              cache,
-		eventPublisher:     resolveEventPublisher(eventPublisher),
+		actionDispatcher:   resolveActionDispatcher(actionDispatcher),
 		cachePolicy:        cachePolicy,
 		logger:             resolveLogger(logger),
 	}
+}
+
+// Deprecated: use NewReactionServiceWithActionDispatcher.
+func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
+	return NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, logger...)
 }
 
 func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
@@ -52,7 +57,7 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 			return false, false, customError.WrapRepository("set user target reaction", err)
 		}
 		if (created || changed) && detailPostID != nil {
-			if err := appendEventsToOutbox(tx, appevent.NewReactionChanged("set", TargetType, TargetID, *detailPostID)); err != nil {
+			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("set", TargetType, TargetID, *detailPostID)); err != nil {
 				return false, false, err
 			}
 		}
@@ -74,7 +79,7 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 			return false, false, customError.WrapRepository("delete user target reaction", err)
 		}
 		if deleted && detailPostID != nil {
-			if err := appendEventsToOutbox(tx, appevent.NewReactionChanged("unset", TargetType, TargetID, *detailPostID)); err != nil {
+			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("unset", TargetType, TargetID, *detailPostID)); err != nil {
 				return false, false, err
 			}
 		}

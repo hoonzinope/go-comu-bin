@@ -92,7 +92,6 @@ func main() {
 			BaseBackoff:  time.Duration(cfg.Event.Outbox.BaseBackoffMillis) * time.Millisecond,
 		},
 	)
-	outboxPublisher := eventOutbox.NewPublisher(outboxRepository, eventSerializer, appLogger)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
@@ -102,18 +101,18 @@ func main() {
 	outboxRelay.Start(appCtx)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
-	boardUseCase := service.NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), authorizationPolicy, appLogger)
-	postUseCase := service.NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), authorizationPolicy, appLogger)
-	commentUseCase := service.NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), authorizationPolicy, appLogger)
-	reactionUseCase := service.NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, outboxPublisher, cachePolicy(cfg), appLogger)
-	attachmentUseCase := service.NewAttachmentServiceWithPublisher(
+	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
+	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
+	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), appLogger)
+	attachmentUseCase := service.NewAttachmentServiceWithActionDispatcher(
 		userRepository,
 		postRepository,
 		attachmentRepository,
 		unitOfWork,
 		fileStorage,
 		cache,
-		outboxPublisher,
+		nil,
 		cfg.Storage.Attachment.MaxUploadSizeBytes,
 		service.ImageOptimizationConfig{
 			Enabled:     cfg.Storage.Attachment.ImageOptimization.Enabled,

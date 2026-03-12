@@ -24,17 +24,17 @@ type CommentService struct {
 	reactionRepository  port.ReactionRepository
 	unitOfWork          port.UnitOfWork
 	cache               port.Cache
-	eventPublisher      port.EventPublisher
+	actionDispatcher    port.ActionHookDispatcher
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
 	logger              port.Logger
 }
 
 func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
-	return NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
+	return NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewCommentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, eventPublisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
+func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
@@ -42,11 +42,16 @@ func NewCommentServiceWithPublisher(userRepository port.UserRepository, postRepo
 		reactionRepository:  reactionRepository,
 		unitOfWork:          unitOfWork,
 		cache:               cache,
-		eventPublisher:      resolveEventPublisher(eventPublisher),
+		actionDispatcher:    resolveActionDispatcher(actionDispatcher),
 		cachePolicy:         cachePolicy,
 		authorizationPolicy: authorizationPolicy,
 		logger:              resolveLogger(logger),
 	}
+}
+
+// Deprecated: use NewCommentServiceWithActionDispatcher.
+func NewCommentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
+	return NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
 }
 
 func (s *CommentService) CreateComment(content string, authorID, postID int64, parentID *int64) (int64, error) {
@@ -90,7 +95,7 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 		if err != nil {
 			return customError.WrapRepository("save comment", err)
 		}
-		if err := appendEventsToOutbox(tx, appevent.NewCommentChanged("created", commentID, postID)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("created", commentID, postID)); err != nil {
 			return err
 		}
 		return nil
@@ -204,7 +209,7 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 			return customError.WrapRepository("update comment", err)
 		}
 		postID = updatedComment.PostID
-		if err := appendEventsToOutbox(tx, appevent.NewCommentChanged("updated", id, postID)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("updated", id, postID)); err != nil {
 			return err
 		}
 		return nil
@@ -247,7 +252,7 @@ func (s *CommentService) DeleteComment(id, authorID int64) error {
 		}
 		commentID = comment.ID
 		postID = comment.PostID
-		if err := appendEventsToOutbox(tx, appevent.NewCommentChanged("deleted", commentID, postID)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("deleted", commentID, postID)); err != nil {
 			return err
 		}
 		return nil

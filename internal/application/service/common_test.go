@@ -73,8 +73,8 @@ func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
 }
 
 func newTestPostService(repositories testRepositories, cache port.Cache) *PostService {
-	eventPublisher := newTestEventPublisher(repositories, cache)
-	return NewPostServiceWithPublisher(
+	actionDispatcher := newTestActionDispatcher(repositories, cache)
+	return NewPostServiceWithActionDispatcher(
 		repositories.user,
 		repositories.board,
 		repositories.post,
@@ -85,12 +85,33 @@ func newTestPostService(repositories testRepositories, cache port.Cache) *PostSe
 		repositories.reaction,
 		repositories.unitOfWork,
 		cache,
-		eventPublisher,
+		actionDispatcher,
 		newTestCachePolicy(),
 		newTestAuthorizationPolicy(),
 	)
 }
 
+func newTestActionDispatcher(repositories testRepositories, cache port.Cache) port.ActionHookDispatcher {
+	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	serializer := appevent.NewJSONEventSerializer()
+	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
+		WorkerCount:  1,
+		BatchSize:    64,
+		PollInterval: time.Millisecond,
+		MaxAttempts:  5,
+		BaseBackoff:  time.Millisecond,
+	})
+	handler := appevent.NewCacheInvalidationHandler(cache, logger)
+	relay.Subscribe(appevent.EventNameBoardChanged, handler)
+	relay.Subscribe(appevent.EventNamePostChanged, handler)
+	relay.Subscribe(appevent.EventNameCommentChanged, handler)
+	relay.Subscribe(appevent.EventNameReactionChanged, handler)
+	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
+	relay.Start(context.Background())
+	return wrapEventPublisherAsActionDispatcher(eventOutbox.NewPublisher(repositories.outbox, serializer, logger))
+}
+
+// Deprecated: use newTestActionDispatcher.
 func newTestEventPublisher(repositories testRepositories, cache port.Cache) port.EventPublisher {
 	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	serializer := appevent.NewJSONEventSerializer()
