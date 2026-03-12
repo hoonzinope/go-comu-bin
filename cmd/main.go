@@ -157,8 +157,7 @@ func main() {
 		outboxRelay.Wait()
 	case <-signalCtx.Done():
 		slog.Info("shutdown signal received")
-		gracefulShutdown(server, outboxRelay, cancel, 5*time.Second, logger)
-		err = <-serverErrCh
+		err = gracefulShutdown(server, serverErrCh, outboxRelay, cancel, 5*time.Second, logger)
 	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped with error", "error", err)
@@ -168,13 +167,20 @@ func main() {
 
 type httpShutdowner interface {
 	Shutdown(ctx context.Context) error
+	Close() error
 }
 
 type relayWaiter interface {
 	Wait()
 }
 
-func gracefulShutdown(server httpShutdowner, relay relayWaiter, cancel context.CancelFunc, timeout time.Duration, logger *slog.Logger) {
+func gracefulShutdown(server httpShutdowner, serverErrCh <-chan error, relay relayWaiter, cancel context.CancelFunc, timeout time.Duration, logger *slog.Logger) error {
+	if cancel != nil {
+		defer cancel()
+	}
+	if relay != nil {
+		defer relay.Wait()
+	}
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), timeout)
 	defer shutdownCancel()
 	if server != nil {
@@ -182,11 +188,27 @@ func gracefulShutdown(server httpShutdowner, relay relayWaiter, cancel context.C
 			logger.Warn("http server shutdown failed", "error", err)
 		}
 	}
-	if cancel != nil {
-		cancel()
+	if serverErrCh == nil {
+		return nil
 	}
-	if relay != nil {
-		relay.Wait()
+	select {
+	case err := <-serverErrCh:
+		return err
+	case <-time.After(timeout):
+		if logger != nil {
+			logger.Warn("server did not stop in time, forcing close")
+		}
+		if server != nil {
+			if err := server.Close(); err != nil && logger != nil {
+				logger.Warn("http server force close failed", "error", err)
+			}
+		}
+		select {
+		case err := <-serverErrCh:
+			return err
+		case <-time.After(500 * time.Millisecond):
+			return fmt.Errorf("graceful shutdown timed out waiting for server stop")
+		}
 	}
 }
 

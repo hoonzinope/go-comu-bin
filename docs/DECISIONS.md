@@ -1328,3 +1328,43 @@
 - `cmd/main.go`
 - `docs/ARCHITECTURE.md`
 - `docs/ROADMAP.md`
+
+## 2026-03-12 - dead outbox 메시지 운영 정책과 shutdown bounded wait
+
+상태
+
+- decided
+
+배경
+
+- dead 메시지 보존 정책은 유지하지만, 운영자가 재처리할지 폐기할지 선택하는 명시적 정책이 필요했다.
+- signal 기반 graceful shutdown을 도입했지만 server 종료 이벤트 대기에 상한이 없어 장애 시 무기한 대기 가능성이 있었다.
+
+관찰
+
+- dead 메시지는 polling 대상에서 제외되어 성능상 이점이 있지만, 재처리 시 ready 경로 재진입 규칙이 명확하지 않았다.
+- `Shutdown` 실패/지연 시 `ListenAndServe` 반환 대기가 길어질 수 있다.
+
+결론
+
+- dead 메시지는 기본 보존한다.
+- 운영자 처리 정책은 다음으로 고정한다.
+  - 재처리: `dead -> pending(ready)` 전환
+  - 폐기: 영구 삭제(discard)
+- 구현은 기존 store 계약 내에서 아래로 매핑한다.
+  - 재처리: `MarkRetry` 호출 시 dead 메시지도 ready 순서에 재삽입
+  - 폐기: `MarkSucceeded`로 제거
+- shutdown 경계는 bounded wait + fallback close로 고정한다.
+
+후속 작업
+
+- dead->pending 재큐잉 회귀 테스트 추가
+- signal shutdown timeout/fallback close 테스트 추가
+- 운영자 재처리/폐기 API는 다음 단계에서 추가
+
+관련 문서/코드
+
+- `internal/infrastructure/persistence/inmemory/outboxRepository.go`
+- `cmd/main.go`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`

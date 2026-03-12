@@ -185,6 +185,9 @@ func (r *OutboxRepository) MarkRetry(id string, nextAttemptAt time.Time, err str
 	message.NextAttemptAt = nextAttemptAt
 	message.LastError = strings.TrimSpace(err)
 	r.data[id] = message
+	if !containsOutboxID(r.order, id) {
+		r.order = append(r.order, id)
+	}
 	return nil
 }
 
@@ -247,4 +250,13 @@ func cloneOutboxMessage(message port.OutboxMessage) port.OutboxMessage {
 		copied.Payload = append([]byte(nil), message.Payload...)
 	}
 	return copied
+}
+
+func containsOutboxID(ids []string, target string) bool {
+	for _, id := range ids {
+		if id == target {
+			return true
+		}
+	}
+	return false
 }

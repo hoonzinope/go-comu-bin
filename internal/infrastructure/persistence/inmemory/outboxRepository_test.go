@@ -114,6 +114,38 @@ func TestOutboxRepository_ReclaimsStaleProcessingMessage(t *testing.T) {
 	assert.Equal(t, port.OutboxStatusProcessing, reclaimed[0].Status)
 }
 
+func TestOutboxRepository_DeadMessageCanBeRequeuedAndDiscarded(t *testing.T) {
+	repo := NewOutboxRepository()
+	now := time.Now()
+	require.NoError(t, repo.Append(port.OutboxMessage{
+		ID:            "dead-1",
+		EventName:     "post.changed",
+		Payload:       []byte(`{"x":1}`),
+		OccurredAt:    now,
+		NextAttemptAt: now,
+		Status:        port.OutboxStatusPending,
+	}))
+
+	ready, err := repo.FetchReady(1, now)
+	require.NoError(t, err)
+	require.Len(t, ready, 1)
+	require.NoError(t, repo.MarkDead("dead-1", "failed too many times"))
+
+	// dead -> pending 재처리(운영자 수동 조치) 경로
+	requeueAt := now.Add(10 * time.Millisecond)
+	require.NoError(t, repo.MarkRetry("dead-1", requeueAt, "manual retry"))
+	ready, err = repo.FetchReady(1, now.Add(20*time.Millisecond))
+	require.NoError(t, err)
+	require.Len(t, ready, 1)
+	assert.Equal(t, "dead-1", ready[0].ID)
+
+	// discard(영구 제거) 경로
+	require.NoError(t, repo.MarkSucceeded("dead-1"))
+	ready, err = repo.FetchReady(1, now.Add(time.Minute))
+	require.NoError(t, err)
+	assert.Empty(t, ready)
+}
+
 func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 	userRepository := NewUserRepository()
 	boardRepository := NewBoardRepository()
