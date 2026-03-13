@@ -30,3 +30,14 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - Keep loaded context small and task-focused.
 - Prefer summaries over pasting long skill contents into the conversation.
 - Avoid deep reference chasing unless the skill requires it.
+
+## CLI defaults
+- Use `fd` instead of `find` for file discovery whenever possible.
+- Use `rg` (`ripgrep`) instead of `grep` for text search whenever possible.
+- Use `bat --style=plain` instead of `cat` for reading file contents whenever possible.
+- Use `eza` instead of `ls` for directory listings whenever possible.
+- Use `ast-grep` for structural code search, code-aware refactors, and syntax-aware matching when the task goes beyond plain text search.
+- Use `jq` and `yq` in pipelines when parsing or transforming JSON/YAML or API responses.
+- Use `gh` for GitHub-related work in non-interactive mode, preferring machine-readable output such as `--json`.
+- Use `ruff` for Python linting and formatting tasks.
+- For CLI commands that talk to external services, prefer non-interactive flags such as `--yes`, `--quiet`, `--non-interactive`, and machine-readable output such as `--json` or `--format json` whenever the tool supports them.
