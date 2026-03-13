@@ -1,6 +1,7 @@
 package inprocess
 
 import (
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,7 +15,7 @@ var _ port.EventPublisher = (*EventBus)(nil)
 type EventBus struct {
 	mu             sync.RWMutex
 	handlers       map[string][]port.EventHandler
-	logger         port.Logger
+	logger         *slog.Logger
 	queue          chan []port.DomainEvent
 	workerCount    int
 	enqueueTimeout time.Duration
@@ -40,7 +41,7 @@ const (
 	defaultEnqueueTimeout = 100 * time.Millisecond
 )
 
-func NewEventBus(logger port.Logger, opts ...Option) *EventBus {
+func NewEventBus(logger *slog.Logger, opts ...Option) *EventBus {
 	bus := &EventBus{
 		handlers:       make(map[string][]port.EventHandler),
 		logger:         logger,

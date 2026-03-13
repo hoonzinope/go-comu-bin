@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -16,10 +17,10 @@ type stubSessionUseCase struct {
 	validate func(token string) (int64, error)
 }
 
-func (s stubSessionUseCase) Login(username, password string) (string, error) { return "", nil }
-func (s stubSessionUseCase) Logout(token string) error                       { return nil }
-func (s stubSessionUseCase) InvalidateUserSessions(userID int64) error       { return nil }
-func (s stubSessionUseCase) ValidateTokenToId(token string) (int64, error) {
+func (s stubSessionUseCase) Login(context.Context, string, string) (string, error) { return "", nil }
+func (s stubSessionUseCase) Logout(context.Context, string) error                  { return nil }
+func (s stubSessionUseCase) InvalidateUserSessions(context.Context, int64) error   { return nil }
+func (s stubSessionUseCase) ValidateTokenToId(_ context.Context, token string) (int64, error) {
 	return s.validate(token)
 }
 

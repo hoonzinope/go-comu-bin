@@ -1,6 +1,8 @@
 package event
 
 import (
+	"log/slog"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -10,10 +12,10 @@ var _ port.EventHandler = (*CacheInvalidationHandler)(nil)
 
 type CacheInvalidationHandler struct {
 	cache  port.Cache
-	logger port.Logger
+	logger *slog.Logger
 }
 
-func NewCacheInvalidationHandler(cache port.Cache, logger port.Logger) *CacheInvalidationHandler {
+func NewCacheInvalidationHandler(cache port.Cache, logger *slog.Logger) *CacheInvalidationHandler {
 	return &CacheInvalidationHandler{cache: cache, logger: logger}
 }
 

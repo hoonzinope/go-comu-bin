@@ -17,7 +17,6 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
-	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
 
@@ -95,7 +94,7 @@ func newTestPostService(t testing.TB, repositories testRepositories, cache port.
 
 func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache port.Cache) port.ActionHookDispatcher {
 	t.Helper()
-	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	serializer := appevent.NewJSONEventSerializer()
 	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
 		WorkerCount:  1,
@@ -122,7 +121,7 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 // Deprecated: use newTestActionDispatcher.
 func newTestEventPublisher(t testing.TB, repositories testRepositories, cache port.Cache) port.EventPublisher {
 	t.Helper()
-	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	serializer := appevent.NewJSONEventSerializer()
 	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
 		WorkerCount:  1,

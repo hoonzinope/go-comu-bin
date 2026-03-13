@@ -2,9 +2,11 @@ package delivery
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -29,45 +31,45 @@ import (
 const apiV1Prefix = "/api/v1"
 
 type fakeUserUseCase struct {
-	signUp            func(username, password string) (string, error)
-	deleteMe          func(userID int64, password string) error
-	getUserSuspension func(adminID int64, targetUserUUID string) (*model.UserSuspension, error)
-	suspendUser       func(adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error
-	unsuspendUser     func(adminID int64, targetUserUUID string) error
+	signUp            func(ctx context.Context, username, password string) (string, error)
+	deleteMe          func(ctx context.Context, userID int64, password string) error
+	getUserSuspension func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error)
+	suspendUser       func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error
+	unsuspendUser     func(ctx context.Context, adminID int64, targetUserUUID string) error
 	verifyCredential  func(username, password string) (int64, error)
 }
 
-func (f *fakeUserUseCase) SignUp(username, password string) (string, error) {
+func (f *fakeUserUseCase) SignUp(ctx context.Context, username, password string) (string, error) {
 	if f.signUp != nil {
-		return f.signUp(username, password)
+		return f.signUp(ctx, username, password)
 	}
 	return "ok", nil
 }
 
-func (f *fakeUserUseCase) DeleteMe(userID int64, password string) error {
+func (f *fakeUserUseCase) DeleteMe(ctx context.Context, userID int64, password string) error {
 	if f.deleteMe != nil {
-		return f.deleteMe(userID, password)
+		return f.deleteMe(ctx, userID, password)
 	}
 	return nil
 }
 
-func (f *fakeUserUseCase) GetUserSuspension(adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
+func (f *fakeUserUseCase) GetUserSuspension(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 	if f.getUserSuspension != nil {
-		return f.getUserSuspension(adminID, targetUserUUID)
+		return f.getUserSuspension(ctx, adminID, targetUserUUID)
 	}
 	return &model.UserSuspension{}, nil
 }
 
-func (f *fakeUserUseCase) SuspendUser(adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+func (f *fakeUserUseCase) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
 	if f.suspendUser != nil {
-		return f.suspendUser(adminID, targetUserUUID, reason, duration)
+		return f.suspendUser(ctx, adminID, targetUserUUID, reason, duration)
 	}
 	return nil
 }
 
-func (f *fakeUserUseCase) UnsuspendUser(adminID int64, targetUserUUID string) error {
+func (f *fakeUserUseCase) UnsuspendUser(ctx context.Context, adminID int64, targetUserUUID string) error {
 	if f.unsuspendUser != nil {
-		return f.unsuspendUser(adminID, targetUserUUID)
+		return f.unsuspendUser(ctx, adminID, targetUserUUID)
 	}
 	return nil
 }
@@ -116,12 +118,12 @@ func (f *fakeUserUseCase) Delete(id int64) error {
 }
 
 type fakeAccountUseCase struct {
-	deleteMyAccount func(userID int64, password string) error
+	deleteMyAccount func(ctx context.Context, userID int64, password string) error
 }
 
-func (f *fakeAccountUseCase) DeleteMyAccount(userID int64, password string) error {
+func (f *fakeAccountUseCase) DeleteMyAccount(ctx context.Context, userID int64, password string) error {
 	if f.deleteMyAccount != nil {
-		return f.deleteMyAccount(userID, password)
+		return f.deleteMyAccount(ctx, userID, password)
 	}
 	return nil
 }
@@ -177,199 +179,219 @@ type spyLogger struct {
 	errors int
 }
 
-func (l *spyLogger) Warn(string, ...any)  { l.warns++ }
-func (l *spyLogger) Error(string, ...any) { l.errors++ }
-
-type fakeBoardUseCase struct {
-	getBoards   func(limit int, lastID int64) (*model.BoardList, error)
-	createBoard func(userID int64, name, description string) (int64, error)
-	updateBoard func(id, userID int64, name, description string) error
-	deleteBoard func(id, userID int64) error
+func (l *spyLogger) Logger() *slog.Logger {
+	return slog.New(&spyHandler{logger: l})
 }
 
-func (f *fakeBoardUseCase) GetBoards(limit int, lastID int64) (*model.BoardList, error) {
-	if f.getBoards != nil {
-		return f.getBoards(limit, lastID)
-	}
-	return &model.BoardList{}, nil
+type spyHandler struct {
+	logger *spyLogger
 }
 
-func (f *fakeBoardUseCase) CreateBoard(userID int64, name, description string) (int64, error) {
-	if f.createBoard != nil {
-		return f.createBoard(userID, name, description)
-	}
-	return 1, nil
-}
+func (h *spyHandler) Enabled(context.Context, slog.Level) bool { return true }
 
-func (f *fakeBoardUseCase) UpdateBoard(id, userID int64, name, description string) error {
-	if f.updateBoard != nil {
-		return f.updateBoard(id, userID, name, description)
+func (h *spyHandler) Handle(_ context.Context, record slog.Record) error {
+	if record.Level >= slog.LevelError {
+		h.logger.errors++
+	} else if record.Level >= slog.LevelWarn {
+		h.logger.warns++
 	}
 	return nil
 }
 
-func (f *fakeBoardUseCase) DeleteBoard(id, userID int64) error {
+func (h *spyHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h *spyHandler) WithGroup(string) slog.Handler { return h }
+
+type fakeBoardUseCase struct {
+	getBoards   func(ctx context.Context, limit int, lastID int64) (*model.BoardList, error)
+	createBoard func(ctx context.Context, userID int64, name, description string) (int64, error)
+	updateBoard func(ctx context.Context, id, userID int64, name, description string) error
+	deleteBoard func(ctx context.Context, id, userID int64) error
+}
+
+func (f *fakeBoardUseCase) GetBoards(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
+	if f.getBoards != nil {
+		return f.getBoards(ctx, limit, lastID)
+	}
+	return &model.BoardList{}, nil
+}
+
+func (f *fakeBoardUseCase) CreateBoard(ctx context.Context, userID int64, name, description string) (int64, error) {
+	if f.createBoard != nil {
+		return f.createBoard(ctx, userID, name, description)
+	}
+	return 1, nil
+}
+
+func (f *fakeBoardUseCase) UpdateBoard(ctx context.Context, id, userID int64, name, description string) error {
+	if f.updateBoard != nil {
+		return f.updateBoard(ctx, id, userID, name, description)
+	}
+	return nil
+}
+
+func (f *fakeBoardUseCase) DeleteBoard(ctx context.Context, id, userID int64) error {
 	if f.deleteBoard != nil {
-		return f.deleteBoard(id, userID)
+		return f.deleteBoard(ctx, id, userID)
 	}
 	return nil
 }
 
 type fakePostUseCase struct {
-	createPost      func(title, content string, tags []string, authorID, boardID int64) (int64, error)
-	createDraftPost func(title, content string, tags []string, authorID, boardID int64) (int64, error)
-	getPostsList    func(boardID int64, limit int, lastID int64) (*model.PostList, error)
-	getPostsByTag   func(tagName string, limit int, lastID int64) (*model.PostList, error)
-	getPostDetail   func(postID int64) (*model.PostDetail, error)
-	publishPost     func(id, authorID int64) error
-	updatePost      func(id, authorID int64, title, content string, tags []string) error
-	deletePost      func(id, authorID int64) error
+	createPost      func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error)
+	createDraftPost func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error)
+	getPostsList    func(ctx context.Context, boardID int64, limit int, lastID int64) (*model.PostList, error)
+	getPostsByTag   func(ctx context.Context, tagName string, limit int, lastID int64) (*model.PostList, error)
+	getPostDetail   func(ctx context.Context, postID int64) (*model.PostDetail, error)
+	publishPost     func(ctx context.Context, id, authorID int64) error
+	updatePost      func(ctx context.Context, id, authorID int64, title, content string, tags []string) error
+	deletePost      func(ctx context.Context, id, authorID int64) error
 }
 
-func (f *fakePostUseCase) CreatePost(title, content string, tags []string, authorID, boardID int64) (int64, error) {
+func (f *fakePostUseCase) CreatePost(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
 	if f.createPost != nil {
-		return f.createPost(title, content, tags, authorID, boardID)
+		return f.createPost(ctx, title, content, tags, authorID, boardID)
 	}
 	return 1, nil
 }
 
-func (f *fakePostUseCase) CreateDraftPost(title, content string, tags []string, authorID, boardID int64) (int64, error) {
+func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
 	if f.createDraftPost != nil {
-		return f.createDraftPost(title, content, tags, authorID, boardID)
+		return f.createDraftPost(ctx, title, content, tags, authorID, boardID)
 	}
 	return 1, nil
 }
 
-func (f *fakePostUseCase) GetPostsList(boardID int64, limit int, lastID int64) (*model.PostList, error) {
+func (f *fakePostUseCase) GetPostsList(ctx context.Context, boardID int64, limit int, lastID int64) (*model.PostList, error) {
 	if f.getPostsList != nil {
-		return f.getPostsList(boardID, limit, lastID)
+		return f.getPostsList(ctx, boardID, limit, lastID)
 	}
 	return &model.PostList{}, nil
 }
 
-func (f *fakePostUseCase) GetPostsByTag(tagName string, limit int, lastID int64) (*model.PostList, error) {
+func (f *fakePostUseCase) GetPostsByTag(ctx context.Context, tagName string, limit int, lastID int64) (*model.PostList, error) {
 	if f.getPostsByTag != nil {
-		return f.getPostsByTag(tagName, limit, lastID)
+		return f.getPostsByTag(ctx, tagName, limit, lastID)
 	}
 	return &model.PostList{}, nil
 }
 
-func (f *fakePostUseCase) GetPostDetail(postID int64) (*model.PostDetail, error) {
+func (f *fakePostUseCase) GetPostDetail(ctx context.Context, postID int64) (*model.PostDetail, error) {
 	if f.getPostDetail != nil {
-		return f.getPostDetail(postID)
+		return f.getPostDetail(ctx, postID)
 	}
 	return &model.PostDetail{}, nil
 }
 
-func (f *fakePostUseCase) PublishPost(id, authorID int64) error {
+func (f *fakePostUseCase) PublishPost(ctx context.Context, id, authorID int64) error {
 	if f.publishPost != nil {
-		return f.publishPost(id, authorID)
+		return f.publishPost(ctx, id, authorID)
 	}
 	return nil
 }
 
-func (f *fakePostUseCase) UpdatePost(id, authorID int64, title, content string, tags []string) error {
+func (f *fakePostUseCase) UpdatePost(ctx context.Context, id, authorID int64, title, content string, tags []string) error {
 	if f.updatePost != nil {
-		return f.updatePost(id, authorID, title, content, tags)
+		return f.updatePost(ctx, id, authorID, title, content, tags)
 	}
 	return nil
 }
 
-func (f *fakePostUseCase) DeletePost(id, authorID int64) error {
+func (f *fakePostUseCase) DeletePost(ctx context.Context, id, authorID int64) error {
 	if f.deletePost != nil {
-		return f.deletePost(id, authorID)
+		return f.deletePost(ctx, id, authorID)
 	}
 	return nil
 }
 
 type fakeCommentUseCase struct {
-	createComment     func(content string, authorID, postID int64, parentID *int64) (int64, error)
-	getCommentsByPost func(postID int64, limit int, lastID int64) (*model.CommentList, error)
-	updateComment     func(id, authorID int64, content string) error
-	deleteComment     func(id, authorID int64) error
+	createComment     func(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error)
+	getCommentsByPost func(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error)
+	updateComment     func(ctx context.Context, id, authorID int64, content string) error
+	deleteComment     func(ctx context.Context, id, authorID int64) error
 }
 
-func (f *fakeCommentUseCase) CreateComment(content string, authorID, postID int64, parentID *int64) (int64, error) {
+func (f *fakeCommentUseCase) CreateComment(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
 	if f.createComment != nil {
-		return f.createComment(content, authorID, postID, parentID)
+		return f.createComment(ctx, content, authorID, postID, parentID)
 	}
 	return 1, nil
 }
 
-func (f *fakeCommentUseCase) GetCommentsByPost(postID int64, limit int, lastID int64) (*model.CommentList, error) {
+func (f *fakeCommentUseCase) GetCommentsByPost(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error) {
 	if f.getCommentsByPost != nil {
-		return f.getCommentsByPost(postID, limit, lastID)
+		return f.getCommentsByPost(ctx, postID, limit, lastID)
 	}
 	return &model.CommentList{}, nil
 }
 
-func (f *fakeCommentUseCase) UpdateComment(id, authorID int64, content string) error {
+func (f *fakeCommentUseCase) UpdateComment(ctx context.Context, id, authorID int64, content string) error {
 	if f.updateComment != nil {
-		return f.updateComment(id, authorID, content)
+		return f.updateComment(ctx, id, authorID, content)
 	}
 	return nil
 }
 
-func (f *fakeCommentUseCase) DeleteComment(id, authorID int64) error {
+func (f *fakeCommentUseCase) DeleteComment(ctx context.Context, id, authorID int64) error {
 	if f.deleteComment != nil {
-		return f.deleteComment(id, authorID)
+		return f.deleteComment(ctx, id, authorID)
 	}
 	return nil
 }
 
 type fakeReactionUseCase struct {
-	setReaction          func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
-	deleteReaction       func(userID, targetID int64, targetType entity.ReactionTargetType) error
-	getReactionsByTarget func(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
+	setReaction          func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
+	deleteReaction       func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) error
+	getReactionsByTarget func(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }
 
 type fakeAttachmentUseCase struct {
-	createPostAttachment         func(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
-	getPostAttachments           func(postID int64) ([]model.Attachment, error)
-	getPostAttachmentFile        func(postID, attachmentID int64) (*model.AttachmentFile, error)
-	getPostAttachmentPreviewFile func(postID, attachmentID, userID int64) (*model.AttachmentFile, error)
-	deletePostAttachment         func(postID, attachmentID, userID int64) error
-	uploadPostAttachment         func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
+	createPostAttachment         func(ctx context.Context, postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
+	getPostAttachments           func(ctx context.Context, postID int64) ([]model.Attachment, error)
+	getPostAttachmentFile        func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error)
+	getPostAttachmentPreviewFile func(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error)
+	deletePostAttachment         func(ctx context.Context, postID, attachmentID, userID int64) error
+	uploadPostAttachment         func(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
 }
 
-func (f *fakeAttachmentUseCase) CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
+func (f *fakeAttachmentUseCase) CreatePostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
 	if f.createPostAttachment != nil {
-		return f.createPostAttachment(postID, userID, fileName, contentType, sizeBytes, storageKey)
+		return f.createPostAttachment(ctx, postID, userID, fileName, contentType, sizeBytes, storageKey)
 	}
 	return 1, nil
 }
 
-func (f *fakeAttachmentUseCase) GetPostAttachments(postID int64) ([]model.Attachment, error) {
+func (f *fakeAttachmentUseCase) GetPostAttachments(ctx context.Context, postID int64) ([]model.Attachment, error) {
 	if f.getPostAttachments != nil {
-		return f.getPostAttachments(postID)
+		return f.getPostAttachments(ctx, postID)
 	}
 	return []model.Attachment{}, nil
 }
 
-func (f *fakeAttachmentUseCase) GetPostAttachmentFile(postID, attachmentID int64) (*model.AttachmentFile, error) {
+func (f *fakeAttachmentUseCase) GetPostAttachmentFile(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
 	if f.getPostAttachmentFile != nil {
-		return f.getPostAttachmentFile(postID, attachmentID)
+		return f.getPostAttachmentFile(ctx, postID, attachmentID)
 	}
 	return nil, customError.ErrAttachmentNotFound
 }
 
-func (f *fakeAttachmentUseCase) GetPostAttachmentPreviewFile(postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+func (f *fakeAttachmentUseCase) GetPostAttachmentPreviewFile(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
 	if f.getPostAttachmentPreviewFile != nil {
-		return f.getPostAttachmentPreviewFile(postID, attachmentID, userID)
+		return f.getPostAttachmentPreviewFile(ctx, postID, attachmentID, userID)
 	}
 	return nil, customError.ErrAttachmentNotFound
 }
 
-func (f *fakeAttachmentUseCase) DeletePostAttachment(postID, attachmentID, userID int64) error {
+func (f *fakeAttachmentUseCase) DeletePostAttachment(ctx context.Context, postID, attachmentID, userID int64) error {
 	if f.deletePostAttachment != nil {
-		return f.deletePostAttachment(postID, attachmentID, userID)
+		return f.deletePostAttachment(ctx, postID, attachmentID, userID)
 	}
 	return nil
 }
 
-func (f *fakeAttachmentUseCase) UploadPostAttachment(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+func (f *fakeAttachmentUseCase) UploadPostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 	if f.uploadPostAttachment != nil {
-		return f.uploadPostAttachment(postID, userID, fileName, contentType, content)
+		return f.uploadPostAttachment(ctx, postID, userID, fileName, contentType, content)
 	}
 	return &model.AttachmentUpload{ID: 1, EmbedMarkdown: "![a.png](attachment://1)"}, nil
 }
@@ -382,23 +404,23 @@ type authUserPort interface {
 	port.UserRepository
 }
 
-func (f *fakeReactionUseCase) SetReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+func (f *fakeReactionUseCase) SetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
 	if f.setReaction != nil {
-		return f.setReaction(userID, targetID, targetType, reactionType)
+		return f.setReaction(ctx, userID, targetID, targetType, reactionType)
 	}
 	return false, nil
 }
 
-func (f *fakeReactionUseCase) DeleteReaction(userID, targetID int64, targetType entity.ReactionTargetType) error {
+func (f *fakeReactionUseCase) DeleteReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) error {
 	if f.deleteReaction != nil {
-		return f.deleteReaction(userID, targetID, targetType)
+		return f.deleteReaction(ctx, userID, targetID, targetType)
 	}
 	return nil
 }
 
-func (f *fakeReactionUseCase) GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
+func (f *fakeReactionUseCase) GetReactionsByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
 	if f.getReactionsByTarget != nil {
-		return f.getReactionsByTarget(targetID, targetType)
+		return f.getReactionsByTarget(ctx, targetID, targetType)
 	}
 	return []model.Reaction{}, nil
 }
@@ -491,7 +513,7 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 func TestHandleUserSuspend_Success(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{
-			suspendUser: func(adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
 				assert.Equal(t, int64(1), adminID)
 				assert.Equal(t, "user-uuid-7", targetUserUUID)
 				assert.Equal(t, "spam", reason)
@@ -519,7 +541,7 @@ func TestHandleUserSuspensionGet_Success(t *testing.T) {
 	until := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
 	handler := newTestHandler(
 		&fakeUserUseCase{
-			getUserSuspension: func(adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
+			getUserSuspension: func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 				assert.Equal(t, int64(1), adminID)
 				assert.Equal(t, "user-uuid-7", targetUserUUID)
 				return &model.UserSuspension{
@@ -555,7 +577,7 @@ func TestHandleCreateDraftPost_Success(t *testing.T) {
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			createDraftPost: func(title, content string, tags []string, authorID, boardID int64) (int64, error) {
+			createDraftPost: func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
 				assert.Equal(t, "draft", title)
 				assert.Equal(t, "content", content)
 				assert.Nil(t, tags)
@@ -584,7 +606,7 @@ func TestHandleCreatePost_PassesTags(t *testing.T) {
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			createPost: func(title, content string, tags []string, authorID, boardID int64) (int64, error) {
+			createPost: func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
 				assert.Equal(t, "hello", title)
 				assert.Equal(t, "body", content)
 				assert.Equal(t, []string{"go", "backend"}, tags)
@@ -614,7 +636,7 @@ func TestHandlePublishPost_Success(t *testing.T) {
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			publishPost: func(id, authorID int64) error {
+			publishPost: func(ctx context.Context, id, authorID int64) error {
 				assert.Equal(t, int64(5), id)
 				assert.Equal(t, int64(1), authorID)
 				return nil
@@ -637,7 +659,7 @@ func TestHandleCreateComment_WithParentID_Success(t *testing.T) {
 		&fakeBoardUseCase{},
 		&fakePostUseCase{},
 		&fakeCommentUseCase{
-			createComment: func(content string, authorID, postID int64, parentID *int64) (int64, error) {
+			createComment: func(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
 				assert.Equal(t, "reply", content)
 				assert.Equal(t, int64(1), authorID)
 				assert.Equal(t, int64(3), postID)
@@ -668,7 +690,7 @@ func TestHandleGetAttachments_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachments: func(postID int64) ([]model.Attachment, error) {
+			getPostAttachments: func(ctx context.Context, postID int64) ([]model.Attachment, error) {
 				assert.Equal(t, int64(3), postID)
 				return []model.Attachment{{
 					ID:          7,
@@ -697,7 +719,7 @@ func TestHandleDeleteAttachment_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			deletePostAttachment: func(postID, attachmentID, userID int64) error {
+			deletePostAttachment: func(ctx context.Context, postID, attachmentID, userID int64) error {
 				assert.Equal(t, int64(3), postID)
 				assert.Equal(t, int64(7), attachmentID)
 				assert.Equal(t, int64(1), userID)
@@ -720,7 +742,7 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			uploadPostAttachment: func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+			uploadPostAttachment: func(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 				assert.Equal(t, int64(3), postID)
 				assert.Equal(t, int64(1), userID)
 				assert.Equal(t, "a.png", fileName)
@@ -771,7 +793,7 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 		CommentUseCase:  &fakeCommentUseCase{},
 		ReactionUseCase: &fakeReactionUseCase{},
 		AttachmentUseCase: &fakeAttachmentUseCase{
-			uploadPostAttachment: func(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+			uploadPostAttachment: func(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 				called = true
 				return nil, nil
 			},
@@ -810,7 +832,7 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentFile: func(postID, attachmentID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentFile: func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
 				assert.Equal(t, int64(3), postID)
 				assert.Equal(t, int64(8), attachmentID)
 				return &model.AttachmentFile{
@@ -845,7 +867,7 @@ func TestHandleGetAttachmentFile_EscapesContentDispositionFilename(t *testing.T)
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentFile: func(postID, attachmentID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentFile: func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
 				return &model.AttachmentFile{
 					FileName:    "a\"b.png",
 					ContentType: "image/png",
@@ -875,7 +897,7 @@ func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentFile: func(postID, attachmentID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentFile: func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
 				return &model.AttachmentFile{
 					FileName:    "a.png",
 					ContentType: "image/png",
@@ -925,7 +947,7 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentPreviewFile: func(postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentPreviewFile: func(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
 				assert.Equal(t, int64(3), postID)
 				assert.Equal(t, int64(8), attachmentID)
 				assert.Equal(t, int64(1), userID)
@@ -966,7 +988,7 @@ func TestHandleGetAttachmentPreview_EscapesContentDispositionFilename(t *testing
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentPreviewFile: func(postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentPreviewFile: func(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
 				return &model.AttachmentFile{
 					FileName:    "a\"b.png",
 					ContentType: "image/png",
@@ -1040,7 +1062,7 @@ func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
 func TestHandleUserUnsuspend_Success(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{
-			unsuspendUser: func(adminID int64, targetUserUUID string) error {
+			unsuspendUser: func(ctx context.Context, adminID int64, targetUserUUID string) error {
 				assert.Equal(t, int64(1), adminID)
 				assert.Equal(t, "user-uuid-7", targetUserUUID)
 				return nil
@@ -1069,7 +1091,7 @@ func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
 
 func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 	user := &fakeUserUseCase{
-		signUp: func(username, password string) (string, error) {
+		signUp: func(ctx context.Context, username, password string) (string, error) {
 			return "", customError.ErrUserAlreadyExists
 		},
 	}
@@ -1116,7 +1138,7 @@ func TestHTTP_UserLogout_Success(t *testing.T) {
 
 func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
 	reaction := &fakeReactionUseCase{
-		setReaction: func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+		setReaction: func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
 			return true, nil
 		},
 	}
@@ -1130,7 +1152,7 @@ func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
 
 func TestHTTP_CommentReactionMeUpdate_NoContent(t *testing.T) {
 	reaction := &fakeReactionUseCase{
-		setReaction: func(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+		setReaction: func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
 			return false, nil
 		},
 	}
@@ -1144,7 +1166,7 @@ func TestHTTP_CommentReactionMeUpdate_NoContent(t *testing.T) {
 
 func TestHTTP_PostReactionMeDelete_NoContent(t *testing.T) {
 	reaction := &fakeReactionUseCase{
-		deleteReaction: func(userID, targetID int64, targetType entity.ReactionTargetType) error {
+		deleteReaction: func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) error {
 			return nil
 		},
 	}
@@ -1224,7 +1246,7 @@ func TestHTTP_UserSignUp_OversizedJSONRejected_WithConfiguredLimit(t *testing.T)
 
 func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 	account := &fakeAccountUseCase{
-		deleteMyAccount: func(userID int64, password string) error {
+		deleteMyAccount: func(ctx context.Context, userID int64, password string) error {
 			return customError.ErrInvalidCredential
 		},
 	}
@@ -1252,7 +1274,7 @@ func TestHTTP_ProtectedRoute_InvalidAuthorizationScheme(t *testing.T) {
 
 func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 	board := &fakeBoardUseCase{
-		createBoard: func(userID int64, name, description string) (int64, error) {
+		createBoard: func(ctx context.Context, userID int64, name, description string) (int64, error) {
 			return 0, customError.ErrForbidden
 		},
 	}
@@ -1267,7 +1289,7 @@ func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 
 func TestHTTP_BoardDelete_Success(t *testing.T) {
 	board := &fakeBoardUseCase{
-		deleteBoard: func(id, userID int64) error {
+		deleteBoard: func(ctx context.Context, id, userID int64) error {
 			assert.Equal(t, int64(3), id)
 			assert.Equal(t, int64(1), userID)
 			return nil
@@ -1282,7 +1304,7 @@ func TestHTTP_BoardDelete_Success(t *testing.T) {
 
 func TestHTTP_BoardPostsGet_Success(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostsList: func(boardID int64, limit int, lastID int64) (*model.PostList, error) {
+		getPostsList: func(ctx context.Context, boardID int64, limit int, lastID int64) (*model.PostList, error) {
 			assert.Equal(t, int64(3), boardID)
 			assert.Equal(t, 2, limit)
 			assert.Equal(t, int64(9), lastID)
@@ -1304,7 +1326,7 @@ func TestHTTP_BoardPostsGet_Success(t *testing.T) {
 
 func TestHTTP_PostDetailPut_Success(t *testing.T) {
 	post := &fakePostUseCase{
-		updatePost: func(id, authorID int64, title, content string, tags []string) error {
+		updatePost: func(ctx context.Context, id, authorID int64, title, content string, tags []string) error {
 			assert.Equal(t, int64(3), id)
 			assert.Equal(t, int64(1), authorID)
 			assert.Equal(t, "hello", title)
@@ -1326,7 +1348,7 @@ func TestHTTP_PostDetailPut_Success(t *testing.T) {
 
 func TestHTTP_PostDetailDelete_Success(t *testing.T) {
 	post := &fakePostUseCase{
-		deletePost: func(id, authorID int64) error {
+		deletePost: func(ctx context.Context, id, authorID int64) error {
 			assert.Equal(t, int64(3), id)
 			assert.Equal(t, int64(1), authorID)
 			return nil
@@ -1341,7 +1363,7 @@ func TestHTTP_PostDetailDelete_Success(t *testing.T) {
 
 func TestHTTP_PostCommentsGet_Success(t *testing.T) {
 	comment := &fakeCommentUseCase{
-		getCommentsByPost: func(postID int64, limit int, lastID int64) (*model.CommentList, error) {
+		getCommentsByPost: func(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error) {
 			assert.Equal(t, int64(3), postID)
 			assert.Equal(t, 2, limit)
 			assert.Equal(t, int64(9), lastID)
@@ -1363,7 +1385,7 @@ func TestHTTP_PostCommentsGet_Success(t *testing.T) {
 
 func TestHTTP_CommentPut_Success(t *testing.T) {
 	comment := &fakeCommentUseCase{
-		updateComment: func(id, authorID int64, content string) error {
+		updateComment: func(ctx context.Context, id, authorID int64, content string) error {
 			assert.Equal(t, int64(3), id)
 			assert.Equal(t, int64(1), authorID)
 			assert.Equal(t, "updated", content)
@@ -1381,7 +1403,7 @@ func TestHTTP_CommentPut_Success(t *testing.T) {
 
 func TestHTTP_CommentDelete_Success(t *testing.T) {
 	comment := &fakeCommentUseCase{
-		deleteComment: func(id, authorID int64) error {
+		deleteComment: func(ctx context.Context, id, authorID int64) error {
 			assert.Equal(t, int64(3), id)
 			assert.Equal(t, int64(1), authorID)
 			return nil
@@ -1477,7 +1499,7 @@ func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
 
 func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
 			return nil, errors.New("unexpected")
 		},
 	}
@@ -1489,7 +1511,7 @@ func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 
 func TestHTTP_PostDetail_NotFound(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
 			return nil, customError.ErrPostNotFound
 		},
 	}
@@ -1501,7 +1523,7 @@ func TestHTTP_PostDetail_NotFound(t *testing.T) {
 
 func TestHTTP_PostDetail_IncludesCommentsHasMore(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
 			return &model.PostDetail{
 				Post:            &model.Post{ID: postID, Title: "title"},
 				CommentsHasMore: true,
@@ -1517,7 +1539,7 @@ func TestHTTP_PostDetail_IncludesCommentsHasMore(t *testing.T) {
 
 func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
 			return &model.PostDetail{
 				Post: &model.Post{ID: postID, Title: "hello"},
 				Tags: []model.Tag{{ID: 1, Name: "go"}},
@@ -1534,7 +1556,7 @@ func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
 
 func TestHTTP_TagPosts_Success(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostsByTag: func(tagName string, limit int, lastID int64) (*model.PostList, error) {
+		getPostsByTag: func(ctx context.Context, tagName string, limit int, lastID int64) (*model.PostList, error) {
 			assert.Equal(t, "go", tagName)
 			assert.Equal(t, 10, limit)
 			assert.Equal(t, int64(0), lastID)
@@ -1575,7 +1597,7 @@ func TestHTTP_NotFound_UsesInjectedLogger(t *testing.T) {
 		CommentUseCase:    &fakeCommentUseCase{},
 		ReactionUseCase:   &fakeReactionUseCase{},
 		AttachmentUseCase: &fakeAttachmentUseCase{},
-		Logger:            logger,
+		Logger:            logger.Logger(),
 	}).Handler
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/unknown", nil)

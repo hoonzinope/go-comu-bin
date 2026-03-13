@@ -21,7 +21,6 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
-	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	"github.com/stretchr/testify/assert"
@@ -141,7 +140,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository)
-	appLogger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	appLogger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(outboxRepository, eventSerializer, appLogger, eventOutbox.RelayConfig{
 		WorkerCount:  1,

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -35,7 +36,7 @@ func NewUserService(userRepository port.UserRepository, passwordHasher port.Pass
 	}
 }
 
-func (s *UserService) SignUp(username, password string) (string, error) {
+func (s *UserService) SignUp(ctx context.Context, username, password string) (string, error) {
 	username = normalizeUsername(username)
 	if username == "" || strings.TrimSpace(password) == "" {
 		return "", customError.ErrInvalidInput
@@ -46,7 +47,7 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 	}
 	newUser := entity.NewUser(username, hashedPassword)
 
-	err = s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		existingUser, repoErr := tx.UserRepository().SelectUserByUsername(username)
 		if repoErr != nil {
 			return customError.WrapRepository("select user by username for signup", repoErr)
@@ -69,8 +70,8 @@ func (s *UserService) SignUp(username, password string) (string, error) {
 	return "ok", nil
 }
 
-func (s *UserService) DeleteMe(userID int64, password string) error {
-	return s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+func (s *UserService) DeleteMe(ctx context.Context, userID int64, password string) error {
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		existingUser, err := tx.UserRepository().SelectUserByID(userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for delete me", err)
@@ -116,7 +117,7 @@ func (s *UserService) VerifyCredentials(username, password string) (int64, error
 	return existingUser.ID, nil
 }
 
-func (s *UserService) SuspendUser(adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
 	if strings.TrimSpace(reason) == "" {
 		return customError.ErrInvalidInput
 	}
@@ -124,7 +125,7 @@ func (s *UserService) SuspendUser(adminID int64, targetUserUUID, reason string, 
 	if !ok {
 		return customError.ErrInvalidInput
 	}
-	return s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		admin, err := tx.UserRepository().SelectUserByID(adminID)
 		if err != nil {
 			return customError.WrapRepository("select admin by id for suspend user", err)
@@ -150,9 +151,9 @@ func (s *UserService) SuspendUser(adminID int64, targetUserUUID, reason string, 
 	})
 }
 
-func (s *UserService) GetUserSuspension(adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
+func (s *UserService) GetUserSuspension(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 	var suspension *model.UserSuspension
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		admin, err := tx.UserRepository().SelectUserByID(adminID)
 		if err != nil {
 			return customError.WrapRepository("select admin by id for get user suspension", err)
@@ -192,8 +193,8 @@ func (s *UserService) GetUserSuspension(adminID int64, targetUserUUID string) (*
 	return suspension, nil
 }
 
-func (s *UserService) UnsuspendUser(adminID int64, targetUserUUID string) error {
-	return s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+func (s *UserService) UnsuspendUser(ctx context.Context, adminID int64, targetUserUUID string) error {
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		admin, err := tx.UserRepository().SelectUserByID(adminID)
 		if err != nil {
 			return customError.WrapRepository("select admin by id for unsuspend user", err)

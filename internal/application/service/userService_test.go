@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -15,7 +16,7 @@ func TestUserService_SignUp_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	result, err := svc.SignUp("alice", "pw")
+	result, err := svc.SignUp(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
 }
@@ -23,9 +24,9 @@ func TestUserService_SignUp_Success(t *testing.T) {
 func TestUserService_SignUp_Duplicate(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp("alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "pw")
 
-	_, err := svc.SignUp("alice", "pw2")
+	_, err := svc.SignUp(context.Background(), "alice", "pw2")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
 }
@@ -34,7 +35,7 @@ func TestUserService_SignUp_TrimsUsernameBeforePersist(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	_, err := svc.SignUp(" alice ", "pw")
+	_, err := svc.SignUp(context.Background(), " alice ", "pw")
 	require.NoError(t, err)
 
 	user, err := repositories.user.SelectUserByUsername("alice")
@@ -46,10 +47,10 @@ func TestUserService_SignUp_TrimsUsernameBeforePersist(t *testing.T) {
 func TestUserService_SignUp_DuplicateAfterWhitespaceNormalization(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := svc.SignUp("alice", "pw")
+	_, err := svc.SignUp(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 
-	_, err = svc.SignUp(" alice ", "pw2")
+	_, err = svc.SignUp(context.Background(), " alice ", "pw2")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
 }
@@ -58,7 +59,7 @@ func TestUserService_SignUp_InvalidInput(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	_, err := svc.SignUp(" ", "pw")
+	_, err := svc.SignUp(context.Background(), " ", "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 }
@@ -66,12 +67,12 @@ func TestUserService_SignUp_InvalidInput(t *testing.T) {
 func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp("alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
-	err = svc.DeleteMe(user.ID, "wrong")
+	err = svc.DeleteMe(context.Background(), user.ID, "wrong")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }
@@ -79,19 +80,19 @@ func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 func TestUserService_DeleteMe_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp("alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
-	require.NoError(t, svc.DeleteMe(user.ID, "pw"))
+	require.NoError(t, svc.DeleteMe(context.Background(), user.ID, "pw"))
 }
 
 func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	err := svc.DeleteMe(999, "pw")
+	err := svc.DeleteMe(context.Background(), 999, "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
 }
@@ -99,8 +100,8 @@ func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 func TestUserService_DeleteMe_SucceedsEvenWhenUserHasPostsCommentsAndReactions(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp("alice", "pw")
-	_, _ = svc.SignUp("bob", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "bob", "pw")
 	alice, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
 	require.NotNil(t, alice)
@@ -114,33 +115,33 @@ func TestUserService_DeleteMe_SucceedsEvenWhenUserHasPostsCommentsAndReactions(t
 	_, _, _, err = repositories.reaction.SetUserTargetReaction(alice.ID, postID, "post", "like")
 	require.NoError(t, err)
 
-	err = svc.DeleteMe(alice.ID, "pw")
+	err = svc.DeleteMe(context.Background(), alice.ID, "pw")
 	require.NoError(t, err)
 }
 
 func TestUserService_DeleteMe_AllowsReuseOfUsernameAfterSoftDelete(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp("alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
-	require.NoError(t, svc.DeleteMe(user.ID, "pw"))
+	require.NoError(t, svc.DeleteMe(context.Background(), user.ID, "pw"))
 
-	_, err = svc.SignUp("alice", "pw2")
+	_, err = svc.SignUp(context.Background(), "alice", "pw2")
 	require.NoError(t, err)
 }
 
 func TestUserService_DeleteMe_InvalidatesCredentialsAfterSoftDelete(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp("alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "pw")
 	user, err := repositories.user.SelectUserByUsername("alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
-	require.NoError(t, svc.DeleteMe(user.ID, "pw"))
+	require.NoError(t, svc.DeleteMe(context.Background(), user.ID, "pw"))
 
 	_, err = svc.VerifyCredentials("alice", "pw")
 	require.Error(t, err)
@@ -159,7 +160,7 @@ func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp("alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "pw")
 
 	_, err := svc.VerifyCredentials("alice", "wrong")
 	require.Error(t, err)
@@ -169,7 +170,7 @@ func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 func TestUserService_VerifyCredentials_TrimsUsername(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := svc.SignUp("alice", "pw")
+	_, err := svc.SignUp(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 
 	userID, err := svc.VerifyCredentials(" alice ", "pw")
@@ -186,7 +187,7 @@ func TestUserService_SuspendUser_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, target)
 
-	err = svc.SuspendUser(adminID, target.UUID, "spam", "7d")
+	err = svc.SuspendUser(context.Background(), adminID, target.UUID, "spam", "7d")
 	require.NoError(t, err)
 
 	target, err = repositories.user.SelectUserByID(targetID)
@@ -206,7 +207,7 @@ func TestUserService_SuspendUser_ForbiddenForNonAdmin(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, target)
 
-	err = svc.SuspendUser(userID, target.UUID, "spam", "7d")
+	err = svc.SuspendUser(context.Background(), userID, target.UUID, "spam", "7d")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }
@@ -220,8 +221,8 @@ func TestUserService_UnsuspendUser_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, target)
 
-	require.NoError(t, svc.SuspendUser(adminID, target.UUID, "spam", "unlimited"))
-	require.NoError(t, svc.UnsuspendUser(adminID, target.UUID))
+	require.NoError(t, svc.SuspendUser(context.Background(), adminID, target.UUID, "spam", "unlimited"))
+	require.NoError(t, svc.UnsuspendUser(context.Background(), adminID, target.UUID))
 
 	target, err = repositories.user.SelectUserByID(targetID)
 	require.NoError(t, err)
@@ -244,7 +245,7 @@ func TestUserService_GetUserSuspension_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, target)
 
-	view, err := svc.GetUserSuspension(adminID, target.UUID)
+	view, err := svc.GetUserSuspension(context.Background(), adminID, target.UUID)
 	require.NoError(t, err)
 	require.NotNil(t, view)
 	assert.Equal(t, target.UUID, view.UserUUID)
@@ -262,7 +263,7 @@ func TestUserService_GetUserSuspension_ForbiddenForNonAdmin(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, target)
 
-	_, err = svc.GetUserSuspension(userID, target.UUID)
+	_, err = svc.GetUserSuspension(context.Background(), userID, target.UUID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }

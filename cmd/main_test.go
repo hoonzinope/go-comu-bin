@@ -120,6 +120,22 @@ func (s stubAttachmentCleanupUseCase) CleanupAttachments(ctx context.Context, no
 	return 0, nil
 }
 
+type recordingAttachmentCleanupUseCase struct {
+	lastCtx context.Context
+	called  chan struct{}
+}
+
+func (s *recordingAttachmentCleanupUseCase) CleanupAttachments(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
+	s.lastCtx = ctx
+	if s.called != nil {
+		select {
+		case s.called <- struct{}{}:
+		default:
+		}
+	}
+	return 0, nil
+}
+
 func TestMainHelpers(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Delivery.HTTP.Port = 18577
@@ -172,6 +188,31 @@ func TestStartBackgroundJobs_ReturnsNilWhenCleanupJobDisabled(t *testing.T) {
 
 	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{})
 	require.NoError(t, err)
+}
+
+func TestStartBackgroundJobs_PassesParentContextToCleanupUseCase(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Jobs.Enabled = true
+	cfg.Jobs.AttachmentCleanup.Enabled = true
+	cfg.Jobs.AttachmentCleanup.IntervalSeconds = 1
+	cfg.Jobs.AttachmentCleanup.GracePeriodSeconds = 10
+	cfg.Jobs.AttachmentCleanup.BatchSize = 5
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	recorder := &recordingAttachmentCleanupUseCase{called: make(chan struct{}, 1)}
+
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, recorder)
+	require.NoError(t, err)
+
+	select {
+	case <-recorder.called:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("cleanup job was not triggered")
+	}
+
+	require.NotNil(t, recorder.lastCtx)
+	assert.Same(t, parentCtx, recorder.lastCtx)
 }
 
 type stubHTTPShutdowner struct {

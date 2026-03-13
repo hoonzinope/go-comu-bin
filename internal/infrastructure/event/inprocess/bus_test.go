@@ -1,8 +1,9 @@
 package inprocess
 
 import (
+	"context"
 	"errors"
-	"sync"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -34,27 +35,37 @@ func (h testHandler) Handle(event port.DomainEvent) error {
 }
 
 type spyLogger struct {
-	mu        sync.Mutex
-	warnCount int
+	warnCount atomic.Int32
 }
-
-func (l *spyLogger) Warn(msg string, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.warnCount++
-}
-
-func (l *spyLogger) Error(msg string, args ...any) {}
 
 func (l *spyLogger) WarnCount() int {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.warnCount
+	return int(l.warnCount.Load())
 }
+
+func (l *spyLogger) Logger() *slog.Logger {
+	return slog.New(&spyHandler{logger: l})
+}
+
+type spyHandler struct {
+	logger *spyLogger
+}
+
+func (h *spyHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *spyHandler) Handle(_ context.Context, record slog.Record) error {
+	if record.Level >= slog.LevelWarn {
+		h.logger.warnCount.Add(1)
+	}
+	return nil
+}
+
+func (h *spyHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h *spyHandler) WithGroup(string) slog.Handler { return h }
 
 func TestEventBus_PublishIsAsync(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger)
+	bus := NewEventBus(logger.Logger())
 	start := make(chan struct{})
 	release := make(chan struct{})
 
@@ -77,7 +88,7 @@ func TestEventBus_PublishIsAsync(t *testing.T) {
 
 func TestEventBus_RecoversFromPanicAndContinues(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger)
+	bus := NewEventBus(logger.Logger())
 	called := make(chan struct{}, 1)
 
 	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
@@ -98,7 +109,7 @@ func TestEventBus_RecoversFromPanicAndContinues(t *testing.T) {
 
 func TestEventBus_LogsHandlerError(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger)
+	bus := NewEventBus(logger.Logger())
 
 	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
 		return errors.New("handler failed")
@@ -113,7 +124,7 @@ func TestEventBus_LogsHandlerError(t *testing.T) {
 
 func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(20*time.Millisecond))
+	bus := NewEventBus(logger.Logger(), WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(20*time.Millisecond))
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -139,7 +150,7 @@ func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 
 func TestEventBus_PublishBlocksUntilQueueHasSpace(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(time.Second))
+	bus := NewEventBus(logger.Logger(), WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(time.Second))
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -175,7 +186,7 @@ func TestEventBus_PublishBlocksUntilQueueHasSpace(t *testing.T) {
 
 func TestEventBus_Close_WaitsForInFlightHandlers(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger, WithQueueSize(4), WithWorkerCount(1))
+	bus := NewEventBus(logger.Logger(), WithQueueSize(4), WithWorkerCount(1))
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -210,7 +221,7 @@ func TestEventBus_Close_WaitsForInFlightHandlers(t *testing.T) {
 
 func TestEventBus_PublishAfterClose_IsDropped(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1))
+	bus := NewEventBus(logger.Logger(), WithQueueSize(1), WithWorkerCount(1))
 	bus.Close()
 
 	bus.Publish(testEvent{name: "test", at: time.Now()})
@@ -222,7 +233,7 @@ func TestEventBus_PublishAfterClose_IsDropped(t *testing.T) {
 
 func TestEventBus_Publish_DoesNotCreateTimeoutTimerWhenQueueHasCapacity(t *testing.T) {
 	logger := &spyLogger{}
-	bus := NewEventBus(logger, WithQueueSize(4), WithWorkerCount(1), WithEnqueueTimeout(time.Second))
+	bus := NewEventBus(logger.Logger(), WithQueueSize(4), WithWorkerCount(1), WithEnqueueTimeout(time.Second))
 	defer bus.Close()
 
 	var afterCalls atomic.Int64
@@ -242,7 +253,7 @@ func TestEventBus_Publish_DoesNotCreateTimeoutTimerWhenQueueHasCapacity(t *testi
 func TestEventBus_CloseDoesNotWaitForEnqueueTimeout(t *testing.T) {
 	logger := &spyLogger{}
 	timeout := 1500 * time.Millisecond
-	bus := NewEventBus(logger, WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(timeout))
+	bus := NewEventBus(logger.Logger(), WithQueueSize(1), WithWorkerCount(1), WithEnqueueTimeout(timeout))
 
 	started := make(chan struct{})
 	release := make(chan struct{})

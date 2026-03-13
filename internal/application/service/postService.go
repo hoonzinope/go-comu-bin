@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strconv"
@@ -39,17 +41,17 @@ type PostService struct {
 	actionDispatcher     port.ActionHookDispatcher
 	cachePolicy          appcache.Policy
 	authorizationPolicy  policy.AuthorizationPolicy
-	logger               port.Logger
+	logger               *slog.Logger
 	postDetailQuery      *postDetailQuery
 }
 
 var attachmentEmbedPattern = regexp.MustCompile(`!\[[^\]]*]\(attachment://([0-9]+)\)`)
 
-func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
+func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
 	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
+func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
 	svc := &PostService{
 		userRepository:       userRepository,
 		boardRepository:      boardRepository,
@@ -71,19 +73,19 @@ func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boar
 }
 
 // Deprecated: use NewPostServiceWithActionDispatcher.
-func NewPostServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *PostService {
+func NewPostServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
 	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
 }
 
-func (s *PostService) CreatePost(title, content string, tags []string, authorID, boardID int64) (int64, error) {
-	return s.createPost(title, content, tags, authorID, boardID, false)
+func (s *PostService) CreatePost(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+	return s.createPost(ctx, title, content, tags, authorID, boardID, false)
 }
 
-func (s *PostService) CreateDraftPost(title, content string, tags []string, authorID, boardID int64) (int64, error) {
-	return s.createPost(title, content, tags, authorID, boardID, true)
+func (s *PostService) CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+	return s.createPost(ctx, title, content, tags, authorID, boardID, true)
 }
 
-func (s *PostService) createPost(title, content string, tags []string, authorID, boardID int64, draft bool) (int64, error) {
+func (s *PostService) createPost(ctx context.Context, title, content string, tags []string, authorID, boardID int64, draft bool) (int64, error) {
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
 		return 0, customError.ErrInvalidInput
 	}
@@ -102,7 +104,7 @@ func (s *PostService) createPost(title, content string, tags []string, authorID,
 	}
 
 	var postID int64
-	err = s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(authorID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for create post", err)
@@ -141,7 +143,7 @@ func (s *PostService) createPost(title, content string, tags []string, authorID,
 	return postID, nil
 }
 
-func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*model.PostList, error) {
+func (s *PostService) GetPostsList(ctx context.Context, boardID int64, limit int, lastID int64) (*model.PostList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
@@ -197,7 +199,7 @@ func (s *PostService) GetPostsList(boardID int64, limit int, lastID int64) (*mod
 	return list, nil
 }
 
-func (s *PostService) GetPostsByTag(tagName string, limit int, lastID int64) (*model.PostList, error) {
+func (s *PostService) GetPostsByTag(ctx context.Context, tagName string, limit int, lastID int64) (*model.PostList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
@@ -220,7 +222,7 @@ func (s *PostService) GetPostsByTag(tagName string, limit int, lastID int64) (*m
 	return list, nil
 }
 
-func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
+func (s *PostService) GetPostDetail(ctx context.Context, id int64) (*model.PostDetail, error) {
 	cacheKey := key.PostDetail(id)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.DetailTTLSeconds, func() (interface{}, error) {
 		return s.postDetailQuery.Load(id)
@@ -235,11 +237,11 @@ func (s *PostService) GetPostDetail(id int64) (*model.PostDetail, error) {
 	return detail, nil
 }
 
-func (s *PostService) PublishPost(id, authorID int64) error {
+func (s *PostService) PublishPost(ctx context.Context, id, authorID int64) error {
 	var boardID int64
 	var postID int64
 	var currentTags []string
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(id)
 		if err != nil {
 			return customError.WrapRepository("select post by id including unpublished for publish post", err)
@@ -332,7 +334,7 @@ func (s *PostService) reactionsFromEntities(reactions []*entity.Reaction) ([]mod
 	return reactionsFromEntitiesWithUUIDs(reactions, userUUIDs)
 }
 
-func (s *PostService) UpdatePost(id, authorID int64, title, content string, tags []string) error {
+func (s *PostService) UpdatePost(ctx context.Context, id, authorID int64, title, content string, tags []string) error {
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
 		return customError.ErrInvalidInput
 	}
@@ -343,7 +345,7 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string, tags
 
 	var postID, boardID int64
 	var currentTagNames []string
-	err = s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(id)
 		if err != nil {
 			return customError.WrapRepository("select post by id for update post", err)
@@ -395,11 +397,11 @@ func (s *PostService) UpdatePost(id, authorID int64, title, content string, tags
 	return nil
 }
 
-func (s *PostService) DeletePost(id, authorID int64) error {
+func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error {
 	var postID, boardID int64
 	var currentTagNames []string
 	var commentIDs []int64
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(id)
 		if err != nil {
 			return customError.WrapRepository("select post by id for delete post", err)

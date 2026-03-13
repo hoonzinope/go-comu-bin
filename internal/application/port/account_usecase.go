@@ -1,5 +1,7 @@
 package port
 
+import "context"
+
 type AccountUseCase interface {
-	DeleteMyAccount(userID int64, password string) error
+	DeleteMyAccount(ctx context.Context, userID int64, password string) error
 }

@@ -1467,3 +1467,51 @@
 - `internal/application/service/outbox_events.go`
 - `internal/application/event/serializer.go`
 - `internal/application/event/serializer_test.go`
+
+## 2026-03-13 - Background Delivery 계층, `slog` 직접 주입, `context.Context` 전파 원칙을 아키텍처 표준으로 고정
+
+상태
+
+- decided
+
+배경
+
+- 아키텍처 문서는 HTTP Delivery 경계는 분명히 설명하지만, outbox relay worker와 attachment cleanup job 같은 백그라운드 실행 주체가 어느 레이어에 속하는지 명시하지 않았다.
+- 문서에는 application이 로깅을 port로 호출한다고 적혀 있었지만, 실제 운영 로깅 요구와 표준 라이브러리 사용 관점에서 더 단순한 원칙이 필요했다.
+- `UnitOfWork`, outbox, graceful shutdown, 향후 tracing을 일관되게 연결하려면 delivery에서 시작된 `context.Context`를 끝단까지 전파하는 규칙이 문서와 코드 모두에 필요했다.
+
+관찰
+
+- 현재 `cmd/main.go`는 HTTP 서버, outbox relay, background job runner를 함께 wiring하는 composition root 역할을 수행한다.
+- background runner/job은 이미 use case를 호출하는 형태로 연결돼 있으나, 이 구조가 아키텍처 규칙으로 고정돼 있지 않았다.
+- 일부 포트(`UnitOfWork`)는 아직 `context.Context`를 받지 않아 전파 원칙과 구현이 완전히 맞물리지 않았다.
+
+결론
+
+- 백그라운드 워커, 주기 잡, 이벤트 컨슈머는 모두 HTTP와 동급의 `Primary Adapter`, 즉 `Delivery` 계층으로 본다.
+- Delivery는 `HTTP Delivery`와 `Background Delivery`로 나눈다.
+- `Background Delivery` 책임은 polling, schedule trigger, retry/ack, shutdown 경계 관리와 입력 해석까지만 가진다.
+- 실제 비즈니스 규칙, 권한 판정, tx 경계, outbox append 같은 변경 로직은 `UseCase Port`와 `Application Service`에서 수행한다.
+- 워커/컨슈머가 repository 또는 DB 구현체를 직접 호출하는 것은 금지한다.
+- 로깅은 도메인 포트로 취급하지 않는다.
+- 애플리케이션/인프라 구현은 필요 시 표준 `*slog.Logger`를 DI로 주입받아 사용한다.
+- composition root는 HTTP 예외 처리, relay, background job이 공유할 로거 인스턴스를 생성해 전달한다.
+- 모든 Application Port, UseCase, Repository, Infrastructure Adapter 메서드는 `context.Context`를 첫 번째 인자로 받는 것을 기본 원칙으로 삼는다.
+- `UnitOfWork` 역시 `WithinTransaction(ctx, fn)` 형태로 상위 컨텍스트를 전달받아 같은 요청/작업 범위의 취소 신호와 추적 문맥을 유지한다.
+- `context.WithValue`는 delivery/middleware 같은 경계에서만 제한적으로 사용하고, application/domain 내부에서 임의 request-scoped 값을 추가하지 않는다.
+- outbox relay는 도메인 쓰기 use case가 아니라 outbox를 전달/소비하는 background delivery adapter로 문서화한다.
+
+후속 작업
+
+- `docs/ARCHITECTURE.md`에 background delivery, logging, context propagation 규칙 반영
+- `port.Logger` 계층 제거 및 `*slog.Logger` 직접 주입으로 코드 정합화
+- `UnitOfWork`와 서비스 경계의 `context.Context` 시그니처 정리 및 회귀 테스트 보강
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `cmd/main.go`
+- `internal/delivery/http.go`
+- `internal/application/port/unit_of_work.go`
+- `internal/infrastructure/event/outbox/relay.go`
+- `internal/infrastructure/job/inprocess/runner.go`

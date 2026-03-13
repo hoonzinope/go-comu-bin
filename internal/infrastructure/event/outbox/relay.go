@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -20,7 +21,7 @@ type RelayConfig struct {
 type Relay struct {
 	store      port.OutboxStore
 	serializer port.EventSerializer
-	logger     port.Logger
+	logger     *slog.Logger
 	cfg        RelayConfig
 
 	mu       sync.RWMutex
@@ -28,7 +29,7 @@ type Relay struct {
 	wg       sync.WaitGroup
 }
 
-func NewRelay(store port.OutboxStore, serializer port.EventSerializer, logger port.Logger, cfg RelayConfig) *Relay {
+func NewRelay(store port.OutboxStore, serializer port.EventSerializer, logger *slog.Logger, cfg RelayConfig) *Relay {
 	if cfg.WorkerCount <= 0 {
 		cfg.WorkerCount = 1
 	}

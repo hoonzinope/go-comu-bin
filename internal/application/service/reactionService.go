@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
@@ -24,14 +26,14 @@ type ReactionService struct {
 	cache              port.Cache
 	actionDispatcher   port.ActionHookDispatcher
 	cachePolicy        appcache.Policy
-	logger             port.Logger
+	logger             *slog.Logger
 }
 
-func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
+func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
 	return NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, logger...)
 }
 
-func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
+func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
 	return &ReactionService{
 		userRepository:     userRepository,
 		postRepository:     postRepository,
@@ -46,12 +48,12 @@ func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, 
 }
 
 // Deprecated: use NewReactionServiceWithActionDispatcher.
-func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, logger ...port.Logger) *ReactionService {
+func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
 	return NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, logger...)
 }
 
-func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
-	created, changed, err := s.withReactionTransaction(UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
+func (s *ReactionService) SetReaction(ctx context.Context, UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
+	created, changed, err := s.withReactionTransaction(ctx, UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
 		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(UserID, TargetID, TargetType, ReactionType)
 		if err != nil {
 			return false, false, customError.WrapRepository("set user target reaction", err)
@@ -72,8 +74,8 @@ func (s *ReactionService) SetReaction(UserID, TargetID int64, TargetType entity.
 	return created, nil
 }
 
-func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType entity.ReactionTargetType) error {
-	deleted, _, err := s.withReactionTransaction(UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
+func (s *ReactionService) DeleteReaction(ctx context.Context, UserID, TargetID int64, TargetType entity.ReactionTargetType) error {
+	deleted, _, err := s.withReactionTransaction(ctx, UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
 		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(UserID, TargetID, TargetType)
 		if err != nil {
 			return false, false, customError.WrapRepository("delete user target reaction", err)
@@ -94,7 +96,7 @@ func (s *ReactionService) DeleteReaction(UserID, TargetID int64, TargetType enti
 	return nil
 }
 
-func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
+func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
 	cacheKey := key.ReactionList(string(targetType), targetID)
 	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
 		if err := s.ensureTargetExists(targetID, targetType); err != nil {
@@ -120,10 +122,10 @@ func (s *ReactionService) GetReactionsByTarget(targetID int64, targetType entity
 	return reactions, nil
 }
 
-func (s *ReactionService) withReactionTransaction(userID, targetID int64, targetType entity.ReactionTargetType, mutate func(tx port.TxScope, detailPostID *int64) (bool, bool, error)) (bool, bool, error) {
+func (s *ReactionService) withReactionTransaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, mutate func(tx port.TxScope, detailPostID *int64) (bool, bool, error)) (bool, bool, error) {
 	var created bool
 	var changed bool
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for reaction", err)

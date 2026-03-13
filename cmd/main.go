@@ -36,7 +36,6 @@ import (
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
-	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	objectstorage "github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/object"
@@ -77,7 +76,7 @@ func main() {
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
-	appLogger := logging.NewSlogLogger(logger)
+	appLogger := logger
 	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository)
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(

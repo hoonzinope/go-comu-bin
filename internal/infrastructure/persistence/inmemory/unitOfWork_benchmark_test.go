@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -36,7 +37,7 @@ func BenchmarkUnitOfWork_WithinTransactionParallelSaveUser(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			id := atomic.AddInt64(&seq, 1)
-			_ = unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+			_ = unitOfWork.WithinTransaction(context.Background(), func(tx port.TxScope) error {
 				user := entity.NewUser(fmt.Sprintf("bench-user-%d", id), "pw")
 				_, err := tx.UserRepository().Save(user)
 				return err

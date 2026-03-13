@@ -18,7 +18,7 @@ func AuthWithSession(sessionUseCase port.SessionUseCase, writeError func(*gin.Co
 			return
 		}
 
-		userID, err := sessionUseCase.ValidateTokenToId(token)
+		userID, err := sessionUseCase.ValidateTokenToId(c.Request.Context(), token)
 		if err != nil {
 			writeError(c, statusForAuthError(err), err)
 			return

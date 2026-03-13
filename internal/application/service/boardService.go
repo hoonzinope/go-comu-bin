@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"log/slog"
 	"strings"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
@@ -25,14 +27,14 @@ type BoardService struct {
 	actionDispatcher    port.ActionHookDispatcher
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
-	logger              port.Logger
+	logger              *slog.Logger
 }
 
-func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
+func NewBoardService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *BoardService {
 	return NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
+func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
 		boardRepository:     boardRepository,
@@ -47,11 +49,11 @@ func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boa
 }
 
 // Deprecated: use NewBoardServiceWithActionDispatcher.
-func NewBoardServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *BoardService {
+func NewBoardServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *BoardService {
 	return NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
 }
 
-func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, error) {
+func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
@@ -97,14 +99,14 @@ func (s *BoardService) GetBoards(limit int, lastID int64) (*model.BoardList, err
 	return list, nil
 }
 
-func (s *BoardService) CreateBoard(userID int64, name, description string) (int64, error) {
+func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, description string) (int64, error) {
 	// 게시판 생성 로직 구현
 	if strings.TrimSpace(name) == "" {
 		return 0, customError.ErrInvalidInput
 	}
 	newBoard := entity.NewBoard(name, description)
 	var boardID int64
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for create board", err)
@@ -130,12 +132,12 @@ func (s *BoardService) CreateBoard(userID int64, name, description string) (int6
 	return boardID, nil
 }
 
-func (s *BoardService) UpdateBoard(id, userID int64, name, description string) error {
+func (s *BoardService) UpdateBoard(ctx context.Context, id, userID int64, name, description string) error {
 	// 게시판 수정 로직 구현
 	if strings.TrimSpace(name) == "" {
 		return customError.ErrInvalidInput
 	}
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for update board", err)
@@ -168,9 +170,9 @@ func (s *BoardService) UpdateBoard(id, userID int64, name, description string) e
 	return nil
 }
 
-func (s *BoardService) DeleteBoard(id, userID int64) error {
+func (s *BoardService) DeleteBoard(ctx context.Context, id, userID int64) error {
 	// 게시판 삭제 로직 구현
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for delete board", err)

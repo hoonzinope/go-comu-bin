@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -25,11 +26,6 @@ const multipartRequestOverheadBytes int64 = 1 << 20
 const defaultMaxJSONBodyBytes int64 = 1 << 20
 const httpLoggerContextKey = "http_logger"
 
-type noopLogger struct{}
-
-func (noopLogger) Warn(string, ...any)  {}
-func (noopLogger) Error(string, ...any) {}
-
 type HTTPHandler struct {
 	sessionUseCase           port.SessionUseCase
 	userUseCase              port.UserUseCase
@@ -41,7 +37,7 @@ type HTTPHandler struct {
 	attachmentUseCase        port.AttachmentUseCase
 	attachmentUploadMaxBytes int64
 	maxJSONBodyBytes         int64
-	logger                   port.Logger
+	logger                   *slog.Logger
 	authGinMiddleware        gin.HandlerFunc
 }
 
@@ -56,13 +52,13 @@ type HTTPDependencies struct {
 	AttachmentUseCase        port.AttachmentUseCase
 	AttachmentUploadMaxBytes int64
 	MaxJSONBodyBytes         int64
-	Logger                   port.Logger
+	Logger                   *slog.Logger
 }
 
 func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 	logger := deps.Logger
 	if logger == nil {
-		logger = noopLogger{}
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	handler := &HTTPHandler{
 		sessionUseCase:           deps.SessionUseCase,
@@ -188,7 +184,7 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if _, err := h.userUseCase.SignUp(req.Username, req.Password); err != nil {
+	if _, err := h.userUseCase.SignUp(c.Request.Context(), req.Username, req.Password); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -218,7 +214,7 @@ func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	token, err := h.sessionUseCase.Login(req.Username, req.Password)
+	token, err := h.sessionUseCase.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -246,7 +242,7 @@ func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, errorResponse{Error: customError.ErrUnauthorized.Error()})
 		return
 	}
-	if err := h.sessionUseCase.Logout(token); err != nil {
+	if err := h.sessionUseCase.Logout(c.Request.Context(), token); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -281,7 +277,7 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.accountUseCase.DeleteMyAccount(userID, req.Password); err != nil {
+	if err := h.accountUseCase.DeleteMyAccount(c.Request.Context(), userID, req.Password); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -312,7 +308,7 @@ func (h *HTTPHandler) handleUserSuspensionGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	view, err := h.userUseCase.GetUserSuspension(adminID, targetUserUUID)
+	view, err := h.userUseCase.GetUserSuspension(c.Request.Context(), adminID, targetUserUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -361,7 +357,7 @@ func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.userUseCase.SuspendUser(adminID, targetUserUUID, reason, duration); err != nil {
+	if err := h.userUseCase.SuspendUser(c.Request.Context(), adminID, targetUserUUID, reason, duration); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -392,7 +388,7 @@ func (h *HTTPHandler) handleUserUnsuspend(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.userUseCase.UnsuspendUser(adminID, targetUserUUID); err != nil {
+	if err := h.userUseCase.UnsuspendUser(c.Request.Context(), adminID, targetUserUUID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -415,7 +411,7 @@ func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	boards, err := h.boardUseCase.GetBoards(limit, lastID)
+	boards, err := h.boardUseCase.GetBoards(c.Request.Context(), limit, lastID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -451,7 +447,7 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	id, err := h.boardUseCase.CreateBoard(userID, req.Name, req.Description)
+	id, err := h.boardUseCase.CreateBoard(c.Request.Context(), userID, req.Name, req.Description)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -494,7 +490,7 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.boardUseCase.UpdateBoard(boardID, userID, req.Name, req.Description); err != nil {
+	if err := h.boardUseCase.UpdateBoard(c.Request.Context(), boardID, userID, req.Name, req.Description); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -524,7 +520,7 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.boardUseCase.DeleteBoard(boardID, userID); err != nil {
+	if err := h.boardUseCase.DeleteBoard(c.Request.Context(), boardID, userID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -553,7 +549,7 @@ func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	posts, err := h.postUseCase.GetPostsList(boardID, limit, lastID)
+	posts, err := h.postUseCase.GetPostsList(c.Request.Context(), boardID, limit, lastID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -594,7 +590,7 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreatePost(req.Title, req.Content, req.Tags, authorID, boardID)
+	postID, err := h.postUseCase.CreatePost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -635,7 +631,7 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreateDraftPost(req.Title, req.Content, req.Tags, authorID, boardID)
+	postID, err := h.postUseCase.CreateDraftPost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -666,7 +662,7 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	posts, err := h.postUseCase.GetPostsByTag(tagName, limit, lastID)
+	posts, err := h.postUseCase.GetPostsByTag(c.Request.Context(), tagName, limit, lastID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -691,7 +687,7 @@ func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 		return
 	}
 
-	post, err := h.postUseCase.GetPostDetail(postID)
+	post, err := h.postUseCase.GetPostDetail(c.Request.Context(), postID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -715,7 +711,7 @@ func (h *HTTPHandler) handlePostAttachmentsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	items, err := h.attachmentUseCase.GetPostAttachments(postID)
+	items, err := h.attachmentUseCase.GetPostAttachments(c.Request.Context(), postID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -780,7 +776,7 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 			contentType = guessed
 		}
 	}
-	upload, err := h.attachmentUseCase.UploadPostAttachment(postID, userID, fileHeader.Filename, contentType, file)
+	upload, err := h.attachmentUseCase.UploadPostAttachment(c.Request.Context(), postID, userID, fileHeader.Filename, contentType, file)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -816,7 +812,7 @@ func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	file, err := h.attachmentUseCase.GetPostAttachmentFile(postID, attachmentID)
+	file, err := h.attachmentUseCase.GetPostAttachmentFile(c.Request.Context(), postID, attachmentID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -861,7 +857,7 @@ func (h *HTTPHandler) handlePostAttachmentPreviewGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	file, err := h.attachmentUseCase.GetPostAttachmentPreviewFile(postID, attachmentID, userID)
+	file, err := h.attachmentUseCase.GetPostAttachmentPreviewFile(c.Request.Context(), postID, attachmentID, userID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -900,7 +896,7 @@ func (h *HTTPHandler) handlePostAttachmentDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.attachmentUseCase.DeletePostAttachment(postID, attachmentID, userID); err != nil {
+	if err := h.attachmentUseCase.DeletePostAttachment(c.Request.Context(), postID, attachmentID, userID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -930,7 +926,7 @@ func (h *HTTPHandler) handlePostPublish(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.postUseCase.PublishPost(postID, authorID); err != nil {
+	if err := h.postUseCase.PublishPost(c.Request.Context(), postID, authorID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -971,7 +967,7 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.postUseCase.UpdatePost(postID, authorID, req.Title, req.Content, req.Tags); err != nil {
+	if err := h.postUseCase.UpdatePost(c.Request.Context(), postID, authorID, req.Title, req.Content, req.Tags); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1001,7 +997,7 @@ func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.postUseCase.DeletePost(postID, authorID); err != nil {
+	if err := h.postUseCase.DeletePost(c.Request.Context(), postID, authorID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1030,7 +1026,7 @@ func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	comments, err := h.commentUseCase.GetCommentsByPost(postID, limit, lastID)
+	comments, err := h.commentUseCase.GetCommentsByPost(c.Request.Context(), postID, limit, lastID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1071,7 +1067,7 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	id, err := h.commentUseCase.CreateComment(req.Content, authorID, postID, req.ParentID)
+	id, err := h.commentUseCase.CreateComment(c.Request.Context(), req.Content, authorID, postID, req.ParentID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1114,7 +1110,7 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.commentUseCase.UpdateComment(commentID, authorID, req.Content); err != nil {
+	if err := h.commentUseCase.UpdateComment(c.Request.Context(), commentID, authorID, req.Content); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1144,7 +1140,7 @@ func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.commentUseCase.DeleteComment(commentID, authorID); err != nil {
+	if err := h.commentUseCase.DeleteComment(c.Request.Context(), commentID, authorID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1284,7 +1280,7 @@ func (h *HTTPHandler) handleMyCommentReactionDelete(c *gin.Context) {
 }
 
 func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
-	reactions, err := h.reactionUseCase.GetReactionsByTarget(targetID, targetType)
+	reactions, err := h.reactionUseCase.GetReactionsByTarget(c.Request.Context(), targetID, targetType)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1307,7 +1303,7 @@ func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, target
 		badRequest(c, err)
 		return
 	}
-	created, err := h.reactionUseCase.SetReaction(userID, targetID, targetType, reactionType)
+	created, err := h.reactionUseCase.SetReaction(c.Request.Context(), userID, targetID, targetType, reactionType)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1324,7 +1320,7 @@ func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetID int64, tar
 	if !ok {
 		return
 	}
-	if err := h.reactionUseCase.DeleteReaction(userID, targetID, targetType); err != nil {
+	if err := h.reactionUseCase.DeleteReaction(c.Request.Context(), userID, targetID, targetType); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1336,7 +1332,7 @@ func writeUseCaseError(c *gin.Context, err error) {
 	writeHTTPError(loggerFromContext(c), c, statusForError(err), publicErr)
 }
 
-func writeHTTPError(logger port.Logger, c *gin.Context, status int, err error) {
+func writeHTTPError(logger *slog.Logger, c *gin.Context, status int, err error) {
 	publicErr := customError.Public(err)
 	logAttrs := []any{
 		"method", c.Request.Method,
@@ -1359,15 +1355,15 @@ func writeHTTPError(logger port.Logger, c *gin.Context, status int, err error) {
 	c.AbortWithStatusJSON(status, errorResponse{Error: publicErr.Error()})
 }
 
-func loggerFromContext(c *gin.Context) port.Logger {
+func loggerFromContext(c *gin.Context) *slog.Logger {
 	if c != nil {
 		if v, ok := c.Get(httpLoggerContextKey); ok {
-			if logger, ok := v.(port.Logger); ok && logger != nil {
+			if logger, ok := v.(*slog.Logger); ok && logger != nil {
 				return logger
 			}
 		}
 	}
-	return noopLogger{}
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func statusForError(err error) int {

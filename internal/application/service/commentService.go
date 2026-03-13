@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
@@ -27,14 +29,14 @@ type CommentService struct {
 	actionDispatcher    port.ActionHookDispatcher
 	cachePolicy         appcache.Policy
 	authorizationPolicy policy.AuthorizationPolicy
-	logger              port.Logger
+	logger              *slog.Logger
 }
 
-func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
+func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
 	return NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
+func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
 		postRepository:      postRepository,
@@ -50,18 +52,18 @@ func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, p
 }
 
 // Deprecated: use NewCommentServiceWithActionDispatcher.
-func NewCommentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *CommentService {
+func NewCommentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
 	return NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
 }
 
-func (s *CommentService) CreateComment(content string, authorID, postID int64, parentID *int64) (int64, error) {
+func (s *CommentService) CreateComment(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
 	// 댓글 생성 로직 구현
 	if strings.TrimSpace(content) == "" {
 		return 0, customError.ErrInvalidInput
 	}
 	newComment := entity.NewComment(content, authorID, postID, parentID)
 	var commentID int64
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(authorID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for create comment", err)
@@ -106,7 +108,7 @@ func (s *CommentService) CreateComment(content string, authorID, postID int64, p
 	return commentID, nil
 }
 
-func (s *CommentService) GetCommentsByPost(postID int64, limit int, lastID int64) (*model.CommentList, error) {
+func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
@@ -176,13 +178,13 @@ func (s *CommentService) commentsFromEntities(comments []*entity.Comment) ([]mod
 	return out, nil
 }
 
-func (s *CommentService) UpdateComment(id, authorID int64, content string) error {
+func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, content string) error {
 	// 댓글 수정 로직 구현
 	if strings.TrimSpace(content) == "" {
 		return customError.ErrInvalidInput
 	}
 	var postID int64
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		comment, err := tx.CommentRepository().SelectCommentByID(id)
 		if err != nil {
 			return customError.WrapRepository("select comment by id for update comment", err)
@@ -220,10 +222,10 @@ func (s *CommentService) UpdateComment(id, authorID int64, content string) error
 	return nil
 }
 
-func (s *CommentService) DeleteComment(id, authorID int64) error {
+func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) error {
 	// 댓글 삭제 로직 구현
 	var commentID, postID int64
-	if err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	if err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		comment, err := tx.CommentRepository().SelectCommentByID(id)
 		if err != nil {
 			return customError.WrapRepository("select comment by id for delete comment", err)

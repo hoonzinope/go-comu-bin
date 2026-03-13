@@ -3,6 +3,7 @@ package outbox
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -13,10 +14,10 @@ var _ port.EventPublisher = (*Publisher)(nil)
 type Publisher struct {
 	store      port.OutboxAppender
 	serializer port.EventSerializer
-	logger     port.Logger
+	logger     *slog.Logger
 }
 
-func NewPublisher(store port.OutboxAppender, serializer port.EventSerializer, logger port.Logger) *Publisher {
+func NewPublisher(store port.OutboxAppender, serializer port.EventSerializer, logger *slog.Logger) *Publisher {
 	return &Publisher{
 		store:      store,
 		serializer: serializer,

@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ type UnitOfWork struct {
 }
 
 type txScope struct {
+	ctx                  context.Context
 	userRepository       port.UserRepository
 	boardRepository      port.BoardRepository
 	postRepository       port.PostRepository
@@ -35,6 +37,8 @@ type txScope struct {
 	attachmentRepository port.AttachmentRepository
 	outboxAppender       port.OutboxAppender
 }
+
+func (s *txScope) Context() context.Context { return s.ctx }
 
 func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository, outboxRepository *OutboxRepository) *UnitOfWork {
 	userRepository.attachCoordinator(newTxCoordinator())
@@ -60,7 +64,7 @@ func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardReposit
 	}
 }
 
-func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
+func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxScope) error) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -224,6 +228,7 @@ func (u *UnitOfWork) WithinTransaction(fn func(tx port.TxScope) error) error {
 	}
 
 	tx := &txScope{
+		ctx:                  ctx,
 		userRepository:       userTxRepository{repo: u.userRepository, beforeWrite: captureUser},
 		boardRepository:      boardTxRepository{repo: u.boardRepository, beforeWrite: captureBoard},
 		postRepository:       postTxRepository{repo: u.postRepository, beforeWrite: capturePost},

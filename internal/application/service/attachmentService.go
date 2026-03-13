@@ -11,6 +11,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -41,7 +42,7 @@ type AttachmentService struct {
 	maxUploadSizeBytes   int64
 	imageOptimization    ImageOptimizationConfig
 	authorizationPolicy  policy.AuthorizationPolicy
-	logger               port.Logger
+	logger               *slog.Logger
 }
 
 type ImageOptimizationConfig struct {
@@ -58,7 +59,7 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
+func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
 	return NewAttachmentServiceWithActionDispatcher(
 		userRepository,
 		postRepository,
@@ -74,11 +75,11 @@ func NewAttachmentService(userRepository port.UserRepository, postRepository por
 	)
 }
 
-func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
+func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
 	return NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
 }
 
-func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
+func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
 	}
@@ -101,17 +102,17 @@ func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository
 }
 
 // Deprecated: use NewAttachmentServiceWithActionDispatcher.
-func NewAttachmentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, publisher port.EventPublisher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...port.Logger) *AttachmentService {
+func NewAttachmentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, publisher port.EventPublisher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
 	return NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, wrapEventPublisherAsActionDispatcher(publisher), maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
 }
 
-func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
+func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || strings.TrimSpace(storageKey) == "" || sizeBytes <= 0 {
 		return 0, customError.ErrInvalidInput
 	}
 	attachment := entity.NewAttachment(postID, fileName, contentType, sizeBytes, storageKey)
 	var id int64
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(postID)
 		if err != nil {
 			return customError.WrapRepository("select post by id including unpublished for create attachment", err)
@@ -147,7 +148,7 @@ func (s *AttachmentService) CreatePostAttachment(postID, userID int64, fileName,
 	return id, nil
 }
 
-func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || content == nil {
 		return nil, customError.ErrInvalidInput
 	}
@@ -187,7 +188,7 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	if err := s.fileStorage.Save(storageKey, bytes.NewReader(data)); err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "save upload file", err)
 	}
-	id, err := s.CreatePostAttachment(postID, userID, fileName, contentType, int64(len(data)), storageKey)
+	id, err := s.CreatePostAttachment(ctx, postID, userID, fileName, contentType, int64(len(data)), storageKey)
 	if err != nil {
 		if deleteErr := s.fileStorage.Delete(storageKey); deleteErr != nil {
 			return nil, errors.Join(err, customError.Wrap(customError.ErrInternalServerError, "rollback upload file", deleteErr))
@@ -201,7 +202,7 @@ func (s *AttachmentService) UploadPostAttachment(postID, userID int64, fileName,
 	}, nil
 }
 
-func (s *AttachmentService) GetPostAttachments(postID int64) ([]model.Attachment, error) {
+func (s *AttachmentService) GetPostAttachments(ctx context.Context, postID int64) ([]model.Attachment, error) {
 	post, err := s.postRepository.SelectPostByID(postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id for get attachments", err)
@@ -232,7 +233,7 @@ func (s *AttachmentService) GetPostAttachments(postID int64) ([]model.Attachment
 	return out, nil
 }
 
-func (s *AttachmentService) GetPostAttachmentFile(postID, attachmentID int64) (*model.AttachmentFile, error) {
+func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
 	post, err := s.postRepository.SelectPostByID(postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id for get attachment file", err)
@@ -263,7 +264,7 @@ func (s *AttachmentService) GetPostAttachmentFile(postID, attachmentID int64) (*
 	}, nil
 }
 
-func (s *AttachmentService) GetPostAttachmentPreviewFile(postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
 	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id including unpublished for preview attachment file", err)
@@ -304,8 +305,8 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(postID, attachmentID, u
 	}, nil
 }
 
-func (s *AttachmentService) DeletePostAttachment(postID, attachmentID, userID int64) error {
-	err := s.unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postID, attachmentID, userID int64) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(postID)
 		if err != nil {
 			return customError.WrapRepository("select post by id including unpublished for delete attachment", err)

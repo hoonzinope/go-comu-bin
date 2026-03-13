@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
@@ -23,7 +25,8 @@ func NewSessionService(credentialVerifier port.CredentialVerifier, userRepositor
 	}
 }
 
-func (s *SessionService) Login(username, password string) (string, error) {
+func (s *SessionService) Login(ctx context.Context, username, password string) (string, error) {
+	_ = ctx
 	userID, err := s.credentialVerifier.VerifyCredentials(username, password)
 	if err != nil {
 		return "", err
@@ -40,7 +43,8 @@ func (s *SessionService) Login(username, password string) (string, error) {
 	return token, nil
 }
 
-func (s *SessionService) Logout(token string) error {
+func (s *SessionService) Logout(ctx context.Context, token string) error {
+	_ = ctx
 	userID, err := s.tokenPort.ValidateTokenToId(token)
 	if err != nil {
 		return nil
@@ -51,14 +55,16 @@ func (s *SessionService) Logout(token string) error {
 	return nil
 }
 
-func (s *SessionService) InvalidateUserSessions(userID int64) error {
+func (s *SessionService) InvalidateUserSessions(ctx context.Context, userID int64) error {
+	_ = ctx
 	if err := s.sessionRepository.DeleteByUser(userID); err != nil {
 		return customError.WrapRepository("delete user sessions", err)
 	}
 	return nil
 }
 
-func (s *SessionService) ValidateTokenToId(token string) (int64, error) {
+func (s *SessionService) ValidateTokenToId(ctx context.Context, token string) (int64, error) {
+	_ = ctx
 	userID, err := s.tokenPort.ValidateTokenToId(token)
 	if err != nil {
 		return 0, err

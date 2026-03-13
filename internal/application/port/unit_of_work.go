@@ -1,6 +1,9 @@
 package port
 
+import "context"
+
 type TxScope interface {
+	Context() context.Context
 	UserRepository() UserRepository
 	BoardRepository() BoardRepository
 	PostRepository() PostRepository
@@ -13,5 +16,5 @@ type TxScope interface {
 }
 
 type UnitOfWork interface {
-	WithinTransaction(fn func(tx TxScope) error) error
+	WithinTransaction(ctx context.Context, fn func(tx TxScope) error) error
 }

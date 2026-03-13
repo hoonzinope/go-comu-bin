@@ -1,21 +1,20 @@
 package event
 
 import (
+	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
-	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
-	"log/slog"
 )
 
 func TestCacheInvalidationHandler_BoardChanged(t *testing.T) {
 	cache := testutil.NewSpyCache()
-	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	h := NewCacheInvalidationHandler(cache, logger)
 
 	require.NoError(t, cache.Set(key.BoardList(10, 0), "cached"))
@@ -28,7 +27,7 @@ func TestCacheInvalidationHandler_BoardChanged(t *testing.T) {
 
 func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
 	cache := testutil.NewSpyCache()
-	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	h := NewCacheInvalidationHandler(cache, logger)
 
 	require.NoError(t, cache.Set(key.PostDetail(10), "cached"))
@@ -57,7 +56,7 @@ func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
 
 func TestCacheInvalidationHandler_CommentReactionAttachmentChanged(t *testing.T) {
 	cache := testutil.NewSpyCache()
-	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	h := NewCacheInvalidationHandler(cache, logger)
 
 	require.NoError(t, cache.Set(key.CommentList(11, 10, 0), "cached"))

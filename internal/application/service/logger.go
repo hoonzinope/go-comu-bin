@@ -1,15 +1,13 @@
 package service
 
-import "github.com/hoonzinope/go-comu-bin/internal/application/port"
+import (
+	"io"
+	"log/slog"
+)
 
-type noopLogger struct{}
-
-func (noopLogger) Warn(string, ...any)  {}
-func (noopLogger) Error(string, ...any) {}
-
-func resolveLogger(loggers []port.Logger) port.Logger {
+func resolveLogger(loggers []*slog.Logger) *slog.Logger {
 	if len(loggers) > 0 && loggers[0] != nil {
 		return loggers[0]
 	}
-	return noopLogger{}
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

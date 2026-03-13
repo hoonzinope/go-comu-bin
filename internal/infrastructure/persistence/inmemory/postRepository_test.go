@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -174,7 +175,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhileTagTransactionL
 	txRelease := make(chan struct{})
 	txDone := make(chan error, 1)
 	go func() {
-		err := uow.WithinTransaction(func(tx port.TxScope) error {
+		err := uow.WithinTransaction(context.Background(), func(tx port.TxScope) error {
 			if _, err := tx.TagRepository().Save(entity.NewTag("hold-lock")); err != nil {
 				return err
 			}
@@ -240,7 +241,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhilePostTagTransact
 	txRelease := make(chan struct{})
 	txDone := make(chan error, 1)
 	go func() {
-		err := uow.WithinTransaction(func(tx port.TxScope) error {
+		err := uow.WithinTransaction(context.Background(), func(tx port.TxScope) error {
 			if err := tx.PostTagRepository().UpsertActive(post.ID, tagID); err != nil {
 				return err
 			}

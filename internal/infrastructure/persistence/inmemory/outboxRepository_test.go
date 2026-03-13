@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -169,7 +170,7 @@ func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 	)
 
 	txErr := errors.New("rollback me")
-	err := unitOfWork.WithinTransaction(func(tx port.TxScope) error {
+	err := unitOfWork.WithinTransaction(context.Background(), func(tx port.TxScope) error {
 		appendErr := tx.Outbox().Append(port.OutboxMessage{
 			ID:            "m1",
 			EventName:     "post.changed",

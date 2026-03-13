@@ -2,6 +2,8 @@ package outbox
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -73,11 +75,6 @@ func (h testHandler) Handle(event port.DomainEvent) error {
 	return h.fn(event)
 }
 
-type noopLogger struct{}
-
-func (noopLogger) Warn(msg string, args ...any)  {}
-func (noopLogger) Error(msg string, args ...any) {}
-
 func TestRelay_PollOnce_MarkSucceededOnSuccess(t *testing.T) {
 	serializer := appevent.NewJSONEventSerializer()
 	name, payload, at, err := serializer.Serialize(appevent.NewBoardChanged("created", 1))
@@ -92,7 +89,7 @@ func TestRelay_PollOnce_MarkSucceededOnSuccess(t *testing.T) {
 			AttemptCount: 1,
 		}},
 	}
-	relay := NewRelay(store, serializer, noopLogger{}, RelayConfig{
+	relay := NewRelay(store, serializer, slog.New(slog.NewTextHandler(io.Discard, nil)), RelayConfig{
 		WorkerCount:  1,
 		BatchSize:    10,
 		PollInterval: time.Millisecond,
@@ -128,7 +125,7 @@ func TestRelay_PollOnce_RetryThenDead(t *testing.T) {
 			{ID: "m2", EventName: name, Payload: payload, OccurredAt: at, AttemptCount: 3},
 		},
 	}
-	relay := NewRelay(store, serializer, noopLogger{}, RelayConfig{
+	relay := NewRelay(store, serializer, slog.New(slog.NewTextHandler(io.Discard, nil)), RelayConfig{
 		WorkerCount:  1,
 		BatchSize:    10,
 		PollInterval: time.Millisecond,
