@@ -10,6 +10,7 @@ import (
 
 const placeholderJWTSecret = "commu-bin-secret-key"
 const placeholderBootstrapPassword = "admin"
+const minJWTSecretLength = 16
 
 type Config struct {
 	Cache struct {
@@ -173,6 +174,9 @@ func validate(cfg *Config) error {
 	}
 	if secret == placeholderJWTSecret {
 		return fmt.Errorf("invalid delivery.http.auth.secret: placeholder secret is not allowed")
+	}
+	if len(secret) < minJWTSecretLength {
+		return fmt.Errorf("invalid delivery.http.auth.secret: must be at least %d characters", minJWTSecretLength)
 	}
 	if cfg.Cache.ListTTLSeconds <= 0 {
 		return fmt.Errorf("invalid cache.listTTLSeconds: %d (must be > 0)", cfg.Cache.ListTTLSeconds)
