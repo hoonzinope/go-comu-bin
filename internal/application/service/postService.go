@@ -471,22 +471,6 @@ func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error 
 	return nil
 }
 
-func (s *PostService) tagsForPost(postID int64) ([]model.Tag, error) {
-	return tagsForPost(context.Background(), s.postTagRepository, s.tagRepository, postID)
-}
-
-func (s *PostService) activeTagNamesByPostID(postID int64) ([]string, error) {
-	tags, err := s.tagsForPost(postID)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(tags))
-	for _, tag := range tags {
-		names = append(names, tag.Name)
-	}
-	return names, nil
-}
-
 func (s *PostService) activeTagNamesByPostIDTx(tx port.TxScope, postID int64) ([]string, error) {
 	tags, err := s.tagsForPostTx(tx, postID)
 	if err != nil {
