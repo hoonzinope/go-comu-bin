@@ -841,6 +841,37 @@
 - `config.yml`
 - `docs/ARCHITECTURE.md`
 - `docs/CONFIG.md`
+
+## 2026-03-11 - ROADMAP 상태 표기를 outbox 전환 기준으로 동기화
+
+상태
+
+- decided
+
+배경
+
+- `in-process publish -> outbox append + relay` 전환이 완료되었지만, `docs/ROADMAP.md`의 Step 4/5 상태 표기가 과거 계획 기준으로 남아 있었다.
+- 문서상 현재 상태와 다음 우선순위가 어긋나면 후속 작업(특히 SQLite outbox adapter 전환)의 착수 지점이 불명확해진다.
+
+관찰
+
+- ROADMAP Step 4는 여전히 "in-process event bus 도입" 수준으로 표현되어 있다.
+- 실제 코드는 tx 내부 outbox append, relay retry/backoff/dead 정책까지 반영되어 있다.
+
+결론
+
+- ROADMAP은 Step 4를 "outbox 경로 전환 완료(인-memory relay)" 기준으로 갱신한다.
+- Step 5에는 다음 내구화 범위(SQLite outbox table + relay/CDC, MQ bridge 선택)를 명시한다.
+- 남은 항목은 "done/remaining" 기준으로 분리해 현재 단계와 후속 단계를 명확히 구분한다.
+
+후속 작업
+
+- SQLite outbox adapter 도입 시 ROADMAP Step 5 진행 상태 업데이트
+- dead 이벤트 재처리 운영 경로 확정 후 문서 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
 - `internal/application/service/sessionService.go`
 - `internal/delivery/http.go`
 
@@ -1216,3 +1247,223 @@
 - `internal/infrastructure/event/inprocess/bus_test.go`
 - `internal/infrastructure/persistence/inmemory/postRepository.go`
 - `internal/infrastructure/persistence/inmemory/postTagRepository.go`
+
+## 2026-03-11 - in-process publish를 outbox append + relay로 전환
+
+상태
+
+- decided
+
+배경
+
+- 현재 서비스는 트랜잭션 성공 후 in-process publisher로 즉시 이벤트를 enqueue한다.
+- 이 방식은 프로세스 생명주기에 의존해 내구성 있는 비동기 전달 경계로 확장하기 어렵다.
+- 로드맵은 outbox 포트 설계 후 SQLite/MQ 어댑터로 확장 가능한 구조를 요구한다.
+
+관찰
+
+- 서비스별 write 유스케이스는 tx 밖에서 `EventPublisher.Publish(...)`를 호출한다.
+- UnitOfWork tx scope에는 outbox 저장 경계가 없다.
+- 캐시 무효화 소비자는 이미 이벤트 핸들러 형태로 분리되어 있어 relay 소비 경로로 재사용 가능하다.
+
+결론
+
+- 서비스 표준 발행 경로를 `tx 내부 outbox append`로 단일화한다.
+- outbox 전달은 in-memory store + relay worker로 1차 구현한다.
+- 전달 보장은 at-least-once(재시도/백오프/최대시도 초과 시 dead 상태 보존)로 고정한다.
+- 기존 즉시 in-process publish 경로는 제거하고, relay가 이벤트 핸들러를 호출하는 구조로 치환한다.
+
+후속 작업
+
+- application port에 outbox 메시지/저장소/직렬화 포트 추가
+- UoW tx scope에 outbox append 경계 추가 및 rollback 결합
+- 서비스 이벤트 발행을 tx 내부 append로 이동
+- outbox relay worker 구현 및 lifecycle wiring
+- 설정/문서/테스트 정합성 반영
+
+관련 문서/코드
+
+- `internal/application/port/*`
+- `internal/application/service/*`
+- `internal/infrastructure/persistence/inmemory/*`
+- `internal/infrastructure/event/*`
+- `cmd/main.go`
+- `docs/ARCHITECTURE.md`
+- `docs/CONFIG.md`
+
+## 2026-03-12 - outbox relay 복구/종료 경계 강화
+
+상태
+
+- decided
+
+배경
+
+- outbox 기반 전환 후에도 worker 비정상 종료 시 `processing` 상태 메시지 복구 규칙이 없어 전달이 정체될 수 있었다.
+- dead 메시지 보존 정책과 선형 스캔 polling이 결합되어 메시지 누적 시 relay hot path 비용이 증가한다.
+- 서버 종료는 `ListenAndServe` 반환 이후에만 relay stop/wait를 수행해 운영 환경 graceful shutdown 경계가 약했다.
+
+관찰
+
+- `FetchReady`는 `pending`만 대상으로 claim하며, claim 후 상태 복구(lease timeout reclaim)가 없다.
+- dead 메시지는 삭제하지 않고 보존하지만, polling 대상 순서에도 남아 반복 스캔된다.
+- `main`에는 signal 기반 `http.Server.Shutdown` 경로가 없다.
+
+결론
+
+- outbox claim은 lease timeout 기반 reclaim을 포함해 stale `processing`을 다시 `pending`으로 복구한다.
+- dead 메시지는 보존하되 relay polling 순서에서는 분리해 hot path 스캔 비용을 줄인다.
+- 서버는 signal 기반 graceful shutdown(`Shutdown -> relay cancel -> relay wait`) 경계를 명시한다.
+
+후속 작업
+
+- outbox reclaim/claim 회귀 테스트 추가
+- shutdown 경계 단위 테스트 추가
+- ARCHITECTURE/ROADMAP에 운영 경계 업데이트
+
+관련 문서/코드
+
+- `internal/infrastructure/persistence/inmemory/outboxRepository.go`
+- `internal/infrastructure/event/outbox/relay.go`
+- `cmd/main.go`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
+
+## 2026-03-12 - dead outbox 메시지 운영 정책과 shutdown bounded wait
+
+상태
+
+- decided
+
+배경
+
+- dead 메시지 보존 정책은 유지하지만, 운영자가 재처리할지 폐기할지 선택하는 명시적 정책이 필요했다.
+- signal 기반 graceful shutdown을 도입했지만 server 종료 이벤트 대기에 상한이 없어 장애 시 무기한 대기 가능성이 있었다.
+
+관찰
+
+- dead 메시지는 polling 대상에서 제외되어 성능상 이점이 있지만, 재처리 시 ready 경로 재진입 규칙이 명확하지 않았다.
+- `Shutdown` 실패/지연 시 `ListenAndServe` 반환 대기가 길어질 수 있다.
+
+결론
+
+- dead 메시지는 기본 보존한다.
+- 운영자 처리 정책은 다음으로 고정한다.
+  - 재처리: `dead -> pending(ready)` 전환
+  - 폐기: 영구 삭제(discard)
+- 구현은 기존 store 계약 내에서 아래로 매핑한다.
+  - 재처리: `MarkRetry` 호출 시 dead 메시지도 ready 순서에 재삽입
+  - 폐기: `MarkSucceeded`로 제거
+- shutdown 경계는 bounded wait + fallback close로 고정한다.
+
+후속 작업
+
+- dead->pending 재큐잉 회귀 테스트 추가
+- signal shutdown timeout/fallback close 테스트 추가
+- 운영자 재처리/폐기 API는 다음 단계에서 추가
+
+관련 문서/코드
+
+- `internal/infrastructure/persistence/inmemory/outboxRepository.go`
+- `cmd/main.go`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
+
+## 2026-03-12 - 이벤트 발행 경계를 action dispatch 용어로 정리
+
+상태
+
+- decided
+
+배경
+
+- outbox 경로가 표준이 된 이후에도 서비스 계층의 `eventPublisher` 명칭은 향후 action/filter hook 확장 의도를 드러내지 못했다.
+- 동시에 일부 경계에서는 tx outbox가 없는 환경(테스트/확장 어댑터)에서 이벤트 전달 fallback 전략이 필요했다.
+
+관찰
+
+- 서비스 write 경로는 `tx.Outbox().Append`를 사용하지만 필드/생성자 이름은 여전히 `eventPublisher` 중심이다.
+- action hook 확장 로드맵 관점에서는 "이벤트 퍼블리셔"보다 "도메인 액션 디스패치" 용어가 의도에 가깝다.
+
+결론
+
+- 서비스 계층 용어를 `actionDispatcher`로 정리한다.
+- 공통 helper는 `dispatchDomainActions(tx, dispatcher, events...)`로 통일한다.
+- dispatch 규칙은 다음으로 고정한다.
+  - tx outbox가 있으면 outbox append 우선
+  - outbox가 없으면 dispatcher fallback publish
+
+후속 작업
+
+- 다음 단계에서 filter/action hook 포트 구체화
+- 서비스 생성자 naming(`WithPublisher`)은 호환성 고려 후 단계적으로 정리
+
+관련 문서/코드
+
+- `internal/application/service/*Service.go`
+- `internal/application/service/outbox_events.go`
+
+## 2026-03-13 - PR 리뷰 반영: 테스트 relay 수명/종료 경계/Outbox 검증 보강
+
+상태
+
+- decided
+
+배경
+
+- PR 리뷰에서 테스트 헬퍼 relay의 무기한 goroutine 생존 가능성, graceful shutdown 경계의 defer 순서/시간 예산 이중 사용, outbox 설정 음수 케이스 검증 누락이 지적되었다.
+
+관찰
+
+- `internal/application/service/common_test.go` 헬퍼는 `context.Background()`로 relay를 시작해 테스트 종료 시 정리 훅이 없었다.
+- `cmd/main.go` graceful shutdown은 `defer` 순서상 `relay.Wait()`가 `cancel()`보다 먼저 실행될 수 있고, timeout budget을 단계별로 재사용해 총 대기 시간이 늘어날 수 있다.
+- `internal/config/config_test.go`는 outbox 정상값 검증은 있으나 각 필드별 invalid 케이스 회귀 테스트가 부족하다.
+
+결론
+
+- 테스트 relay는 `testing.TB` 기반 helper에서 `context.WithCancel` + `t.Cleanup(cancel+relay.Wait)`로 수명을 테스트 스코프로 제한한다.
+- graceful shutdown은 defer 의존을 제거하고 단일 deadline 기반 timeout budget으로 서버 종료/강제 종료 경계를 일원화한다.
+- outbox 설정은 `workerCount/batchSize/pollIntervalMillis/maxAttempts/baseBackoffMillis` 각 필드의 invalid 케이스를 table-driven 테스트로 보강한다.
+
+후속 작업
+
+- 필요 시 `cmd/main.go` fallback wait 상수를 설정값으로 승격 검토
+- 테스트 helper naming(`WithPublisher`) 정리 시 `WithActionDispatcher` 용어 통일 추가 검토
+
+관련 문서/코드
+
+- `internal/application/service/common_test.go`
+- `cmd/main.go`
+- `cmd/main_test.go`
+- `internal/config/config_test.go`
+
+## 2026-03-13 - PR 후속 리뷰 반영: 이벤트 디스패치 분기 정리와 serializer 중복 제거
+
+상태
+
+- decided
+
+배경
+
+- `1cf2793` 이후 PR 리뷰에서 `dispatchDomainActions`의 중복 조건 분기와 `JSONEventSerializer.Deserialize`의 반복 코드가 지적되었다.
+
+관찰
+
+- `dispatchDomainActions`는 함수 시작에서 `len(events)==0` 반환 후, 다음 분기에서 동일 조건을 다시 검사한다.
+- `Deserialize`는 이벤트 타입별로 동일한 `unmarshal -> At zero이면 occurredAt 보정` 로직을 반복한다.
+
+결론
+
+- `dispatchDomainActions`는 중복 조건을 제거하고 의도(이벤트 없음/tx 없음/outbox 없음)를 단일 분기로 유지한다.
+- `Deserialize`는 공통 역직렬화 helper로 중복을 제거하되 이벤트 이름별 타입 매핑과 unsupported 에러 동작은 유지한다.
+- serializer 동작 회귀 방지를 위해 전용 단위 테스트를 추가한다.
+
+후속 작업
+
+- 이벤트 타입이 추가될 때 serializer 테스트 케이스를 함께 확장한다.
+
+관련 문서/코드
+
+- `internal/application/service/outbox_events.go`
+- `internal/application/event/serializer.go`
+- `internal/application/event/serializer_test.go`

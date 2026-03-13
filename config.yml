@@ -26,10 +26,12 @@ delivery:
       secret: ""
 
 event:
-  inprocess:
-    queueSize: 256
+  outbox:
     workerCount: 1
-    enqueueTimeoutMillis: 100
+    batchSize: 100
+    pollIntervalMillis: 100
+    maxAttempts: 5
+    baseBackoffMillis: 200
 
 admin:
   bootstrap:

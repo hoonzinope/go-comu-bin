@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
@@ -18,7 +20,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
-	eventInProcess "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/inprocess"
+	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
@@ -133,19 +135,33 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	outboxRepository := inmemory.NewOutboxRepository()
 	fileStorage := localfs.NewFileStorage(t.TempDir())
 
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository)
 	appLogger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
-	eventBus := eventInProcess.NewEventBus(appLogger)
+	eventSerializer := appevent.NewJSONEventSerializer()
+	outboxRelay := eventOutbox.NewRelay(outboxRepository, eventSerializer, appLogger, eventOutbox.RelayConfig{
+		WorkerCount:  1,
+		BatchSize:    64,
+		PollInterval: 5 * time.Millisecond,
+		MaxAttempts:  5,
+		BaseBackoff:  10 * time.Millisecond,
+	})
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
-	eventBus.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
-	eventBus.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
+	relayCtx, relayCancel := context.WithCancel(context.Background())
+	outboxRelay.Start(relayCtx)
+	t.Cleanup(func() {
+		relayCancel()
+		outboxRelay.Wait()
+	})
 	passwordHasher := auth.NewBcryptPasswordHasher(4)
 	hashedAdminPassword, err := passwordHasher.Hash("admin")
 	require.NoError(t, err)
@@ -154,11 +170,11 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	require.NoError(t, err)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
-	boardUseCase := service.NewBoardServiceWithPublisher(userRepository, boardRepository, postRepository, unitOfWork, cache, eventBus, testCachePolicy(), authorizationPolicy)
-	postUseCase := service.NewPostServiceWithPublisher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, testCachePolicy(), authorizationPolicy)
-	commentUseCase := service.NewCommentServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, testCachePolicy(), authorizationPolicy)
-	reactionUseCase := service.NewReactionServiceWithPublisher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, eventBus, testCachePolicy())
-	attachmentUseCase := service.NewAttachmentServiceWithPublisher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, eventBus, 10<<20, service.ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, authorizationPolicy)
+	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy())
+	attachmentUseCase := service.NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, 10<<20, service.ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)
@@ -399,17 +415,21 @@ func mustDeleteCommentReaction(t *testing.T, baseURL, token string, commentID in
 
 func mustNoComments(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
-	assert.Equal(t, http.StatusOK, status, "get comments failed: body=%s", string(body))
-	var resp map[string]any
-	mustUnmarshal(t, body, &resp)
-	rawComments, exists := resp["comments"]
-	if !exists || rawComments == nil {
-		return
-	}
-	comments, ok := rawComments.([]any)
-	require.True(t, ok, "unexpected comments payload type: %T", rawComments)
-	assert.Empty(t, comments)
+	require.Eventually(t, func() bool {
+		body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/comments", postID), nil)
+		if status != http.StatusOK {
+			return false
+		}
+		var resp map[string]any
+		mustUnmarshal(t, body, &resp)
+		rawComments, exists := resp["comments"]
+		if !exists || rawComments == nil {
+			return true
+		}
+		comments, ok := rawComments.([]any)
+		require.True(t, ok, "unexpected comments payload type: %T", rawComments)
+		return len(comments) == 0
+	}, time.Second, 10*time.Millisecond)
 }
 
 func mustHaveDeletedParentAndVisibleReply(t *testing.T, baseURL string, postID, parentID int64) {
@@ -432,26 +452,36 @@ func mustHaveDeletedParentAndVisibleReply(t *testing.T, baseURL string, postID, 
 
 func mustNoPostReactions(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/reactions", postID), nil)
-	assert.Equal(t, http.StatusOK, status, "get post reactions failed: body=%s", string(body))
-	var resp []map[string]any
-	mustUnmarshal(t, body, &resp)
-	assert.Empty(t, resp)
+	require.Eventually(t, func() bool {
+		body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d/reactions", postID), nil)
+		if status != http.StatusOK {
+			return false
+		}
+		var resp []map[string]any
+		mustUnmarshal(t, body, &resp)
+		return len(resp) == 0
+	}, time.Second, 10*time.Millisecond)
 }
 
 func mustNoCommentReactions(t *testing.T, baseURL string, commentID int64) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/comments/%d/reactions", commentID), nil)
-	assert.Equal(t, http.StatusOK, status, "get comment reactions failed: body=%s", string(body))
-	var resp []map[string]any
-	mustUnmarshal(t, body, &resp)
-	assert.Empty(t, resp)
+	require.Eventually(t, func() bool {
+		body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/comments/%d/reactions", commentID), nil)
+		if status != http.StatusOK {
+			return false
+		}
+		var resp []map[string]any
+		mustUnmarshal(t, body, &resp)
+		return len(resp) == 0
+	}, time.Second, 10*time.Millisecond)
 }
 
 func mustPostNotAccessible(t *testing.T, baseURL string, postID int64) {
 	t.Helper()
-	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
-	assert.Equal(t, http.StatusNotFound, status, "expected deleted post to be inaccessible(404), body=%s", string(body))
+	require.Eventually(t, func() bool {
+		_, status, _ := requestJSON(t, baseURL, "", http.MethodGet, fmt.Sprintf("/posts/%d", postID), nil)
+		return status == http.StatusNotFound
+	}, time.Second, 10*time.Millisecond)
 }
 
 func assertStatus(t *testing.T, baseURL, token, method, path string, body any, expected int) {

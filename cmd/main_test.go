@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,4 +172,140 @@ func TestStartBackgroundJobs_ReturnsNilWhenCleanupJobDisabled(t *testing.T) {
 
 	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{})
 	require.NoError(t, err)
+}
+
+type stubHTTPShutdowner struct {
+	shutdownCalled int32
+	closeCalled    int32
+	shutdownErr    error
+}
+
+func (s *stubHTTPShutdowner) Shutdown(ctx context.Context) error {
+	atomic.AddInt32(&s.shutdownCalled, 1)
+	return s.shutdownErr
+}
+
+func (s *stubHTTPShutdowner) Close() error {
+	atomic.AddInt32(&s.closeCalled, 1)
+	return nil
+}
+
+type stubRelayWaiter struct {
+	called int32
+}
+
+func (s *stubRelayWaiter) Wait() {
+	atomic.AddInt32(&s.called, 1)
+}
+
+type blockingRelayWaiter struct {
+	called int32
+	until  <-chan struct{}
+}
+
+func (s *blockingRelayWaiter) Wait() {
+	atomic.AddInt32(&s.called, 1)
+	<-s.until
+}
+
+func TestGracefulShutdown_CallsServerShutdownAndRelayWait(t *testing.T) {
+	server := &stubHTTPShutdowner{}
+	relay := &stubRelayWaiter{}
+	cancelCalled := int32(0)
+	cancel := func() { atomic.AddInt32(&cancelCalled, 1) }
+	serverErrCh := make(chan error, 1)
+	serverErrCh <- errors.New("stopped")
+
+	_ = gracefulShutdown(
+		server,
+		serverErrCh,
+		relay,
+		cancel,
+		50*time.Millisecond,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&cancelCalled))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&server.shutdownCalled))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&server.closeCalled))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&relay.called))
+}
+
+func TestGracefulShutdown_FallbackCloseWhenServerDoesNotExit(t *testing.T) {
+	server := &stubHTTPShutdowner{shutdownErr: errors.New("shutdown timeout")}
+	relay := &stubRelayWaiter{}
+	cancelCalled := int32(0)
+	cancel := func() { atomic.AddInt32(&cancelCalled, 1) }
+	serverErrCh := make(chan error) // never receives
+
+	err := gracefulShutdown(
+		server,
+		serverErrCh,
+		relay,
+		cancel,
+		20*time.Millisecond,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&server.shutdownCalled))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&server.closeCalled))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&cancelCalled))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&relay.called))
+}
+
+func TestGracefulShutdown_CancelsBeforeWaitingRelay(t *testing.T) {
+	server := &stubHTTPShutdowner{}
+	unblockRelay := make(chan struct{})
+	relay := &blockingRelayWaiter{until: unblockRelay}
+	cancelCalled := int32(0)
+	cancel := func() {
+		atomic.AddInt32(&cancelCalled, 1)
+		close(unblockRelay)
+	}
+	serverErrCh := make(chan error, 1)
+	serverErrCh <- errors.New("stopped")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- gracefulShutdown(
+			server,
+			serverErrCh,
+			relay,
+			cancel,
+			100*time.Millisecond,
+			slog.New(slog.NewTextHandler(io.Discard, nil)),
+		)
+	}()
+
+	select {
+	case err := <-done:
+		require.Error(t, err)
+		assert.Equal(t, int32(1), atomic.LoadInt32(&cancelCalled))
+		assert.Equal(t, int32(1), atomic.LoadInt32(&relay.called))
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("gracefulShutdown did not return; likely waiting relay before cancel")
+	}
+}
+
+func TestGracefulShutdown_UsesSingleTimeoutBudget(t *testing.T) {
+	server := &stubHTTPShutdowner{}
+	relay := &stubRelayWaiter{}
+	serverErrCh := make(chan error) // never receives
+	timeout := 40 * time.Millisecond
+	start := time.Now()
+
+	err := gracefulShutdown(
+		server,
+		serverErrCh,
+		relay,
+		func() {},
+		timeout,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
+	assert.LessOrEqual(t, time.Since(start), timeout+60*time.Millisecond)
 }

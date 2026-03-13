@@ -116,6 +116,7 @@ type testTxScope struct {
 	comment    port.CommentRepository
 	reaction   port.ReactionRepository
 	attachment port.AttachmentRepository
+	outbox     port.OutboxAppender
 }
 
 func (s testTxScope) UserRepository() port.UserRepository             { return s.user }
@@ -126,6 +127,7 @@ func (s testTxScope) PostTagRepository() port.PostTagRepository       { return s
 func (s testTxScope) CommentRepository() port.CommentRepository       { return s.comment }
 func (s testTxScope) ReactionRepository() port.ReactionRepository     { return s.reaction }
 func (s testTxScope) AttachmentRepository() port.AttachmentRepository { return s.attachment }
+func (s testTxScope) Outbox() port.OutboxAppender                     { return s.outbox }
 
 type testUnitOfWork struct {
 	scope port.TxScope
@@ -260,7 +262,7 @@ func TestAttachmentService_DeletePostAttachment_InvalidatesPostDetailCache(t *te
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
+	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(t, repositories, cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
 	attachmentID, err := svc.CreatePostAttachment(postID, userID, "a.png", "image/png", 10, "attachments/a.png")
 	require.NoError(t, err)
 	require.NoError(t, cache.Set(key.PostDetail(postID), "stale"))
@@ -406,7 +408,7 @@ func TestAttachmentService_UploadPostAttachment_InvalidatesPostDetailCache(t *te
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	require.NoError(t, cache.Set(key.PostDetail(postID), "stale"))
-	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
+	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(t, repositories, cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
 
 	_, err := svc.UploadPostAttachment(postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
 	require.NoError(t, err)

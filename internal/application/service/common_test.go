@@ -1,9 +1,12 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
+	"testing"
+	"time"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
@@ -13,7 +16,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
-	eventInProcess "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/inprocess"
+	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/logging"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 )
@@ -27,6 +30,7 @@ type testRepositories struct {
 	comment    port.CommentRepository
 	reaction   port.ReactionRepository
 	attachment port.AttachmentRepository
+	outbox     port.OutboxStore
 	unitOfWork port.UnitOfWork
 }
 
@@ -39,6 +43,7 @@ func newTestRepositories() testRepositories {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	outboxRepository := inmemory.NewOutboxRepository()
 	return testRepositories{
 		user:       userRepository,
 		board:      boardRepository,
@@ -48,7 +53,8 @@ func newTestRepositories() testRepositories {
 		comment:    commentRepository,
 		reaction:   reactionRepository,
 		attachment: attachmentRepository,
-		unitOfWork: inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository),
+		outbox:     outboxRepository,
+		unitOfWork: inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository),
 	}
 }
 
@@ -67,9 +73,10 @@ func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
 	return policy.NewRoleAuthorizationPolicy()
 }
 
-func newTestPostService(repositories testRepositories, cache port.Cache) *PostService {
-	eventPublisher := newTestEventPublisher(cache)
-	return NewPostServiceWithPublisher(
+func newTestPostService(t testing.TB, repositories testRepositories, cache port.Cache) *PostService {
+	t.Helper()
+	actionDispatcher := newTestActionDispatcher(t, repositories, cache)
+	return NewPostServiceWithActionDispatcher(
 		repositories.user,
 		repositories.board,
 		repositories.post,
@@ -80,22 +87,63 @@ func newTestPostService(repositories testRepositories, cache port.Cache) *PostSe
 		repositories.reaction,
 		repositories.unitOfWork,
 		cache,
-		eventPublisher,
+		actionDispatcher,
 		newTestCachePolicy(),
 		newTestAuthorizationPolicy(),
 	)
 }
 
-func newTestEventPublisher(cache port.Cache) port.EventPublisher {
+func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache port.Cache) port.ActionHookDispatcher {
+	t.Helper()
 	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
-	bus := eventInProcess.NewEventBus(logger)
+	serializer := appevent.NewJSONEventSerializer()
+	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
+		WorkerCount:  1,
+		BatchSize:    64,
+		PollInterval: time.Millisecond,
+		MaxAttempts:  5,
+		BaseBackoff:  time.Millisecond,
+	})
 	handler := appevent.NewCacheInvalidationHandler(cache, logger)
-	bus.Subscribe(appevent.EventNameBoardChanged, handler)
-	bus.Subscribe(appevent.EventNamePostChanged, handler)
-	bus.Subscribe(appevent.EventNameCommentChanged, handler)
-	bus.Subscribe(appevent.EventNameReactionChanged, handler)
-	bus.Subscribe(appevent.EventNameAttachmentChanged, handler)
-	return bus
+	relay.Subscribe(appevent.EventNameBoardChanged, handler)
+	relay.Subscribe(appevent.EventNamePostChanged, handler)
+	relay.Subscribe(appevent.EventNameCommentChanged, handler)
+	relay.Subscribe(appevent.EventNameReactionChanged, handler)
+	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
+	relayCtx, relayCancel := context.WithCancel(context.Background())
+	relay.Start(relayCtx)
+	t.Cleanup(func() {
+		relayCancel()
+		relay.Wait()
+	})
+	return wrapEventPublisherAsActionDispatcher(eventOutbox.NewPublisher(repositories.outbox, serializer, logger))
+}
+
+// Deprecated: use newTestActionDispatcher.
+func newTestEventPublisher(t testing.TB, repositories testRepositories, cache port.Cache) port.EventPublisher {
+	t.Helper()
+	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	serializer := appevent.NewJSONEventSerializer()
+	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
+		WorkerCount:  1,
+		BatchSize:    64,
+		PollInterval: time.Millisecond,
+		MaxAttempts:  5,
+		BaseBackoff:  time.Millisecond,
+	})
+	handler := appevent.NewCacheInvalidationHandler(cache, logger)
+	relay.Subscribe(appevent.EventNameBoardChanged, handler)
+	relay.Subscribe(appevent.EventNamePostChanged, handler)
+	relay.Subscribe(appevent.EventNameCommentChanged, handler)
+	relay.Subscribe(appevent.EventNameReactionChanged, handler)
+	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
+	relayCtx, relayCancel := context.WithCancel(context.Background())
+	relay.Start(relayCtx)
+	t.Cleanup(func() {
+		relayCancel()
+		relay.Wait()
+	})
+	return eventOutbox.NewPublisher(repositories.outbox, serializer, logger)
 }
 
 func newTestPasswordHasher() port.PasswordHasher {

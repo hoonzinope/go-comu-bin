@@ -9,6 +9,7 @@ type TxScope interface {
 	CommentRepository() CommentRepository
 	ReactionRepository() ReactionRepository
 	AttachmentRepository() AttachmentRepository
+	Outbox() OutboxAppender
 }
 
 type UnitOfWork interface {
