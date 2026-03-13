@@ -1637,3 +1637,43 @@
 - `internal/config/config.go`
 - `internal/config/config_test.go`
 - `docs/CONFIG.md`
+
+## 2026-03-13 - JWT claim 타입 안정성과 이벤트 핸들러 context 전파를 정렬한다
+
+상태
+
+- decided
+
+배경
+
+- JWT `user_id`를 `MapClaims`에서 `float64`로 읽는 방식은 큰 정수 식별자에서 정밀도 손실 위험이 있다.
+- 아키텍처 원칙은 경계 전반의 `context.Context` 전파를 요구하지만, 이벤트 핸들러 포트는 context를 받지 않아 relay 취소/종료 문맥이 하위 I/O 경계까지 전달되지 않는다.
+
+관찰
+
+- `JwtTokenProvider.ValidateTokenToId`는 `claims["user_id"].(float64)` 캐스팅을 사용한다.
+- `EventHandler` 포트는 `Handle(event DomainEvent)` 시그니처다.
+- outbox relay와 in-process bus는 handler 호출 시 context를 전달하지 않는다.
+- cache invalidation handler는 내부에서 `context.Background()`를 사용한다.
+
+결론
+
+- JWT claims를 typed struct로 전환해 `user_id int64`를 타입 안정적으로 직렬화/역직렬화한다.
+- 이벤트 핸들러 포트를 `Handle(ctx context.Context, event DomainEvent)`로 확장한다.
+- outbox relay/in-process bus는 worker/request context를 handler까지 전달한다.
+- cache invalidation handler는 전달받은 ctx를 cache 포트 호출에 그대로 전달한다.
+
+후속 작업
+
+- JWT large-id round-trip 회귀 테스트 추가
+- 이벤트 핸들러 context 전달/취소 경계 테스트 추가
+- 아키텍처 문서의 이벤트 경계 문구를 새 포트 시그니처에 맞춰 정합화
+
+관련 문서/코드
+
+- `internal/infrastructure/auth/JwtTokenProvider.go`
+- `internal/application/port/event.go`
+- `internal/infrastructure/event/outbox/relay.go`
+- `internal/infrastructure/event/inprocess/event_bus.go`
+- `internal/application/event/cache_invalidation_handler.go`
+- `docs/ARCHITECTURE.md`
