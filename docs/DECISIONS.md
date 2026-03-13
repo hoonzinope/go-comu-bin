@@ -1436,3 +1436,34 @@
 - `cmd/main.go`
 - `cmd/main_test.go`
 - `internal/config/config_test.go`
+
+## 2026-03-13 - PR 후속 리뷰 반영: 이벤트 디스패치 분기 정리와 serializer 중복 제거
+
+상태
+
+- decided
+
+배경
+
+- `1cf2793` 이후 PR 리뷰에서 `dispatchDomainActions`의 중복 조건 분기와 `JSONEventSerializer.Deserialize`의 반복 코드가 지적되었다.
+
+관찰
+
+- `dispatchDomainActions`는 함수 시작에서 `len(events)==0` 반환 후, 다음 분기에서 동일 조건을 다시 검사한다.
+- `Deserialize`는 이벤트 타입별로 동일한 `unmarshal -> At zero이면 occurredAt 보정` 로직을 반복한다.
+
+결론
+
+- `dispatchDomainActions`는 중복 조건을 제거하고 의도(이벤트 없음/tx 없음/outbox 없음)를 단일 분기로 유지한다.
+- `Deserialize`는 공통 역직렬화 helper로 중복을 제거하되 이벤트 이름별 타입 매핑과 unsupported 에러 동작은 유지한다.
+- serializer 동작 회귀 방지를 위해 전용 단위 테스트를 추가한다.
+
+후속 작업
+
+- 이벤트 타입이 추가될 때 serializer 테스트 케이스를 함께 확장한다.
+
+관련 문서/코드
+
+- `internal/application/service/outbox_events.go`
+- `internal/application/event/serializer.go`
+- `internal/application/event/serializer_test.go`

@@ -30,51 +30,27 @@ func (s *JSONEventSerializer) Serialize(event port.DomainEvent) (string, []byte,
 func (s *JSONEventSerializer) Deserialize(eventName string, payload []byte, occurredAt time.Time) (port.DomainEvent, error) {
 	switch eventName {
 	case EventNameBoardChanged:
-		var event BoardChanged
-		if err := json.Unmarshal(payload, &event); err != nil {
-			return nil, err
-		}
-		if event.At.IsZero() {
-			event.At = occurredAt
-		}
-		return event, nil
+		return deserializeEvent(payload, occurredAt, func(e BoardChanged) time.Time { return e.At }, func(e *BoardChanged, at time.Time) { e.At = at })
 	case EventNamePostChanged:
-		var event PostChanged
-		if err := json.Unmarshal(payload, &event); err != nil {
-			return nil, err
-		}
-		if event.At.IsZero() {
-			event.At = occurredAt
-		}
-		return event, nil
+		return deserializeEvent(payload, occurredAt, func(e PostChanged) time.Time { return e.At }, func(e *PostChanged, at time.Time) { e.At = at })
 	case EventNameCommentChanged:
-		var event CommentChanged
-		if err := json.Unmarshal(payload, &event); err != nil {
-			return nil, err
-		}
-		if event.At.IsZero() {
-			event.At = occurredAt
-		}
-		return event, nil
+		return deserializeEvent(payload, occurredAt, func(e CommentChanged) time.Time { return e.At }, func(e *CommentChanged, at time.Time) { e.At = at })
 	case EventNameReactionChanged:
-		var event ReactionChanged
-		if err := json.Unmarshal(payload, &event); err != nil {
-			return nil, err
-		}
-		if event.At.IsZero() {
-			event.At = occurredAt
-		}
-		return event, nil
+		return deserializeEvent(payload, occurredAt, func(e ReactionChanged) time.Time { return e.At }, func(e *ReactionChanged, at time.Time) { e.At = at })
 	case EventNameAttachmentChanged:
-		var event AttachmentChanged
-		if err := json.Unmarshal(payload, &event); err != nil {
-			return nil, err
-		}
-		if event.At.IsZero() {
-			event.At = occurredAt
-		}
-		return event, nil
+		return deserializeEvent(payload, occurredAt, func(e AttachmentChanged) time.Time { return e.At }, func(e *AttachmentChanged, at time.Time) { e.At = at })
 	default:
 		return nil, fmt.Errorf("unsupported event name: %s", eventName)
 	}
+}
+
+func deserializeEvent[T port.DomainEvent](payload []byte, occurredAt time.Time, getOccurredAt func(T) time.Time, setOccurredAt func(*T, time.Time)) (T, error) {
+	var event T
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return event, err
+	}
+	if getOccurredAt(event).IsZero() {
+		setOccurredAt(&event, occurredAt)
+	}
+	return event, nil
 }

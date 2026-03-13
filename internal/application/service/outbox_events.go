@@ -21,7 +21,7 @@ func dispatchDomainActions(tx port.TxScope, dispatcher port.ActionHookDispatcher
 	if len(events) == 0 {
 		return nil
 	}
-	if tx == nil || len(events) == 0 {
+	if tx == nil {
 		if dispatcher != nil {
 			dispatcher.Dispatch(events...)
 		}
