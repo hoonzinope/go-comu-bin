@@ -103,7 +103,7 @@ func TestBoardService_DeleteBoard_RejectsNonEmptyBoard(t *testing.T) {
 func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	svc := NewBoardServiceWithPublisher(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, cache, newTestEventPublisher(repositories, cache), newTestCachePolicy(), newTestAuthorizationPolicy())
+	svc := NewBoardServiceWithPublisher(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, cache, newTestEventPublisher(t, repositories, cache), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	seedBoard(repositories.board, "b1", "d1")

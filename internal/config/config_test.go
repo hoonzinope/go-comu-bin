@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -426,4 +427,51 @@ func TestLoadFromViper_RequiresBootstrapCredentialsWhenEnabled(t *testing.T) {
 	cfg, err := loadFromViper(v)
 	require.Error(t, err)
 	assert.Nil(t, cfg)
+}
+
+func TestLoadFromViper_InvalidOutboxConfig(t *testing.T) {
+	base := func() *viper.Viper {
+		v := viper.New()
+		v.Set("delivery.http.port", 18577)
+		v.Set("delivery.http.auth.secret", "test-secret")
+		v.Set("cache.listTTLSeconds", 30)
+		v.Set("cache.detailTTLSeconds", 30)
+		v.Set("storage.provider", "local")
+		v.Set("storage.local.rootDir", "./data/uploads")
+		v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+		v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+		v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+		v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+		v.Set("jobs.attachmentCleanup.batchSize", 50)
+		v.Set("event.outbox.workerCount", 1)
+		v.Set("event.outbox.batchSize", 100)
+		v.Set("event.outbox.pollIntervalMillis", 100)
+		v.Set("event.outbox.maxAttempts", 5)
+		v.Set("event.outbox.baseBackoffMillis", 100)
+		return v
+	}
+	tests := []struct {
+		name      string
+		field     string
+		value     int
+		errSubstr string
+	}{
+		{name: "worker count", field: "event.outbox.workerCount", value: 0, errSubstr: "event.outbox.workerCount"},
+		{name: "batch size", field: "event.outbox.batchSize", value: 0, errSubstr: "event.outbox.batchSize"},
+		{name: "poll interval", field: "event.outbox.pollIntervalMillis", value: 0, errSubstr: "event.outbox.pollIntervalMillis"},
+		{name: "max attempts", field: "event.outbox.maxAttempts", value: 0, errSubstr: "event.outbox.maxAttempts"},
+		{name: "base backoff", field: "event.outbox.baseBackoffMillis", value: 0, errSubstr: "event.outbox.baseBackoffMillis"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := base()
+			v.Set(tc.field, tc.value)
+
+			cfg, err := loadFromViper(v)
+			require.Error(t, err)
+			assert.Nil(t, cfg)
+			assert.True(t, strings.Contains(err.Error(), tc.errSubstr))
+		})
+	}
 }

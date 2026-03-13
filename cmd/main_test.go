@@ -198,6 +198,16 @@ func (s *stubRelayWaiter) Wait() {
 	atomic.AddInt32(&s.called, 1)
 }
 
+type blockingRelayWaiter struct {
+	called int32
+	until  <-chan struct{}
+}
+
+func (s *blockingRelayWaiter) Wait() {
+	atomic.AddInt32(&s.called, 1)
+	<-s.until
+}
+
 func TestGracefulShutdown_CallsServerShutdownAndRelayWait(t *testing.T) {
 	server := &stubHTTPShutdowner{}
 	relay := &stubRelayWaiter{}
@@ -243,4 +253,59 @@ func TestGracefulShutdown_FallbackCloseWhenServerDoesNotExit(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(&server.closeCalled))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&cancelCalled))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&relay.called))
+}
+
+func TestGracefulShutdown_CancelsBeforeWaitingRelay(t *testing.T) {
+	server := &stubHTTPShutdowner{}
+	unblockRelay := make(chan struct{})
+	relay := &blockingRelayWaiter{until: unblockRelay}
+	cancelCalled := int32(0)
+	cancel := func() {
+		atomic.AddInt32(&cancelCalled, 1)
+		close(unblockRelay)
+	}
+	serverErrCh := make(chan error, 1)
+	serverErrCh <- errors.New("stopped")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- gracefulShutdown(
+			server,
+			serverErrCh,
+			relay,
+			cancel,
+			100*time.Millisecond,
+			slog.New(slog.NewTextHandler(io.Discard, nil)),
+		)
+	}()
+
+	select {
+	case err := <-done:
+		require.Error(t, err)
+		assert.Equal(t, int32(1), atomic.LoadInt32(&cancelCalled))
+		assert.Equal(t, int32(1), atomic.LoadInt32(&relay.called))
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("gracefulShutdown did not return; likely waiting relay before cancel")
+	}
+}
+
+func TestGracefulShutdown_UsesSingleTimeoutBudget(t *testing.T) {
+	server := &stubHTTPShutdowner{}
+	relay := &stubRelayWaiter{}
+	serverErrCh := make(chan error) // never receives
+	timeout := 40 * time.Millisecond
+	start := time.Now()
+
+	err := gracefulShutdown(
+		server,
+		serverErrCh,
+		relay,
+		func() {},
+		timeout,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
+	assert.LessOrEqual(t, time.Since(start), timeout+60*time.Millisecond)
 }

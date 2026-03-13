@@ -134,8 +134,8 @@ func TestCommentService_GetCommentsByPost_ReturnsPostNotFound_WhenPostDeleted(t 
 func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	commentSvc := NewCommentServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(repositories, cache), newTestCachePolicy(), newTestAuthorizationPolicy())
-	postSvc := newTestPostService(repositories, cache)
+	commentSvc := NewCommentServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(t, repositories, cache), newTestCachePolicy(), newTestAuthorizationPolicy())
+	postSvc := newTestPostService(t, repositories, cache)
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")

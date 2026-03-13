@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"testing"
 	"time"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
@@ -72,8 +73,9 @@ func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
 	return policy.NewRoleAuthorizationPolicy()
 }
 
-func newTestPostService(repositories testRepositories, cache port.Cache) *PostService {
-	actionDispatcher := newTestActionDispatcher(repositories, cache)
+func newTestPostService(t testing.TB, repositories testRepositories, cache port.Cache) *PostService {
+	t.Helper()
+	actionDispatcher := newTestActionDispatcher(t, repositories, cache)
 	return NewPostServiceWithActionDispatcher(
 		repositories.user,
 		repositories.board,
@@ -91,7 +93,8 @@ func newTestPostService(repositories testRepositories, cache port.Cache) *PostSe
 	)
 }
 
-func newTestActionDispatcher(repositories testRepositories, cache port.Cache) port.ActionHookDispatcher {
+func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache port.Cache) port.ActionHookDispatcher {
+	t.Helper()
 	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	serializer := appevent.NewJSONEventSerializer()
 	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
@@ -107,12 +110,18 @@ func newTestActionDispatcher(repositories testRepositories, cache port.Cache) po
 	relay.Subscribe(appevent.EventNameCommentChanged, handler)
 	relay.Subscribe(appevent.EventNameReactionChanged, handler)
 	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
-	relay.Start(context.Background())
+	relayCtx, relayCancel := context.WithCancel(context.Background())
+	relay.Start(relayCtx)
+	t.Cleanup(func() {
+		relayCancel()
+		relay.Wait()
+	})
 	return wrapEventPublisherAsActionDispatcher(eventOutbox.NewPublisher(repositories.outbox, serializer, logger))
 }
 
 // Deprecated: use newTestActionDispatcher.
-func newTestEventPublisher(repositories testRepositories, cache port.Cache) port.EventPublisher {
+func newTestEventPublisher(t testing.TB, repositories testRepositories, cache port.Cache) port.EventPublisher {
+	t.Helper()
 	logger := logging.NewSlogLogger(slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	serializer := appevent.NewJSONEventSerializer()
 	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
@@ -128,7 +137,12 @@ func newTestEventPublisher(repositories testRepositories, cache port.Cache) port
 	relay.Subscribe(appevent.EventNameCommentChanged, handler)
 	relay.Subscribe(appevent.EventNameReactionChanged, handler)
 	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
-	relay.Start(context.Background())
+	relayCtx, relayCancel := context.WithCancel(context.Background())
+	relay.Start(relayCtx)
+	t.Cleanup(func() {
+		relayCancel()
+		relay.Wait()
+	})
 	return eventOutbox.NewPublisher(repositories.outbox, serializer, logger)
 }
 

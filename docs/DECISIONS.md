@@ -1402,3 +1402,37 @@
 
 - `internal/application/service/*Service.go`
 - `internal/application/service/outbox_events.go`
+
+## 2026-03-13 - PR 리뷰 반영: 테스트 relay 수명/종료 경계/Outbox 검증 보강
+
+상태
+
+- decided
+
+배경
+
+- PR 리뷰에서 테스트 헬퍼 relay의 무기한 goroutine 생존 가능성, graceful shutdown 경계의 defer 순서/시간 예산 이중 사용, outbox 설정 음수 케이스 검증 누락이 지적되었다.
+
+관찰
+
+- `internal/application/service/common_test.go` 헬퍼는 `context.Background()`로 relay를 시작해 테스트 종료 시 정리 훅이 없었다.
+- `cmd/main.go` graceful shutdown은 `defer` 순서상 `relay.Wait()`가 `cancel()`보다 먼저 실행될 수 있고, timeout budget을 단계별로 재사용해 총 대기 시간이 늘어날 수 있다.
+- `internal/config/config_test.go`는 outbox 정상값 검증은 있으나 각 필드별 invalid 케이스 회귀 테스트가 부족하다.
+
+결론
+
+- 테스트 relay는 `testing.TB` 기반 helper에서 `context.WithCancel` + `t.Cleanup(cancel+relay.Wait)`로 수명을 테스트 스코프로 제한한다.
+- graceful shutdown은 defer 의존을 제거하고 단일 deadline 기반 timeout budget으로 서버 종료/강제 종료 경계를 일원화한다.
+- outbox 설정은 `workerCount/batchSize/pollIntervalMillis/maxAttempts/baseBackoffMillis` 각 필드의 invalid 케이스를 table-driven 테스트로 보강한다.
+
+후속 작업
+
+- 필요 시 `cmd/main.go` fallback wait 상수를 설정값으로 승격 검토
+- 테스트 helper naming(`WithPublisher`) 정리 시 `WithActionDispatcher` 용어 통일 추가 검토
+
+관련 문서/코드
+
+- `internal/application/service/common_test.go`
+- `cmd/main.go`
+- `cmd/main_test.go`
+- `internal/config/config_test.go`

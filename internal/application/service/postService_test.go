@@ -20,7 +20,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	otherID := seedUser(repositories.user, "other", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content", nil)
 	require.Error(t, err)
@@ -33,7 +33,7 @@ func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	require.NoError(t, svc.UpdatePost(postID, adminID, "new-title", "new-content", nil))
 }
@@ -42,7 +42,7 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	postID, err := svc.CreatePost("title", "content", nil, userID, boardID)
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestPostService_CreatePost_InvalidInput(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	_, err := svc.CreatePost(" ", "content", nil, userID, boardID)
 	require.Error(t, err)
@@ -78,7 +78,7 @@ func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
 	userID, err := repositories.user.Save(user)
 	require.NoError(t, err)
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	_, err = svc.CreatePost("title", "content", nil, userID, boardID)
 	require.Error(t, err)
@@ -92,7 +92,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	seedPost(repositories.post, userID, boardID, "title1", "content1")
 	seedPost(repositories.post, userID, boardID, "title2", "content2")
 	seedPost(repositories.post, userID, boardID, "title3", "content3")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	list, err := svc.GetPostsList(boardID, 2, 0)
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestPostService_GetPostsList_InvalidLimit(t *testing.T) {
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	_, err := svc.GetPostsList(boardID, 0, 0)
 	require.Error(t, err)
@@ -120,7 +120,7 @@ func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testi
 	boardID := seedBoard(repositories.board, "free", "desc")
 	seedPost(repositories.post, userID, boardID, "title", "content")
 	require.NoError(t, repositories.board.Delete(boardID))
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	_, err := svc.GetPostsList(boardID, 10, 0)
 	require.Error(t, err)
@@ -130,7 +130,7 @@ func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testi
 func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := newTestPostService(repositories, cache)
+	postSvc := newTestPostService(t, repositories, cache)
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -152,7 +152,7 @@ func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	postSvc := newTestPostService(repositories, cache)
+	postSvc := newTestPostService(t, repositories, cache)
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -182,7 +182,7 @@ func TestPostService_UpdatePost_SucceedsWhenCacheInvalidationFails(t *testing.T)
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := newTestPostService(repositories, &errorCache{
+	svc := newTestPostService(t, repositories, &errorCache{
 		deleteErr:         newCacheFailure(nil),
 		deleteByPrefixErr: newCacheFailure(nil),
 	})
@@ -199,7 +199,7 @@ func TestPostService_UpdatePost_SucceedsWhenCacheInvalidationFails(t *testing.T)
 
 func TestPostService_GetPostDetail_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
 	repositories := newTestRepositories()
-	svc := newTestPostService(repositories, &errorCache{
+	svc := newTestPostService(t, repositories, &errorCache{
 		getOrSetWithTTLErr: newCacheFailure(nil),
 	})
 
@@ -213,7 +213,7 @@ func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	require.NoError(t, svc.DeletePost(postID, userID))
 
@@ -230,7 +230,7 @@ func TestPostService_CreatePost_NormalizesTagsAndIncludesThemInDetail(t *testing
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	postID, err := svc.CreatePost("title", "content", []string{" Go ", "go", "Backend"}, userID, boardID)
 	require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestPostService_UpdatePost_SoftDeletesAndReactivatesTagRelations(t *testing
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	postID, err := svc.CreatePost("title", "content", []string{"go", "backend"}, userID, boardID)
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestPostService_DeletePost_RemovesPostFromTagList(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	postID, err := svc.CreatePost("title", "content", []string{"go"}, userID, boardID)
 	require.NoError(t, err)
@@ -284,7 +284,7 @@ func TestPostService_GetPostsByTag_ExcludesDraftPosts(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	draftID, err := svc.CreateDraftPost("draft", "content", []string{"go"}, userID, boardID)
 	require.NoError(t, err)
@@ -302,7 +302,7 @@ func TestPostService_CreatePost_InvalidTags(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	_, err := svc.CreatePost("title", "content", []string{" "}, userID, boardID)
 	require.Error(t, err)
@@ -322,7 +322,7 @@ func TestPostService_DeletePost_OrphansAttachmentsAndSoftDeletesComments(t *test
 	require.NotNil(t, attachment)
 	attachment.MarkReferenced()
 	require.NoError(t, repositories.attachment.Update(attachment))
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	require.NoError(t, svc.DeletePost(postID, userID))
 
@@ -346,7 +346,7 @@ func TestPostService_DeletePost_RemovesStoredReactionsForPostAndComments(t *test
 	require.NoError(t, err)
 	_, _, _, err = repositories.reaction.SetUserTargetReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
 	require.NoError(t, err)
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	require.NoError(t, svc.DeletePost(postID, userID))
 
@@ -362,7 +362,7 @@ func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	postID, err := svc.CreateDraftPost("draft-title", "draft-content", nil, userID, boardID)
 	require.NoError(t, err)
@@ -377,7 +377,7 @@ func TestPostService_PublishPost_MakesDraftVisible(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	postID, err := svc.CreateDraftPost("draft-title", "draft-content", nil, userID, boardID)
 	require.NoError(t, err)
@@ -399,7 +399,7 @@ func TestPostService_UpdatePost_RejectsForeignAttachmentReference(t *testing.T) 
 	otherPostID := seedDraftPost(repositories.post, userID, boardID, "title2", "content2")
 	foreignAttachmentID, err := repositories.attachment.Save(entity.NewAttachment(otherPostID, "a.png", "image/png", 10, "posts/2/a.png"))
 	require.NoError(t, err)
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	err = svc.UpdatePost(postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(foreignAttachmentID, 10)+")", nil)
 	require.Error(t, err)
@@ -411,7 +411,7 @@ func TestPostService_PublishPost_RejectsMissingAttachmentReference(t *testing.T)
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "body ![a](attachment://999)")
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	err := svc.PublishPost(postID, userID)
 	require.Error(t, err)
@@ -427,7 +427,7 @@ func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {
 	attachment.MarkReferenced()
 	_, err := repositories.attachment.Save(attachment)
 	require.NoError(t, err)
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	detail, err := svc.GetPostDetail(postID)
 	require.NoError(t, err)
@@ -443,7 +443,7 @@ func TestPostService_GetPostDetail_ExposesCommentPreviewHasMore(t *testing.T) {
 	for i := 0; i < 11; i++ {
 		seedComment(repositories.comment, userID, postID, "comment")
 	}
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	detail, err := svc.GetPostDetail(postID)
 	require.NoError(t, err)
@@ -487,7 +487,7 @@ func TestPostService_UpdatePost_MarksUnusedAttachmentsAsOrphaned(t *testing.T) {
 	require.NoError(t, err)
 	unusedID, err := repositories.attachment.Save(entity.NewAttachment(postID, "b.png", "image/png", 10, "posts/1/b.png"))
 	require.NoError(t, err)
-	svc := newTestPostService(repositories, newTestCache())
+	svc := newTestPostService(t, repositories, newTestCache())
 
 	err = svc.UpdatePost(postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(referencedID, 10)+")", nil)
 	require.NoError(t, err)

@@ -174,40 +174,92 @@ type relayWaiter interface {
 }
 
 func gracefulShutdown(server httpShutdowner, serverErrCh <-chan error, relay relayWaiter, cancel context.CancelFunc, timeout time.Duration, logger *slog.Logger) error {
-	if cancel != nil {
-		defer cancel()
+	if timeout <= 0 {
+		timeout = 5 * time.Second
 	}
-	if relay != nil {
-		defer relay.Wait()
-	}
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), timeout)
+	deadline := time.Now().Add(timeout)
+	shutdownCtx, shutdownCancel := context.WithDeadline(context.Background(), deadline)
 	defer shutdownCancel()
 	if server != nil {
 		if err := server.Shutdown(shutdownCtx); err != nil && logger != nil {
 			logger.Warn("http server shutdown failed", "error", err)
 		}
 	}
+	if cancel != nil {
+		cancel()
+	}
+	waitForRelay(relay, time.Until(deadline), logger)
 	if serverErrCh == nil {
 		return nil
 	}
-	select {
-	case err := <-serverErrCh:
+	if err, ok := awaitServerErr(serverErrCh, time.Until(deadline)); ok {
 		return err
-	case <-time.After(timeout):
-		if logger != nil {
-			logger.Warn("server did not stop in time, forcing close")
+	}
+	if logger != nil {
+		logger.Warn("server did not stop in time, forcing close")
+	}
+	if server != nil {
+		if err := server.Close(); err != nil && logger != nil {
+			logger.Warn("http server force close failed", "error", err)
 		}
-		if server != nil {
-			if err := server.Close(); err != nil && logger != nil {
-				logger.Warn("http server force close failed", "error", err)
+	}
+	forceWait := 500 * time.Millisecond
+	if remaining := time.Until(deadline); remaining <= 0 {
+		forceWait = 0
+	} else if remaining < forceWait {
+		forceWait = remaining
+	}
+	if err, ok := awaitServerErr(serverErrCh, forceWait); ok {
+		return err
+	}
+	return fmt.Errorf("graceful shutdown timed out waiting for server stop")
+}
+
+func waitForRelay(relay relayWaiter, timeout time.Duration, logger *slog.Logger) {
+	if relay == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		relay.Wait()
+		close(done)
+	}()
+	if timeout <= 0 {
+		select {
+		case <-done:
+		default:
+			if logger != nil {
+				logger.Warn("relay wait timed out during shutdown")
 			}
 		}
+		return
+	}
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		if logger != nil {
+			logger.Warn("relay wait timed out during shutdown")
+		}
+	}
+}
+
+func awaitServerErr(serverErrCh <-chan error, timeout time.Duration) (error, bool) {
+	if serverErrCh == nil {
+		return nil, false
+	}
+	if timeout <= 0 {
 		select {
 		case err := <-serverErrCh:
-			return err
-		case <-time.After(500 * time.Millisecond):
-			return fmt.Errorf("graceful shutdown timed out waiting for server stop")
+			return err, true
+		default:
+			return nil, false
 		}
+	}
+	select {
+	case err := <-serverErrCh:
+		return err, true
+	case <-time.After(timeout):
+		return nil, false
 	}
 }
 
