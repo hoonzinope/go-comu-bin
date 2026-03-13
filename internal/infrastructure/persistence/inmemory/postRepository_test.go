@@ -140,6 +140,30 @@ func TestPostRepository_SelectPublishedPostsByTagName_FiltersBeforePagination(t 
 	assert.Equal(t, publishedLowID.ID, posts[1].ID)
 }
 
+func TestPostRepository_SelectPublishedPostsByTagName_PropagatesContextToTagLookup(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	repo := NewPostRepository(tagRepo, postTagRepo)
+
+	tagID, err := tagRepo.Save(context.Background(), entity.NewTag("go"))
+	require.NoError(t, err)
+	post := testPost("published", "content", 1, 1)
+	_, err = repo.Save(context.Background(), post)
+	require.NoError(t, err)
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), post.ID, tagID))
+
+	type ctxKey struct{}
+	requestCtx := context.WithValue(context.Background(), ctxKey{}, "rid-1")
+	var observedRID any
+	tagRepo.onSelectByName = func(ctx context.Context, _ string) {
+		observedRID = ctx.Value(ctxKey{})
+	}
+
+	_, err = repo.SelectPublishedPostsByTagName(requestCtx, "go", 10, 0)
+	require.NoError(t, err)
+	assert.Equal(t, "rid-1", observedRID)
+}
+
 func TestPostRepository_SelectPublishedPostsByTagName_WithoutTagDependenciesErrors(t *testing.T) {
 	repo := NewPostRepository(nil, nil)
 

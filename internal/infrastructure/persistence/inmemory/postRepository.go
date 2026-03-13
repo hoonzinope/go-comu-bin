@@ -138,13 +138,12 @@ func (r *PostRepository) selectPosts(boardID int64, limit int, lastID int64) ([]
 }
 
 func (r *PostRepository) SelectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {
-	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
-	return r.selectPublishedPostsByTagName(tagName, limit, lastID)
+	return r.selectPublishedPostsByTagName(ctx, tagName, limit, lastID)
 }
 
-func (r *PostRepository) selectPublishedPostsByTagName(tagName string, limit int, lastID int64) ([]*entity.Post, error) {
+func (r *PostRepository) selectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {
 	if limit <= 0 {
 		return []*entity.Post{}, nil
 	}
@@ -152,7 +151,7 @@ func (r *PostRepository) selectPublishedPostsByTagName(tagName string, limit int
 		return nil, errors.New("post repository tag dependencies are not attached")
 	}
 
-	tag, err := r.tagRepository.SelectByName(context.Background(), tagName)
+	tag, err := r.tagRepository.SelectByName(ctx, tagName)
 	if err != nil {
 		return nil, err
 	}

@@ -13,6 +13,7 @@ var _ port.TagRepository = (*TagRepository)(nil)
 type TagRepository struct {
 	mu          sync.RWMutex
 	coordinator *txCoordinator
+	onSelectByName func(context.Context, string)
 	tagDB       struct {
 		ID     int64
 		Data   map[int64]*entity.Tag
@@ -66,6 +67,9 @@ func (r *TagRepository) save(tag *entity.Tag) (int64, error) {
 }
 
 func (r *TagRepository) SelectByName(ctx context.Context, name string) (*entity.Tag, error) {
+	if r.onSelectByName != nil {
+		r.onSelectByName(ctx, name)
+	}
 	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()

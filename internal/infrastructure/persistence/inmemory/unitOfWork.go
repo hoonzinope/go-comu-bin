@@ -415,8 +415,7 @@ func (r postTxRepository) SelectPosts(ctx context.Context, boardID int64, limit 
 	return r.repo.selectPosts(boardID, limit, lastID)
 }
 func (r postTxRepository) SelectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {
-	_ = ctx
-	return r.repo.selectPublishedPostsByTagName(tagName, limit, lastID)
+	return r.repo.selectPublishedPostsByTagName(ctx, tagName, limit, lastID)
 }
 func (r postTxRepository) ExistsByBoardID(ctx context.Context, boardID int64) (bool, error) {
 	_ = ctx
