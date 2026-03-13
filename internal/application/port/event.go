@@ -1,6 +1,9 @@
 package port
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type DomainEvent interface {
 	EventName() string
@@ -8,7 +11,7 @@ type DomainEvent interface {
 }
 
 type EventHandler interface {
-	Handle(event DomainEvent) error
+	Handle(ctx context.Context, event DomainEvent) error
 }
 
 type EventBus interface {

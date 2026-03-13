@@ -27,11 +27,11 @@ func (e testEvent) OccurredAt() time.Time {
 }
 
 type testHandler struct {
-	fn func(event port.DomainEvent) error
+	fn func(ctx context.Context, event port.DomainEvent) error
 }
 
-func (h testHandler) Handle(event port.DomainEvent) error {
-	return h.fn(event)
+func (h testHandler) Handle(ctx context.Context, event port.DomainEvent) error {
+	return h.fn(ctx, event)
 }
 
 type spyLogger struct {
@@ -69,7 +69,8 @@ func TestEventBus_PublishIsAsync(t *testing.T) {
 	start := make(chan struct{})
 	release := make(chan struct{})
 
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		close(start)
 		<-release
 		return nil
@@ -91,10 +92,12 @@ func TestEventBus_RecoversFromPanicAndContinues(t *testing.T) {
 	bus := NewEventBus(logger.Logger())
 	called := make(chan struct{}, 1)
 
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		panic("boom")
 	}})
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		called <- struct{}{}
 		return nil
 	}})
@@ -111,7 +114,8 @@ func TestEventBus_LogsHandlerError(t *testing.T) {
 	logger := &spyLogger{}
 	bus := NewEventBus(logger.Logger())
 
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		return errors.New("handler failed")
 	}})
 
@@ -128,7 +132,8 @@ func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		close(started)
 		<-release
 		return nil
@@ -154,7 +159,8 @@ func TestEventBus_PublishBlocksUntilQueueHasSpace(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		close(started)
 		<-release
 		return nil
@@ -190,7 +196,8 @@ func TestEventBus_Close_WaitsForInFlightHandlers(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		close(started)
 		<-release
 		return nil
@@ -257,7 +264,8 @@ func TestEventBus_CloseDoesNotWaitForEnqueueTimeout(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	bus.Subscribe("test", testHandler{fn: func(event port.DomainEvent) error {
+	bus.Subscribe("test", testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		close(started)
 		<-release
 		return nil

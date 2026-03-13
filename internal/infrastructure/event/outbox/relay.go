@@ -95,7 +95,7 @@ func (r *Relay) worker(ctx context.Context) {
 			return
 		default:
 		}
-		if processed := r.pollOnce(time.Now()); processed {
+		if processed := r.pollOnce(ctx, time.Now()); processed {
 			continue
 		}
 		select {
@@ -106,7 +106,7 @@ func (r *Relay) worker(ctx context.Context) {
 	}
 }
 
-func (r *Relay) pollOnce(now time.Time) bool {
+func (r *Relay) pollOnce(ctx context.Context, now time.Time) bool {
 	messages, err := r.store.FetchReady(r.cfg.BatchSize, now)
 	if err != nil {
 		r.warn("fetch outbox ready messages failed", "error", err)
@@ -116,18 +116,18 @@ func (r *Relay) pollOnce(now time.Time) bool {
 		return false
 	}
 	for _, message := range messages {
-		r.handleMessage(message, now)
+		r.handleMessage(ctx, message, now)
 	}
 	return true
 }
 
-func (r *Relay) handleMessage(message port.OutboxMessage, now time.Time) {
+func (r *Relay) handleMessage(ctx context.Context, message port.OutboxMessage, now time.Time) {
 	event, err := r.serializer.Deserialize(message.EventName, message.Payload, message.OccurredAt)
 	if err != nil {
 		r.markFailure(message, now, "deserialize outbox event failed", err)
 		return
 	}
-	if err := r.dispatch(event); err != nil {
+	if err := r.dispatch(ctx, event); err != nil {
 		r.markFailure(message, now, "dispatch outbox event failed", err)
 		return
 	}
@@ -136,7 +136,7 @@ func (r *Relay) handleMessage(message port.OutboxMessage, now time.Time) {
 	}
 }
 
-func (r *Relay) dispatch(event port.DomainEvent) error {
+func (r *Relay) dispatch(ctx context.Context, event port.DomainEvent) error {
 	if event == nil {
 		return nil
 	}
@@ -145,7 +145,7 @@ func (r *Relay) dispatch(event port.DomainEvent) error {
 		if handler == nil {
 			continue
 		}
-		if err := callHandler(handler, event); err != nil {
+		if err := callHandler(ctx, handler, event); err != nil {
 			return err
 		}
 	}
@@ -192,13 +192,13 @@ func backoffDuration(base time.Duration, attempt int, maxFactor int) time.Durati
 	return time.Duration(factor) * base
 }
 
-func callHandler(handler port.EventHandler, event port.DomainEvent) (err error) {
+func callHandler(ctx context.Context, handler port.EventHandler, event port.DomainEvent) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = panicError{value: recovered}
 		}
 	}()
-	return handler.Handle(event)
+	return handler.Handle(ctx, event)
 }
 
 type panicError struct {

@@ -1,6 +1,7 @@
 package inprocess
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -173,7 +174,7 @@ func (b *EventBus) callHandler(handler port.EventHandler, event port.DomainEvent
 			b.warn("event handler panic", "event", event.EventName(), "panic", recovered)
 		}
 	}()
-	if err := handler.Handle(event); err != nil {
+	if err := handler.Handle(context.Background(), event); err != nil {
 		b.warn("event handler failed", "event", event.EventName(), "error", err)
 	}
 }

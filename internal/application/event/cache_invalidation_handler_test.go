@@ -8,6 +8,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,7 @@ func TestCacheInvalidationHandler_BoardChanged(t *testing.T) {
 	h := NewCacheInvalidationHandler(cache, logger)
 
 	require.NoError(t, cache.Set(context.Background(), key.BoardList(10, 0), "cached"))
-	require.NoError(t, h.Handle(NewBoardChanged("updated", 1)))
+	require.NoError(t, h.Handle(context.Background(), NewBoardChanged("updated", 1)))
 
 	_, ok, err := cache.Get(context.Background(), key.BoardList(10, 0))
 	require.NoError(t, err)
@@ -39,7 +40,7 @@ func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), 100), "cached"))
 
 	e := NewPostChanged("deleted", 10, 2, []string{"go"}, []int64{100})
-	require.NoError(t, h.Handle(e))
+	require.NoError(t, h.Handle(context.Background(), e))
 
 	for _, cacheKey := range []string{
 		key.PostDetail(10),
@@ -63,14 +64,14 @@ func TestCacheInvalidationHandler_CommentReactionAttachmentChanged(t *testing.T)
 	require.NoError(t, cache.Set(context.Background(), key.CommentList(11, 10, 0), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), 90), "cached"))
-	require.NoError(t, h.Handle(NewCommentChanged("deleted", 90, 11)))
+	require.NoError(t, h.Handle(context.Background(), NewCommentChanged("deleted", 90, 11)))
 
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetPost), 11), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
-	require.NoError(t, h.Handle(NewReactionChanged("set", entity.ReactionTargetPost, 11, 11)))
+	require.NoError(t, h.Handle(context.Background(), NewReactionChanged("set", entity.ReactionTargetPost, 11, 11)))
 
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
-	require.NoError(t, h.Handle(NewAttachmentChanged("deleted", 5, 11)))
+	require.NoError(t, h.Handle(context.Background(), NewAttachmentChanged("deleted", 5, 11)))
 
 	for _, cacheKey := range []string{
 		key.CommentList(11, 10, 0),
@@ -82,4 +83,41 @@ func TestCacheInvalidationHandler_CommentReactionAttachmentChanged(t *testing.T)
 		require.NoError(t, err)
 		assert.False(t, ok)
 	}
+}
+
+type recordingCache struct {
+	deleteCtx         context.Context
+	deleteByPrefixCtx context.Context
+}
+
+func (c *recordingCache) Get(context.Context, string) (interface{}, bool, error) { return nil, false, nil }
+func (c *recordingCache) Set(context.Context, string, interface{}) error          { return nil }
+func (c *recordingCache) SetWithTTL(context.Context, string, interface{}, int) error {
+	return nil
+}
+func (c *recordingCache) Delete(ctx context.Context, key string) error {
+	c.deleteCtx = ctx
+	_ = key
+	return nil
+}
+func (c *recordingCache) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	c.deleteByPrefixCtx = ctx
+	_ = prefix
+	return 0, nil
+}
+func (c *recordingCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	return loader(ctx)
+}
+
+var _ port.Cache = (*recordingCache)(nil)
+
+func TestCacheInvalidationHandler_UsesProvidedContext(t *testing.T) {
+	cache := &recordingCache{}
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	h := NewCacheInvalidationHandler(cache, logger)
+
+	ctx := context.WithValue(context.Background(), struct{ k string }{k: "rid"}, "rid-1")
+	require.NoError(t, h.Handle(ctx, NewPostChanged("updated", 10, 2, []string{"go"}, nil)))
+	assert.Same(t, ctx, cache.deleteCtx)
+	assert.Same(t, ctx, cache.deleteByPrefixCtx)
 }

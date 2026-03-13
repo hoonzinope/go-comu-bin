@@ -1,6 +1,7 @@
 package outbox
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -68,11 +69,11 @@ func (s *fakeOutboxStore) MarkDead(id string, _ string) error {
 }
 
 type testHandler struct {
-	fn func(event port.DomainEvent) error
+	fn func(ctx context.Context, event port.DomainEvent) error
 }
 
-func (h testHandler) Handle(event port.DomainEvent) error {
-	return h.fn(event)
+func (h testHandler) Handle(ctx context.Context, event port.DomainEvent) error {
+	return h.fn(ctx, event)
 }
 
 func TestRelay_PollOnce_MarkSucceededOnSuccess(t *testing.T) {
@@ -97,12 +98,13 @@ func TestRelay_PollOnce_MarkSucceededOnSuccess(t *testing.T) {
 		BaseBackoff:  time.Millisecond,
 	})
 	handled := make(chan struct{}, 1)
-	relay.Subscribe(appevent.EventNameBoardChanged, testHandler{fn: func(event port.DomainEvent) error {
+	relay.Subscribe(appevent.EventNameBoardChanged, testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		handled <- struct{}{}
 		return nil
 	}})
 
-	processed := relay.pollOnce(time.Now())
+	processed := relay.pollOnce(context.Background(), time.Now())
 	assert.True(t, processed)
 	select {
 	case <-handled:
@@ -132,13 +134,58 @@ func TestRelay_PollOnce_RetryThenDead(t *testing.T) {
 		MaxAttempts:  3,
 		BaseBackoff:  time.Millisecond,
 	})
-	relay.Subscribe(appevent.EventNameBoardChanged, testHandler{fn: func(event port.DomainEvent) error {
+	relay.Subscribe(appevent.EventNameBoardChanged, testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
 		return errors.New("handler failed")
 	}})
 
-	processed := relay.pollOnce(time.Now())
+	processed := relay.pollOnce(context.Background(), time.Now())
 	assert.True(t, processed)
 	assert.Equal(t, []string{"m1"}, store.retryCalls)
 	assert.Equal(t, []string{"m2"}, store.deadCalls)
 	assert.Empty(t, store.succeededIDs)
+}
+
+func TestRelay_Start_PropagatesContextToHandler(t *testing.T) {
+	serializer := appevent.NewJSONEventSerializer()
+	name, payload, at, err := serializer.Serialize(appevent.NewBoardChanged("created", 1))
+	require.NoError(t, err)
+
+	store := &fakeOutboxStore{
+		ready: []port.OutboxMessage{{
+			ID:           "m1",
+			EventName:    name,
+			Payload:      payload,
+			OccurredAt:   at,
+			AttemptCount: 1,
+		}},
+	}
+	relay := NewRelay(store, serializer, slog.New(slog.NewTextHandler(io.Discard, nil)), RelayConfig{
+		WorkerCount:  1,
+		BatchSize:    10,
+		PollInterval: 10 * time.Millisecond,
+		MaxAttempts:  3,
+		BaseBackoff:  time.Millisecond,
+	})
+
+	handled := make(chan string, 1)
+	relay.Subscribe(appevent.EventNameBoardChanged, testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = event
+		v, _ := ctx.Value("request_id").(string)
+		handled <- v
+		return nil
+	}})
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "request_id", "relay-1"))
+	defer cancel()
+	relay.Start(ctx)
+
+	select {
+	case got := <-handled:
+		assert.Equal(t, "relay-1", got)
+	case <-time.After(time.Second):
+		t.Fatal("handler was not called")
+	}
+	cancel()
+	relay.Wait()
 }
