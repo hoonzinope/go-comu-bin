@@ -318,34 +318,42 @@ type userTxRepository struct {
 	beforeWrite func()
 }
 
-func (r userTxRepository) Save(user *entity.User) (int64, error) {
+func (r userTxRepository) Save(ctx context.Context, user *entity.User) (int64, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.save(user)
 }
-func (r userTxRepository) SelectUserByUsername(username string) (*entity.User, error) {
+func (r userTxRepository) SelectUserByUsername(ctx context.Context, username string) (*entity.User, error) {
+	_ = ctx
 	return r.repo.selectUserByUsername(username)
 }
-func (r userTxRepository) SelectUserByUUID(userUUID string) (*entity.User, error) {
+func (r userTxRepository) SelectUserByUUID(ctx context.Context, userUUID string) (*entity.User, error) {
+	_ = ctx
 	return r.repo.selectUserByUUID(userUUID)
 }
-func (r userTxRepository) SelectUserByID(id int64) (*entity.User, error) {
+func (r userTxRepository) SelectUserByID(ctx context.Context, id int64) (*entity.User, error) {
+	_ = ctx
 	return r.repo.selectUserByID(id)
 }
-func (r userTxRepository) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
+func (r userTxRepository) SelectUserByIDIncludingDeleted(ctx context.Context, id int64) (*entity.User, error) {
+	_ = ctx
 	return r.repo.selectUserByIDIncludingDeleted(id)
 }
-func (r userTxRepository) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+func (r userTxRepository) SelectUsersByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]*entity.User, error) {
+	_ = ctx
 	return r.repo.selectUsersByIDsIncludingDeleted(ids)
 }
-func (r userTxRepository) Update(user *entity.User) error {
+func (r userTxRepository) Update(ctx context.Context, user *entity.User) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.update(user)
 }
-func (r userTxRepository) Delete(id int64) error {
+func (r userTxRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
@@ -357,59 +365,72 @@ type boardTxRepository struct {
 	beforeWrite func()
 }
 
-func (r boardTxRepository) SelectBoardByID(id int64) (*entity.Board, error) {
+func (r boardTxRepository) SelectBoardByID(ctx context.Context, id int64) (*entity.Board, error) {
+	_ = ctx
 	return r.repo.selectBoardByID(id)
 }
-func (r boardTxRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Board, error) {
+func (r boardTxRepository) SelectBoardList(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error) {
+	_ = ctx
 	return r.repo.selectBoardList(limit, lastID)
 }
-func (r boardTxRepository) Save(board *entity.Board) (int64, error) {
+func (r boardTxRepository) Save(ctx context.Context, board *entity.Board) (int64, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.save(board)
 }
-func (r boardTxRepository) Update(board *entity.Board) error {
+func (r boardTxRepository) Update(ctx context.Context, board *entity.Board) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.update(board)
 }
-func (r boardTxRepository) Delete(id int64) error {
+func (r boardTxRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.delete(id)
 }
 
-func (r postTxRepository) Save(post *entity.Post) (int64, error) {
+func (r postTxRepository) Save(ctx context.Context, post *entity.Post) (int64, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.save(post)
 }
-func (r postTxRepository) SelectPostByID(id int64) (*entity.Post, error) {
+func (r postTxRepository) SelectPostByID(ctx context.Context, id int64) (*entity.Post, error) {
+	_ = ctx
 	return r.repo.selectPostByID(id)
 }
-func (r postTxRepository) SelectPostByIDIncludingUnpublished(id int64) (*entity.Post, error) {
+func (r postTxRepository) SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error) {
+	_ = ctx
 	return r.repo.selectPostByIDIncludingUnpublished(id)
 }
-func (r postTxRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
+func (r postTxRepository) SelectPosts(ctx context.Context, boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	_ = ctx
 	return r.repo.selectPosts(boardID, limit, lastID)
 }
-func (r postTxRepository) SelectPublishedPostsByTagName(tagName string, limit int, lastID int64) ([]*entity.Post, error) {
+func (r postTxRepository) SelectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {
+	_ = ctx
 	return r.repo.selectPublishedPostsByTagName(tagName, limit, lastID)
 }
-func (r postTxRepository) ExistsByBoardID(boardID int64) (bool, error) {
+func (r postTxRepository) ExistsByBoardID(ctx context.Context, boardID int64) (bool, error) {
+	_ = ctx
 	return r.repo.existsByBoardID(boardID)
 }
-func (r postTxRepository) Update(post *entity.Post) error {
+func (r postTxRepository) Update(ctx context.Context, post *entity.Post) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.update(post)
 }
-func (r postTxRepository) Delete(id int64) error {
+func (r postTxRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
@@ -421,16 +442,19 @@ type tagTxRepository struct {
 	beforeWrite func()
 }
 
-func (r tagTxRepository) Save(tag *entity.Tag) (int64, error) {
+func (r tagTxRepository) Save(ctx context.Context, tag *entity.Tag) (int64, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.save(tag)
 }
-func (r tagTxRepository) SelectByName(name string) (*entity.Tag, error) {
+func (r tagTxRepository) SelectByName(ctx context.Context, name string) (*entity.Tag, error) {
+	_ = ctx
 	return r.repo.selectByName(name)
 }
-func (r tagTxRepository) SelectByIDs(ids []int64) ([]*entity.Tag, error) {
+func (r tagTxRepository) SelectByIDs(ctx context.Context, ids []int64) ([]*entity.Tag, error) {
+	_ = ctx
 	return r.repo.selectByIDs(ids)
 }
 
@@ -439,25 +463,30 @@ type postTagTxRepository struct {
 	beforeWrite func()
 }
 
-func (r postTagTxRepository) SelectActiveByPostID(postID int64) ([]*entity.PostTag, error) {
+func (r postTagTxRepository) SelectActiveByPostID(ctx context.Context, postID int64) ([]*entity.PostTag, error) {
+	_ = ctx
 	return r.repo.selectActiveByPostID(postID)
 }
-func (r postTagTxRepository) SelectActiveByTagID(tagID int64, limit int, lastID int64) ([]*entity.PostTag, error) {
+func (r postTagTxRepository) SelectActiveByTagID(ctx context.Context, tagID int64, limit int, lastID int64) ([]*entity.PostTag, error) {
+	_ = ctx
 	return r.repo.selectActiveByTagID(tagID, limit, lastID)
 }
-func (r postTagTxRepository) UpsertActive(postID, tagID int64) error {
+func (r postTagTxRepository) UpsertActive(ctx context.Context, postID, tagID int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.upsertActive(postID, tagID)
 }
-func (r postTagTxRepository) SoftDelete(postID, tagID int64) error {
+func (r postTagTxRepository) SoftDelete(ctx context.Context, postID, tagID int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.softDelete(postID, tagID)
 }
-func (r postTagTxRepository) SoftDeleteByPostID(postID int64) error {
+func (r postTagTxRepository) SoftDeleteByPostID(ctx context.Context, postID int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
@@ -469,31 +498,38 @@ type commentTxRepository struct {
 	beforeWrite func()
 }
 
-func (r commentTxRepository) Save(comment *entity.Comment) (int64, error) {
+func (r commentTxRepository) Save(ctx context.Context, comment *entity.Comment) (int64, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.save(comment)
 }
-func (r commentTxRepository) SelectCommentByID(id int64) (*entity.Comment, error) {
+func (r commentTxRepository) SelectCommentByID(ctx context.Context, id int64) (*entity.Comment, error) {
+	_ = ctx
 	return r.repo.selectCommentByID(id)
 }
-func (r commentTxRepository) SelectComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+func (r commentTxRepository) SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	_ = ctx
 	return r.repo.selectComments(postID, limit, lastID)
 }
-func (r commentTxRepository) SelectCommentsIncludingDeleted(postID int64) ([]*entity.Comment, error) {
+func (r commentTxRepository) SelectCommentsIncludingDeleted(ctx context.Context, postID int64) ([]*entity.Comment, error) {
+	_ = ctx
 	return r.repo.selectCommentsIncludingDeleted(postID)
 }
-func (r commentTxRepository) SelectVisibleComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+func (r commentTxRepository) SelectVisibleComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	_ = ctx
 	return r.repo.selectVisibleComments(postID, limit, lastID)
 }
-func (r commentTxRepository) Update(comment *entity.Comment) error {
+func (r commentTxRepository) Update(ctx context.Context, comment *entity.Comment) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.update(comment)
 }
-func (r commentTxRepository) Delete(id int64) error {
+func (r commentTxRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
@@ -505,31 +541,37 @@ type reactionTxRepository struct {
 	beforeWrite func()
 }
 
-func (r reactionTxRepository) SetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (*entity.Reaction, bool, bool, error) {
+func (r reactionTxRepository) SetUserTargetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (*entity.Reaction, bool, bool, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.setUserTargetReaction(userID, targetID, targetType, reactionType)
 }
-func (r reactionTxRepository) DeleteUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (bool, error) {
+func (r reactionTxRepository) DeleteUserTargetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) (bool, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.deleteUserTargetReaction(userID, targetID, targetType)
 }
-func (r reactionTxRepository) DeleteByTarget(targetID int64, targetType entity.ReactionTargetType) (int, error) {
+func (r reactionTxRepository) DeleteByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) (int, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.deleteByTarget(targetID, targetType)
 }
-func (r reactionTxRepository) GetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error) {
+func (r reactionTxRepository) GetUserTargetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error) {
+	_ = ctx
 	return r.repo.getUserTargetReaction(userID, targetID, targetType)
 }
-func (r reactionTxRepository) GetByTarget(targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error) {
+func (r reactionTxRepository) GetByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error) {
+	_ = ctx
 	return r.repo.getByTarget(targetID, targetType)
 }
-func (r reactionTxRepository) GetByTargets(targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
+func (r reactionTxRepository) GetByTargets(ctx context.Context, targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
+	_ = ctx
 	return r.repo.getByTargets(targetIDs, targetType)
 }
 
@@ -543,28 +585,34 @@ type outboxTxAppender struct {
 	beforeWrite func()
 }
 
-func (r attachmentTxRepository) Save(attachment *entity.Attachment) (int64, error) {
+func (r attachmentTxRepository) Save(ctx context.Context, attachment *entity.Attachment) (int64, error) {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.save(attachment)
 }
-func (r attachmentTxRepository) SelectByID(id int64) (*entity.Attachment, error) {
+func (r attachmentTxRepository) SelectByID(ctx context.Context, id int64) (*entity.Attachment, error) {
+	_ = ctx
 	return r.repo.selectByID(id)
 }
-func (r attachmentTxRepository) SelectByPostID(postID int64) ([]*entity.Attachment, error) {
+func (r attachmentTxRepository) SelectByPostID(ctx context.Context, postID int64) ([]*entity.Attachment, error) {
+	_ = ctx
 	return r.repo.selectByPostID(postID)
 }
-func (r attachmentTxRepository) SelectCleanupCandidatesBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error) {
+func (r attachmentTxRepository) SelectCleanupCandidatesBefore(ctx context.Context, cutoff time.Time, limit int) ([]*entity.Attachment, error) {
+	_ = ctx
 	return r.repo.selectCleanupCandidatesBefore(cutoff, limit)
 }
-func (r attachmentTxRepository) Update(attachment *entity.Attachment) error {
+func (r attachmentTxRepository) Update(ctx context.Context, attachment *entity.Attachment) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
 	return r.repo.update(attachment)
 }
-func (r attachmentTxRepository) Delete(id int64) error {
+func (r attachmentTxRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}

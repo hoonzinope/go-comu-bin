@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"sort"
 
@@ -33,8 +34,8 @@ func newPostDetailQuery(userRepository port.UserRepository, postRepository port.
 	}
 }
 
-func (q *postDetailQuery) Load(id int64) (*model.PostDetail, error) {
-	post, err := q.postRepository.SelectPostByID(id)
+func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail, error) {
+	post, err := q.postRepository.SelectPostByID(ctx, id)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id for post detail", err)
 	}
@@ -42,11 +43,11 @@ func (q *postDetailQuery) Load(id int64) (*model.PostDetail, error) {
 		return nil, customError.ErrPostNotFound
 	}
 
-	postReactions, err := q.reactionRepository.GetByTarget(post.ID, entity.ReactionTargetPost)
+	postReactions, err := q.reactionRepository.GetByTarget(ctx, post.ID, entity.ReactionTargetPost)
 	if err != nil {
 		return nil, customError.WrapRepository("select post reactions for post detail", err)
 	}
-	comments, commentsHasMore, err := q.visibleCommentsForDetail(post.ID, commentDefaultLimit)
+	comments, commentsHasMore, err := q.visibleCommentsForDetail(ctx, post.ID, commentDefaultLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -54,11 +55,11 @@ func (q *postDetailQuery) Load(id int64) (*model.PostDetail, error) {
 	for _, comment := range comments {
 		commentIDs = append(commentIDs, comment.ID)
 	}
-	commentReactionsByID, err := q.reactionRepository.GetByTargets(commentIDs, entity.ReactionTargetComment)
+	commentReactionsByID, err := q.reactionRepository.GetByTargets(ctx, commentIDs, entity.ReactionTargetComment)
 	if err != nil {
 		return nil, customError.WrapRepository("select comment reactions for post detail", err)
 	}
-	userUUIDs, err := userUUIDsForPostDetail(q.userRepository, post, comments, postReactions, commentReactionsByID)
+	userUUIDs, err := userUUIDsForPostDetail(ctx, q.userRepository, post, comments, postReactions, commentReactionsByID)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +84,11 @@ func (q *postDetailQuery) Load(id int64) (*model.PostDetail, error) {
 	if err != nil {
 		return nil, err
 	}
-	tags, err := tagsForPost(q.postTagRepository, q.tagRepository, post.ID)
+	tags, err := tagsForPost(ctx, q.postTagRepository, q.tagRepository, post.ID)
 	if err != nil {
 		return nil, err
 	}
-	attachmentEntities, err := q.attachmentRepository.SelectByPostID(post.ID)
+	attachmentEntities, err := q.attachmentRepository.SelectByPostID(ctx, post.ID)
 	if err != nil {
 		return nil, customError.WrapRepository("select attachments for post detail", err)
 	}
@@ -106,8 +107,8 @@ func (q *postDetailQuery) Load(id int64) (*model.PostDetail, error) {
 	}, nil
 }
 
-func (q *postDetailQuery) visibleCommentsForDetail(postID int64, limit int) ([]*entity.Comment, bool, error) {
-	comments, err := q.commentRepository.SelectVisibleComments(postID, limit+1, 0)
+func (q *postDetailQuery) visibleCommentsForDetail(ctx context.Context, postID int64, limit int) ([]*entity.Comment, bool, error) {
+	comments, err := q.commentRepository.SelectVisibleComments(ctx, postID, limit+1, 0)
 	if err != nil {
 		return nil, false, customError.WrapRepository("select visible comments for post detail", err)
 	}
@@ -119,7 +120,7 @@ func (q *postDetailQuery) visibleCommentsForDetail(postID int64, limit int) ([]*
 	return comments, hasMore, nil
 }
 
-func userUUIDsForPostDetail(userRepository port.UserRepository, post *entity.Post, comments []*entity.Comment, postReactions []*entity.Reaction, commentReactionsByID map[int64][]*entity.Reaction) (map[int64]string, error) {
+func userUUIDsForPostDetail(ctx context.Context, userRepository port.UserRepository, post *entity.Post, comments []*entity.Comment, postReactions []*entity.Reaction, commentReactionsByID map[int64][]*entity.Reaction) (map[int64]string, error) {
 	userIDs := []int64{post.AuthorID}
 	for _, comment := range comments {
 		userIDs = append(userIDs, comment.AuthorID)
@@ -132,7 +133,7 @@ func userUUIDsForPostDetail(userRepository port.UserRepository, post *entity.Pos
 			userIDs = append(userIDs, reaction.UserID)
 		}
 	}
-	return userUUIDsByIDs(userRepository, userIDs)
+	return userUUIDsByIDs(ctx, userRepository, userIDs)
 }
 
 func postModelFromEntity(post *entity.Post, authorUUIDs map[int64]string) (model.Post, error) {
@@ -169,8 +170,8 @@ func reactionsFromEntitiesWithUUIDs(reactions []*entity.Reaction, userUUIDs map[
 	return out, nil
 }
 
-func tagsForPost(postTagRepository port.PostTagRepository, tagRepository port.TagRepository, postID int64) ([]model.Tag, error) {
-	relations, err := postTagRepository.SelectActiveByPostID(postID)
+func tagsForPost(ctx context.Context, postTagRepository port.PostTagRepository, tagRepository port.TagRepository, postID int64) ([]model.Tag, error) {
+	relations, err := postTagRepository.SelectActiveByPostID(ctx, postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select active tags by post id", err)
 	}
@@ -181,7 +182,7 @@ func tagsForPost(postTagRepository port.PostTagRepository, tagRepository port.Ta
 	for _, relation := range relations {
 		tagIDs = append(tagIDs, relation.TagID)
 	}
-	tags, err := tagRepository.SelectByIDs(tagIDs)
+	tags, err := tagRepository.SelectByIDs(ctx, tagIDs)
 	if err != nil {
 		return nil, customError.WrapRepository("select tags by ids", err)
 	}

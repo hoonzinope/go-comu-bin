@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -41,7 +42,8 @@ func (r *UserRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *UserRepository) Save(user *entity.User) (int64, error) {
+func (r *UserRepository) Save(ctx context.Context, user *entity.User) (int64, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.save(user)
@@ -64,7 +66,8 @@ func (r *UserRepository) save(user *entity.User) (int64, error) {
 	return saved.ID, nil
 }
 
-func (r *UserRepository) SelectUserByUsername(username string) (*entity.User, error) {
+func (r *UserRepository) SelectUserByUsername(ctx context.Context, username string) (*entity.User, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectUserByUsername(username)
@@ -82,7 +85,8 @@ func (r *UserRepository) selectUserByUsername(username string) (*entity.User, er
 	return nil, nil
 }
 
-func (r *UserRepository) SelectUserByUUID(userUUID string) (*entity.User, error) {
+func (r *UserRepository) SelectUserByUUID(ctx context.Context, userUUID string) (*entity.User, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectUserByUUID(userUUID)
@@ -100,7 +104,8 @@ func (r *UserRepository) selectUserByUUID(userUUID string) (*entity.User, error)
 	return nil, nil
 }
 
-func (r *UserRepository) SelectUserByID(id int64) (*entity.User, error) {
+func (r *UserRepository) SelectUserByID(ctx context.Context, id int64) (*entity.User, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectUserByID(id)
@@ -116,7 +121,8 @@ func (r *UserRepository) selectUserByID(id int64) (*entity.User, error) {
 	return nil, nil
 }
 
-func (r *UserRepository) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
+func (r *UserRepository) SelectUserByIDIncludingDeleted(ctx context.Context, id int64) (*entity.User, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectUserByIDIncludingDeleted(id)
@@ -132,7 +138,8 @@ func (r *UserRepository) selectUserByIDIncludingDeleted(id int64) (*entity.User,
 	return nil, nil
 }
 
-func (r *UserRepository) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+func (r *UserRepository) SelectUsersByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]*entity.User, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectUsersByIDsIncludingDeleted(ids)
@@ -154,7 +161,8 @@ func (r *UserRepository) selectUsersByIDsIncludingDeleted(ids []int64) (map[int6
 	return out, nil
 }
 
-func (r *UserRepository) Update(user *entity.User) error {
+func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.update(user)
@@ -178,7 +186,8 @@ func (r *UserRepository) update(user *entity.User) error {
 	return nil
 }
 
-func (r *UserRepository) Delete(id int64) error {
+func (r *UserRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.delete(id)

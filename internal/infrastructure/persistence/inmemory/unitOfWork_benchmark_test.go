@@ -39,7 +39,7 @@ func BenchmarkUnitOfWork_WithinTransactionParallelSaveUser(b *testing.B) {
 			id := atomic.AddInt64(&seq, 1)
 			_ = unitOfWork.WithinTransaction(context.Background(), func(tx port.TxScope) error {
 				user := entity.NewUser(fmt.Sprintf("bench-user-%d", id), "pw")
-				_, err := tx.UserRepository().Save(user)
+				_, err := tx.UserRepository().Save(context.Background(), user)
 				return err
 			})
 		}

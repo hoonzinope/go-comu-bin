@@ -1,8 +1,10 @@
 package port
 
+import "context"
+
 type SessionRepository interface {
-	Save(userID int64, token string, ttlSeconds int) error
-	Delete(userID int64, token string) error
-	DeleteByUser(userID int64) error
-	Exists(userID int64, token string) (bool, error)
+	Save(ctx context.Context, userID int64, token string, ttlSeconds int) error
+	Delete(ctx context.Context, userID int64, token string) error
+	DeleteByUser(ctx context.Context, userID int64) error
+	Exists(ctx context.Context, userID int64, token string) (bool, error)
 }

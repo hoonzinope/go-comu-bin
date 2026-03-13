@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -18,16 +19,16 @@ func TestBoardRepositoryContract(t *testing.T) {
 
 func TestBoardRepository_SelectReturnsClone(t *testing.T) {
 	repo := NewBoardRepository()
-	id, err := repo.Save(entity.NewBoard("free", "desc"))
+	id, err := repo.Save(context.Background(), entity.NewBoard("free", "desc"))
 	require.NoError(t, err)
 
-	selected, err := repo.SelectBoardByID(id)
+	selected, err := repo.SelectBoardByID(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
 
 	selected.Update("mutated", "changed")
 
-	again, err := repo.SelectBoardByID(id)
+	again, err := repo.SelectBoardByID(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, again)
 	assert.Equal(t, "free", again.Name)

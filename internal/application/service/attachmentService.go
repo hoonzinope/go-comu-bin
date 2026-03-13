@@ -113,14 +113,15 @@ func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, us
 	attachment := entity.NewAttachment(postID, fileName, contentType, sizeBytes, storageKey)
 	var id int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(postID)
+		txCtx := tx.Context()
+		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, postID)
 		if err != nil {
 			return customError.WrapRepository("select post by id including unpublished for create attachment", err)
 		}
 		if post == nil {
 			return customError.ErrPostNotFound
 		}
-		requester, err := tx.UserRepository().SelectUserByID(userID)
+		requester, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for create attachment", err)
 		}
@@ -133,7 +134,7 @@ func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, us
 		if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 			return err
 		}
-		id, err = tx.AttachmentRepository().Save(attachment)
+		id, err = tx.AttachmentRepository().Save(txCtx, attachment)
 		if err != nil {
 			return customError.WrapRepository("save attachment", err)
 		}
@@ -162,14 +163,14 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, us
 	if err := validateAttachmentUpload(fileName, contentType, data, s.maxUploadSizeBytes); err != nil {
 		return nil, err
 	}
-	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
+	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(ctx, postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id including unpublished for upload attachment", err)
 	}
 	if post == nil {
 		return nil, customError.ErrPostNotFound
 	}
-	requester, err := s.userRepository.SelectUserByID(userID)
+	requester, err := s.userRepository.SelectUserByID(ctx, userID)
 	if err != nil {
 		return nil, customError.WrapRepository("select user by id for upload attachment", err)
 	}
@@ -185,12 +186,12 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, us
 	contentType = normalizeAttachmentContentType(contentType)
 	data = optimizeAttachmentImage(contentType, data, s.imageOptimization)
 	storageKey := buildAttachmentStorageKey(postID, fileName)
-	if err := s.fileStorage.Save(storageKey, bytes.NewReader(data)); err != nil {
+	if err := s.fileStorage.Save(ctx, storageKey, bytes.NewReader(data)); err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "save upload file", err)
 	}
 	id, err := s.CreatePostAttachment(ctx, postID, userID, fileName, contentType, int64(len(data)), storageKey)
 	if err != nil {
-		if deleteErr := s.fileStorage.Delete(storageKey); deleteErr != nil {
+		if deleteErr := s.fileStorage.Delete(ctx, storageKey); deleteErr != nil {
 			return nil, errors.Join(err, customError.Wrap(customError.ErrInternalServerError, "rollback upload file", deleteErr))
 		}
 		return nil, err
@@ -203,14 +204,14 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, us
 }
 
 func (s *AttachmentService) GetPostAttachments(ctx context.Context, postID int64) ([]model.Attachment, error) {
-	post, err := s.postRepository.SelectPostByID(postID)
+	post, err := s.postRepository.SelectPostByID(ctx, postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id for get attachments", err)
 	}
 	if post == nil {
 		return nil, customError.ErrPostNotFound
 	}
-	items, err := s.attachmentRepository.SelectByPostID(postID)
+	items, err := s.attachmentRepository.SelectByPostID(ctx, postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select attachments by post id", err)
 	}
@@ -234,14 +235,14 @@ func (s *AttachmentService) GetPostAttachments(ctx context.Context, postID int64
 }
 
 func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
-	post, err := s.postRepository.SelectPostByID(postID)
+	post, err := s.postRepository.SelectPostByID(ctx, postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id for get attachment file", err)
 	}
 	if post == nil {
 		return nil, customError.ErrPostNotFound
 	}
-	attachment, err := s.attachmentRepository.SelectByID(attachmentID)
+	attachment, err := s.attachmentRepository.SelectByID(ctx, attachmentID)
 	if err != nil {
 		return nil, customError.WrapRepository("select attachment by id for get attachment file", err)
 	}
@@ -251,7 +252,7 @@ func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postID, a
 	if attachment.IsOrphaned() || attachment.IsPendingDelete() {
 		return nil, customError.ErrAttachmentNotFound
 	}
-	content, err := s.fileStorage.Open(attachment.StorageKey)
+	content, err := s.fileStorage.Open(ctx, attachment.StorageKey)
 	if err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "open attachment file", err)
 	}
@@ -265,14 +266,14 @@ func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postID, a
 }
 
 func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
-	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(postID)
+	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(ctx, postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select post by id including unpublished for preview attachment file", err)
 	}
 	if post == nil {
 		return nil, customError.ErrPostNotFound
 	}
-	requester, err := s.userRepository.SelectUserByID(userID)
+	requester, err := s.userRepository.SelectUserByID(ctx, userID)
 	if err != nil {
 		return nil, customError.WrapRepository("select user by id for preview attachment file", err)
 	}
@@ -282,7 +283,7 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, po
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return nil, err
 	}
-	attachment, err := s.attachmentRepository.SelectByID(attachmentID)
+	attachment, err := s.attachmentRepository.SelectByID(ctx, attachmentID)
 	if err != nil {
 		return nil, customError.WrapRepository("select attachment by id for preview attachment file", err)
 	}
@@ -292,7 +293,7 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, po
 	if attachment.IsPendingDelete() {
 		return nil, customError.ErrAttachmentNotFound
 	}
-	content, err := s.fileStorage.Open(attachment.StorageKey)
+	content, err := s.fileStorage.Open(ctx, attachment.StorageKey)
 	if err != nil {
 		return nil, customError.Wrap(customError.ErrInternalServerError, "open preview attachment file", err)
 	}
@@ -307,14 +308,15 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, po
 
 func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postID, attachmentID, userID int64) error {
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(postID)
+		txCtx := tx.Context()
+		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, postID)
 		if err != nil {
 			return customError.WrapRepository("select post by id including unpublished for delete attachment", err)
 		}
 		if post == nil {
 			return customError.ErrPostNotFound
 		}
-		requester, err := tx.UserRepository().SelectUserByID(userID)
+		requester, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for delete attachment", err)
 		}
@@ -327,7 +329,7 @@ func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postID, at
 		if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 			return err
 		}
-		attachment, err := tx.AttachmentRepository().SelectByID(attachmentID)
+		attachment, err := tx.AttachmentRepository().SelectByID(txCtx, attachmentID)
 		if err != nil {
 			return customError.WrapRepository("select attachment by id for delete attachment", err)
 		}
@@ -341,7 +343,7 @@ func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postID, at
 		}
 		updatedAttachment := *attachment
 		updatedAttachment.MarkPendingDelete()
-		if err := tx.AttachmentRepository().Update(&updatedAttachment); err != nil {
+		if err := tx.AttachmentRepository().Update(txCtx, &updatedAttachment); err != nil {
 			return customError.WrapRepository("mark attachment pending delete", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewAttachmentChanged("deleted", attachmentID, postID)); err != nil {
@@ -363,7 +365,7 @@ func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Tim
 		return 0, nil
 	}
 	cutoff := now.Add(-gracePeriod)
-	items, err := s.attachmentRepository.SelectCleanupCandidatesBefore(cutoff, limit)
+	items, err := s.attachmentRepository.SelectCleanupCandidatesBefore(ctx, cutoff, limit)
 	if err != nil {
 		return 0, customError.WrapRepository("select orphan attachments for cleanup", err)
 	}
@@ -376,14 +378,14 @@ func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Tim
 		}
 		if !item.IsPendingDelete() {
 			item.MarkPendingDeleteAt(cutoff)
-			if err := s.attachmentRepository.Update(item); err != nil {
+			if err := s.attachmentRepository.Update(ctx, item); err != nil {
 				return deletedCount, customError.WrapRepository("mark attachment pending delete for cleanup", err)
 			}
 		}
-		if err := s.fileStorage.Delete(item.StorageKey); err != nil {
+		if err := s.fileStorage.Delete(ctx, item.StorageKey); err != nil {
 			return deletedCount, customError.Wrap(customError.ErrInternalServerError, "delete orphan attachment file", err)
 		}
-		if err := s.attachmentRepository.Delete(item.ID); err != nil {
+		if err := s.attachmentRepository.Delete(ctx, item.ID); err != nil {
 			return deletedCount, customError.WrapRepository("delete orphan attachment metadata", err)
 		}
 		deletedCount++

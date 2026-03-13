@@ -20,11 +20,11 @@ func TestPostRepositoryContract(t *testing.T) {
 
 func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
 	repo := NewPostRepository(nil, nil)
-	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
-	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
-	_, _ = repo.Save(testPost("p3", "c3", 2, 2))
+	_, _ = repo.Save(context.Background(), testPost("p1", "c1", 1, 1))
+	_, _ = repo.Save(context.Background(), testPost("p2", "c2", 1, 1))
+	_, _ = repo.Save(context.Background(), testPost("p3", "c3", 2, 2))
 
-	posts, err := repo.SelectPosts(1, 10, 0)
+	posts, err := repo.SelectPosts(context.Background(), 1, 10, 0)
 	require.NoError(t, err)
 	assert.Len(t, posts, 2)
 	assert.Equal(t, int64(2), posts[0].ID)
@@ -33,61 +33,61 @@ func TestPostRepository_FilterByBoardAndPagination(t *testing.T) {
 
 func TestPostRepository_SaveSelectUpdateDelete(t *testing.T) {
 	repo := NewPostRepository(nil, nil)
-	id, err := repo.Save(testPost("title", "content", 1, 1))
+	id, err := repo.Save(context.Background(), testPost("title", "content", 1, 1))
 	require.NoError(t, err)
 
-	selected, err := repo.SelectPostByID(id)
+	selected, err := repo.SelectPostByID(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
 	assert.Equal(t, "title", selected.Title)
 
 	selected.Update("new", "new-content")
-	require.NoError(t, repo.Update(selected))
+	require.NoError(t, repo.Update(context.Background(), selected))
 
-	updated, err := repo.SelectPostByID(id)
+	updated, err := repo.SelectPostByID(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 	assert.Equal(t, "new", updated.Title)
 
-	require.NoError(t, repo.Delete(id))
-	deleted, err := repo.SelectPostByID(id)
+	require.NoError(t, repo.Delete(context.Background(), id))
+	deleted, err := repo.SelectPostByID(context.Background(), id)
 	require.NoError(t, err)
 	assert.Nil(t, deleted)
 }
 
 func TestPostRepository_Delete_SoftDeletesAndExcludesFromList(t *testing.T) {
 	repo := NewPostRepository(nil, nil)
-	id, err := repo.Save(testPost("title", "content", 1, 1))
+	id, err := repo.Save(context.Background(), testPost("title", "content", 1, 1))
 	require.NoError(t, err)
 
-	require.NoError(t, repo.Delete(id))
+	require.NoError(t, repo.Delete(context.Background(), id))
 
-	selected, err := repo.SelectPostByID(id)
+	selected, err := repo.SelectPostByID(context.Background(), id)
 	require.NoError(t, err)
 	assert.Nil(t, selected)
 
-	posts, err := repo.SelectPosts(1, 10, 0)
+	posts, err := repo.SelectPosts(context.Background(), 1, 10, 0)
 	require.NoError(t, err)
 	assert.Empty(t, posts)
 }
 
 func TestPostRepository_PaginationCursorAtEnd_ReturnsEmpty(t *testing.T) {
 	repo := NewPostRepository(nil, nil)
-	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
-	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
+	_, _ = repo.Save(context.Background(), testPost("p1", "c1", 1, 1))
+	_, _ = repo.Save(context.Background(), testPost("p2", "c2", 1, 1))
 
-	posts, err := repo.SelectPosts(1, 10, 1)
+	posts, err := repo.SelectPosts(context.Background(), 1, 10, 1)
 	require.NoError(t, err)
 	assert.Empty(t, posts)
 }
 
 func TestPostRepository_PaginationWithCursor_ReturnsNextChunk(t *testing.T) {
 	repo := NewPostRepository(nil, nil)
-	_, _ = repo.Save(testPost("p1", "c1", 1, 1))
-	_, _ = repo.Save(testPost("p2", "c2", 1, 1))
-	_, _ = repo.Save(testPost("p3", "c3", 1, 1))
+	_, _ = repo.Save(context.Background(), testPost("p1", "c1", 1, 1))
+	_, _ = repo.Save(context.Background(), testPost("p2", "c2", 1, 1))
+	_, _ = repo.Save(context.Background(), testPost("p3", "c3", 1, 1))
 
-	posts, err := repo.SelectPosts(1, 10, 3)
+	posts, err := repo.SelectPosts(context.Background(), 1, 10, 3)
 	require.NoError(t, err)
 	require.Len(t, posts, 2)
 	assert.Equal(t, int64(2), posts[0].ID)
@@ -99,8 +99,8 @@ func TestPostRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 	p := testPost("x", "y", 1, 1)
 	p.ID = 999
 
-	require.NoError(t, repo.Update(p))
-	require.NoError(t, repo.Delete(999))
+	require.NoError(t, repo.Update(context.Background(), p))
+	require.NoError(t, repo.Delete(context.Background(), 999))
 }
 
 func TestPostRepository_SelectPublishedPostsByTagName_FiltersBeforePagination(t *testing.T) {
@@ -108,32 +108,32 @@ func TestPostRepository_SelectPublishedPostsByTagName_FiltersBeforePagination(t 
 	postTagRepo := NewPostTagRepository()
 	repo := NewPostRepository(tagRepo, postTagRepo)
 
-	tagID, err := tagRepo.Save(entity.NewTag("go"))
+	tagID, err := tagRepo.Save(context.Background(), entity.NewTag("go"))
 	require.NoError(t, err)
 
 	publishedLowID := testPost("published-1", "content", 1, 1)
-	_, err = repo.Save(publishedLowID)
+	_, err = repo.Save(context.Background(), publishedLowID)
 	require.NoError(t, err)
 
 	draft := entity.NewDraftPost("draft", "content", 1, 1)
-	_, err = repo.Save(draft)
+	_, err = repo.Save(context.Background(), draft)
 	require.NoError(t, err)
 
 	publishedHighID := testPost("published-2", "content", 1, 1)
-	_, err = repo.Save(publishedHighID)
+	_, err = repo.Save(context.Background(), publishedHighID)
 	require.NoError(t, err)
 
 	deleted := testPost("deleted", "content", 1, 1)
-	deletedID, err := repo.Save(deleted)
+	deletedID, err := repo.Save(context.Background(), deleted)
 	require.NoError(t, err)
-	require.NoError(t, repo.Delete(deletedID))
+	require.NoError(t, repo.Delete(context.Background(), deletedID))
 
-	require.NoError(t, postTagRepo.UpsertActive(publishedLowID.ID, tagID))
-	require.NoError(t, postTagRepo.UpsertActive(draft.ID, tagID))
-	require.NoError(t, postTagRepo.UpsertActive(publishedHighID.ID, tagID))
-	require.NoError(t, postTagRepo.UpsertActive(deletedID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), publishedLowID.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), draft.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), publishedHighID.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), deletedID, tagID))
 
-	posts, err := repo.SelectPublishedPostsByTagName("go", 2, 0)
+	posts, err := repo.SelectPublishedPostsByTagName(context.Background(), "go", 2, 0)
 	require.NoError(t, err)
 	require.Len(t, posts, 2)
 	assert.Equal(t, publishedHighID.ID, posts[0].ID)
@@ -143,7 +143,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_FiltersBeforePagination(t 
 func TestPostRepository_SelectPublishedPostsByTagName_WithoutTagDependenciesErrors(t *testing.T) {
 	repo := NewPostRepository(nil, nil)
 
-	posts, err := repo.SelectPublishedPostsByTagName("go", 10, 0)
+	posts, err := repo.SelectPublishedPostsByTagName(context.Background(), "go", 10, 0)
 	require.Error(t, err)
 	assert.Nil(t, posts)
 }
@@ -164,19 +164,19 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhileTagTransactionL
 		NewOutboxRepository(),
 	)
 
-	tagID, err := tagRepo.Save(entity.NewTag("go"))
+	tagID, err := tagRepo.Save(context.Background(), entity.NewTag("go"))
 	require.NoError(t, err)
 	post := testPost("published", "content", 1, 1)
-	_, err = repo.Save(post)
+	_, err = repo.Save(context.Background(), post)
 	require.NoError(t, err)
-	require.NoError(t, postTagRepo.UpsertActive(post.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), post.ID, tagID))
 
 	txStarted := make(chan struct{})
 	txRelease := make(chan struct{})
 	txDone := make(chan error, 1)
 	go func() {
 		err := uow.WithinTransaction(context.Background(), func(tx port.TxScope) error {
-			if _, err := tx.TagRepository().Save(entity.NewTag("hold-lock")); err != nil {
+			if _, err := tx.TagRepository().Save(context.Background(), entity.NewTag("hold-lock")); err != nil {
 				return err
 			}
 			close(txStarted)
@@ -189,7 +189,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhileTagTransactionL
 
 	queryDone := make(chan struct{})
 	go func() {
-		_, _ = repo.SelectPublishedPostsByTagName("go", 10, 0)
+		_, _ = repo.SelectPublishedPostsByTagName(context.Background(), "go", 10, 0)
 		close(queryDone)
 	}()
 
@@ -230,19 +230,19 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhilePostTagTransact
 		NewOutboxRepository(),
 	)
 
-	tagID, err := tagRepo.Save(entity.NewTag("go"))
+	tagID, err := tagRepo.Save(context.Background(), entity.NewTag("go"))
 	require.NoError(t, err)
 	post := testPost("published", "content", 1, 1)
-	_, err = repo.Save(post)
+	_, err = repo.Save(context.Background(), post)
 	require.NoError(t, err)
-	require.NoError(t, postTagRepo.UpsertActive(post.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), post.ID, tagID))
 
 	txStarted := make(chan struct{})
 	txRelease := make(chan struct{})
 	txDone := make(chan error, 1)
 	go func() {
 		err := uow.WithinTransaction(context.Background(), func(tx port.TxScope) error {
-			if err := tx.PostTagRepository().UpsertActive(post.ID, tagID); err != nil {
+			if err := tx.PostTagRepository().UpsertActive(context.Background(), post.ID, tagID); err != nil {
 				return err
 			}
 			close(txStarted)
@@ -255,7 +255,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhilePostTagTransact
 
 	queryDone := make(chan struct{})
 	go func() {
-		_, _ = repo.SelectPublishedPostsByTagName("go", 10, 0)
+		_, _ = repo.SelectPublishedPostsByTagName(context.Background(), "go", 10, 0)
 		close(queryDone)
 	}()
 

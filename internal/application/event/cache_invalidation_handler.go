@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
@@ -65,13 +66,13 @@ func (h *CacheInvalidationHandler) handleReactionChanged(e ReactionChanged) {
 }
 
 func (h *CacheInvalidationHandler) bestEffortDelete(cacheKey, operation string) {
-	if err := h.cache.Delete(cacheKey); err != nil {
+	if err := h.cache.Delete(context.Background(), cacheKey); err != nil {
 		h.logger.Warn("cache invalidation failed", "operation", operation, "key", cacheKey, "error", err)
 	}
 }
 
 func (h *CacheInvalidationHandler) bestEffortDeleteByPrefix(prefix, operation string) {
-	if _, err := h.cache.DeleteByPrefix(prefix); err != nil {
+	if _, err := h.cache.DeleteByPrefix(context.Background(), prefix); err != nil {
 		h.logger.Warn("cache invalidation failed", "operation", operation, "prefix", prefix, "error", err)
 	}
 }

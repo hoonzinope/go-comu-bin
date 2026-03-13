@@ -37,23 +37,23 @@ func NewFileStorageWithClient(client objectClient, bucket string) *FileStorage {
 	return &FileStorage{client: client, bucket: bucket}
 }
 
-func (s *FileStorage) Save(key string, content io.Reader) error {
+func (s *FileStorage) Save(ctx context.Context, key string, content io.Reader) error {
 	size := int64(-1)
 	if sized, ok := content.(interface{ Len() int }); ok {
 		size = int64(sized.Len())
 	}
-	_, err := s.client.PutObject(context.Background(), s.bucket, key, content, size, minio.PutObjectOptions{})
+	_, err := s.client.PutObject(ctx, s.bucket, key, content, size, minio.PutObjectOptions{})
 	return err
 }
 
-func (s *FileStorage) Open(key string) (io.ReadCloser, error) {
-	object, err := s.client.GetObject(context.Background(), s.bucket, key, minio.GetObjectOptions{})
+func (s *FileStorage) Open(ctx context.Context, key string) (io.ReadCloser, error) {
+	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return object, nil
 }
 
-func (s *FileStorage) Delete(key string) error {
-	return s.client.RemoveObject(context.Background(), s.bucket, key, minio.RemoveObjectOptions{})
+func (s *FileStorage) Delete(ctx context.Context, key string) error {
+	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 }

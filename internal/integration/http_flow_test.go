@@ -165,7 +165,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	hashedAdminPassword, err := passwordHasher.Hash("admin")
 	require.NoError(t, err)
 	admin := entity.NewAdmin("admin", hashedAdminPassword)
-	_, err = userRepository.Save(admin)
+	_, err = userRepository.Save(context.Background(), admin)
 	require.NoError(t, err)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)

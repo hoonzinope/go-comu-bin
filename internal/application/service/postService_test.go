@@ -76,7 +76,7 @@ func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
 	repositories := newTestRepositories()
 	user := entity.NewUser("user", "pw")
 	user.Suspend("spam", nil)
-	userID, err := repositories.user.Save(user)
+	userID, err := repositories.user.Save(context.Background(), user)
 	require.NoError(t, err)
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
@@ -120,7 +120,7 @@ func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testi
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	seedPost(repositories.post, userID, boardID, "title", "content")
-	require.NoError(t, repositories.board.Delete(boardID))
+	require.NoError(t, repositories.board.Delete(context.Background(), boardID))
 	svc := newTestPostService(t, repositories, newTestCache())
 
 	_, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
@@ -167,12 +167,12 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 	require.NoError(t, postSvc.UpdatePost(context.Background(), postID, userID, "new", "new-content", nil))
 
 	require.Eventually(t, func() bool {
-		_, ok, err := cache.Get(key.PostDetail(postID))
+		_, ok, err := cache.Get(context.Background(), key.PostDetail(postID))
 		require.NoError(t, err)
 		if ok {
 			return false
 		}
-		_, ok, err = cache.Get(key.PostList(boardID, 10, 0))
+		_, ok, err = cache.Get(context.Background(), key.PostList(boardID, 10, 0))
 		require.NoError(t, err)
 		return !ok
 	}, time.Second, 10*time.Millisecond)
@@ -191,7 +191,7 @@ func TestPostService_UpdatePost_SucceedsWhenCacheInvalidationFails(t *testing.T)
 	err := svc.UpdatePost(context.Background(), postID, userID, "new", "new-content", nil)
 	require.NoError(t, err)
 
-	post, repoErr := repositories.post.SelectPostByIDIncludingUnpublished(postID)
+	post, repoErr := repositories.post.SelectPostByIDIncludingUnpublished(context.Background(), postID)
 	require.NoError(t, repoErr)
 	require.NotNil(t, post)
 	assert.Equal(t, "new", post.Title)
@@ -316,22 +316,22 @@ func TestPostService_DeletePost_OrphansAttachmentsAndSoftDeletesComments(t *test
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	commentID := seedComment(repositories.comment, userID, postID, "comment")
-	attachmentID, err := repositories.attachment.Save(entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png"))
+	attachmentID, err := repositories.attachment.Save(context.Background(), entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png"))
 	require.NoError(t, err)
-	attachment, err := repositories.attachment.SelectByID(attachmentID)
+	attachment, err := repositories.attachment.SelectByID(context.Background(), attachmentID)
 	require.NoError(t, err)
 	require.NotNil(t, attachment)
 	attachment.MarkReferenced()
-	require.NoError(t, repositories.attachment.Update(attachment))
+	require.NoError(t, repositories.attachment.Update(context.Background(), attachment))
 	svc := newTestPostService(t, repositories, newTestCache())
 
 	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
 
-	comment, err := repositories.comment.SelectCommentByID(commentID)
+	comment, err := repositories.comment.SelectCommentByID(context.Background(), commentID)
 	require.NoError(t, err)
 	assert.Nil(t, comment)
 
-	attachment, err = repositories.attachment.SelectByID(attachmentID)
+	attachment, err = repositories.attachment.SelectByID(context.Background(), attachmentID)
 	require.NoError(t, err)
 	require.NotNil(t, attachment)
 	assert.True(t, attachment.IsOrphaned())
@@ -343,18 +343,18 @@ func TestPostService_DeletePost_RemovesStoredReactionsForPostAndComments(t *test
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	commentID := seedComment(repositories.comment, userID, postID, "comment")
-	_, _, _, err := repositories.reaction.SetUserTargetReaction(userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	_, _, _, err := repositories.reaction.SetUserTargetReaction(context.Background(), userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
 	require.NoError(t, err)
-	_, _, _, err = repositories.reaction.SetUserTargetReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
+	_, _, _, err = repositories.reaction.SetUserTargetReaction(context.Background(), userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
 	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
 
-	postReactions, err := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	postReactions, err := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	assert.Empty(t, postReactions)
-	commentReactions, err := repositories.reaction.GetByTarget(commentID, entity.ReactionTargetComment)
+	commentReactions, err := repositories.reaction.GetByTarget(context.Background(), commentID, entity.ReactionTargetComment)
 	require.NoError(t, err)
 	assert.Empty(t, commentReactions)
 }
@@ -398,7 +398,7 @@ func TestPostService_UpdatePost_RejectsForeignAttachmentReference(t *testing.T) 
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	otherPostID := seedDraftPost(repositories.post, userID, boardID, "title2", "content2")
-	foreignAttachmentID, err := repositories.attachment.Save(entity.NewAttachment(otherPostID, "a.png", "image/png", 10, "posts/2/a.png"))
+	foreignAttachmentID, err := repositories.attachment.Save(context.Background(), entity.NewAttachment(otherPostID, "a.png", "image/png", 10, "posts/2/a.png"))
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
@@ -426,7 +426,7 @@ func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {
 	postID := seedPost(repositories.post, userID, boardID, "title", "body")
 	attachment := entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png")
 	attachment.MarkReferenced()
-	_, err := repositories.attachment.Save(attachment)
+	_, err := repositories.attachment.Save(context.Background(), attachment)
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
@@ -469,7 +469,7 @@ func TestPostDetailQuery_Load_Success(t *testing.T) {
 		repositories.reaction,
 	)
 
-	detail, err := query.Load(postID)
+	detail, err := query.Load(context.Background(), postID)
 	require.NoError(t, err)
 	require.NotNil(t, detail)
 	require.NotNil(t, detail.Post)
@@ -484,18 +484,18 @@ func TestPostService_UpdatePost_MarksUnusedAttachmentsAsOrphaned(t *testing.T) {
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	referenced := entity.NewAttachment(postID, "a.png", "image/png", 10, "posts/1/a.png")
 	referenced.MarkReferenced()
-	referencedID, err := repositories.attachment.Save(referenced)
+	referencedID, err := repositories.attachment.Save(context.Background(), referenced)
 	require.NoError(t, err)
-	unusedID, err := repositories.attachment.Save(entity.NewAttachment(postID, "b.png", "image/png", 10, "posts/1/b.png"))
+	unusedID, err := repositories.attachment.Save(context.Background(), entity.NewAttachment(postID, "b.png", "image/png", 10, "posts/1/b.png"))
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
 	err = svc.UpdatePost(context.Background(), postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(referencedID, 10)+")", nil)
 	require.NoError(t, err)
 
-	referencedAfter, err := repositories.attachment.SelectByID(referencedID)
+	referencedAfter, err := repositories.attachment.SelectByID(context.Background(), referencedID)
 	require.NoError(t, err)
-	unusedAfter, err := repositories.attachment.SelectByID(unusedID)
+	unusedAfter, err := repositories.attachment.SelectByID(context.Background(), unusedID)
 	require.NoError(t, err)
 	assert.False(t, referencedAfter.IsOrphaned())
 	assert.True(t, unusedAfter.IsOrphaned())

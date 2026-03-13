@@ -1515,3 +1515,47 @@
 - `internal/application/port/unit_of_work.go`
 - `internal/infrastructure/event/outbox/relay.go`
 - `internal/infrastructure/job/inprocess/runner.go`
+
+## 2026-03-13 - Repository, Cache, SessionRepository, FileStorage 포트도 `context.Context`를 첫 번째 인자로 통일한다
+
+상태
+
+- decided
+
+배경
+
+- 이전 단계에서 Delivery, UseCase, Service, UnitOfWork 경계에 `context.Context`를 올렸지만, 하위 repository/cache/storage 포트는 여전히 일부 메서드가 `ctx` 없이 동작했다.
+- 이 상태에서는 요청 취소, deadline, tracing, background job cancellation이 service 아래 계층으로 완전히 전파되지 않는다.
+
+관찰
+
+- 현재 서비스는 `UnitOfWork.WithinTransaction(ctx, fn)`까지는 동일한 상위 context를 전달한다.
+- 하지만 tx 안팎의 repository/cache/file storage 호출은 `ctx`를 받지 않아 실제 I/O 경계에서 request scope를 활용할 수 없다.
+- `SessionRepository`는 cache adapter 위에 놓여 있으므로 함께 정리하지 않으면 인증 경로의 context 일관성이 깨진다.
+
+결론
+
+- 모든 Repository 포트(`User/Board/Post/Tag/PostTag/Comment/Reaction/Attachment`)는 `context.Context`를 첫 번째 인자로 받는다.
+- `Cache` 포트의 `Get/Set/SetWithTTL/Delete/DeleteByPrefix/GetOrSetWithTTL`도 `context.Context`를 첫 번째 인자로 받는다.
+- `GetOrSetWithTTL`의 loader 역시 `func(ctx context.Context) (interface{}, error)` 형태로 상위 context를 그대로 받는다.
+- `SessionRepository`와 `FileStorage` 포트도 동일하게 `context.Context`를 첫 번째 인자로 받는다.
+- 서비스는 tx 밖에서는 자신이 받은 `ctx`를, tx 안에서는 `tx.Context()`를 사용해 하위 포트를 호출한다.
+- `TokenProvider`, `PasswordHasher`처럼 순수 계산/포맷팅 성격의 포트는 이번 단계에서 `ctx` 대상에 포함하지 않는다.
+
+후속 작업
+
+- 포트/어댑터/테스트 시그니처 정리
+- 서비스와 delivery에서 tx 안팎의 repository/cache/storage 호출을 `ctx` 기반으로 전환
+- 전체 회귀 테스트로 cancellation/loader 전달 경계 확인
+
+관련 문서/코드
+
+- `internal/application/port/*_repository.go`
+- `internal/application/port/cache.go`
+- `internal/application/port/session_repository.go`
+- `internal/application/port/file_storage.go`
+- `internal/application/service/*.go`
+- `internal/infrastructure/persistence/inmemory`
+- `internal/infrastructure/cache`
+- `internal/infrastructure/auth/CacheSessionRepository.go`
+- `internal/infrastructure/storage`

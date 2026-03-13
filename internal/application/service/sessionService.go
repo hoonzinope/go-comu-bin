@@ -26,7 +26,6 @@ func NewSessionService(credentialVerifier port.CredentialVerifier, userRepositor
 }
 
 func (s *SessionService) Login(ctx context.Context, username, password string) (string, error) {
-	_ = ctx
 	userID, err := s.credentialVerifier.VerifyCredentials(username, password)
 	if err != nil {
 		return "", err
@@ -37,47 +36,44 @@ func (s *SessionService) Login(ctx context.Context, username, password string) (
 		return "", customError.WrapToken("issue login token", err)
 	}
 
-	if err := s.sessionRepository.Save(userID, token, s.tokenPort.TTLSeconds()); err != nil {
+	if err := s.sessionRepository.Save(ctx, userID, token, s.tokenPort.TTLSeconds()); err != nil {
 		return "", customError.WrapRepository("save session", err)
 	}
 	return token, nil
 }
 
 func (s *SessionService) Logout(ctx context.Context, token string) error {
-	_ = ctx
 	userID, err := s.tokenPort.ValidateTokenToId(token)
 	if err != nil {
 		return nil
 	}
-	if err := s.sessionRepository.Delete(userID, token); err != nil {
+	if err := s.sessionRepository.Delete(ctx, userID, token); err != nil {
 		return customError.WrapRepository("delete session", err)
 	}
 	return nil
 }
 
 func (s *SessionService) InvalidateUserSessions(ctx context.Context, userID int64) error {
-	_ = ctx
-	if err := s.sessionRepository.DeleteByUser(userID); err != nil {
+	if err := s.sessionRepository.DeleteByUser(ctx, userID); err != nil {
 		return customError.WrapRepository("delete user sessions", err)
 	}
 	return nil
 }
 
 func (s *SessionService) ValidateTokenToId(ctx context.Context, token string) (int64, error) {
-	_ = ctx
 	userID, err := s.tokenPort.ValidateTokenToId(token)
 	if err != nil {
 		return 0, err
 	}
 
-	exists, err := s.sessionRepository.Exists(userID, token)
+	exists, err := s.sessionRepository.Exists(ctx, userID, token)
 	if err != nil {
 		return 0, customError.WrapRepository("lookup session", err)
 	}
 	if !exists {
 		return 0, customError.ErrInvalidToken
 	}
-	user, err := s.userRepository.SelectUserByID(userID)
+	user, err := s.userRepository.SelectUserByID(ctx, userID)
 	if err != nil {
 		return 0, customError.WrapRepository("select user by id for validate token", err)
 	}

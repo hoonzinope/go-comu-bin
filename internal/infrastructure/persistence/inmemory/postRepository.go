@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"sync"
@@ -49,7 +50,8 @@ func (r *PostRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *PostRepository) Save(post *entity.Post) (int64, error) {
+func (r *PostRepository) Save(ctx context.Context, post *entity.Post) (int64, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.save(post)
@@ -67,7 +69,8 @@ func (r *PostRepository) save(post *entity.Post) (int64, error) {
 	return saved.ID, nil
 }
 
-func (r *PostRepository) SelectPostByID(id int64) (*entity.Post, error) {
+func (r *PostRepository) SelectPostByID(ctx context.Context, id int64) (*entity.Post, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectPostByID(id)
@@ -83,7 +86,8 @@ func (r *PostRepository) selectPostByID(id int64) (*entity.Post, error) {
 	return nil, nil
 }
 
-func (r *PostRepository) SelectPostByIDIncludingUnpublished(id int64) (*entity.Post, error) {
+func (r *PostRepository) SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectPostByIDIncludingUnpublished(id)
@@ -99,7 +103,8 @@ func (r *PostRepository) selectPostByIDIncludingUnpublished(id int64) (*entity.P
 	return nil, nil
 }
 
-func (r *PostRepository) SelectPosts(boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
+func (r *PostRepository) SelectPosts(ctx context.Context, boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectPosts(boardID, limit, lastID)
@@ -132,7 +137,8 @@ func (r *PostRepository) selectPosts(boardID int64, limit int, lastID int64) ([]
 	return posts, nil
 }
 
-func (r *PostRepository) SelectPublishedPostsByTagName(tagName string, limit int, lastID int64) ([]*entity.Post, error) {
+func (r *PostRepository) SelectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectPublishedPostsByTagName(tagName, limit, lastID)
@@ -146,7 +152,7 @@ func (r *PostRepository) selectPublishedPostsByTagName(tagName string, limit int
 		return nil, errors.New("post repository tag dependencies are not attached")
 	}
 
-	tag, err := r.tagRepository.SelectByName(tagName)
+	tag, err := r.tagRepository.SelectByName(context.Background(), tagName)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +187,8 @@ func (r *PostRepository) selectPublishedPostsByTagName(tagName string, limit int
 	return posts, nil
 }
 
-func (r *PostRepository) ExistsByBoardID(boardID int64) (bool, error) {
+func (r *PostRepository) ExistsByBoardID(ctx context.Context, boardID int64) (bool, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.existsByBoardID(boardID)
@@ -199,7 +206,8 @@ func (r *PostRepository) existsByBoardID(boardID int64) (bool, error) {
 	return false, nil
 }
 
-func (r *PostRepository) Update(post *entity.Post) error {
+func (r *PostRepository) Update(ctx context.Context, post *entity.Post) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.update(post)
@@ -216,7 +224,8 @@ func (r *PostRepository) update(post *entity.Post) error {
 	return nil
 }
 
-func (r *PostRepository) Delete(id int64) error {
+func (r *PostRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.delete(id)

@@ -58,7 +58,7 @@ func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 
 	_, err := reactionSvc.GetReactionsByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, err)
-	_, ok, err := cache.Get(key.ReactionList("post", postID))
+	_, ok, err := cache.Get(context.Background(), key.ReactionList("post", postID))
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -67,12 +67,12 @@ func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 	assert.True(t, created)
 
 	require.Eventually(t, func() bool {
-		_, ok, err = cache.Get(key.ReactionList("post", postID))
+		_, ok, err = cache.Get(context.Background(), key.ReactionList("post", postID))
 		require.NoError(t, err)
 		return !ok
 	}, time.Second, 10*time.Millisecond)
 
-	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
 	require.Len(t, reactions, 1)
 	assert.Equal(t, entity.ReactionTypeLike, reactions[0].Type)
@@ -91,7 +91,7 @@ func TestReactionService_SetReaction_SucceedsWhenCacheInvalidationFails(t *testi
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
 	require.Len(t, reactions, 1)
 	assert.Equal(t, entity.ReactionTypeLike, reactions[0].Type)
@@ -114,7 +114,7 @@ func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, created)
 
-	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
 	require.Len(t, reactions, 1)
 	assert.Equal(t, entity.ReactionTypeDislike, reactions[0].Type)
@@ -137,7 +137,7 @@ func TestReactionService_SetReaction_NoOpWhenSameType(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, created)
 
-	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
 	require.Len(t, reactions, 1)
 	assert.Equal(t, entity.ReactionTypeLike, reactions[0].Type)
@@ -168,7 +168,7 @@ func TestReactionService_DeleteReaction_RemovesOwnedReaction(t *testing.T) {
 
 	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, postID, entity.ReactionTargetPost))
 
-	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
 	assert.Empty(t, reactions)
 }
@@ -188,7 +188,7 @@ func TestReactionService_DeleteReaction_DoesNotRemoveOtherUsersReaction(t *testi
 
 	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), otherID, postID, entity.ReactionTargetPost))
 
-	reactions, repoErr := repositories.reaction.GetByTarget(postID, entity.ReactionTargetPost)
+	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
 	require.Len(t, reactions, 1)
 	assert.Equal(t, ownerID, reactions[0].UserID)
@@ -210,17 +210,17 @@ func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testi
 
 	_, err = reactionSvc.GetReactionsByTarget(context.Background(), commentID, entity.ReactionTargetComment)
 	require.NoError(t, err)
-	require.NoError(t, cache.Set(key.PostDetail(postID), "cached-post-detail"))
+	require.NoError(t, cache.Set(context.Background(), key.PostDetail(postID), "cached-post-detail"))
 
 	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, commentID, entity.ReactionTargetComment))
 
 	require.Eventually(t, func() bool {
-		_, ok, err := cache.Get(key.ReactionList("comment", commentID))
+		_, ok, err := cache.Get(context.Background(), key.ReactionList("comment", commentID))
 		require.NoError(t, err)
 		if ok {
 			return false
 		}
-		_, ok, err = cache.Get(key.PostDetail(postID))
+		_, ok, err = cache.Get(context.Background(), key.PostDetail(postID))
 		require.NoError(t, err)
 		return !ok
 	}, time.Second, 10*time.Millisecond)
@@ -244,7 +244,7 @@ func TestReactionService_GetReactionsByTarget_ReturnsPostNotFound_WhenPostDelete
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := NewReactionService(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy())
 
-	require.NoError(t, repositories.post.Delete(postID))
+	require.NoError(t, repositories.post.Delete(context.Background(), postID))
 
 	_, err := svc.GetReactionsByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.Error(t, err)

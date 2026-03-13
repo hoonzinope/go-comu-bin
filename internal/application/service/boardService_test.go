@@ -111,7 +111,7 @@ func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 
 	_, err := svc.GetBoards(context.Background(), 10, 0)
 	require.NoError(t, err)
-	_, ok, err := cache.Get(key.BoardList(10, 0))
+	_, ok, err := cache.Get(context.Background(), key.BoardList(10, 0))
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -119,7 +119,7 @@ func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		_, ok, err = cache.Get(key.BoardList(10, 0))
+		_, ok, err = cache.Get(context.Background(), key.BoardList(10, 0))
 		require.NoError(t, err)
 		return !ok
 	}, time.Second, 10*time.Millisecond)
@@ -136,7 +136,7 @@ func TestBoardService_CreateBoard_Succeeds_WhenInvalidationFails(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotZero(t, boardID)
 
-	board, repoErr := repositories.board.SelectBoardByID(boardID)
+	board, repoErr := repositories.board.SelectBoardByID(context.Background(), boardID)
 	require.NoError(t, repoErr)
 	assert.NotNil(t, board)
 }

@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"strings"
 	"sync"
 )
@@ -18,32 +19,37 @@ func NewSpyCache() *SpyCache {
 	}
 }
 
-func (c *SpyCache) Get(key string) (interface{}, bool, error) {
+func (c *SpyCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
+	_ = ctx
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	v, ok := c.store[key]
 	return v, ok, nil
 }
 
-func (c *SpyCache) Set(key string, value interface{}) error {
+func (c *SpyCache) Set(ctx context.Context, key string, value interface{}) error {
+	_ = ctx
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.store[key] = value
 	return nil
 }
 
-func (c *SpyCache) SetWithTTL(key string, value interface{}, ttlSeconds int) error {
-	return c.Set(key, value)
+func (c *SpyCache) SetWithTTL(ctx context.Context, key string, value interface{}, ttlSeconds int) error {
+	_ = ttlSeconds
+	return c.Set(ctx, key, value)
 }
 
-func (c *SpyCache) Delete(key string) error {
+func (c *SpyCache) Delete(ctx context.Context, key string) error {
+	_ = ctx
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.store, key)
 	return nil
 }
 
-func (c *SpyCache) DeleteByPrefix(prefix string) (int, error) {
+func (c *SpyCache) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	_ = ctx
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	deleted := 0
@@ -56,20 +62,20 @@ func (c *SpyCache) DeleteByPrefix(prefix string) (int, error) {
 	return deleted, nil
 }
 
-func (c *SpyCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
-	if v, ok, err := c.Get(key); err != nil {
+func (c *SpyCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	if v, ok, err := c.Get(ctx, key); err != nil {
 		return nil, err
 	} else if ok {
 		return v, nil
 	}
-	v, err := loader()
+	v, err := loader(ctx)
 	if err != nil {
 		return nil, err
 	}
 	c.mu.Lock()
 	c.loadCounts[key]++
 	c.mu.Unlock()
-	if err := c.SetWithTTL(key, v, ttlSeconds); err != nil {
+	if err := c.SetWithTTL(ctx, key, v, ttlSeconds); err != nil {
 		return nil, err
 	}
 	return v, nil

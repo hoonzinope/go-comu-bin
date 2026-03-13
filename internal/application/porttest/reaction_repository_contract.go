@@ -1,6 +1,7 @@
 package porttest
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -16,13 +17,13 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 	t.Run("set creates and get by user target returns same reaction", func(t *testing.T) {
 		repo := newRepository()
 
-		reaction, created, changed, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		reaction, created, changed, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
 		require.NotNil(t, reaction)
 		assert.True(t, created)
 		assert.True(t, changed)
 
-		selected, err := repo.GetUserTargetReaction(7, 10, entity.ReactionTargetPost)
+		selected, err := repo.GetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.NotNil(t, selected)
 		assert.Equal(t, reaction.ID, selected.ID)
@@ -32,13 +33,13 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 	t.Run("set same user target updates instead of duplicating", func(t *testing.T) {
 		repo := newRepository()
 
-		first, created, changed, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		first, created, changed, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
 		require.NotNil(t, first)
 		assert.True(t, created)
 		assert.True(t, changed)
 
-		second, created, changed, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
+		second, created, changed, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
 		require.NoError(t, err)
 		require.NotNil(t, second)
 		assert.False(t, created)
@@ -46,7 +47,7 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 		assert.Equal(t, first.ID, second.ID)
 		assert.Equal(t, entity.ReactionTypeDislike, second.Type)
 
-		reactions, err := repo.GetByTarget(10, entity.ReactionTargetPost)
+		reactions, err := repo.GetByTarget(context.Background(), 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.Len(t, reactions, 1)
 		assert.Equal(t, entity.ReactionTypeDislike, reactions[0].Type)
@@ -55,17 +56,17 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 	t.Run("set same type is no-op", func(t *testing.T) {
 		repo := newRepository()
 
-		first, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		first, _, _, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
 
-		second, created, changed, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		second, created, changed, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
 		require.NotNil(t, second)
 		assert.False(t, created)
 		assert.False(t, changed)
 		assert.Equal(t, first.ID, second.ID)
 
-		reactions, err := repo.GetByTarget(10, entity.ReactionTargetPost)
+		reactions, err := repo.GetByTarget(context.Background(), 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.Len(t, reactions, 1)
 	})
@@ -73,20 +74,20 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 	t.Run("delete removes only matching user target reaction", func(t *testing.T) {
 		repo := newRepository()
 
-		_, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		_, _, _, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
-		_, _, _, err = repo.SetUserTargetReaction(8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
+		_, _, _, err = repo.SetUserTargetReaction(context.Background(), 8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
 		require.NoError(t, err)
 
-		deleted, err := repo.DeleteUserTargetReaction(7, 10, entity.ReactionTargetPost)
+		deleted, err := repo.DeleteUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		assert.True(t, deleted)
 
-		selected, err := repo.GetUserTargetReaction(7, 10, entity.ReactionTargetPost)
+		selected, err := repo.GetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		assert.Nil(t, selected)
 
-		reactions, err := repo.GetByTarget(10, entity.ReactionTargetPost)
+		reactions, err := repo.GetByTarget(context.Background(), 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.Len(t, reactions, 1)
 		assert.Equal(t, int64(8), reactions[0].UserID)
@@ -95,22 +96,22 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 	t.Run("delete by target removes all reactions for target", func(t *testing.T) {
 		repo := newRepository()
 
-		_, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		_, _, _, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
-		_, _, _, err = repo.SetUserTargetReaction(8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
+		_, _, _, err = repo.SetUserTargetReaction(context.Background(), 8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
 		require.NoError(t, err)
-		_, _, _, err = repo.SetUserTargetReaction(9, 11, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		_, _, _, err = repo.SetUserTargetReaction(context.Background(), 9, 11, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
 
-		deletedCount, err := repo.DeleteByTarget(10, entity.ReactionTargetPost)
+		deletedCount, err := repo.DeleteByTarget(context.Background(), 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		assert.Equal(t, 2, deletedCount)
 
-		reactions, err := repo.GetByTarget(10, entity.ReactionTargetPost)
+		reactions, err := repo.GetByTarget(context.Background(), 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		assert.Empty(t, reactions)
 
-		otherTarget, err := repo.GetByTarget(11, entity.ReactionTargetPost)
+		otherTarget, err := repo.GetByTarget(context.Background(), 11, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.Len(t, otherTarget, 1)
 	})
@@ -118,16 +119,16 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 	t.Run("get by targets groups reactions per target", func(t *testing.T) {
 		repo := newRepository()
 
-		_, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		_, _, _, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
-		_, _, _, err = repo.SetUserTargetReaction(8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
+		_, _, _, err = repo.SetUserTargetReaction(context.Background(), 8, 10, entity.ReactionTargetPost, entity.ReactionTypeDislike)
 		require.NoError(t, err)
-		_, _, _, err = repo.SetUserTargetReaction(9, 11, entity.ReactionTargetPost, entity.ReactionTypeLike)
+		_, _, _, err = repo.SetUserTargetReaction(context.Background(), 9, 11, entity.ReactionTargetPost, entity.ReactionTypeLike)
 		require.NoError(t, err)
-		_, _, _, err = repo.SetUserTargetReaction(10, 12, entity.ReactionTargetComment, entity.ReactionTypeLike)
+		_, _, _, err = repo.SetUserTargetReaction(context.Background(), 10, 12, entity.ReactionTargetComment, entity.ReactionTypeLike)
 		require.NoError(t, err)
 
-		grouped, err := repo.GetByTargets([]int64{10, 11, 99}, entity.ReactionTargetPost)
+		grouped, err := repo.GetByTargets(context.Background(), []int64{10, 11, 99}, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.Len(t, grouped[10], 2)
 		require.Len(t, grouped[11], 1)
@@ -148,7 +149,7 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 				if iter%2 == 1 {
 					reactionType = entity.ReactionTypeDislike
 				}
-				_, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, reactionType)
+				_, _, _, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, reactionType)
 				errCh <- err
 			}(i)
 		}
@@ -158,11 +159,11 @@ func RunReactionRepositoryContractTests(t *testing.T, newRepository func() port.
 			require.NoError(t, err)
 		}
 
-		reactions, err := repo.GetByTarget(10, entity.ReactionTargetPost)
+		reactions, err := repo.GetByTarget(context.Background(), 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.Len(t, reactions, 1)
 
-		selected, err := repo.GetUserTargetReaction(7, 10, entity.ReactionTargetPost)
+		selected, err := repo.GetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost)
 		require.NoError(t, err)
 		require.NotNil(t, selected)
 		assert.Equal(t, reactions[0].ID, selected.ID)

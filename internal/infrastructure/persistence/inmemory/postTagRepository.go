@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -36,7 +37,8 @@ func (r *PostTagRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *PostTagRepository) SelectActiveByPostID(postID int64) ([]*entity.PostTag, error) {
+func (r *PostTagRepository) SelectActiveByPostID(ctx context.Context, postID int64) ([]*entity.PostTag, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectActiveByPostID(postID)
@@ -61,7 +63,8 @@ func (r *PostTagRepository) selectActiveByPostID(postID int64) ([]*entity.PostTa
 	return items, nil
 }
 
-func (r *PostTagRepository) SelectActiveByTagID(tagID int64, limit int, lastID int64) ([]*entity.PostTag, error) {
+func (r *PostTagRepository) SelectActiveByTagID(ctx context.Context, tagID int64, limit int, lastID int64) ([]*entity.PostTag, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectActiveByTagID(tagID, limit, lastID)
@@ -112,7 +115,8 @@ func (r *PostTagRepository) selectActivePostIDSetByTagID(tagID int64) map[int64]
 	return postIDs
 }
 
-func (r *PostTagRepository) UpsertActive(postID, tagID int64) error {
+func (r *PostTagRepository) UpsertActive(ctx context.Context, postID, tagID int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.upsertActive(postID, tagID)
@@ -132,7 +136,8 @@ func (r *PostTagRepository) upsertActive(postID, tagID int64) error {
 	return nil
 }
 
-func (r *PostTagRepository) SoftDelete(postID, tagID int64) error {
+func (r *PostTagRepository) SoftDelete(ctx context.Context, postID, tagID int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.softDelete(postID, tagID)
@@ -152,7 +157,8 @@ func (r *PostTagRepository) softDelete(postID, tagID int64) error {
 	return nil
 }
 
-func (r *PostTagRepository) SoftDeleteByPostID(postID int64) error {
+func (r *PostTagRepository) SoftDeleteByPostID(ctx context.Context, postID int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.softDeleteByPostID(postID)

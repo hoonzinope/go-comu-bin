@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"strconv"
 	"sync"
 
@@ -44,7 +45,8 @@ func (r *ReactionRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *ReactionRepository) SetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (*entity.Reaction, bool, bool, error) {
+func (r *ReactionRepository) SetUserTargetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (*entity.Reaction, bool, bool, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.setUserTargetReaction(userID, targetID, targetType, reactionType)
@@ -74,7 +76,8 @@ func (r *ReactionRepository) setUserTargetReaction(userID, targetID int64, targe
 	return cloneReaction(reaction), true, true, nil
 }
 
-func (r *ReactionRepository) DeleteUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (bool, error) {
+func (r *ReactionRepository) DeleteUserTargetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) (bool, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.deleteUserTargetReaction(userID, targetID, targetType)
@@ -95,7 +98,8 @@ func (r *ReactionRepository) deleteUserTargetReaction(userID, targetID int64, ta
 	return true, nil
 }
 
-func (r *ReactionRepository) DeleteByTarget(targetID int64, targetType entity.ReactionTargetType) (int, error) {
+func (r *ReactionRepository) DeleteByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) (int, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.deleteByTarget(targetID, targetType)
@@ -117,7 +121,8 @@ func (r *ReactionRepository) deleteByTarget(targetID int64, targetType entity.Re
 	return deletedCount, nil
 }
 
-func (r *ReactionRepository) GetUserTargetReaction(userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error) {
+func (r *ReactionRepository) GetUserTargetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.getUserTargetReaction(userID, targetID, targetType)
@@ -134,7 +139,8 @@ func (r *ReactionRepository) getUserTargetReaction(userID, targetID int64, targe
 	return cloneReaction(r.reactionDB.Data[reactionID]), nil
 }
 
-func (r *ReactionRepository) GetByTarget(targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error) {
+func (r *ReactionRepository) GetByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.getByTarget(targetID, targetType)
@@ -153,7 +159,8 @@ func (r *ReactionRepository) getByTarget(targetID int64, targetType entity.React
 	return reactions, nil
 }
 
-func (r *ReactionRepository) GetByTargets(targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
+func (r *ReactionRepository) GetByTargets(ctx context.Context, targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.getByTargets(targetIDs, targetType)

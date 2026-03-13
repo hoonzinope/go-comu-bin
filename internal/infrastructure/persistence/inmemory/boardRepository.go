@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -41,7 +42,8 @@ func (r *BoardRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *BoardRepository) SelectBoardByID(id int64) (*entity.Board, error) {
+func (r *BoardRepository) SelectBoardByID(ctx context.Context, id int64) (*entity.Board, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectBoardByID(id)
@@ -57,7 +59,8 @@ func (r *BoardRepository) selectBoardByID(id int64) (*entity.Board, error) {
 	return nil, nil
 }
 
-func (r *BoardRepository) SelectBoardList(limit int, lastID int64) ([]*entity.Board, error) {
+func (r *BoardRepository) SelectBoardList(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectBoardList(limit, lastID)
@@ -88,7 +91,8 @@ func (r *BoardRepository) selectBoardList(limit int, lastID int64) ([]*entity.Bo
 	return boards, nil
 }
 
-func (r *BoardRepository) Save(board *entity.Board) (int64, error) {
+func (r *BoardRepository) Save(ctx context.Context, board *entity.Board) (int64, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.save(board)
@@ -106,7 +110,8 @@ func (r *BoardRepository) save(board *entity.Board) (int64, error) {
 	return saved.ID, nil
 }
 
-func (r *BoardRepository) Update(board *entity.Board) error {
+func (r *BoardRepository) Update(ctx context.Context, board *entity.Board) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.update(board)
@@ -123,7 +128,8 @@ func (r *BoardRepository) update(board *entity.Board) error {
 	return nil
 }
 
-func (r *BoardRepository) Delete(id int64) error {
+func (r *BoardRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.delete(id)

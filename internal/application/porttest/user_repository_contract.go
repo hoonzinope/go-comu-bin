@@ -1,6 +1,7 @@
 package porttest
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -18,22 +19,22 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		repo := newRepository()
 
 		user := entity.NewUser("alice", "pw")
-		id, err := repo.Save(user)
+		id, err := repo.Save(context.Background(), user)
 		require.NoError(t, err)
 		assert.NotZero(t, id)
 
-		byName, err := repo.SelectUserByUsername("alice")
+		byName, err := repo.SelectUserByUsername(context.Background(), "alice")
 		require.NoError(t, err)
 		require.NotNil(t, byName)
 		assert.Equal(t, id, byName.ID)
 
-		byID, err := repo.SelectUserByID(id)
+		byID, err := repo.SelectUserByID(context.Background(), id)
 		require.NoError(t, err)
 		require.NotNil(t, byID)
 		assert.Equal(t, "alice", byID.Name)
 		assert.NotEmpty(t, byID.UUID)
 
-		byUUID, err := repo.SelectUserByUUID(byID.UUID)
+		byUUID, err := repo.SelectUserByUUID(context.Background(), byID.UUID)
 		require.NoError(t, err)
 		require.NotNil(t, byUUID)
 		assert.Equal(t, id, byUUID.ID)
@@ -42,10 +43,10 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 	t.Run("username is unique", func(t *testing.T) {
 		repo := newRepository()
 
-		_, err := repo.Save(entity.NewUser("alice", "pw"))
+		_, err := repo.Save(context.Background(), entity.NewUser("alice", "pw"))
 		require.NoError(t, err)
 
-		_, err = repo.Save(entity.NewUser("alice", "pw2"))
+		_, err = repo.Save(context.Background(), entity.NewUser("alice", "pw2"))
 		require.Error(t, err)
 		assert.ErrorIs(t, err, customError.ErrUserAlreadyExists)
 	})
@@ -55,12 +56,12 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 
 		user1 := entity.NewUser("alice", "pw")
 		user1.UUID = "fixed-uuid"
-		_, err := repo.Save(user1)
+		_, err := repo.Save(context.Background(), user1)
 		require.NoError(t, err)
 
 		user2 := entity.NewUser("bob", "pw")
 		user2.UUID = "fixed-uuid"
-		_, err = repo.Save(user2)
+		_, err = repo.Save(context.Background(), user2)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, customError.ErrUserAlreadyExists)
 	})
@@ -74,7 +75,7 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_, err := repo.Save(entity.NewUser("alice", "pw"))
+				_, err := repo.Save(context.Background(), entity.NewUser("alice", "pw"))
 				errCh <- err
 			}()
 		}
@@ -99,18 +100,18 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 	t.Run("delete removes only matching user", func(t *testing.T) {
 		repo := newRepository()
 
-		aliceID, err := repo.Save(entity.NewUser("alice", "pw"))
+		aliceID, err := repo.Save(context.Background(), entity.NewUser("alice", "pw"))
 		require.NoError(t, err)
-		bobID, err := repo.Save(entity.NewUser("bob", "pw"))
+		bobID, err := repo.Save(context.Background(), entity.NewUser("bob", "pw"))
 		require.NoError(t, err)
 
-		require.NoError(t, repo.Delete(aliceID))
+		require.NoError(t, repo.Delete(context.Background(), aliceID))
 
-		alice, err := repo.SelectUserByID(aliceID)
+		alice, err := repo.SelectUserByID(context.Background(), aliceID)
 		require.NoError(t, err)
 		assert.Nil(t, alice)
 
-		bob, err := repo.SelectUserByID(bobID)
+		bob, err := repo.SelectUserByID(context.Background(), bobID)
 		require.NoError(t, err)
 		require.NotNil(t, bob)
 		assert.Equal(t, "bob", bob.Name)
@@ -120,26 +121,26 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		repo := newRepository()
 
 		user := entity.NewUser("alice", "pw")
-		id, err := repo.Save(user)
+		id, err := repo.Save(context.Background(), user)
 		require.NoError(t, err)
 		user.ID = id
 		user.SoftDelete()
 
-		require.NoError(t, repo.Update(user))
+		require.NoError(t, repo.Update(context.Background(), user))
 
-		byID, err := repo.SelectUserByID(id)
+		byID, err := repo.SelectUserByID(context.Background(), id)
 		require.NoError(t, err)
 		assert.Nil(t, byID)
 
-		byName, err := repo.SelectUserByUsername("alice")
+		byName, err := repo.SelectUserByUsername(context.Background(), "alice")
 		require.NoError(t, err)
 		assert.Nil(t, byName)
 
-		byUUID, err := repo.SelectUserByUUID(user.UUID)
+		byUUID, err := repo.SelectUserByUUID(context.Background(), user.UUID)
 		require.NoError(t, err)
 		assert.Nil(t, byUUID)
 
-		includingDeleted, err := repo.SelectUserByIDIncludingDeleted(id)
+		includingDeleted, err := repo.SelectUserByIDIncludingDeleted(context.Background(), id)
 		require.NoError(t, err)
 		require.NotNil(t, includingDeleted)
 		assert.Equal(t, user.UUID, includingDeleted.UUID)
@@ -148,16 +149,16 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 	t.Run("select users by ids including deleted returns unique requested users", func(t *testing.T) {
 		repo := newRepository()
 
-		aliceID, err := repo.Save(entity.NewUser("alice", "pw"))
+		aliceID, err := repo.Save(context.Background(), entity.NewUser("alice", "pw"))
 		require.NoError(t, err)
 		bob := entity.NewUser("bob", "pw")
-		bobID, err := repo.Save(bob)
+		bobID, err := repo.Save(context.Background(), bob)
 		require.NoError(t, err)
 		bob.ID = bobID
 		bob.SoftDelete()
-		require.NoError(t, repo.Update(bob))
+		require.NoError(t, repo.Update(context.Background(), bob))
 
-		users, err := repo.SelectUsersByIDsIncludingDeleted([]int64{bobID, aliceID, bobID, 999})
+		users, err := repo.SelectUsersByIDsIncludingDeleted(context.Background(), []int64{bobID, aliceID, bobID, 999})
 		require.NoError(t, err)
 		require.Len(t, users, 2)
 		assert.Equal(t, "alice", users[aliceID].Name)

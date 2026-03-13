@@ -156,37 +156,37 @@ func seedUser(userRepository port.UserRepository, name, password, role string) i
 	} else {
 		user = entity.NewUser(name, password)
 	}
-	id, _ := userRepository.Save(user)
+	id, _ := userRepository.Save(context.Background(), user)
 	return id
 }
 
 func seedBoard(boardRepository port.BoardRepository, name, description string) int64 {
 	board := entity.NewBoard(name, description)
-	id, _ := boardRepository.Save(board)
+	id, _ := boardRepository.Save(context.Background(), board)
 	return id
 }
 
 func seedPost(postRepository port.PostRepository, authorID, boardID int64, title, content string) int64 {
 	post := entity.NewPost(title, content, authorID, boardID)
-	id, _ := postRepository.Save(post)
+	id, _ := postRepository.Save(context.Background(), post)
 	return id
 }
 
 func seedDraftPost(postRepository port.PostRepository, authorID, boardID int64, title, content string) int64 {
 	post := entity.NewDraftPost(title, content, authorID, boardID)
-	id, _ := postRepository.Save(post)
+	id, _ := postRepository.Save(context.Background(), post)
 	return id
 }
 
 func seedComment(commentRepository port.CommentRepository, authorID, postID int64, content string) int64 {
 	comment := entity.NewComment(content, authorID, postID, nil)
-	id, _ := commentRepository.Save(comment)
+	id, _ := commentRepository.Save(context.Background(), comment)
 	return id
 }
 
 func seedCommentWithParent(commentRepository port.CommentRepository, authorID, postID int64, content string, parentID *int64) int64 {
 	comment := entity.NewComment(content, authorID, postID, parentID)
-	id, _ := commentRepository.Save(comment)
+	id, _ := commentRepository.Save(context.Background(), comment)
 	return id
 }
 
@@ -199,15 +199,24 @@ type errorCache struct {
 	getOrSetWithTTLErr error
 }
 
-func (c *errorCache) Get(key string) (interface{}, bool, error) {
+func (c *errorCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
+	_ = ctx
+	_ = key
 	return nil, false, c.getErr
 }
 
-func (c *errorCache) Set(key string, value interface{}) error {
+func (c *errorCache) Set(ctx context.Context, key string, value interface{}) error {
+	_ = ctx
+	_ = key
+	_ = value
 	return c.setErr
 }
 
-func (c *errorCache) SetWithTTL(key string, value interface{}, ttlSeconds int) error {
+func (c *errorCache) SetWithTTL(ctx context.Context, key string, value interface{}, ttlSeconds int) error {
+	_ = ctx
+	_ = key
+	_ = value
+	_ = ttlSeconds
 	if c.setWithTTLErr != nil {
 		return c.setWithTTLErr
 	}
@@ -217,22 +226,29 @@ func (c *errorCache) SetWithTTL(key string, value interface{}, ttlSeconds int) e
 	return nil
 }
 
-func (c *errorCache) Delete(key string) error {
+func (c *errorCache) Delete(ctx context.Context, key string) error {
+	_ = ctx
+	_ = key
 	return c.deleteErr
 }
 
-func (c *errorCache) DeleteByPrefix(prefix string) (int, error) {
+func (c *errorCache) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	_ = ctx
+	_ = prefix
 	return 0, c.deleteByPrefixErr
 }
 
-func (c *errorCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
+func (c *errorCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	_ = ctx
+	_ = key
+	_ = ttlSeconds
 	if c.getOrSetWithTTLErr != nil {
 		return nil, customError.WrapCache("get or set cache", c.getOrSetWithTTLErr)
 	}
 	if c.getErr != nil {
 		return nil, customError.WrapCache("get cache", c.getErr)
 	}
-	return loader()
+	return loader(ctx)
 }
 
 func newCacheFailure(err error) error {

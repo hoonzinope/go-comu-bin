@@ -64,7 +64,8 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 	newComment := entity.NewComment(content, authorID, postID, parentID)
 	var commentID int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		user, err := tx.UserRepository().SelectUserByID(authorID)
+		txCtx := tx.Context()
+		user, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for create comment", err)
 		}
@@ -74,7 +75,7 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 		if err := s.authorizationPolicy.CanWrite(user); err != nil {
 			return err
 		}
-		post, err := tx.PostRepository().SelectPostByID(postID)
+		post, err := tx.PostRepository().SelectPostByID(txCtx, postID)
 		if err != nil {
 			return customError.WrapRepository("select post by id for create comment", err)
 		}
@@ -82,7 +83,7 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 			return customError.ErrPostNotFound
 		}
 		if parentID != nil {
-			parent, err := tx.CommentRepository().SelectCommentByID(*parentID)
+			parent, err := tx.CommentRepository().SelectCommentByID(txCtx, *parentID)
 			if err != nil {
 				return customError.WrapRepository("select parent comment by id for create comment", err)
 			}
@@ -93,7 +94,7 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 				return customError.ErrInvalidInput
 			}
 		}
-		commentID, err = tx.CommentRepository().Save(newComment)
+		commentID, err = tx.CommentRepository().Save(txCtx, newComment)
 		if err != nil {
 			return customError.WrapRepository("save comment", err)
 		}
@@ -113,8 +114,8 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 		return nil, err
 	}
 	cacheKey := key.CommentList(postID, limit, lastID)
-	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
-		post, err := s.postRepository.SelectPostByID(postID)
+	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
+		post, err := s.postRepository.SelectPostByID(ctx, postID)
 		if err != nil {
 			return nil, customError.WrapRepository("select post by id for comment list", err)
 		}
@@ -122,7 +123,7 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 			return nil, customError.ErrPostNotFound
 		}
 
-		comments, err := s.commentRepository.SelectVisibleComments(postID, limit+1, lastID)
+		comments, err := s.commentRepository.SelectVisibleComments(ctx, postID, limit+1, lastID)
 		if err != nil {
 			return nil, customError.WrapRepository("select visible comments by post", err)
 		}
@@ -137,7 +138,7 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 			nextLastID = &next
 		}
 
-		commentModels, err := s.commentsFromEntities(comments)
+		commentModels, err := s.commentsFromEntities(ctx, comments)
 		if err != nil {
 			return nil, err
 		}
@@ -160,8 +161,8 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 	return list, nil
 }
 
-func (s *CommentService) commentsFromEntities(comments []*entity.Comment) ([]model.Comment, error) {
-	authorUUIDs, err := userUUIDsForComments(s.userRepository, comments)
+func (s *CommentService) commentsFromEntities(ctx context.Context, comments []*entity.Comment) ([]model.Comment, error) {
+	authorUUIDs, err := userUUIDsForComments(ctx, s.userRepository, comments)
 	if err != nil {
 		return nil, err
 	}
@@ -185,14 +186,15 @@ func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, 
 	}
 	var postID int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		comment, err := tx.CommentRepository().SelectCommentByID(id)
+		txCtx := tx.Context()
+		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, id)
 		if err != nil {
 			return customError.WrapRepository("select comment by id for update comment", err)
 		}
 		if comment == nil {
 			return customError.ErrCommentNotFound
 		}
-		requester, err := tx.UserRepository().SelectUserByID(authorID)
+		requester, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for update comment", err)
 		}
@@ -207,7 +209,7 @@ func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, 
 		}
 		updatedComment := *comment
 		updatedComment.Update(content)
-		if err := tx.CommentRepository().Update(&updatedComment); err != nil {
+		if err := tx.CommentRepository().Update(txCtx, &updatedComment); err != nil {
 			return customError.WrapRepository("update comment", err)
 		}
 		postID = updatedComment.PostID
@@ -226,14 +228,15 @@ func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) 
 	// 댓글 삭제 로직 구현
 	var commentID, postID int64
 	if err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		comment, err := tx.CommentRepository().SelectCommentByID(id)
+		txCtx := tx.Context()
+		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, id)
 		if err != nil {
 			return customError.WrapRepository("select comment by id for delete comment", err)
 		}
 		if comment == nil {
 			return customError.ErrCommentNotFound
 		}
-		requester, err := tx.UserRepository().SelectUserByID(authorID)
+		requester, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for delete comment", err)
 		}
@@ -246,10 +249,10 @@ func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) 
 		if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 			return err
 		}
-		if deleteErr := tx.CommentRepository().Delete(comment.ID); deleteErr != nil {
+		if deleteErr := tx.CommentRepository().Delete(txCtx, comment.ID); deleteErr != nil {
 			return customError.WrapRepository("delete comment", deleteErr)
 		}
-		if _, reactionErr := tx.ReactionRepository().DeleteByTarget(comment.ID, entity.ReactionTargetComment); reactionErr != nil {
+		if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, comment.ID, entity.ReactionTargetComment); reactionErr != nil {
 			return customError.WrapRepository("delete comment reactions", reactionErr)
 		}
 		commentID = comment.ID

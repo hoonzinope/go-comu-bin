@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +21,8 @@ func NewFileStorage(rootDir string) *FileStorage {
 	return &FileStorage{rootDir: rootDir}
 }
 
-func (s *FileStorage) Save(key string, content io.Reader) error {
+func (s *FileStorage) Save(ctx context.Context, key string, content io.Reader) error {
+	_ = ctx
 	fullPath, err := s.resolve(key)
 	if err != nil {
 		return err
@@ -37,7 +39,8 @@ func (s *FileStorage) Save(key string, content io.Reader) error {
 	return err
 }
 
-func (s *FileStorage) Open(key string) (io.ReadCloser, error) {
+func (s *FileStorage) Open(ctx context.Context, key string) (io.ReadCloser, error) {
+	_ = ctx
 	fullPath, err := s.resolve(key)
 	if err != nil {
 		return nil, err
@@ -45,7 +48,8 @@ func (s *FileStorage) Open(key string) (io.ReadCloser, error) {
 	return os.Open(fullPath)
 }
 
-func (s *FileStorage) Delete(key string) error {
+func (s *FileStorage) Delete(ctx context.Context, key string) error {
+	_ = ctx
 	fullPath, err := s.resolve(key)
 	if err != nil {
 		return err

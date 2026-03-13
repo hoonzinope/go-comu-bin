@@ -1,6 +1,10 @@
 package noop
 
-import "github.com/hoonzinope/go-comu-bin/internal/application/port"
+import (
+	"context"
+
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+)
 
 var _ port.Cache = (*NoopCache)(nil)
 
@@ -10,15 +14,41 @@ func NewNoopCache() *NoopCache {
 	return &NoopCache{}
 }
 
-func (n *NoopCache) Get(key string) (interface{}, bool, error) { return nil, false, nil }
-func (n *NoopCache) Set(key string, value interface{}) error   { return nil }
-func (n *NoopCache) SetWithTTL(key string, value interface{}, ttlSeconds int) error {
+func (n *NoopCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
+	_ = ctx
+	_ = key
+	return nil, false, nil
+}
+
+func (n *NoopCache) Set(ctx context.Context, key string, value interface{}) error {
+	_ = ctx
+	_ = key
+	_ = value
 	return nil
 }
-func (n *NoopCache) Delete(key string) error { return nil }
-func (n *NoopCache) DeleteByPrefix(prefix string) (int, error) {
+
+func (n *NoopCache) SetWithTTL(ctx context.Context, key string, value interface{}, ttlSeconds int) error {
+	_ = ctx
+	_ = key
+	_ = value
+	_ = ttlSeconds
+	return nil
+}
+
+func (n *NoopCache) Delete(ctx context.Context, key string) error {
+	_ = ctx
+	_ = key
+	return nil
+}
+
+func (n *NoopCache) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	_ = ctx
+	_ = prefix
 	return 0, nil
 }
-func (n *NoopCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
-	return loader()
+
+func (n *NoopCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	_ = key
+	_ = ttlSeconds
+	return loader(ctx)
 }

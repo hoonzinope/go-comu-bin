@@ -1,9 +1,12 @@
 package port
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 type FileStorage interface {
-	Save(key string, content io.Reader) error
-	Open(key string) (io.ReadCloser, error)
-	Delete(key string) error
+	Save(ctx context.Context, key string, content io.Reader) error
+	Open(ctx context.Context, key string) (io.ReadCloser, error)
+	Delete(ctx context.Context, key string) error
 }

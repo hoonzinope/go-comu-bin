@@ -17,45 +17,45 @@ import (
 )
 
 type stubUserRepository struct {
-	selectUserByUsername func(username string) (*entity.User, error)
-	save                 func(user *entity.User) (int64, error)
+	selectUserByUsername func(ctx context.Context, username string) (*entity.User, error)
+	save                 func(ctx context.Context, user *entity.User) (int64, error)
 }
 
-func (r *stubUserRepository) Save(user *entity.User) (int64, error) {
+func (r *stubUserRepository) Save(ctx context.Context, user *entity.User) (int64, error) {
 	if r.save != nil {
-		return r.save(user)
+		return r.save(ctx, user)
 	}
 	return 1, nil
 }
 
-func (r *stubUserRepository) SelectUserByUsername(username string) (*entity.User, error) {
+func (r *stubUserRepository) SelectUserByUsername(ctx context.Context, username string) (*entity.User, error) {
 	if r.selectUserByUsername != nil {
-		return r.selectUserByUsername(username)
+		return r.selectUserByUsername(ctx, username)
 	}
 	return nil, nil
 }
 
-func (r *stubUserRepository) SelectUserByUUID(userUUID string) (*entity.User, error) {
+func (r *stubUserRepository) SelectUserByUUID(context.Context, string) (*entity.User, error) {
 	return nil, nil
 }
 
-func (r *stubUserRepository) SelectUserByID(id int64) (*entity.User, error) {
+func (r *stubUserRepository) SelectUserByID(context.Context, int64) (*entity.User, error) {
 	return nil, nil
 }
 
-func (r *stubUserRepository) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
+func (r *stubUserRepository) SelectUserByIDIncludingDeleted(context.Context, int64) (*entity.User, error) {
 	return nil, nil
 }
 
-func (r *stubUserRepository) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+func (r *stubUserRepository) SelectUsersByIDsIncludingDeleted(context.Context, []int64) (map[int64]*entity.User, error) {
 	return map[int64]*entity.User{}, nil
 }
 
-func (r *stubUserRepository) Update(user *entity.User) error {
+func (r *stubUserRepository) Update(context.Context, *entity.User) error {
 	return nil
 }
 
-func (r *stubUserRepository) Delete(id int64) error {
+func (r *stubUserRepository) Delete(context.Context, int64) error {
 	return nil
 }
 
@@ -67,7 +67,8 @@ func TestEnsureBootstrapAdmin_ReturnsError_WhenSaveFails(t *testing.T) {
 	cfg.Admin.Bootstrap.Password = "strong-admin-password"
 
 	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
-		save: func(user *entity.User) (int64, error) {
+		save: func(ctx context.Context, user *entity.User) (int64, error) {
+			_ = ctx
 			require.Equal(t, "admin", user.Name)
 			require.NotEmpty(t, user.Password)
 			return 0, expected
@@ -83,7 +84,7 @@ func TestEnsureBootstrapAdmin_SkipsWhenDisabled(t *testing.T) {
 	called := false
 
 	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
-		save: func(user *entity.User) (int64, error) {
+		save: func(context.Context, *entity.User) (int64, error) {
 			called = true
 			return 1, nil
 		},
@@ -101,10 +102,10 @@ func TestEnsureBootstrapAdmin_SkipsWhenUserAlreadyExists(t *testing.T) {
 
 	calledSave := false
 	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
-		selectUserByUsername: func(username string) (*entity.User, error) {
+		selectUserByUsername: func(_ context.Context, username string) (*entity.User, error) {
 			return &entity.User{ID: 1, Name: username}, nil
 		},
-		save: func(user *entity.User) (int64, error) {
+		save: func(context.Context, *entity.User) (int64, error) {
 			calledSave = true
 			return 1, nil
 		},

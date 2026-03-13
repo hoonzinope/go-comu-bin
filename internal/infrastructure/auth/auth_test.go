@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -50,27 +51,28 @@ func TestJwtTokenProvider(t *testing.T) {
 func TestCacheSessionRepository(t *testing.T) {
 	cache := cacheInMemory.NewInMemoryCache()
 	repo := NewCacheSessionRepository(cache)
+	ctx := context.Background()
 
-	require.NoError(t, repo.Save(7, "token-a", 1))
-	exists, err := repo.Exists(7, "token-a")
+	require.NoError(t, repo.Save(ctx, 7, "token-a", 1))
+	exists, err := repo.Exists(ctx, 7, "token-a")
 	require.NoError(t, err)
 	assert.True(t, exists)
 
-	require.NoError(t, repo.Delete(7, "token-a"))
-	exists, err = repo.Exists(7, "token-a")
+	require.NoError(t, repo.Delete(ctx, 7, "token-a"))
+	exists, err = repo.Exists(ctx, 7, "token-a")
 	require.NoError(t, err)
 	assert.False(t, exists)
 
-	require.NoError(t, repo.Save(7, "token-b", 1))
-	require.NoError(t, repo.Save(7, "token-c", 1))
-	require.NoError(t, repo.DeleteByUser(7))
-	exists, err = repo.Exists(7, "token-b")
+	require.NoError(t, repo.Save(ctx, 7, "token-b", 1))
+	require.NoError(t, repo.Save(ctx, 7, "token-c", 1))
+	require.NoError(t, repo.DeleteByUser(ctx, 7))
+	exists, err = repo.Exists(ctx, 7, "token-b")
 	require.NoError(t, err)
 	assert.False(t, exists)
 
-	require.NoError(t, repo.Save(8, "token-d", 1))
+	require.NoError(t, repo.Save(ctx, 8, "token-d", 1))
 	time.Sleep(1100 * time.Millisecond)
-	exists, err = repo.Exists(8, "token-d")
+	exists, err = repo.Exists(ctx, 8, "token-d")
 	require.NoError(t, err)
 	assert.False(t, exists)
 }

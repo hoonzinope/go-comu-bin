@@ -52,12 +52,12 @@ func TestFileStorage_SaveAndDelete(t *testing.T) {
 	client := &fakeObjectClient{}
 	storage := NewFileStorageWithClient(client, "attachments")
 
-	require.NoError(t, storage.Save("posts/1/a.png", bytes.NewReader([]byte("hello"))))
+	require.NoError(t, storage.Save(context.Background(), "posts/1/a.png", bytes.NewReader([]byte("hello"))))
 	assert.Equal(t, "attachments", client.putBucket)
 	assert.Equal(t, "posts/1/a.png", client.putKey)
 	assert.Equal(t, "hello", client.putBody)
 
-	require.NoError(t, storage.Delete("posts/1/a.png"))
+	require.NoError(t, storage.Delete(context.Background(), "posts/1/a.png"))
 	assert.Equal(t, "attachments", client.delBucket)
 	assert.Equal(t, "posts/1/a.png", client.delKey)
 }
@@ -67,7 +67,7 @@ func TestFileStorage_Save_UsesSizedReaderWithoutCopyWhenAvailable(t *testing.T) 
 	storage := NewFileStorageWithClient(client, "attachments")
 	reader := bytes.NewReader([]byte("hello"))
 
-	require.NoError(t, storage.Save("posts/1/a.png", reader))
+	require.NoError(t, storage.Save(context.Background(), "posts/1/a.png", reader))
 
 	assert.Same(t, reader, client.putReader)
 	assert.EqualValues(t, 5, client.putSize)

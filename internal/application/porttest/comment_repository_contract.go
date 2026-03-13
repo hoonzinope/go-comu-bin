@@ -1,6 +1,7 @@
 package porttest
 
 import (
+	"context"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -16,23 +17,23 @@ func RunCommentRepositoryContractTests(t *testing.T, newRepository func() port.C
 		repo := newRepository()
 
 		active1 := entity.NewComment("active-1", 1, 10, nil)
-		active1ID, err := repo.Save(active1)
+		active1ID, err := repo.Save(context.Background(), active1)
 		require.NoError(t, err)
 
 		deleted := entity.NewComment("deleted", 1, 10, nil)
-		deletedID, err := repo.Save(deleted)
+		deletedID, err := repo.Save(context.Background(), deleted)
 		require.NoError(t, err)
-		require.NoError(t, repo.Delete(deletedID))
+		require.NoError(t, repo.Delete(context.Background(), deletedID))
 
 		active2 := entity.NewComment("active-2", 1, 10, nil)
-		active2ID, err := repo.Save(active2)
+		active2ID, err := repo.Save(context.Background(), active2)
 		require.NoError(t, err)
 
 		otherPost := entity.NewComment("other-post", 1, 11, nil)
-		_, err = repo.Save(otherPost)
+		_, err = repo.Save(context.Background(), otherPost)
 		require.NoError(t, err)
 
-		comments, err := repo.SelectComments(10, 10, 0)
+		comments, err := repo.SelectComments(context.Background(), 10, 10, 0)
 		require.NoError(t, err)
 		require.Len(t, comments, 2)
 		assert.Equal(t, []int64{active2ID, active1ID}, []int64{comments[0].ID, comments[1].ID})
@@ -42,19 +43,19 @@ func RunCommentRepositoryContractTests(t *testing.T, newRepository func() port.C
 		repo := newRepository()
 
 		active := entity.NewComment("active", 1, 10, nil)
-		activeID, err := repo.Save(active)
+		activeID, err := repo.Save(context.Background(), active)
 		require.NoError(t, err)
 
 		tombstone := entity.NewComment("deleted", 1, 10, nil)
-		tombstoneID, err := repo.Save(tombstone)
+		tombstoneID, err := repo.Save(context.Background(), tombstone)
 		require.NoError(t, err)
-		require.NoError(t, repo.Delete(tombstoneID))
+		require.NoError(t, repo.Delete(context.Background(), tombstoneID))
 
 		otherPost := entity.NewComment("other-post", 1, 11, nil)
-		_, err = repo.Save(otherPost)
+		_, err = repo.Save(context.Background(), otherPost)
 		require.NoError(t, err)
 
-		comments, err := repo.SelectCommentsIncludingDeleted(10)
+		comments, err := repo.SelectCommentsIncludingDeleted(context.Background(), 10)
 		require.NoError(t, err)
 		require.Len(t, comments, 2)
 		assert.Equal(t, []int64{tombstoneID, activeID}, []int64{comments[0].ID, comments[1].ID})
@@ -67,11 +68,11 @@ func RunCommentRepositoryContractTests(t *testing.T, newRepository func() port.C
 		repo := newRepository()
 
 		comment := entity.NewComment("hello", 1, 10, nil)
-		id, err := repo.Save(comment)
+		id, err := repo.Save(context.Background(), comment)
 		require.NoError(t, err)
-		require.NoError(t, repo.Delete(id))
+		require.NoError(t, repo.Delete(context.Background(), id))
 
-		selected, err := repo.SelectCommentByID(id)
+		selected, err := repo.SelectCommentByID(context.Background(), id)
 		require.NoError(t, err)
 		assert.Nil(t, selected)
 	})
@@ -79,15 +80,15 @@ func RunCommentRepositoryContractTests(t *testing.T, newRepository func() port.C
 	t.Run("select comments applies cursor after filtering deleted comments", func(t *testing.T) {
 		repo := newRepository()
 
-		firstID, err := repo.Save(entity.NewComment("first", 1, 10, nil))
+		firstID, err := repo.Save(context.Background(), entity.NewComment("first", 1, 10, nil))
 		require.NoError(t, err)
-		secondID, err := repo.Save(entity.NewComment("second", 1, 10, nil))
+		secondID, err := repo.Save(context.Background(), entity.NewComment("second", 1, 10, nil))
 		require.NoError(t, err)
-		thirdID, err := repo.Save(entity.NewComment("third", 1, 10, nil))
+		thirdID, err := repo.Save(context.Background(), entity.NewComment("third", 1, 10, nil))
 		require.NoError(t, err)
-		require.NoError(t, repo.Delete(secondID))
+		require.NoError(t, repo.Delete(context.Background(), secondID))
 
-		comments, err := repo.SelectComments(10, 10, thirdID)
+		comments, err := repo.SelectComments(context.Background(), 10, 10, thirdID)
 		require.NoError(t, err)
 		require.Len(t, comments, 1)
 		assert.Equal(t, firstID, comments[0].ID)
@@ -96,14 +97,14 @@ func RunCommentRepositoryContractTests(t *testing.T, newRepository func() port.C
 	t.Run("select visible comments keeps deleted parent tombstone when active reply exists", func(t *testing.T) {
 		repo := newRepository()
 
-		parentID, err := repo.Save(entity.NewComment("parent", 1, 10, nil))
+		parentID, err := repo.Save(context.Background(), entity.NewComment("parent", 1, 10, nil))
 		require.NoError(t, err)
-		require.NoError(t, repo.Delete(parentID))
+		require.NoError(t, repo.Delete(context.Background(), parentID))
 
-		_, err = repo.Save(entity.NewComment("reply", 2, 10, &parentID))
+		_, err = repo.Save(context.Background(), entity.NewComment("reply", 2, 10, &parentID))
 		require.NoError(t, err)
 
-		visible, err := repo.SelectVisibleComments(10, 10, 0)
+		visible, err := repo.SelectVisibleComments(context.Background(), 10, 10, 0)
 		require.NoError(t, err)
 		require.Len(t, visible, 2)
 		assert.Equal(t, entity.CommentStatusActive, visible[0].Status)

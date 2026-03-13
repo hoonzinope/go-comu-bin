@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -18,16 +19,16 @@ func TestUserRepositoryContract(t *testing.T) {
 
 func TestUserRepository_SelectReturnsClone(t *testing.T) {
 	repo := NewUserRepository()
-	id, err := repo.Save(entity.NewUser("alice", "pw"))
+	id, err := repo.Save(context.Background(), entity.NewUser("alice", "pw"))
 	require.NoError(t, err)
 
-	selected, err := repo.SelectUserByID(id)
+	selected, err := repo.SelectUserByID(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
 
 	selected.Name = "mutated"
 
-	again, err := repo.SelectUserByID(id)
+	again, err := repo.SelectUserByID(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, again)
 	assert.Equal(t, "alice", again.Name)
@@ -35,16 +36,16 @@ func TestUserRepository_SelectReturnsClone(t *testing.T) {
 
 func TestUserRepository_SelectUsersByIDsIncludingDeleted_ReturnsClones(t *testing.T) {
 	repo := NewUserRepository()
-	id, err := repo.Save(entity.NewUser("alice", "pw"))
+	id, err := repo.Save(context.Background(), entity.NewUser("alice", "pw"))
 	require.NoError(t, err)
 
-	users, err := repo.SelectUsersByIDsIncludingDeleted([]int64{id})
+	users, err := repo.SelectUsersByIDsIncludingDeleted(context.Background(), []int64{id})
 	require.NoError(t, err)
 	require.Contains(t, users, id)
 
 	users[id].Name = "mutated"
 
-	again, err := repo.SelectUsersByIDsIncludingDeleted([]int64{id})
+	again, err := repo.SelectUsersByIDsIncludingDeleted(context.Background(), []int64{id})
 	require.NoError(t, err)
 	require.Contains(t, again, id)
 	assert.Equal(t, "alice", again[id].Name)

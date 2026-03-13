@@ -81,27 +81,27 @@ func (f *fakeUserUseCase) VerifyCredentials(username, password string) (int64, e
 	return 1, nil
 }
 
-func (f *fakeUserUseCase) Save(user *entity.User) (int64, error) {
+func (f *fakeUserUseCase) Save(context.Context, *entity.User) (int64, error) {
 	return 1, nil
 }
 
-func (f *fakeUserUseCase) SelectUserByUsername(username string) (*entity.User, error) {
+func (f *fakeUserUseCase) SelectUserByUsername(_ context.Context, username string) (*entity.User, error) {
 	return &entity.User{ID: 1, Name: username, Status: entity.UserStatusActive}, nil
 }
 
-func (f *fakeUserUseCase) SelectUserByUUID(userUUID string) (*entity.User, error) {
+func (f *fakeUserUseCase) SelectUserByUUID(_ context.Context, userUUID string) (*entity.User, error) {
 	return &entity.User{ID: 1, UUID: userUUID, Status: entity.UserStatusActive}, nil
 }
 
-func (f *fakeUserUseCase) SelectUserByID(id int64) (*entity.User, error) {
+func (f *fakeUserUseCase) SelectUserByID(_ context.Context, id int64) (*entity.User, error) {
 	return &entity.User{ID: id, Name: "user", Status: entity.UserStatusActive}, nil
 }
 
-func (f *fakeUserUseCase) SelectUserByIDIncludingDeleted(id int64) (*entity.User, error) {
+func (f *fakeUserUseCase) SelectUserByIDIncludingDeleted(_ context.Context, id int64) (*entity.User, error) {
 	return &entity.User{ID: id, Name: "user", Status: entity.UserStatusActive}, nil
 }
 
-func (f *fakeUserUseCase) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int64]*entity.User, error) {
+func (f *fakeUserUseCase) SelectUsersByIDsIncludingDeleted(_ context.Context, ids []int64) (map[int64]*entity.User, error) {
 	out := make(map[int64]*entity.User, len(ids))
 	for _, id := range ids {
 		out[id] = &entity.User{ID: id, Name: "user", Status: entity.UserStatusActive}
@@ -109,11 +109,11 @@ func (f *fakeUserUseCase) SelectUsersByIDsIncludingDeleted(ids []int64) (map[int
 	return out, nil
 }
 
-func (f *fakeUserUseCase) Update(user *entity.User) error {
+func (f *fakeUserUseCase) Update(context.Context, *entity.User) error {
 	return nil
 }
 
-func (f *fakeUserUseCase) Delete(id int64) error {
+func (f *fakeUserUseCase) Delete(context.Context, int64) error {
 	return nil
 }
 
@@ -499,7 +499,7 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
 	require.NotNil(t, testSessionRepository)
-	require.NoError(t, testSessionRepository.Save(userID, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, testSessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
 
 	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
 	req.Header.Set("Content-Type", "application/json")
@@ -768,7 +768,7 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
-	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, testSessionRepository.Save(context.Background(), 1, token, tokenProvider.TTLSeconds()))
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -813,7 +813,7 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
-	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, testSessionRepository.Save(context.Background(), 1, token, tokenProvider.TTLSeconds()))
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -966,7 +966,7 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
-	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, testSessionRepository.Save(context.Background(), 1, token, tokenProvider.TTLSeconds()))
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -1003,7 +1003,7 @@ func TestHandleGetAttachmentPreview_EscapesContentDispositionFilename(t *testing
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
-	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, testSessionRepository.Save(context.Background(), 1, token, tokenProvider.TTLSeconds()))
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -1030,7 +1030,7 @@ func TestHandleGetAttachmentPreview_NotFound(t *testing.T) {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
-	require.NoError(t, testSessionRepository.Save(1, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, testSessionRepository.Save(context.Background(), 1, token, tokenProvider.TTLSeconds()))
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()

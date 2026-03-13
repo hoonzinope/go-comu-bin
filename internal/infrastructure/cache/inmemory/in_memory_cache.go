@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +29,8 @@ func NewInMemoryCache() *InMemoryCache {
 	}
 }
 
-func (c *InMemoryCache) Get(key string) (interface{}, bool, error) {
+func (c *InMemoryCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
+	_ = ctx
 	value, exists := c.store.Load(key)
 	if !exists {
 		return nil, false, nil
@@ -44,16 +46,17 @@ func (c *InMemoryCache) Get(key string) (interface{}, bool, error) {
 	return entry.value, true, nil
 }
 
-func (c *InMemoryCache) Set(key string, value interface{}) error {
+func (c *InMemoryCache) Set(ctx context.Context, key string, value interface{}) error {
+	_ = ctx
 	c.store.Store(key, cacheEntry{
 		value: value,
 	})
 	return nil
 }
 
-func (c *InMemoryCache) SetWithTTL(key string, value interface{}, ttlSeconds int) error {
+func (c *InMemoryCache) SetWithTTL(ctx context.Context, key string, value interface{}, ttlSeconds int) error {
 	if ttlSeconds <= 0 {
-		return c.Set(key, value)
+		return c.Set(ctx, key, value)
 	}
 	c.store.Store(key, cacheEntry{
 		value:     value,
@@ -63,12 +66,14 @@ func (c *InMemoryCache) SetWithTTL(key string, value interface{}, ttlSeconds int
 	return nil
 }
 
-func (c *InMemoryCache) Delete(key string) error {
+func (c *InMemoryCache) Delete(ctx context.Context, key string) error {
+	_ = ctx
 	c.store.Delete(key)
 	return nil
 }
 
-func (c *InMemoryCache) DeleteByPrefix(prefix string) (int, error) {
+func (c *InMemoryCache) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	_ = ctx
 	deleted := 0
 	c.store.Range(func(key, _ interface{}) bool {
 		k, ok := key.(string)
@@ -84,24 +89,24 @@ func (c *InMemoryCache) DeleteByPrefix(prefix string) (int, error) {
 	return deleted, nil
 }
 
-func (c *InMemoryCache) GetOrSetWithTTL(key string, ttlSeconds int, loader func() (interface{}, error)) (interface{}, error) {
-	if value, ok, err := c.Get(key); err != nil {
+func (c *InMemoryCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	if value, ok, err := c.Get(ctx, key); err != nil {
 		return nil, err
 	} else if ok {
 		return value, nil
 	}
 
 	value, err, _ := c.sf.Do(key, func() (interface{}, error) {
-		if cached, ok, getErr := c.Get(key); getErr != nil {
+		if cached, ok, getErr := c.Get(ctx, key); getErr != nil {
 			return nil, getErr
 		} else if ok {
 			return cached, nil
 		}
-		loaded, loadErr := loader()
+		loaded, loadErr := loader(ctx)
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		if setErr := c.SetWithTTL(key, loaded, ttlSeconds); setErr != nil {
+		if setErr := c.SetWithTTL(ctx, key, loaded, ttlSeconds); setErr != nil {
 			return nil, setErr
 		}
 		return loaded, nil

@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -41,7 +42,8 @@ func (r *CommentRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *CommentRepository) Save(comment *entity.Comment) (int64, error) {
+func (r *CommentRepository) Save(ctx context.Context, comment *entity.Comment) (int64, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.save(comment)
@@ -59,7 +61,8 @@ func (r *CommentRepository) save(comment *entity.Comment) (int64, error) {
 	return saved.ID, nil
 }
 
-func (r *CommentRepository) SelectCommentByID(id int64) (*entity.Comment, error) {
+func (r *CommentRepository) SelectCommentByID(ctx context.Context, id int64) (*entity.Comment, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectCommentByID(id)
@@ -75,7 +78,8 @@ func (r *CommentRepository) selectCommentByID(id int64) (*entity.Comment, error)
 	return nil, nil
 }
 
-func (r *CommentRepository) SelectComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+func (r *CommentRepository) SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectComments(postID, limit, lastID)
@@ -108,7 +112,8 @@ func (r *CommentRepository) selectComments(postID int64, limit int, lastID int64
 	return comments, nil
 }
 
-func (r *CommentRepository) SelectCommentsIncludingDeleted(postID int64) ([]*entity.Comment, error) {
+func (r *CommentRepository) SelectCommentsIncludingDeleted(ctx context.Context, postID int64) ([]*entity.Comment, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectCommentsIncludingDeleted(postID)
@@ -130,7 +135,8 @@ func (r *CommentRepository) selectCommentsIncludingDeleted(postID int64) ([]*ent
 	return comments, nil
 }
 
-func (r *CommentRepository) SelectVisibleComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+func (r *CommentRepository) SelectVisibleComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectVisibleComments(postID, limit, lastID)
@@ -148,7 +154,8 @@ func (r *CommentRepository) selectVisibleComments(postID int64, limit int, lastI
 	return filtered, nil
 }
 
-func (r *CommentRepository) Update(comment *entity.Comment) error {
+func (r *CommentRepository) Update(ctx context.Context, comment *entity.Comment) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.update(comment)
@@ -165,7 +172,8 @@ func (r *CommentRepository) update(comment *entity.Comment) error {
 	return nil
 }
 
-func (r *CommentRepository) Delete(id int64) error {
+func (r *CommentRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.delete(id)

@@ -27,10 +27,10 @@ func TestSessionService_Login_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
-	user, err := repositories.user.SelectUserByUsername("alice")
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
-	exists, err := sessionRepository.Exists(user.ID, token)
+	exists, err := sessionRepository.Exists(context.Background(), user.ID, token)
 	require.NoError(t, err)
 	assert.True(t, exists)
 }
@@ -64,7 +64,7 @@ func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
 	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	require.NoError(t, sessionRepository.Save(userID, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, sessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
 
 	svc := NewSessionService(userService, repositories.user, tokenProvider, sessionRepository)
 
@@ -86,7 +86,7 @@ func TestSessionService_ValidateTokenToId_DeletedUser(t *testing.T) {
 	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	require.NoError(t, sessionRepository.Save(userID, token, tokenProvider.TTLSeconds()))
+	require.NoError(t, sessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
 
 	require.NoError(t, userService.DeleteMe(context.Background(), userID, "pw"))
 

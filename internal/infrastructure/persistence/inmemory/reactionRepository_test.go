@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -18,17 +19,17 @@ func TestReactionRepositoryContract(t *testing.T) {
 
 func TestReactionRepository_SelectReturnsClone(t *testing.T) {
 	repo := NewReactionRepository()
-	reaction, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	reaction, _, _, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 	require.NoError(t, err)
 	require.NotNil(t, reaction)
 
-	selected, err := repo.GetUserTargetReaction(7, 10, entity.ReactionTargetPost)
+	selected, err := repo.GetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	require.NotNil(t, selected)
 
 	selected.Update(entity.ReactionTypeDislike)
 
-	again, err := repo.GetUserTargetReaction(7, 10, entity.ReactionTargetPost)
+	again, err := repo.GetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	require.NotNil(t, again)
 	assert.Equal(t, entity.ReactionTypeLike, again.Type)
@@ -36,16 +37,16 @@ func TestReactionRepository_SelectReturnsClone(t *testing.T) {
 
 func TestReactionRepository_GetByTargets_ReturnsClones(t *testing.T) {
 	repo := NewReactionRepository()
-	_, _, _, err := repo.SetUserTargetReaction(7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
+	_, _, _, err := repo.SetUserTargetReaction(context.Background(), 7, 10, entity.ReactionTargetPost, entity.ReactionTypeLike)
 	require.NoError(t, err)
 
-	grouped, err := repo.GetByTargets([]int64{10}, entity.ReactionTargetPost)
+	grouped, err := repo.GetByTargets(context.Background(), []int64{10}, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	require.Len(t, grouped[10], 1)
 
 	grouped[10][0].Update(entity.ReactionTypeDislike)
 
-	again, err := repo.GetByTarget(10, entity.ReactionTargetPost)
+	again, err := repo.GetByTarget(context.Background(), 10, entity.ReactionTargetPost)
 	require.NoError(t, err)
 	require.Len(t, again, 1)
 	assert.Equal(t, entity.ReactionTypeLike, again[0].Type)

@@ -1,13 +1,17 @@
 package port
 
-import "github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+import (
+	"context"
+
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+)
 
 type CommentRepository interface {
-	Save(*entity.Comment) (int64, error)
-	SelectCommentByID(id int64) (*entity.Comment, error)
-	SelectComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error)
-	SelectCommentsIncludingDeleted(postID int64) ([]*entity.Comment, error)
-	SelectVisibleComments(postID int64, limit int, lastID int64) ([]*entity.Comment, error)
-	Update(*entity.Comment) error
-	Delete(id int64) error
+	Save(ctx context.Context, comment *entity.Comment) (int64, error)
+	SelectCommentByID(ctx context.Context, id int64) (*entity.Comment, error)
+	SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error)
+	SelectCommentsIncludingDeleted(ctx context.Context, postID int64) ([]*entity.Comment, error)
+	SelectVisibleComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error)
+	Update(ctx context.Context, comment *entity.Comment) error
+	Delete(ctx context.Context, id int64) error
 }

@@ -76,7 +76,7 @@ func TestCommentService_CreateComment_BlockedForSuspendedUser(t *testing.T) {
 	repositories := newTestRepositories()
 	user := entity.NewUser("user", "pw")
 	user.Suspend("spam", nil)
-	userID, err := repositories.user.Save(user)
+	userID, err := repositories.user.Save(context.Background(), user)
 	require.NoError(t, err)
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
@@ -124,7 +124,7 @@ func TestCommentService_GetCommentsByPost_ReturnsPostNotFound_WhenPostDeleted(t 
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	seedComment(repositories.comment, userID, postID, "c1")
-	require.NoError(t, repositories.post.Delete(postID))
+	require.NoError(t, repositories.post.Delete(context.Background(), postID))
 	svc := NewCommentService(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
 	_, err := svc.GetCommentsByPost(context.Background(), postID, 10, 0)
@@ -151,12 +151,12 @@ func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		_, ok, err := cache.Get(key.PostDetail(postID))
+		_, ok, err := cache.Get(context.Background(), key.PostDetail(postID))
 		require.NoError(t, err)
 		if ok {
 			return false
 		}
-		_, ok, err = cache.Get(key.CommentList(postID, 10, 0))
+		_, ok, err = cache.Get(context.Background(), key.CommentList(postID, 10, 0))
 		require.NoError(t, err)
 		return !ok
 	}, time.Second, 10*time.Millisecond)
@@ -176,7 +176,7 @@ func TestCommentService_CreateComment_SucceedsWhenCacheInvalidationFails(t *test
 	require.NoError(t, err)
 	assert.NotZero(t, commentID)
 
-	comment, repoErr := repositories.comment.SelectCommentByID(commentID)
+	comment, repoErr := repositories.comment.SelectCommentByID(context.Background(), commentID)
 	require.NoError(t, repoErr)
 	require.NotNil(t, comment)
 	assert.Equal(t, "new-comment", comment.Content)
@@ -219,12 +219,12 @@ func TestCommentService_DeleteComment_RemovesStoredReactions(t *testing.T) {
 
 	commentID, err := svc.CreateComment(context.Background(), "comment", userID, postID, nil)
 	require.NoError(t, err)
-	_, _, _, err = repositories.reaction.SetUserTargetReaction(userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
+	_, _, _, err = repositories.reaction.SetUserTargetReaction(context.Background(), userID, commentID, entity.ReactionTargetComment, entity.ReactionTypeLike)
 	require.NoError(t, err)
 
 	require.NoError(t, svc.DeleteComment(context.Background(), commentID, userID))
 
-	reactions, err := repositories.reaction.GetByTarget(commentID, entity.ReactionTargetComment)
+	reactions, err := repositories.reaction.GetByTarget(context.Background(), commentID, entity.ReactionTargetComment)
 	require.NoError(t, err)
 	assert.Empty(t, reactions)
 }
@@ -251,7 +251,7 @@ func TestCommentService_DeleteComment_SoftDeletesReplyComments(t *testing.T) {
 	assert.Equal(t, replyID, list.Comments[0].ID)
 	assert.Equal(t, "reply", list.Comments[0].Content)
 
-	reply, err := repositories.comment.SelectCommentByID(replyID)
+	reply, err := repositories.comment.SelectCommentByID(context.Background(), replyID)
 	require.NoError(t, err)
 	require.NotNil(t, reply)
 	assert.Equal(t, entity.CommentStatusActive, reply.Status)

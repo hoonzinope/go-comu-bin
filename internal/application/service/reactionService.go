@@ -54,7 +54,7 @@ func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRep
 
 func (s *ReactionService) SetReaction(ctx context.Context, UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
 	created, changed, err := s.withReactionTransaction(ctx, UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
-		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(UserID, TargetID, TargetType, ReactionType)
+		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(tx.Context(), UserID, TargetID, TargetType, ReactionType)
 		if err != nil {
 			return false, false, customError.WrapRepository("set user target reaction", err)
 		}
@@ -76,7 +76,7 @@ func (s *ReactionService) SetReaction(ctx context.Context, UserID, TargetID int6
 
 func (s *ReactionService) DeleteReaction(ctx context.Context, UserID, TargetID int64, TargetType entity.ReactionTargetType) error {
 	deleted, _, err := s.withReactionTransaction(ctx, UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
-		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(UserID, TargetID, TargetType)
+		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(tx.Context(), UserID, TargetID, TargetType)
 		if err != nil {
 			return false, false, customError.WrapRepository("delete user target reaction", err)
 		}
@@ -98,15 +98,15 @@ func (s *ReactionService) DeleteReaction(ctx context.Context, UserID, TargetID i
 
 func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
 	cacheKey := key.ReactionList(string(targetType), targetID)
-	value, err := s.cache.GetOrSetWithTTL(cacheKey, s.cachePolicy.ListTTLSeconds, func() (interface{}, error) {
-		if err := s.ensureTargetExists(targetID, targetType); err != nil {
+	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
+		if err := s.ensureTargetExists(ctx, targetID, targetType); err != nil {
 			return nil, err
 		}
-		reactions, err := s.reactionRepository.GetByTarget(targetID, targetType)
+		reactions, err := s.reactionRepository.GetByTarget(ctx, targetID, targetType)
 		if err != nil {
 			return nil, customError.WrapRepository("select reactions by target", err)
 		}
-		reactionModels, err := s.reactionsFromEntities(reactions)
+		reactionModels, err := s.reactionsFromEntities(ctx, reactions)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +126,7 @@ func (s *ReactionService) withReactionTransaction(ctx context.Context, userID, t
 	var created bool
 	var changed bool
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		user, err := tx.UserRepository().SelectUserByID(userID)
+		user, err := tx.UserRepository().SelectUserByID(tx.Context(), userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for reaction", err)
 		}
@@ -149,8 +149,8 @@ func (s *ReactionService) withReactionTransaction(ctx context.Context, userID, t
 	return created, changed, nil
 }
 
-func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([]model.Reaction, error) {
-	userUUIDs, err := userUUIDsForReactions(s.userRepository, reactions)
+func (s *ReactionService) reactionsFromEntities(ctx context.Context, reactions []*entity.Reaction) ([]model.Reaction, error) {
+	userUUIDs, err := userUUIDsForReactions(ctx, s.userRepository, reactions)
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +168,10 @@ func (s *ReactionService) reactionsFromEntities(reactions []*entity.Reaction) ([
 }
 
 func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, targetType entity.ReactionTargetType) (*int64, error) {
+	txCtx := tx.Context()
 	switch targetType {
 	case entity.ReactionTargetPost:
-		post, err := tx.PostRepository().SelectPostByID(targetID)
+		post, err := tx.PostRepository().SelectPostByID(txCtx, targetID)
 		if err != nil {
 			return nil, customError.WrapRepository("select post by id for ensure reaction target", err)
 		}
@@ -180,7 +181,7 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, 
 		postID := post.ID
 		return &postID, nil
 	case entity.ReactionTargetComment:
-		comment, err := tx.CommentRepository().SelectCommentByID(targetID)
+		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, targetID)
 		if err != nil {
 			return nil, customError.WrapRepository("select comment by id for ensure reaction target", err)
 		}
@@ -194,10 +195,10 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, 
 	}
 }
 
-func (s *ReactionService) ensureTargetExists(targetID int64, targetType entity.ReactionTargetType) error {
+func (s *ReactionService) ensureTargetExists(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) error {
 	switch targetType {
 	case entity.ReactionTargetPost:
-		post, err := s.postRepository.SelectPostByID(targetID)
+		post, err := s.postRepository.SelectPostByID(ctx, targetID)
 		if err != nil {
 			return customError.WrapRepository("select post by id for ensure reaction target", err)
 		}
@@ -206,7 +207,7 @@ func (s *ReactionService) ensureTargetExists(targetID int64, targetType entity.R
 		}
 		return nil
 	case entity.ReactionTargetComment:
-		comment, err := s.commentRepository.SelectCommentByID(targetID)
+		comment, err := s.commentRepository.SelectCommentByID(ctx, targetID)
 		if err != nil {
 			return customError.WrapRepository("select comment by id for ensure reaction target", err)
 		}

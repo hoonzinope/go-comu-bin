@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sort"
 	"sync"
 	"time"
@@ -42,7 +43,8 @@ func (r *AttachmentRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *AttachmentRepository) Save(attachment *entity.Attachment) (int64, error) {
+func (r *AttachmentRepository) Save(ctx context.Context, attachment *entity.Attachment) (int64, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.save(attachment)
@@ -60,7 +62,8 @@ func (r *AttachmentRepository) save(attachment *entity.Attachment) (int64, error
 	return saved.ID, nil
 }
 
-func (r *AttachmentRepository) SelectByID(id int64) (*entity.Attachment, error) {
+func (r *AttachmentRepository) SelectByID(ctx context.Context, id int64) (*entity.Attachment, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectByID(id)
@@ -76,7 +79,8 @@ func (r *AttachmentRepository) selectByID(id int64) (*entity.Attachment, error) 
 	return nil, nil
 }
 
-func (r *AttachmentRepository) SelectByPostID(postID int64) ([]*entity.Attachment, error) {
+func (r *AttachmentRepository) SelectByPostID(ctx context.Context, postID int64) ([]*entity.Attachment, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectByPostID(postID)
@@ -95,7 +99,8 @@ func (r *AttachmentRepository) selectByPostID(postID int64) ([]*entity.Attachmen
 	return out, nil
 }
 
-func (r *AttachmentRepository) SelectCleanupCandidatesBefore(cutoff time.Time, limit int) ([]*entity.Attachment, error) {
+func (r *AttachmentRepository) SelectCleanupCandidatesBefore(ctx context.Context, cutoff time.Time, limit int) ([]*entity.Attachment, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectCleanupCandidatesBefore(cutoff, limit)
@@ -139,7 +144,8 @@ func cleanupEligibleAt(attachment *entity.Attachment) time.Time {
 	return time.Time{}
 }
 
-func (r *AttachmentRepository) Update(attachment *entity.Attachment) error {
+func (r *AttachmentRepository) Update(ctx context.Context, attachment *entity.Attachment) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.update(attachment)
@@ -156,7 +162,8 @@ func (r *AttachmentRepository) update(attachment *entity.Attachment) error {
 	return nil
 }
 
-func (r *AttachmentRepository) Delete(id int64) error {
+func (r *AttachmentRepository) Delete(ctx context.Context, id int64) error {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.delete(id)

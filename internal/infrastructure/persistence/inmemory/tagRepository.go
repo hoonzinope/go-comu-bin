@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -43,7 +44,8 @@ func (r *TagRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *TagRepository) Save(tag *entity.Tag) (int64, error) {
+func (r *TagRepository) Save(ctx context.Context, tag *entity.Tag) (int64, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.save(tag)
@@ -63,7 +65,8 @@ func (r *TagRepository) save(tag *entity.Tag) (int64, error) {
 	return tag.ID, nil
 }
 
-func (r *TagRepository) SelectByName(name string) (*entity.Tag, error) {
+func (r *TagRepository) SelectByName(ctx context.Context, name string) (*entity.Tag, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectByName(name)
@@ -84,7 +87,8 @@ func (r *TagRepository) selectByName(name string) (*entity.Tag, error) {
 	return cloneTag(tag), nil
 }
 
-func (r *TagRepository) SelectByIDs(ids []int64) ([]*entity.Tag, error) {
+func (r *TagRepository) SelectByIDs(ctx context.Context, ids []int64) ([]*entity.Tag, error) {
+	_ = ctx
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectByIDs(ids)

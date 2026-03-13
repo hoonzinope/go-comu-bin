@@ -48,14 +48,15 @@ func (s *UserService) SignUp(ctx context.Context, username, password string) (st
 	newUser := entity.NewUser(username, hashedPassword)
 
 	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		existingUser, repoErr := tx.UserRepository().SelectUserByUsername(username)
+		txCtx := tx.Context()
+		existingUser, repoErr := tx.UserRepository().SelectUserByUsername(txCtx, username)
 		if repoErr != nil {
 			return customError.WrapRepository("select user by username for signup", repoErr)
 		}
 		if existingUser != nil {
 			return customError.ErrUserAlreadyExists
 		}
-		_, repoErr = tx.UserRepository().Save(newUser)
+		_, repoErr = tx.UserRepository().Save(txCtx, newUser)
 		if repoErr != nil {
 			if errors.Is(repoErr, customError.ErrUserAlreadyExists) {
 				return customError.ErrUserAlreadyExists
@@ -72,7 +73,8 @@ func (s *UserService) SignUp(ctx context.Context, username, password string) (st
 
 func (s *UserService) DeleteMe(ctx context.Context, userID int64, password string) error {
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		existingUser, err := tx.UserRepository().SelectUserByID(userID)
+		txCtx := tx.Context()
+		existingUser, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
 			return customError.WrapRepository("select user by id for delete me", err)
 		}
@@ -87,7 +89,7 @@ func (s *UserService) DeleteMe(ctx context.Context, userID int64, password strin
 			return customError.ErrInvalidCredential
 		}
 		existingUser.SoftDelete()
-		if err := tx.UserRepository().Update(existingUser); err != nil {
+		if err := tx.UserRepository().Update(txCtx, existingUser); err != nil {
 			return customError.WrapRepository("soft delete user for delete me", err)
 		}
 		return nil
@@ -99,7 +101,7 @@ func (s *UserService) VerifyCredentials(username, password string) (int64, error
 	if username == "" {
 		return 0, customError.ErrInvalidCredential
 	}
-	existingUser, err := s.userRepository.SelectUserByUsername(username)
+	existingUser, err := s.userRepository.SelectUserByUsername(context.Background(), username)
 	if err != nil {
 		return 0, customError.WrapRepository("select user by username for verify credentials", err)
 	}
@@ -126,7 +128,8 @@ func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUser
 		return customError.ErrInvalidInput
 	}
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		admin, err := tx.UserRepository().SelectUserByID(adminID)
+		txCtx := tx.Context()
+		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
 		if err != nil {
 			return customError.WrapRepository("select admin by id for suspend user", err)
 		}
@@ -136,7 +139,7 @@ func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUser
 		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 			return err
 		}
-		target, err := tx.UserRepository().SelectUserByUUID(targetUserUUID)
+		target, err := tx.UserRepository().SelectUserByUUID(txCtx, targetUserUUID)
 		if err != nil {
 			return customError.WrapRepository("select target user by uuid for suspend user", err)
 		}
@@ -144,7 +147,7 @@ func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUser
 			return customError.ErrUserNotFound
 		}
 		target.Suspend(strings.TrimSpace(reason), until)
-		if err := tx.UserRepository().Update(target); err != nil {
+		if err := tx.UserRepository().Update(txCtx, target); err != nil {
 			return customError.WrapRepository("update user suspension", err)
 		}
 		return nil
@@ -154,7 +157,8 @@ func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUser
 func (s *UserService) GetUserSuspension(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 	var suspension *model.UserSuspension
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		admin, err := tx.UserRepository().SelectUserByID(adminID)
+		txCtx := tx.Context()
+		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
 		if err != nil {
 			return customError.WrapRepository("select admin by id for get user suspension", err)
 		}
@@ -164,7 +168,7 @@ func (s *UserService) GetUserSuspension(ctx context.Context, adminID int64, targ
 		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 			return err
 		}
-		target, err := tx.UserRepository().SelectUserByUUID(targetUserUUID)
+		target, err := tx.UserRepository().SelectUserByUUID(txCtx, targetUserUUID)
 		if err != nil {
 			return customError.WrapRepository("select target user by uuid for get user suspension", err)
 		}
@@ -195,7 +199,8 @@ func (s *UserService) GetUserSuspension(ctx context.Context, adminID int64, targ
 
 func (s *UserService) UnsuspendUser(ctx context.Context, adminID int64, targetUserUUID string) error {
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		admin, err := tx.UserRepository().SelectUserByID(adminID)
+		txCtx := tx.Context()
+		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
 		if err != nil {
 			return customError.WrapRepository("select admin by id for unsuspend user", err)
 		}
@@ -205,7 +210,7 @@ func (s *UserService) UnsuspendUser(ctx context.Context, adminID int64, targetUs
 		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 			return err
 		}
-		target, err := tx.UserRepository().SelectUserByUUID(targetUserUUID)
+		target, err := tx.UserRepository().SelectUserByUUID(txCtx, targetUserUUID)
 		if err != nil {
 			return customError.WrapRepository("select target user by uuid for unsuspend user", err)
 		}
@@ -213,7 +218,7 @@ func (s *UserService) UnsuspendUser(ctx context.Context, adminID int64, targetUs
 			return customError.ErrUserNotFound
 		}
 		target.Unsuspend()
-		if err := tx.UserRepository().Update(target); err != nil {
+		if err := tx.UserRepository().Update(txCtx, target); err != nil {
 			return customError.WrapRepository("clear user suspension", err)
 		}
 		return nil

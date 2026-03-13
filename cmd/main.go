@@ -268,7 +268,7 @@ func ensureBootstrapAdmin(cfg *config.Config, userRepository port.UserRepository
 	}
 	username := strings.TrimSpace(cfg.Admin.Bootstrap.Username)
 	password := cfg.Admin.Bootstrap.Password
-	existingUser, err := userRepository.SelectUserByUsername(username)
+	existingUser, err := userRepository.SelectUserByUsername(context.Background(), username)
 	if err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ func ensureBootstrapAdmin(cfg *config.Config, userRepository port.UserRepository
 		return err
 	}
 	admin := entity.NewAdmin(username, hashedPassword)
-	_, err = userRepository.Save(admin)
+	_, err = userRepository.Save(context.Background(), admin)
 	return err
 }
 

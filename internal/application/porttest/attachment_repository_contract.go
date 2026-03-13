@@ -1,6 +1,7 @@
 package porttest
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -20,15 +21,15 @@ func RunAttachmentRepositoryContractTests(t *testing.T, newRepository func() por
 		pending.MarkReferenced()
 		oldPendingTime := time.Now().Add(-2 * time.Hour)
 		pending.MarkPendingDeleteAt(oldPendingTime)
-		pendingID, err := repo.Save(pending)
+		pendingID, err := repo.Save(context.Background(), pending)
 		require.NoError(t, err)
 
 		live := entity.NewAttachment(10, "live.png", "image/png", 10, "live.png")
 		live.MarkReferenced()
-		_, err = repo.Save(live)
+		_, err = repo.Save(context.Background(), live)
 		require.NoError(t, err)
 
-		items, err := repo.SelectCleanupCandidatesBefore(time.Now().Add(-time.Hour), 10)
+		items, err := repo.SelectCleanupCandidatesBefore(context.Background(), time.Now().Add(-time.Hour), 10)
 		require.NoError(t, err)
 		require.Len(t, items, 1)
 		assert.Equal(t, pendingID, items[0].ID)
@@ -40,17 +41,17 @@ func RunAttachmentRepositoryContractTests(t *testing.T, newRepository func() por
 		orphan := entity.NewAttachment(10, "orphan.png", "image/png", 10, "orphan.png")
 		orphanTime := time.Now().Add(-3 * time.Hour)
 		orphan.OrphanedAt = &orphanTime
-		orphanID, err := repo.Save(orphan)
+		orphanID, err := repo.Save(context.Background(), orphan)
 		require.NoError(t, err)
 
 		pending := entity.NewAttachment(10, "pending.png", "image/png", 10, "pending.png")
 		pending.MarkReferenced()
 		pendingTime := time.Now().Add(-2 * time.Hour)
 		pending.MarkPendingDeleteAt(pendingTime)
-		pendingID, err := repo.Save(pending)
+		pendingID, err := repo.Save(context.Background(), pending)
 		require.NoError(t, err)
 
-		items, err := repo.SelectCleanupCandidatesBefore(time.Now().Add(-time.Hour), 10)
+		items, err := repo.SelectCleanupCandidatesBefore(context.Background(), time.Now().Add(-time.Hour), 10)
 		require.NoError(t, err)
 		require.Len(t, items, 2)
 		assert.Equal(t, []int64{orphanID, pendingID}, []int64{items[0].ID, items[1].ID})
@@ -62,16 +63,16 @@ func RunAttachmentRepositoryContractTests(t *testing.T, newRepository func() por
 		first := entity.NewAttachment(10, "first.png", "image/png", 10, "first.png")
 		firstTime := time.Now().Add(-3 * time.Hour)
 		first.OrphanedAt = &firstTime
-		_, err := repo.Save(first)
+		_, err := repo.Save(context.Background(), first)
 		require.NoError(t, err)
 
 		second := entity.NewAttachment(10, "second.png", "image/png", 10, "second.png")
 		secondTime := time.Now().Add(-2 * time.Hour)
 		second.OrphanedAt = &secondTime
-		_, err = repo.Save(second)
+		_, err = repo.Save(context.Background(), second)
 		require.NoError(t, err)
 
-		items, err := repo.SelectCleanupCandidatesBefore(time.Now().Add(-time.Hour), 1)
+		items, err := repo.SelectCleanupCandidatesBefore(context.Background(), time.Now().Add(-time.Hour), 1)
 		require.NoError(t, err)
 		require.Len(t, items, 1)
 		assert.Equal(t, "first.png", items[0].FileName)
