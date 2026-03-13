@@ -48,6 +48,19 @@ func TestJwtTokenProvider(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestJwtTokenProvider_LargeUserIDRoundTrip(t *testing.T) {
+	provider := NewJwtTokenProvider("secret")
+	// 2^53+1: float64 기반 claim 파싱이면 정밀도 손실이 발생할 수 있다.
+	userID := int64(9007199254740993)
+
+	token, err := provider.IdToToken(userID)
+	require.NoError(t, err)
+
+	got, err := provider.ValidateTokenToId(token)
+	require.NoError(t, err)
+	assert.Equal(t, userID, got)
+}
+
 func TestCacheSessionRepository(t *testing.T) {
 	cache := cacheInMemory.NewInMemoryCache()
 	repo := NewCacheSessionRepository(cache)

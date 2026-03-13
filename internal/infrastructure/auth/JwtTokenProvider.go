@@ -13,6 +13,11 @@ type JwtTokenProvider struct {
 	ttl       time.Duration
 }
 
+type tokenClaims struct {
+	UserID int64 `json:"user_id"`
+	jwt.RegisteredClaims
+}
+
 func NewJwtTokenProvider(secretKey string) *JwtTokenProvider {
 	return &JwtTokenProvider{
 		secretKey: secretKey,
@@ -22,10 +27,12 @@ func NewJwtTokenProvider(secretKey string) *JwtTokenProvider {
 
 func (p *JwtTokenProvider) IdToToken(userID int64) (string, error) {
 	now := time.Now()
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"iat":     now.Unix(),
-		"exp":     now.Add(p.ttl).Unix(),
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, tokenClaims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(p.ttl)),
+		},
 	})
 	signed, err := token.SignedString([]byte(p.secretKey))
 	if err != nil {
@@ -39,7 +46,8 @@ func (p *JwtTokenProvider) TTLSeconds() int {
 }
 
 func (p *JwtTokenProvider) ValidateTokenToId(token string) (int64, error) {
-	parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+	claims := &tokenClaims{}
+	parsedToken, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
 		}
@@ -49,10 +57,8 @@ func (p *JwtTokenProvider) ValidateTokenToId(token string) (int64, error) {
 		return 0, customError.Wrap(customError.ErrInvalidToken, "parse jwt", err)
 	}
 
-	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok && parsedToken.Valid {
-		if userID, ok := claims["user_id"].(float64); ok {
-			return int64(userID), nil
-		}
+	if parsedToken.Valid && claims.UserID > 0 {
+		return claims.UserID, nil
 	}
 
 	return 0, customError.Wrap(customError.ErrInvalidToken, "decode jwt claims", errors.New("invalid token claims"))
