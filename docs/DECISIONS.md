@@ -1677,3 +1677,39 @@
 - `internal/infrastructure/event/inprocess/event_bus.go`
 - `internal/application/event/cache_invalidation_handler.go`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-14 - 미사용 in-process EventBus를 제거하고 태그 조회 경로 context 전파를 정렬한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 production wiring은 outbox relay만 사용하고 in-process EventBus 어댑터는 테스트 외 사용 경로가 없다.
+- 미사용 어댑터를 유지하면 별도 lifecycle/backpressure/context 정책을 지속 관리해야 해 코드 복잡도와 정책 드리프트 위험이 커진다.
+- `PostRepository.SelectPublishedPostsByTagName` 내부가 `context.Background()`를 고정 사용해 상위 request context 불변성 원칙과 충돌한다.
+
+관찰
+
+- `cmd/main.go`는 outbox relay 구독/시작만 수행하고 in-process EventBus는 조립하지 않는다.
+- `internal/application/port/event.go`의 `EventBus` 계약은 현재 비테스트 경로에서 실사용되지 않는다.
+- `internal/infrastructure/persistence/inmemory/postRepository.go`의 태그 조회 내부 호출은 전달된 `ctx` 대신 `context.Background()`를 사용한다.
+
+결론
+
+- `internal/infrastructure/event/inprocess` 패키지를 제거한다.
+- 미사용 `EventBus` 포트 계약을 제거하고, 이벤트 발행 계약은 `EventPublisher` + `EventHandler`로 단순화한다.
+- `SelectPublishedPostsByTagName` 경로는 상위 `ctx`를 내부 태그 조회까지 그대로 전달한다.
+
+후속 작업
+
+- 태그 조회 경로 context 전달 회귀 테스트 추가
+- 전체 테스트 스위트 실행으로 제거 영향 확인
+
+관련 문서/코드
+
+- `internal/infrastructure/event/inprocess`
+- `internal/application/port/event.go`
+- `internal/infrastructure/persistence/inmemory/postRepository.go`
+- `internal/infrastructure/persistence/inmemory/unitOfWork.go`
