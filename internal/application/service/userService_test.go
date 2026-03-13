@@ -143,7 +143,7 @@ func TestUserService_DeleteMe_InvalidatesCredentialsAfterSoftDelete(t *testing.T
 
 	require.NoError(t, svc.DeleteMe(context.Background(), user.ID, "pw"))
 
-	_, err = svc.VerifyCredentials("alice", "pw")
+	_, err = svc.VerifyCredentials(context.Background(), "alice", "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }
@@ -152,7 +152,7 @@ func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	_, err := svc.VerifyCredentials("nope", "pw")
+	_, err := svc.VerifyCredentials(context.Background(), "nope", "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }
@@ -162,7 +162,7 @@ func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, _ = svc.SignUp(context.Background(), "alice", "pw")
 
-	_, err := svc.VerifyCredentials("alice", "wrong")
+	_, err := svc.VerifyCredentials(context.Background(), "alice", "wrong")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
 }
@@ -173,7 +173,7 @@ func TestUserService_VerifyCredentials_TrimsUsername(t *testing.T) {
 	_, err := svc.SignUp(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 
-	userID, err := svc.VerifyCredentials(" alice ", "pw")
+	userID, err := svc.VerifyCredentials(context.Background(), " alice ", "pw")
 	require.NoError(t, err)
 	assert.NotZero(t, userID)
 }

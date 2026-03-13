@@ -46,6 +46,42 @@
 - internal/...
 ```
 
+## 2026-03-13 - 로컬 터미널 툴체인과 AGENTS 기본 CLI 규칙을 표준화한다
+
+상태
+
+- decided
+
+배경
+
+- 로컬 개발자 작업 환경과 AGENTS의 자동화 효율을 높이려면, 반복적으로 쓰는 탐색/검색/출력/검증 도구를 일관되게 맞출 필요가 있었다.
+- 특히 파일 탐색, 텍스트 검색, 구조 검색, GitHub 작업, JSON/YAML 파이프라인 처리에서 더 빠르고 비대화형에 적합한 CLI 조합이 필요했다.
+
+관찰
+
+- 현재 저장소의 `AGENTS.md`는 작업 순서와 skill 사용 규칙은 정의하지만, 구체적인 CLI 기본값과 비대화형 실행 원칙은 아직 충분히 명시하지 않는다.
+- macOS 개발 환경에서는 Homebrew를 통해 Rust 기반 CLI와 TUI 도구를 일관되게 배포하고 갱신할 수 있다.
+
+결론
+
+- 로컬 기본 툴체인은 `rg`, `fd`, `bat`, `eza`, `zoxide`, `fzf`, `atuin`, `jq`, `yq`, `httpie`, `ast-grep`, `difftastic`, `shellcheck`, `shfmt`, `ruff`, `gh`, `git-delta`, `lazygit`, `yazi`, `starship`로 표준화한다.
+- AGENTS는 파일 탐색 시 `fd`, 텍스트 검색 시 `rg`, 파일 읽기 시 `bat`, 디렉터리 목록 확인 시 `eza`를 우선 사용한다.
+- 구조 기반 검색/리팩토링은 `ast-grep`를 우선 검토한다.
+- JSON/YAML/API 응답 처리는 `jq`, `yq`, `httpie` 조합을 우선 사용한다.
+- GitHub 관련 자동화는 `gh`를 비대화형 JSON 출력 중심으로 사용한다.
+- 외부 서비스와 상호작용하는 CLI는 가능한 한 `--yes`, `--quiet`, `--json`, `--format json` 같은 비대화형/기계 판독 옵션을 강제한다.
+
+후속 작업
+
+- `AGENTS.md`에 위 기본 CLI 규칙 반영
+- 설치된 도구 버전 검증
+- 개발자 셸 초기화 예시 정리
+
+관련 문서/코드
+
+- `AGENTS.md`
+- `docs/DECISIONS.md`
+
 ## 2026-03-08 - 도메인 도입 우선순위 및 기존 엔티티 보강 방향
 
 상태
@@ -1559,3 +1595,45 @@
 - `internal/infrastructure/cache`
 - `internal/infrastructure/auth/CacheSessionRepository.go`
 - `internal/infrastructure/storage`
+
+## 2026-03-13 - 인증 credential 검증에도 request context를 전달하고 JWT secret 최소 강도 정책을 추가한다
+
+상태
+
+- decided
+
+배경
+
+- 로그인 경로는 `SessionService.Login(ctx, ...)`로 시작하지만, credential 검증 포트는 `ctx` 없는 시그니처라 사용자 조회 경계에서 cancellation/deadline/trace 문맥이 끊겼다.
+- JWT secret 검증은 empty/placeholder만 차단하고 최소 길이 기준이 없어 운영 실수로 약한 키가 배포될 여지가 있었다.
+- 서비스 계층에 미사용 helper가 남아 있어 코드 간결성과 경계 규칙(context 일관성) 관점에서 정리가 필요했다.
+
+관찰
+
+- `CredentialVerifier.VerifyCredentials(username, password)`는 `ctx`를 받지 않는다.
+- `UserService.VerifyCredentials`는 내부에서 `context.Background()`를 사용한다.
+- `delivery.http.auth.secret`은 trim/placeholder 검증은 있으나 길이 기준이 없다.
+- `cache_invalidation.go`, `postService.go` 일부 helper는 호출 경로가 없다.
+
+결론
+
+- `CredentialVerifier` 포트 시그니처를 `VerifyCredentials(ctx context.Context, username, password)`로 변경한다.
+- `SessionService.Login`은 상위 request `ctx`를 credential verifier까지 전달한다.
+- `UserService.VerifyCredentials`는 전달받은 `ctx`로 repository를 호출한다.
+- JWT secret은 trim 후 최소 길이(32자 이상) 정책을 적용한다.
+- 미사용 helper(`cache_invalidation.go`의 best-effort 함수, `PostService`의 미사용 non-tx tag helper)는 제거해 코드와 설계 규칙을 정합화한다.
+
+후속 작업
+
+- 포트 시그니처 변경에 따른 서비스/테스트 업데이트
+- config validation 및 테스트에 최소 길이 정책 반영
+- CONFIG 문서에 JWT secret 최소 강도 기준 명시
+
+관련 문서/코드
+
+- `internal/application/port/credential_verifier.go`
+- `internal/application/service/sessionService.go`
+- `internal/application/service/userService.go`
+- `internal/config/config.go`
+- `internal/config/config_test.go`
+- `docs/CONFIG.md`

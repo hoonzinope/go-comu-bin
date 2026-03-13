@@ -13,6 +13,20 @@ import (
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 )
 
+type recordingCredentialVerifier struct {
+	calledCtx context.Context
+	userID    int64
+	err       error
+}
+
+func (v *recordingCredentialVerifier) VerifyCredentials(ctx context.Context, username, password string) (int64, error) {
+	v.calledCtx = ctx
+	if v.err != nil {
+		return 0, v.err
+	}
+	return v.userID, nil
+}
+
 func TestSessionService_Login_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
@@ -33,6 +47,19 @@ func TestSessionService_Login_Success(t *testing.T) {
 	exists, err := sessionRepository.Exists(context.Background(), user.ID, token)
 	require.NoError(t, err)
 	assert.True(t, exists)
+}
+
+func TestSessionService_Login_PropagatesContextToCredentialVerifier(t *testing.T) {
+	repositories := newTestRepositories()
+	cache := cacheInMemory.NewInMemoryCache()
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	verifier := &recordingCredentialVerifier{userID: 42}
+	svc := NewSessionService(verifier, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+
+	ctx := context.WithValue(context.Background(), struct{ key string }{key: "req"}, "v")
+	_, err := svc.Login(ctx, "alice", "pw")
+	require.NoError(t, err)
+	assert.Same(t, ctx, verifier.calledCtx)
 }
 
 func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
@@ -78,7 +105,7 @@ func TestSessionService_ValidateTokenToId_DeletedUser(t *testing.T) {
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	_, err := userService.SignUp(context.Background(), "alice", "pw")
 	require.NoError(t, err)
-	userID, err := userService.VerifyCredentials("alice", "pw")
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
@@ -112,7 +139,7 @@ func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 	token2, err := svc.Login(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 
-	userID, err := userService.VerifyCredentials("alice", "pw")
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 	require.NoError(t, svc.InvalidateUserSessions(context.Background(), userID))
 
@@ -148,7 +175,7 @@ func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t
 	require.NoError(t, err)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
-	userID, err := userService.VerifyCredentials("alice", "pw")
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
@@ -169,7 +196,7 @@ func TestSessionService_InvalidateUserSessions_ReturnsRepositoryFailure_WhenSess
 	_, err := userService.SignUp(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 
-	userID, err := userService.VerifyCredentials("alice", "pw")
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "pw")
 	require.NoError(t, err)
 
 	sessionRepository := auth.NewCacheSessionRepository(&errorCache{

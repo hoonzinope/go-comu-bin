@@ -36,7 +36,7 @@ type fakeUserUseCase struct {
 	getUserSuspension func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error)
 	suspendUser       func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error
 	unsuspendUser     func(ctx context.Context, adminID int64, targetUserUUID string) error
-	verifyCredential  func(username, password string) (int64, error)
+	verifyCredential  func(ctx context.Context, username, password string) (int64, error)
 }
 
 func (f *fakeUserUseCase) SignUp(ctx context.Context, username, password string) (string, error) {
@@ -74,9 +74,9 @@ func (f *fakeUserUseCase) UnsuspendUser(ctx context.Context, adminID int64, targ
 	return nil
 }
 
-func (f *fakeUserUseCase) VerifyCredentials(username, password string) (int64, error) {
+func (f *fakeUserUseCase) VerifyCredentials(ctx context.Context, username, password string) (int64, error) {
 	if f.verifyCredential != nil {
-		return f.verifyCredential(username, password)
+		return f.verifyCredential(ctx, username, password)
 	}
 	return 1, nil
 }

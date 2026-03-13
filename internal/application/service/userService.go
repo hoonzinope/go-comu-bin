@@ -96,12 +96,12 @@ func (s *UserService) DeleteMe(ctx context.Context, userID int64, password strin
 	})
 }
 
-func (s *UserService) VerifyCredentials(username, password string) (int64, error) {
+func (s *UserService) VerifyCredentials(ctx context.Context, username, password string) (int64, error) {
 	username = normalizeUsername(username)
 	if username == "" {
 		return 0, customError.ErrInvalidCredential
 	}
-	existingUser, err := s.userRepository.SelectUserByUsername(context.Background(), username)
+	existingUser, err := s.userRepository.SelectUserByUsername(ctx, username)
 	if err != nil {
 		return 0, customError.WrapRepository("select user by username for verify credentials", err)
 	}

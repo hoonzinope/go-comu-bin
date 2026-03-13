@@ -26,7 +26,7 @@ func NewSessionService(credentialVerifier port.CredentialVerifier, userRepositor
 }
 
 func (s *SessionService) Login(ctx context.Context, username, password string) (string, error) {
-	userID, err := s.credentialVerifier.VerifyCredentials(username, password)
+	userID, err := s.credentialVerifier.VerifyCredentials(ctx, username, password)
 	if err != nil {
 		return "", err
 	}
