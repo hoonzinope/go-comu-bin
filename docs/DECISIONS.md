@@ -1894,3 +1894,32 @@
 - `internal/application/service/pagination.go`
 - `internal/application/service/pagination_test.go`
 - `internal/application/service/postService_test.go`
+
+## 2026-03-14 - pagination 상한 도입 이후 도달 불가 overflow 분기를 제거한다
+
+상태
+
+- decided
+
+배경
+
+- `maxPageLimit` 상한 도입으로 `cursorFetchLimit` 입력은 항상 제한된다.
+
+관찰
+
+- `cursorFetchLimit` 내부 `limit > math.MaxInt-1` 체크는 상한(`1000`)보다 훨씬 큰 값이어서 도달 불가능하다.
+
+결론
+
+- 도달 불가 분기를 제거해 pagination 검증 코드를 단순화한다.
+- 입력 검증 책임은 `requirePositiveLimit`에 유지한다.
+
+후속 작업
+
+- `cursorFetchLimit` 구현 단순화
+- pagination 경계 테스트 통과 확인
+
+관련 문서/코드
+
+- `internal/application/service/pagination.go`
+- `internal/application/service/pagination_test.go`
