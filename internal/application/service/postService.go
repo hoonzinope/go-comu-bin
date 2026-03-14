@@ -527,21 +527,52 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 		return nil, customError.ErrTagNotFound
 	}
 
-	publishedPosts, err := s.postRepository.SelectPublishedPostsByTagName(ctx, normalizedName, limit+1, lastID)
+	fetchLimit, err := cursorFetchLimit(limit)
 	if err != nil {
-		return nil, customError.WrapRepository("select published posts by tag name", err)
+		return nil, err
 	}
+	cursor := lastID
+	visiblePosts := make([]*entity.Post, 0, fetchLimit)
+	boardVisibility := make(map[int64]bool)
+
+	for len(visiblePosts) < fetchLimit {
+		publishedPosts, err := s.postRepository.SelectPublishedPostsByTagName(ctx, normalizedName, fetchLimit, cursor)
+		if err != nil {
+			return nil, customError.WrapRepository("select published posts by tag name", err)
+		}
+		if len(publishedPosts) == 0 {
+			break
+		}
+
+		if err := s.resolveBoardVisibility(ctx, publishedPosts, boardVisibility); err != nil {
+			return nil, err
+		}
+
+		for _, post := range publishedPosts {
+			if boardVisibility[post.BoardID] {
+				visiblePosts = append(visiblePosts, post)
+				if len(visiblePosts) >= fetchLimit {
+					break
+				}
+			}
+		}
+		if len(visiblePosts) >= fetchLimit || len(publishedPosts) < fetchLimit {
+			break
+		}
+		cursor = publishedPosts[len(publishedPosts)-1].ID
+	}
+
 	hasMore := false
 	var nextLastID *int64
-	if len(publishedPosts) > limit {
+	if len(visiblePosts) > limit {
 		hasMore = true
-		publishedPosts = publishedPosts[:limit]
+		visiblePosts = visiblePosts[:limit]
 	}
-	if hasMore && len(publishedPosts) > 0 {
-		next := publishedPosts[len(publishedPosts)-1].ID
+	if hasMore && len(visiblePosts) > 0 {
+		next := visiblePosts[len(visiblePosts)-1].ID
 		nextLastID = &next
 	}
-	postModels, err := s.postsFromEntities(ctx, publishedPosts)
+	postModels, err := s.postsFromEntities(ctx, visiblePosts)
 	if err != nil {
 		return nil, err
 	}
@@ -552,6 +583,31 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 		HasMore:    hasMore,
 		NextLastID: nextLastID,
 	}, nil
+}
+
+func (s *PostService) resolveBoardVisibility(ctx context.Context, posts []*entity.Post, boardVisibility map[int64]bool) error {
+	boardIDsToFetch := make(map[int64]struct{}, len(posts))
+	for _, post := range posts {
+		if _, cached := boardVisibility[post.BoardID]; cached {
+			continue
+		}
+		boardIDsToFetch[post.BoardID] = struct{}{}
+	}
+	if len(boardIDsToFetch) == 0 {
+		return nil
+	}
+	uncachedBoardIDs := make([]int64, 0, len(boardIDsToFetch))
+	for boardID := range boardIDsToFetch {
+		uncachedBoardIDs = append(uncachedBoardIDs, boardID)
+	}
+	boardsByID, err := s.boardRepository.SelectBoardsByIDs(ctx, uncachedBoardIDs)
+	if err != nil {
+		return customError.WrapRepository("select boards by ids for tag post visibility", err)
+	}
+	for _, boardID := range uncachedBoardIDs {
+		boardVisibility[boardID] = policy.EnsureBoardVisible(boardsByID[boardID], nil) == nil
+	}
+	return nil
 }
 
 func (s *PostService) syncPostTags(tx port.TxScope, postID int64, normalizedTags []string) error {

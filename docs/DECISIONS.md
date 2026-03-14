@@ -1794,3 +1794,132 @@
 - `internal/application/service`
 - `internal/delivery/http.go`
 - `internal/infrastructure/persistence/inmemory`
+
+## 2026-03-14 - 태그 기반 게시글 목록에도 hidden 게시판 비노출 정책을 일관 적용한다
+
+상태
+
+- decided
+
+배경
+
+- hidden 게시판은 비admin에게 완전 비노출이 정책이지만, 태그 기반 게시글 목록 경로는 동일 정책을 서비스 경계에서 강제하지 못했다.
+- 이로 인해 hidden 게시판 게시글이 태그 목록에 노출될 수 있어 정책 일관성과 보안 기대치에 어긋난다.
+
+관찰
+
+- `GetPostsList`, `GetPostDetail` 등은 `policy.EnsureBoardVisible`을 사용한다.
+- `GetPostsByTag`는 게시글-태그 관계만으로 목록을 만들고 board visibility 검증을 수행하지 않는다.
+
+결론
+
+- 태그 목록 경로는 별도 hidden 필터를 추가하지 않고, 기존 `policy.EnsureBoardVisible`을 재사용해 정책 단일 경계를 유지한다.
+- hidden 게시판 게시글을 건너뛰는 동안에도 커서 pagination(`has_more`, `next_last_id`) 의미를 보존하도록 visibility-aware 조회를 적용한다.
+
+후속 작업
+
+- `PostService.GetPostsByTag` 경로에 visibility-aware 페이징 로직 추가
+- hidden 게시판 게시글 비노출 및 커서 정합성 테스트(TDD) 추가
+
+관련 문서/코드
+
+- `internal/application/policy/board_visibility_policy.go`
+- `internal/application/service/postService.go`
+- `internal/application/service/postService_test.go`
+
+## 2026-03-14 - 태그 목록 hidden 필터 보완 후 리뷰 반영으로 페이징 overflow 방어와 배치 보드 조회를 추가한다
+
+상태
+
+- decided
+
+배경
+
+- 태그 목록 visibility-aware 구현 이후 코드리뷰에서 `limit+1` overflow panic 가능성과 보드 조회 N+1 가능성이 지적됐다.
+
+관찰
+
+- 공개 API의 `limit`은 하한(1)만 검증하고 상한은 서비스 레이어에 위임된다.
+- `loadPublishedPostsByTag`는 hidden 게시판 차단을 위해 게시글별 보드 조회를 수행하므로, 게시글이 여러 보드에 분산되면 호출 수가 증가할 수 있다.
+
+결론
+
+- 커서 조회용 `limit+1` 계산은 overflow-safe helper를 통해 수행한다.
+- 태그 목록 visibility 판단 시 배치 단위로 보드를 조회하는 `SelectBoardsByIDs` 포트를 추가해 조회 횟수를 줄인다.
+- visibility bool 계산은 `policy.EnsureBoardVisible(board, nil) == nil` 형태로 단순화한다.
+
+후속 작업
+
+- `BoardRepository`/in-memory 구현/contract test에 `SelectBoardsByIDs` 추가
+- `PostService` 태그 목록 경로에 overflow-safe 페이징 + 배치 보드 조회 적용
+- 관련 회귀 테스트(대형 limit 입력) 보강
+
+관련 문서/코드
+
+- `internal/application/service/pagination.go`
+- `internal/application/port/board_repository.go`
+- `internal/infrastructure/persistence/inmemory/boardRepository.go`
+- `internal/application/service/postService.go`
+- `internal/application/service/postService_test.go`
+
+## 2026-03-14 - 목록 API limit 상한을 도입해 과대 할당 기반 DoS 가능성을 차단한다
+
+상태
+
+- decided
+
+배경
+
+- `limit+1` overflow는 차단했지만, 매우 큰 `limit` 자체는 대규모 메모리 할당 시도를 유발할 수 있다.
+- 목록 API 전반은 `requirePositiveLimit`를 공유하므로 상한을 공통 적용하는 것이 경계 일관성과 운영 안전성에 유리하다.
+
+관찰
+
+- `GetBoards`, `GetPostsList`, `GetPostsByTag`, `GetCommentsByPost`, `GetReports`, `GetDeadMessages`가 동일 검증 함수를 사용한다.
+- 상한이 없으면 서비스/저장소 레이어에서 불필요하게 큰 slice capacity 또는 대량 조회를 시도할 수 있다.
+
+결론
+
+- 공통 pagination limit 상한을 `1000`으로 고정한다.
+- `limit < 1` 또는 `limit > 1000`은 `ErrInvalidInput`으로 처리한다.
+- 기존 overflow 방어는 유지해 방어 코드를 중첩 적용한다.
+
+후속 작업
+
+- `requirePositiveLimit`/`cursorFetchLimit` 경계 테스트 보강
+- 태그 목록 경로 상한 검증 테스트 보강
+
+관련 문서/코드
+
+- `internal/application/service/pagination.go`
+- `internal/application/service/pagination_test.go`
+- `internal/application/service/postService_test.go`
+
+## 2026-03-14 - pagination 상한 도입 이후 도달 불가 overflow 분기를 제거한다
+
+상태
+
+- decided
+
+배경
+
+- `maxPageLimit` 상한 도입으로 `cursorFetchLimit` 입력은 항상 제한된다.
+
+관찰
+
+- `cursorFetchLimit` 내부 `limit > math.MaxInt-1` 체크는 상한(`1000`)보다 훨씬 큰 값이어서 도달 불가능하다.
+
+결론
+
+- 도달 불가 분기를 제거해 pagination 검증 코드를 단순화한다.
+- 입력 검증 책임은 `requirePositiveLimit`에 유지한다.
+
+후속 작업
+
+- `cursorFetchLimit` 구현 단순화
+- pagination 경계 테스트 통과 확인
+
+관련 문서/코드
+
+- `internal/application/service/pagination.go`
+- `internal/application/service/pagination_test.go`
