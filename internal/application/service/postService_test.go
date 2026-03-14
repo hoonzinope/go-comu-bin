@@ -299,6 +299,68 @@ func TestPostService_GetPostsByTag_ExcludesDraftPosts(t *testing.T) {
 	assert.Equal(t, publishedID, list.Posts[0].ID)
 }
 
+func TestPostService_GetPostsByTag_ExcludesHiddenBoardPosts(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	visibleBoardID := seedBoard(repositories.board, "free", "desc")
+	hiddenBoardID := seedBoard(repositories.board, "secret", "desc")
+	svc := newTestPostService(t, repositories, newTestCache())
+
+	visiblePostID, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, userID, visibleBoardID)
+	require.NoError(t, err)
+	_, err = svc.CreatePost(context.Background(), "hidden", "content", []string{"go"}, userID, hiddenBoardID)
+	require.NoError(t, err)
+
+	hiddenBoard, err := repositories.board.SelectBoardByID(context.Background(), hiddenBoardID)
+	require.NoError(t, err)
+	require.NotNil(t, hiddenBoard)
+	hiddenBoard.SetHidden(true)
+	require.NoError(t, repositories.board.Update(context.Background(), hiddenBoard))
+
+	list, err := svc.GetPostsByTag(context.Background(), "go", 10, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Posts, 1)
+	assert.Equal(t, visiblePostID, list.Posts[0].ID)
+}
+
+func TestPostService_GetPostsByTag_PaginationIgnoresHiddenBoards(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	visibleBoardID := seedBoard(repositories.board, "free", "desc")
+	hiddenBoardID := seedBoard(repositories.board, "secret", "desc")
+	svc := newTestPostService(t, repositories, newTestCache())
+
+	visibleOlderID, err := svc.CreatePost(context.Background(), "visible-older", "content", []string{"go"}, userID, visibleBoardID)
+	require.NoError(t, err)
+	_, err = svc.CreatePost(context.Background(), "hidden-older", "content", []string{"go"}, userID, hiddenBoardID)
+	require.NoError(t, err)
+	visibleNewerID, err := svc.CreatePost(context.Background(), "visible-newer", "content", []string{"go"}, userID, visibleBoardID)
+	require.NoError(t, err)
+	_, err = svc.CreatePost(context.Background(), "hidden-newer", "content", []string{"go"}, userID, hiddenBoardID)
+	require.NoError(t, err)
+
+	hiddenBoard, err := repositories.board.SelectBoardByID(context.Background(), hiddenBoardID)
+	require.NoError(t, err)
+	require.NotNil(t, hiddenBoard)
+	hiddenBoard.SetHidden(true)
+	require.NoError(t, repositories.board.Update(context.Background(), hiddenBoard))
+
+	firstPage, err := svc.GetPostsByTag(context.Background(), "go", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, firstPage.Posts, 1)
+	assert.Equal(t, visibleNewerID, firstPage.Posts[0].ID)
+	assert.True(t, firstPage.HasMore)
+	require.NotNil(t, firstPage.NextLastID)
+	assert.Equal(t, visibleNewerID, *firstPage.NextLastID)
+
+	secondPage, err := svc.GetPostsByTag(context.Background(), "go", 1, *firstPage.NextLastID)
+	require.NoError(t, err)
+	require.Len(t, secondPage.Posts, 1)
+	assert.Equal(t, visibleOlderID, secondPage.Posts[0].ID)
+	assert.False(t, secondPage.HasMore)
+	assert.Nil(t, secondPage.NextLastID)
+}
+
 func TestPostService_CreatePost_InvalidTags(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")

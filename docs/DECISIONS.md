@@ -1794,3 +1794,35 @@
 - `internal/application/service`
 - `internal/delivery/http.go`
 - `internal/infrastructure/persistence/inmemory`
+
+## 2026-03-14 - 태그 기반 게시글 목록에도 hidden 게시판 비노출 정책을 일관 적용한다
+
+상태
+
+- decided
+
+배경
+
+- hidden 게시판은 비admin에게 완전 비노출이 정책이지만, 태그 기반 게시글 목록 경로는 동일 정책을 서비스 경계에서 강제하지 못했다.
+- 이로 인해 hidden 게시판 게시글이 태그 목록에 노출될 수 있어 정책 일관성과 보안 기대치에 어긋난다.
+
+관찰
+
+- `GetPostsList`, `GetPostDetail` 등은 `policy.EnsureBoardVisible`을 사용한다.
+- `GetPostsByTag`는 게시글-태그 관계만으로 목록을 만들고 board visibility 검증을 수행하지 않는다.
+
+결론
+
+- 태그 목록 경로는 별도 hidden 필터를 추가하지 않고, 기존 `policy.EnsureBoardVisible`을 재사용해 정책 단일 경계를 유지한다.
+- hidden 게시판 게시글을 건너뛰는 동안에도 커서 pagination(`has_more`, `next_last_id`) 의미를 보존하도록 visibility-aware 조회를 적용한다.
+
+후속 작업
+
+- `PostService.GetPostsByTag` 경로에 visibility-aware 페이징 로직 추가
+- hidden 게시판 게시글 비노출 및 커서 정합성 테스트(TDD) 추가
+
+관련 문서/코드
+
+- `internal/application/policy/board_visibility_policy.go`
+- `internal/application/service/postService.go`
+- `internal/application/service/postService_test.go`

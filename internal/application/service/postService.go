@@ -527,21 +527,58 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 		return nil, customError.ErrTagNotFound
 	}
 
-	publishedPosts, err := s.postRepository.SelectPublishedPostsByTagName(ctx, normalizedName, limit+1, lastID)
-	if err != nil {
-		return nil, customError.WrapRepository("select published posts by tag name", err)
+	fetchLimit := limit + 1
+	cursor := lastID
+	visiblePosts := make([]*entity.Post, 0, fetchLimit)
+	boardVisibility := make(map[int64]bool)
+
+	for len(visiblePosts) < fetchLimit {
+		publishedPosts, err := s.postRepository.SelectPublishedPostsByTagName(ctx, normalizedName, fetchLimit, cursor)
+		if err != nil {
+			return nil, customError.WrapRepository("select published posts by tag name", err)
+		}
+		if len(publishedPosts) == 0 {
+			break
+		}
+
+		for _, post := range publishedPosts {
+			visible, checked := boardVisibility[post.BoardID]
+			if !checked {
+				board, boardErr := s.boardRepository.SelectBoardByID(ctx, post.BoardID)
+				if boardErr != nil {
+					return nil, customError.WrapRepository("select board by id for tag post visibility", boardErr)
+				}
+				if ensureErr := policy.EnsureBoardVisible(board, nil); ensureErr != nil {
+					visible = false
+				} else {
+					visible = true
+				}
+				boardVisibility[post.BoardID] = visible
+			}
+			if visible {
+				visiblePosts = append(visiblePosts, post)
+				if len(visiblePosts) >= fetchLimit {
+					break
+				}
+			}
+		}
+		if len(visiblePosts) >= fetchLimit || len(publishedPosts) < fetchLimit {
+			break
+		}
+		cursor = publishedPosts[len(publishedPosts)-1].ID
 	}
+
 	hasMore := false
 	var nextLastID *int64
-	if len(publishedPosts) > limit {
+	if len(visiblePosts) > limit {
 		hasMore = true
-		publishedPosts = publishedPosts[:limit]
+		visiblePosts = visiblePosts[:limit]
 	}
-	if hasMore && len(publishedPosts) > 0 {
-		next := publishedPosts[len(publishedPosts)-1].ID
+	if hasMore && len(visiblePosts) > 0 {
+		next := visiblePosts[len(visiblePosts)-1].ID
 		nextLastID = &next
 	}
-	postModels, err := s.postsFromEntities(ctx, publishedPosts)
+	postModels, err := s.postsFromEntities(ctx, visiblePosts)
 	if err != nil {
 		return nil, err
 	}
