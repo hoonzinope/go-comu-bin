@@ -50,3 +50,20 @@ func TestOutboxAdminService_GetDeadMessages_Requeue_Discard(t *testing.T) {
 	assert.Empty(t, list.Messages)
 }
 
+func TestOutboxAdminService_RequeueDiscard_RejectsNonDeadMessage(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewOutboxAdminService(repositories.user, repositories.outbox, newTestAuthorizationPolicy())
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	now := time.Now()
+	require.NoError(t, repositories.outbox.Append(
+		port.OutboxMessage{ID: "pending-1", EventName: "post.changed", Status: port.OutboxStatusPending, OccurredAt: now, NextAttemptAt: now},
+	))
+
+	err := svc.RequeueDeadMessage(context.Background(), adminID, "pending-1")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+
+	err = svc.DiscardDeadMessage(context.Background(), adminID, "pending-1")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}
