@@ -1603,6 +1603,9 @@ func TestHTTP_BoardGet_BadLimit(t *testing.T) {
 
 	rr = doJSONRequest(t, handler, http.MethodGet, "/boards?limit=0", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+	rr = doJSONRequest(t, handler, http.MethodGet, "/boards?limit=1001", nil)
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_BoardGet_BadOffset(t *testing.T) {

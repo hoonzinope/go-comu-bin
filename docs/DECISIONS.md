@@ -1923,3 +1923,45 @@
 
 - `internal/application/service/pagination.go`
 - `internal/application/service/pagination_test.go`
+
+## 2026-03-14 - limit 계약/secret 강도/hidden 책임을 최신 정책으로 정렬한다
+
+상태
+
+- decided
+
+배경
+
+- pagination 상한이 코드에 도입됐지만 공개 API 문서/Swagger에는 상한 정보가 누락되어 있었다.
+- JWT secret 최소 길이는 결정 기록(32자)과 실제 검증(16자)이 어긋나 있었다.
+- board hidden 필터가 service와 repository에 중복되어 계층 책임이 불명확했다.
+
+관찰
+
+- 서비스 공통 검증은 `limit > 1000`을 거부한다.
+- `internal/config/config.go`는 `minJWTSecretLength = 16`으로 동작했다.
+- in-memory `SelectBoardList`와 `BoardService.GetBoards`가 모두 hidden 필터를 수행했다.
+
+결론
+
+- 목록 API의 `limit` 계약을 `1..1000`으로 명시하고 delivery 파서/Swagger/문서를 일치시킨다.
+- JWT secret 최소 길이를 32자로 상향해 기존 결정과 구현을 정렬한다.
+- hidden 비노출 판단 책임은 policy+service 레이어로 단일화하고 repository는 원시 데이터 조회 책임으로 유지한다.
+
+후속 작업
+
+- `parseLimitLastID`/`parseLimitLastIDString` 상한 검증 추가
+- Swagger/`docs/API.md`의 limit 파라미터 상한 반영
+- config 검증/테스트 secret 길이 기준 상향
+- board repository hidden 필터 제거 및 service policy 적용 유지
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `docs/API.md`
+- `docs/swagger`
+- `internal/config/config.go`
+- `internal/config/config_test.go`
+- `docs/CONFIG.md`
+- `internal/application/service/boardService.go`
+- `internal/infrastructure/persistence/inmemory/boardRepository.go`

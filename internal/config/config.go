@@ -10,7 +10,7 @@ import (
 
 const placeholderJWTSecret = "commu-bin-secret-key"
 const placeholderBootstrapPassword = "admin"
-const minJWTSecretLength = 16
+const minJWTSecretLength = 32
 
 type Config struct {
 	Cache struct {

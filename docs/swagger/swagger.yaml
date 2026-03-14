@@ -455,6 +455,7 @@ paths:
       parameters:
       - description: Page size
         in: query
+        maximum: 1000
         minimum: 1
         name: limit
         type: integer
@@ -570,6 +571,7 @@ paths:
         type: string
       - description: Page size
         in: query
+        maximum: 1000
         minimum: 1
         name: limit
         type: integer
@@ -719,6 +721,7 @@ paths:
       parameters:
       - description: Page size
         in: query
+        maximum: 1000
         minimum: 1
         name: limit
         type: integer
@@ -880,6 +883,7 @@ paths:
         type: integer
       - description: Page size
         in: query
+        maximum: 1000
         minimum: 1
         name: limit
         type: integer
@@ -1516,6 +1520,7 @@ paths:
         type: integer
       - description: Page size
         in: query
+        maximum: 1000
         minimum: 1
         name: limit
         type: integer
@@ -1826,6 +1831,7 @@ paths:
         type: string
       - description: Page size
         in: query
+        maximum: 1000
         minimum: 1
         name: limit
         type: integer

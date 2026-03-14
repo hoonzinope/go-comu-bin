@@ -73,7 +73,7 @@ jobs:
 - `delivery.http.maxJSONBodyBytes`: `> 0`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
-- `delivery.http.auth.secret`: 최소 길이 `16`자 이상
+- `delivery.http.auth.secret`: 최소 길이 `32`자 이상
 - `event.outbox.workerCount`: `> 0`
 - `event.outbox.batchSize`: `> 0`
 - `event.outbox.pollIntervalMillis`: `> 0`
@@ -127,5 +127,5 @@ jobs:
 
 - 커밋된 `config.yml`은 샘플로 취급합니다.
 - 실제 실행 전에는 `delivery.http.auth.secret`를 반드시 실값으로 넣어야 합니다.
-- 운영 환경에서는 예측 가능한 문자열 대신 충분히 긴 랜덤 시크릿(최소 16자, 권장 32자+)을 사용합니다.
+- 운영 환경에서는 예측 가능한 문자열 대신 충분히 긴 랜덤 시크릿(최소 32자 이상)을 사용합니다.
 - bootstrap admin이 필요할 때만 `admin.bootstrap.enabled=true`로 켜고, 일회성 강한 비밀번호를 설정한 뒤 다시 끄는 것을 기본으로 합니다.

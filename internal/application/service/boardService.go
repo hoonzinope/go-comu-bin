@@ -54,10 +54,9 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 	}
 	cacheKey := key.BoardList(limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		// 커서 기반 페이지네이션을 위해 1개 더 조회한다.
-		fetchLimit := limit
-		if limit > 0 {
-			fetchLimit = limit + 1
+		fetchLimit, err := cursorFetchLimit(limit)
+		if err != nil {
+			return nil, err
 		}
 
 		boards, err := s.boardRepository.SelectBoardList(ctx, fetchLimit, lastID)
@@ -66,7 +65,7 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 		}
 		visibleBoards := make([]*entity.Board, 0, len(boards))
 		for _, board := range boards {
-			if board.Hidden {
+			if err := policy.EnsureBoardVisible(board, nil); err != nil {
 				continue
 			}
 			visibleBoards = append(visibleBoards, board)

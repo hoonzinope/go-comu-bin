@@ -105,6 +105,7 @@ const docTemplate = `{
                 "summary": "List Dead Outbox Messages",
                 "parameters": [
                     {
+                        "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
@@ -285,6 +286,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
@@ -510,6 +512,7 @@ const docTemplate = `{
                 "summary": "List Boards",
                 "parameters": [
                     {
+                        "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
@@ -758,6 +761,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
@@ -1734,6 +1738,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
                         "description": "Page size",
@@ -2211,6 +2216,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
                         "description": "Page size",

@@ -76,6 +76,10 @@ func TestBoardService_GetBoards_InvalidLimit(t *testing.T) {
 	_, err := svc.GetBoards(context.Background(), 0, 0)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+
+	_, err = svc.GetBoards(context.Background(), maxPageLimit+1, 0)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 }
 
 func TestBoardService_GetBoards_HasMoreAndNextCursor(t *testing.T) {

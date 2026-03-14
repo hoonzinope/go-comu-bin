@@ -25,6 +25,8 @@ import (
 
 const multipartRequestOverheadBytes int64 = 1 << 20
 const defaultMaxJSONBodyBytes int64 = 1 << 20
+const defaultPageLimit = 10
+const maxPageLimit = 1000
 const httpLoggerContextKey = "http_logger"
 
 type HTTPHandler struct {
@@ -456,7 +458,7 @@ func (h *HTTPHandler) handleUserUnsuspend(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param status query string false "Report status filter"
-// @Param limit query int false "Page size" minimum(1)
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param last_id query int false "Cursor id" minimum(0)
 // @Success 200 {object} reportListResponse
 // @Failure 400 {object} errorResponse
@@ -544,7 +546,7 @@ func (h *HTTPHandler) handleAdminReportResolve(c *gin.Context) {
 // @Tags Admin
 // @Produce json
 // @Security BearerAuth
-// @Param limit query int false "Page size" minimum(1)
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param last_id query string false "Cursor id"
 // @Success 200 {object} outboxDeadListResponse
 // @Failure 400 {object} errorResponse
@@ -677,7 +679,7 @@ func (h *HTTPHandler) handleAdminBoardVisibilityPut(c *gin.Context) {
 // @Description Returns board list with cursor pagination.
 // @Tags Board
 // @Produce json
-// @Param limit query int false "Page size" minimum(1)
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
 // @Success 200 {object} response.BoardList
 // @Failure 400 {object} errorResponse
@@ -810,7 +812,7 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 // @Tags Post
 // @Produce json
 // @Param boardID path int true "Board ID"
-// @Param limit query int false "Page size" minimum(1)
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
 // @Success 200 {object} response.PostList
 // @Failure 400 {object} errorResponse
@@ -922,7 +924,7 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 // @Tags Tag
 // @Produce json
 // @Param tagName path string true "Normalized tag name"
-// @Param limit query int false "Page size" minimum(1)
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
 // @Success 200 {object} response.PostList
 // @Failure 400 {object} errorResponse
@@ -1287,7 +1289,7 @@ func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
 // @Tags Comment
 // @Produce json
 // @Param postID path int true "Post ID"
-// @Param limit query int false "Page size" minimum(1)
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
 // @Success 200 {object} response.CommentList
 // @Failure 400 {object} errorResponse
@@ -1728,12 +1730,12 @@ func parseLimitLastID(c *gin.Context) (int, int64, bool) {
 	limitStr := c.Query("limit")
 	lastIDStr := c.Query("last_id")
 
-	limit := 10
+	limit := defaultPageLimit
 	var lastID int64
 
 	if limitStr != "" {
 		v, err := strconv.Atoi(limitStr)
-		if err != nil || v < 1 {
+		if err != nil || v < 1 || v > maxPageLimit {
 			badRequest(c, errors.New("invalid limit"))
 			return 0, 0, false
 		}
@@ -1756,10 +1758,10 @@ func parseLimitLastIDString(c *gin.Context) (int, string, bool) {
 	limitStr := c.Query("limit")
 	lastID := strings.TrimSpace(c.Query("last_id"))
 
-	limit := 10
+	limit := defaultPageLimit
 	if limitStr != "" {
 		v, err := strconv.Atoi(limitStr)
-		if err != nil || v < 1 {
+		if err != nil || v < 1 || v > maxPageLimit {
 			badRequest(c, errors.New("invalid limit"))
 			return 0, "", false
 		}

@@ -14,7 +14,7 @@ import (
 func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("delivery.http.maxJSONBodyBytes", int64(1<<20))
 	v.Set("event.outbox.workerCount", 3)
 	v.Set("event.outbox.batchSize", 200)
@@ -88,7 +88,7 @@ delivery:
   http:
     port: 18577
     auth:
-      secret: "test-secret-123456"
+      secret: "test-secret-1234567890-abcdef-1234"
 
 admin:
   bootstrap:
@@ -132,7 +132,7 @@ func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
 	}()
 
 	t.Setenv("DELIVERY_HTTP_PORT", "18577")
-	t.Setenv("DELIVERY_HTTP_AUTH_SECRET", "env-secret-123456")
+	t.Setenv("DELIVERY_HTTP_AUTH_SECRET", "env-secret-1234567890-abcdef-1234")
 	t.Setenv("STORAGE_PROVIDER", "local")
 	t.Setenv("STORAGE_LOCAL_ROOTDIR", "./data/uploads")
 	t.Setenv("STORAGE_ATTACHMENT_MAXUPLOADSIZEBYTES", "10485760")
@@ -145,14 +145,14 @@ func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
-	assert.Equal(t, "env-secret-123456", cfg.Delivery.HTTP.Auth.Secret)
+	assert.Equal(t, "env-secret-1234567890-abcdef-1234", cfg.Delivery.HTTP.Auth.Secret)
 }
 
 func TestLoadFromViper_InvalidPort(t *testing.T) {
 	t.Run("port_is_zero", func(t *testing.T) {
 		v := viper.New()
 		v.Set("delivery.http.port", 0)
-		v.Set("delivery.http.auth.secret", "test-secret-123456")
+		v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 		v.Set("cache.listTTLSeconds", 30)
 		v.Set("cache.detailTTLSeconds", 30)
 		v.Set("storage.provider", "local")
@@ -171,7 +171,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 	t.Run("port_is_out_of_range", func(t *testing.T) {
 		v := viper.New()
 		v.Set("delivery.http.port", 70000)
-		v.Set("delivery.http.auth.secret", "test-secret-123456")
+		v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 		v.Set("cache.listTTLSeconds", 30)
 		v.Set("cache.detailTTLSeconds", 30)
 		v.Set("storage.provider", "local")
@@ -191,7 +191,7 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 func TestLoadFromViper_UnknownField(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "local")
@@ -211,7 +211,7 @@ func TestLoadFromViper_UnknownField(t *testing.T) {
 func TestLoadFromViper_InvalidMaxJSONBodyBytes(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("delivery.http.maxJSONBodyBytes", int64(0))
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
@@ -231,7 +231,7 @@ func TestLoadFromViper_InvalidMaxJSONBodyBytes(t *testing.T) {
 func TestLoadFromViper_InvalidCacheTTL(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 0)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "local")
@@ -250,7 +250,7 @@ func TestLoadFromViper_InvalidCacheTTL(t *testing.T) {
 func TestLoadFromViper_InvalidStorageRoot(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "local")
@@ -269,7 +269,7 @@ func TestLoadFromViper_InvalidStorageRoot(t *testing.T) {
 func TestLoadFromViper_InvalidAttachmentMaxUploadSize(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "local")
@@ -288,7 +288,7 @@ func TestLoadFromViper_InvalidAttachmentMaxUploadSize(t *testing.T) {
 func TestLoadFromViper_InvalidAttachmentJPEGQuality(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "local")
@@ -307,7 +307,7 @@ func TestLoadFromViper_InvalidAttachmentJPEGQuality(t *testing.T) {
 func TestLoadFromViper_InvalidAttachmentCleanupInterval(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "local")
@@ -326,7 +326,7 @@ func TestLoadFromViper_InvalidAttachmentCleanupInterval(t *testing.T) {
 func TestLoadFromViper_ObjectStorageConfig(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "object")
@@ -408,7 +408,7 @@ func TestLoadFromViper_RejectsTooShortJWTSecret(t *testing.T) {
 func TestLoadFromViper_AllowsZeroCleanupConfigWhenJobsDisabled(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("cache.listTTLSeconds", 30)
 	v.Set("cache.detailTTLSeconds", 30)
 	v.Set("storage.provider", "local")
@@ -430,7 +430,7 @@ func TestLoadFromViper_AllowsZeroCleanupConfigWhenJobsDisabled(t *testing.T) {
 func TestLoadFromViper_RequiresBootstrapCredentialsWhenEnabled(t *testing.T) {
 	v := viper.New()
 	v.Set("delivery.http.port", 18577)
-	v.Set("delivery.http.auth.secret", "test-secret-123456")
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 	v.Set("admin.bootstrap.enabled", true)
 	v.Set("admin.bootstrap.username", "admin")
 	v.Set("cache.listTTLSeconds", 30)
@@ -452,7 +452,7 @@ func TestLoadFromViper_InvalidOutboxConfig(t *testing.T) {
 	base := func() *viper.Viper {
 		v := viper.New()
 		v.Set("delivery.http.port", 18577)
-		v.Set("delivery.http.auth.secret", "test-secret-123456")
+		v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
 		v.Set("cache.listTTLSeconds", 30)
 		v.Set("cache.detailTTLSeconds", 30)
 		v.Set("storage.provider", "local")

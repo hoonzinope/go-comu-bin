@@ -52,6 +52,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 신고 목록을 조회합니다.
   - 기본 정렬은 `pending` 우선 + 최신순입니다.
   - `status` 필터는 선택값이며, 허용값은 `pending`, `accepted`, `rejected`
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
 - `PUT /api/v1/admin/reports/{reportID}/resolve` (인증 필요, admin)
   - 신고를 수동 처리합니다.
   - 요청 본문: `status`, 선택적 `resolution_note`
@@ -60,6 +61,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `GET /api/v1/admin/outbox/dead?limit=10&last_id=` (인증 필요, admin)
   - dead outbox 메시지 목록을 조회합니다.
   - 응답 최소 필드: `id`, `event_name`, `attempt_count`, `last_error`, `occurred_at`, `next_attempt_at`
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
 - `POST /api/v1/admin/outbox/dead/{messageID}/requeue` (인증 필요, admin)
   - dead 메시지를 재처리 큐로 되돌립니다.
 - `DELETE /api/v1/admin/outbox/dead/{messageID}` (인증 필요, admin)
@@ -72,7 +74,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 - `GET /api/v1/boards?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
-  - `limit`은 `1` 이상의 정수여야 합니다.
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
 - `POST /api/v1/boards` (인증 필요, admin)
 - `PUT /api/v1/boards/{boardID}` (인증 필요, admin)
 - `DELETE /api/v1/boards/{boardID}` (인증 필요, admin)
@@ -89,7 +91,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 공개 목록/상세 조회에서는 `published`만 노출
 - `GET /api/v1/boards/{boardID}/posts?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
-  - `limit`은 `1` 이상의 정수여야 합니다.
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 게시판이 없으면 `404 Not Found`
 - `POST /api/v1/boards/{boardID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
@@ -126,6 +128,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 ## Tag
 
 - `GET /api/v1/tags/{tagName}/posts?limit=10&last_id=0`
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 응답 메타: `has_more`, `next_last_id`
   - `tagName`은 내부적으로 앞뒤 공백 제거 후 영문 소문자로 정규화합니다.
   - tag가 없으면 `404 Not Found`
@@ -182,7 +185,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 응답은 flat list를 유지하고 `parent_id`로 관계를 표현한다.
 - `GET /api/v1/posts/{postID}/comments?limit=10&last_id=0`
   - 응답 메타: `has_more`, `next_last_id`
-  - `limit`은 `1` 이상의 정수여야 합니다.
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 삭제된 게시글이면 `404 Not Found`
 - `POST /api/v1/posts/{postID}/comments` (인증 필요)
   - 요청 본문은 `content`, 선택적 `parent_id`
