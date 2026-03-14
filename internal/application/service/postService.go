@@ -544,26 +544,8 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 			break
 		}
 
-		uncachedBoardIDs := make([]int64, 0)
-		seenBoardIDs := make(map[int64]struct{}, len(publishedPosts))
-		for _, post := range publishedPosts {
-			if _, ok := boardVisibility[post.BoardID]; ok {
-				continue
-			}
-			if _, seen := seenBoardIDs[post.BoardID]; seen {
-				continue
-			}
-			seenBoardIDs[post.BoardID] = struct{}{}
-			uncachedBoardIDs = append(uncachedBoardIDs, post.BoardID)
-		}
-		if len(uncachedBoardIDs) > 0 {
-			boardsByID, boardErr := s.boardRepository.SelectBoardsByIDs(ctx, uncachedBoardIDs)
-			if boardErr != nil {
-				return nil, customError.WrapRepository("select boards by ids for tag post visibility", boardErr)
-			}
-			for _, boardID := range uncachedBoardIDs {
-				boardVisibility[boardID] = policy.EnsureBoardVisible(boardsByID[boardID], nil) == nil
-			}
+		if err := s.resolveBoardVisibility(ctx, publishedPosts, boardVisibility); err != nil {
+			return nil, err
 		}
 
 		for _, post := range publishedPosts {
@@ -601,6 +583,31 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 		HasMore:    hasMore,
 		NextLastID: nextLastID,
 	}, nil
+}
+
+func (s *PostService) resolveBoardVisibility(ctx context.Context, posts []*entity.Post, boardVisibility map[int64]bool) error {
+	boardIDsToFetch := make(map[int64]struct{}, len(posts))
+	for _, post := range posts {
+		if _, cached := boardVisibility[post.BoardID]; cached {
+			continue
+		}
+		boardIDsToFetch[post.BoardID] = struct{}{}
+	}
+	if len(boardIDsToFetch) == 0 {
+		return nil
+	}
+	uncachedBoardIDs := make([]int64, 0, len(boardIDsToFetch))
+	for boardID := range boardIDsToFetch {
+		uncachedBoardIDs = append(uncachedBoardIDs, boardID)
+	}
+	boardsByID, err := s.boardRepository.SelectBoardsByIDs(ctx, uncachedBoardIDs)
+	if err != nil {
+		return customError.WrapRepository("select boards by ids for tag post visibility", err)
+	}
+	for _, boardID := range uncachedBoardIDs {
+		boardVisibility[boardID] = policy.EnsureBoardVisible(boardsByID[boardID], nil) == nil
+	}
+	return nil
 }
 
 func (s *PostService) syncPostTags(tx port.TxScope, postID int64, normalizedTags []string) error {
