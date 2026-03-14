@@ -42,5 +42,8 @@ func TestReport_Resolve(t *testing.T) {
 	ok = report.Resolve(ReportStatusPending, "invalid", 100)
 	assert.False(t, ok)
 	assert.Equal(t, ReportStatusAccepted, report.Status)
-}
 
+	ok = report.Resolve(ReportStatusRejected, "re-review", 101)
+	assert.False(t, ok)
+	assert.Equal(t, ReportStatusAccepted, report.Status)
+}

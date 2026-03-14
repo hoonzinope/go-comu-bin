@@ -88,6 +88,9 @@ func (r *Report) Resolve(status ReportStatus, resolutionNote string, resolverID 
 	if status != ReportStatusAccepted && status != ReportStatusRejected {
 		return false
 	}
+	if r.Status != ReportStatusPending {
+		return false
+	}
 	now := time.Now()
 	r.Status = status
 	r.ResolutionNote = resolutionNote
@@ -96,4 +99,3 @@ func (r *Report) Resolve(status ReportStatus, resolutionNote string, resolverID 
 	r.UpdatedAt = now
 	return true
 }
-
