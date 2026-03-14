@@ -1999,3 +1999,41 @@
 - `internal/infrastructure/persistence/inmemory/boardRepository.go`
 - `internal/delivery/http.go`
 - `internal/config/config.go`
+
+## 2026-03-14 - Step 3 첫 구현으로 IP 기반 쓰기 요청 Rate Limit을 도입한다
+
+상태
+
+- decided
+
+배경
+
+- 로드맵 Step 3(어뷰징 방지/보안)에서 도배성 쓰기 요청을 제어할 최소 안전장치가 필요하다.
+- 현재 HTTP 경계에는 바디 크기 제한은 있으나, 동일 클라이언트의 고빈도 쓰기 요청을 제어하는 장치가 없다.
+
+관찰
+
+- 인증 미들웨어는 라우트별로 적용되어 있어, 전역 요청 제어는 API 경계(`v1`)에서 처리하는 편이 일관적이다.
+- 쓰기 요청 경계는 HTTP 메서드(`POST/PUT/DELETE/PATCH`)로 명확히 분리 가능하다.
+
+결론
+
+- `RateLimiter` 포트를 추가하고 기본 어댑터는 in-memory fixed-window 카운터로 시작한다.
+- 적용 범위는 `/api/v1` 하위 쓰기 메서드 전체로 제한하고, 읽기 메서드(`GET/HEAD/OPTIONS`)는 제외한다.
+- 키 전략은 `method + route + client_ip` 조합으로 고정한다.
+- 초과 시 공개 에러는 `too many requests`로 응답하고 상태코드는 `429`를 사용한다.
+- 설정은 `delivery.http.rateLimit.{enabled,windowSeconds,writeRequests}`로 주입한다.
+
+후속 작업
+
+- HTTP 통합 테스트로 `429` 회귀 케이스를 추가한다.
+- config 검증/문서/샘플 설정/Swagger를 정책과 일치시킨다.
+- 추후 persistent 또는 분산 limiter로 교체 가능한 포트 경계를 유지한다.
+
+관련 문서/코드
+
+- `internal/application/port`
+- `internal/infrastructure/ratelimit/inmemory`
+- `internal/delivery/http.go`
+- `internal/config/config.go`
+- `docs/CONFIG.md`

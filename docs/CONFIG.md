@@ -42,6 +42,10 @@ delivery:
     port: 18577
     maxJSONBodyBytes: 1048576
     defaultPageLimit: 10
+    rateLimit:
+      enabled: true
+      windowSeconds: 60
+      writeRequests: 60
     auth:
       secret: "replace-with-real-secret"
 
@@ -73,6 +77,8 @@ jobs:
 - `delivery.http.port`: `1..65535`
 - `delivery.http.maxJSONBodyBytes`: `> 0`
 - `delivery.http.defaultPageLimit`: `1..1000`
+- `delivery.http.rateLimit.windowSeconds`: `>= 1`
+- `delivery.http.rateLimit.writeRequests`: `>= 1`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
 - `delivery.http.auth.secret`: 최소 길이 `32`자 이상
@@ -107,6 +113,8 @@ jobs:
 - JSON body 최대 크기(bytes): `cmd/main.go` -> `cfg.Delivery.HTTP.MaxJSONBodyBytes`
   - JSON API 요청 바디가 이 값을 초과하면 `400 Bad Request (request body too large)`를 반환합니다.
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
+- HTTP 쓰기 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
+  - `enabled=true`일 때 `/api/v1` 하위 `POST/PUT/DELETE/PATCH` 요청에 `method+route+client_ip` 기준 제한을 적용합니다.
 - outbox relay 워커 수: `cmd/main.go` -> `cfg.Event.Outbox.WorkerCount`
 - outbox relay 배치 크기: `cmd/main.go` -> `cfg.Event.Outbox.BatchSize`
 - outbox relay polling 주기(ms): `cmd/main.go` -> `cfg.Event.Outbox.PollIntervalMillis`

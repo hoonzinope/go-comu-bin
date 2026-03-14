@@ -10,6 +10,7 @@ var (
 	ErrInternalServerError = errors.New("internal server error")
 	ErrForbidden           = errors.New("forbidden")
 	ErrUnauthorized        = errors.New("unauthorized")
+	ErrTooManyRequests     = errors.New("too many requests")
 	ErrInvalidInput        = errors.New("invalid input")
 	ErrNotFound            = errors.New("not found")
 	ErrMethodNotAllowed    = errors.New("method not allowed")
@@ -96,6 +97,8 @@ func Public(err error) error {
 		return ErrMethodNotAllowed
 	case errors.Is(err, ErrUnauthorized):
 		return ErrUnauthorized
+	case errors.Is(err, ErrTooManyRequests):
+		return ErrTooManyRequests
 	case errors.Is(err, ErrMissingAuthHeader):
 		return ErrMissingAuthHeader
 	case errors.Is(err, ErrInvalidToken):

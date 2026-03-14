@@ -13,6 +13,8 @@ const placeholderBootstrapPassword = "admin"
 const minJWTSecretLength = 32
 const minDefaultPageLimit = 1
 const maxDefaultPageLimit = 1000
+const minRateLimitWindowSeconds = 1
+const minRateLimitWriteRequests = 1
 
 type Config struct {
 	Cache struct {
@@ -51,7 +53,12 @@ type Config struct {
 			Port             int   `yaml:"port"`
 			MaxJSONBodyBytes int64 `yaml:"maxJSONBodyBytes"`
 			DefaultPageLimit int   `yaml:"defaultPageLimit"`
-			Auth             struct {
+			RateLimit        struct {
+				Enabled       bool `yaml:"enabled"`
+				WindowSeconds int  `yaml:"windowSeconds"`
+				WriteRequests int  `yaml:"writeRequests"`
+			} `yaml:"rateLimit"`
+			Auth struct {
 				Secret string `yaml:"secret"`
 			} `yaml:"auth"`
 		} `yaml:"http"`
@@ -102,6 +109,9 @@ func Load() (*Config, error) {
 		"delivery.http.port",
 		"delivery.http.maxJSONBodyBytes",
 		"delivery.http.defaultPageLimit",
+		"delivery.http.rateLimit.enabled",
+		"delivery.http.rateLimit.windowSeconds",
+		"delivery.http.rateLimit.writeRequests",
 		"delivery.http.auth.secret",
 		"event.outbox.workerCount",
 		"event.outbox.batchSize",
@@ -142,6 +152,9 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.SetDefault("delivery.http.maxJSONBodyBytes", int64(1<<20))
 	v.SetDefault("delivery.http.defaultPageLimit", 10)
+	v.SetDefault("delivery.http.rateLimit.enabled", true)
+	v.SetDefault("delivery.http.rateLimit.windowSeconds", 60)
+	v.SetDefault("delivery.http.rateLimit.writeRequests", 60)
 	v.SetDefault("event.outbox.workerCount", 1)
 	v.SetDefault("event.outbox.batchSize", 100)
 	v.SetDefault("event.outbox.pollIntervalMillis", 100)
@@ -179,6 +192,20 @@ func validate(cfg *Config) error {
 			cfg.Delivery.HTTP.DefaultPageLimit,
 			minDefaultPageLimit,
 			maxDefaultPageLimit,
+		)
+	}
+	if cfg.Delivery.HTTP.RateLimit.WindowSeconds < minRateLimitWindowSeconds {
+		return fmt.Errorf(
+			"invalid delivery.http.rateLimit.windowSeconds: %d (must be >= %d)",
+			cfg.Delivery.HTTP.RateLimit.WindowSeconds,
+			minRateLimitWindowSeconds,
+		)
+	}
+	if cfg.Delivery.HTTP.RateLimit.WriteRequests < minRateLimitWriteRequests {
+		return fmt.Errorf(
+			"invalid delivery.http.rateLimit.writeRequests: %d (must be >= %d)",
+			cfg.Delivery.HTTP.RateLimit.WriteRequests,
+			minRateLimitWriteRequests,
 		)
 	}
 	secret := strings.TrimSpace(cfg.Delivery.HTTP.Auth.Secret)

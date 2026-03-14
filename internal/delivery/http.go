@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
@@ -26,6 +27,8 @@ import (
 const multipartRequestOverheadBytes int64 = 1 << 20
 const defaultMaxJSONBodyBytes int64 = 1 << 20
 const defaultPageLimit = 10
+const defaultRateLimitWindow = 60 * time.Second
+const defaultRateLimitWriteRequests = 60
 const maxPageLimit = 1000
 const httpLoggerContextKey = "http_logger"
 
@@ -40,9 +43,13 @@ type HTTPHandler struct {
 	attachmentUseCase        port.AttachmentUseCase
 	reportUseCase            port.ReportUseCase
 	outboxAdminUseCase       port.OutboxAdminUseCase
+	rateLimiter              port.RateLimiter
 	attachmentUploadMaxBytes int64
 	maxJSONBodyBytes         int64
 	defaultPageLimit         int
+	rateLimitEnabled         bool
+	rateLimitWindow          time.Duration
+	rateLimitWriteRequests   int
 	logger                   *slog.Logger
 	authGinMiddleware        gin.HandlerFunc
 }
@@ -58,9 +65,13 @@ type HTTPDependencies struct {
 	AttachmentUseCase        port.AttachmentUseCase
 	ReportUseCase            port.ReportUseCase
 	OutboxAdminUseCase       port.OutboxAdminUseCase
+	RateLimiter              port.RateLimiter
 	AttachmentUploadMaxBytes int64
 	MaxJSONBodyBytes         int64
 	DefaultPageLimit         int
+	RateLimitEnabled         bool
+	RateLimitWindowSecond    int
+	RateLimitWriteRequest    int
 	Logger                   *slog.Logger
 }
 
@@ -80,9 +91,13 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		attachmentUseCase:        deps.AttachmentUseCase,
 		reportUseCase:            deps.ReportUseCase,
 		outboxAdminUseCase:       deps.OutboxAdminUseCase,
+		rateLimiter:              deps.RateLimiter,
 		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
 		maxJSONBodyBytes:         resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
 		defaultPageLimit:         resolveDefaultPageLimit(deps.DefaultPageLimit),
+		rateLimitEnabled:         deps.RateLimitEnabled,
+		rateLimitWindow:          resolveRateLimitWindow(deps.RateLimitWindowSecond),
+		rateLimitWriteRequests:   resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
 		logger:                   logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
@@ -105,6 +120,20 @@ func resolveDefaultPageLimit(limit int) int {
 	return limit
 }
 
+func resolveRateLimitWindow(windowSeconds int) time.Duration {
+	if windowSeconds <= 0 {
+		return defaultRateLimitWindow
+	}
+	return time.Duration(windowSeconds) * time.Second
+}
+
+func resolveRateLimitWriteRequests(requests int) int {
+	if requests <= 0 {
+		return defaultRateLimitWriteRequests
+	}
+	return requests
+}
+
 func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.Use(func(c *gin.Context) {
 		c.Set(httpLoggerContextKey, h.logger)
@@ -120,6 +149,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	v1 := r.Group("/api/v1")
+	v1.Use(h.rateLimitGinMiddleware())
 	v1.POST("/signup", h.handleUserSignUp)
 	v1.POST("/auth/login", h.handleUserLogin)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
@@ -1695,6 +1725,8 @@ func loggerFromContext(c *gin.Context) *slog.Logger {
 
 func statusForError(err error) int {
 	switch {
+	case errors.Is(err, customError.ErrTooManyRequests):
+		return http.StatusTooManyRequests
 	case errors.Is(err, customError.ErrUserAlreadyExists):
 		return http.StatusConflict
 	case errors.Is(err, customError.ErrInvalidInput):
@@ -1733,6 +1765,43 @@ func statusForError(err error) int {
 		return http.StatusForbidden
 	default:
 		return http.StatusInternalServerError
+	}
+}
+
+func (h *HTTPHandler) rateLimitGinMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if h == nil || !h.rateLimitEnabled || h.rateLimiter == nil {
+			c.Next()
+			return
+		}
+		if !isWriteMethod(c.Request.Method) {
+			c.Next()
+			return
+		}
+		path := c.FullPath()
+		if path == "" {
+			path = c.Request.URL.Path
+		}
+		key := c.Request.Method + ":" + path + ":" + c.ClientIP()
+		allowed, err := h.rateLimiter.Allow(c.Request.Context(), key, h.rateLimitWriteRequests, h.rateLimitWindow)
+		if err != nil {
+			writeHTTPError(h.logger, c, http.StatusInternalServerError, customError.Wrap(customError.ErrInternalServerError, "rate limit", err))
+			return
+		}
+		if !allowed {
+			writeHTTPError(h.logger, c, http.StatusTooManyRequests, customError.ErrTooManyRequests)
+			return
+		}
+		c.Next()
+	}
+}
+
+func isWriteMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch:
+		return true
+	default:
+		return false
 	}
 }
 

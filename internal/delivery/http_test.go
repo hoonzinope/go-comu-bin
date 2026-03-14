@@ -24,6 +24,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
+	rateLimitInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/ratelimit/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -574,6 +575,43 @@ func newTestHandlerWithDefaultPageLimit(
 		OutboxAdminUseCase: outboxAdminUseCase,
 		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
 		DefaultPageLimit:   defaultPageLimit,
+	}).Handler
+}
+
+func newTestHandlerWithRateLimit(
+	user authUserPort,
+	account port.AccountUseCase,
+	board port.BoardUseCase,
+	post port.PostUseCase,
+	comment port.CommentUseCase,
+	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
+	enabled bool,
+	windowSeconds int,
+	writeRequests int,
+) http.Handler {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	reportUseCase := &fakeReportUseCase{}
+	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:        sessionUseCase,
+		UserUseCase:           user,
+		AccountUseCase:        account,
+		BoardUseCase:          board,
+		PostUseCase:           post,
+		CommentUseCase:        comment,
+		ReactionUseCase:       reaction,
+		AttachmentUseCase:     attachment,
+		ReportUseCase:         reportUseCase,
+		OutboxAdminUseCase:    outboxAdminUseCase,
+		RateLimiter:           rateLimiter,
+		MaxJSONBodyBytes:      defaultMaxJSONBodyBytes,
+		RateLimitEnabled:      enabled,
+		RateLimitWindowSecond: windowSeconds,
+		RateLimitWriteRequest: writeRequests,
 	}).Handler
 }
 
@@ -1452,6 +1490,33 @@ func TestHTTP_UserSignUp_OversizedJSONRejected_WithConfiguredLimit(t *testing.T)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Contains(t, rr.Body.String(), "request body too large")
+}
+
+func TestHTTP_WriteRateLimit_ReturnsTooManyRequests(t *testing.T) {
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		true,
+		60,
+		2,
+	)
+
+	reqBody := map[string]any{
+		"username": "alice",
+		"password": "pw",
+	}
+	first := doJSONRequest(t, handler, http.MethodPost, "/signup", reqBody)
+	assert.Equal(t, http.StatusCreated, first.Code)
+	second := doJSONRequest(t, handler, http.MethodPost, "/signup", reqBody)
+	assert.Equal(t, http.StatusCreated, second.Code)
+	third := doJSONRequest(t, handler, http.MethodPost, "/signup", reqBody)
+	assert.Equal(t, http.StatusTooManyRequests, third.Code)
+	assert.JSONEq(t, `{"error":"too many requests"}`, third.Body.String())
 }
 
 func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
