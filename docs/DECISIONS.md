@@ -1861,3 +1861,36 @@
 - `internal/infrastructure/persistence/inmemory/boardRepository.go`
 - `internal/application/service/postService.go`
 - `internal/application/service/postService_test.go`
+
+## 2026-03-14 - 목록 API limit 상한을 도입해 과대 할당 기반 DoS 가능성을 차단한다
+
+상태
+
+- decided
+
+배경
+
+- `limit+1` overflow는 차단했지만, 매우 큰 `limit` 자체는 대규모 메모리 할당 시도를 유발할 수 있다.
+- 목록 API 전반은 `requirePositiveLimit`를 공유하므로 상한을 공통 적용하는 것이 경계 일관성과 운영 안전성에 유리하다.
+
+관찰
+
+- `GetBoards`, `GetPostsList`, `GetPostsByTag`, `GetCommentsByPost`, `GetReports`, `GetDeadMessages`가 동일 검증 함수를 사용한다.
+- 상한이 없으면 서비스/저장소 레이어에서 불필요하게 큰 slice capacity 또는 대량 조회를 시도할 수 있다.
+
+결론
+
+- 공통 pagination limit 상한을 `1000`으로 고정한다.
+- `limit < 1` 또는 `limit > 1000`은 `ErrInvalidInput`으로 처리한다.
+- 기존 overflow 방어는 유지해 방어 코드를 중첩 적용한다.
+
+후속 작업
+
+- `requirePositiveLimit`/`cursorFetchLimit` 경계 테스트 보강
+- 태그 목록 경로 상한 검증 테스트 보강
+
+관련 문서/코드
+
+- `internal/application/service/pagination.go`
+- `internal/application/service/pagination_test.go`
+- `internal/application/service/postService_test.go`

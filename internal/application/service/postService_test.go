@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -362,7 +361,7 @@ func TestPostService_GetPostsByTag_PaginationIgnoresHiddenBoards(t *testing.T) {
 	assert.Nil(t, secondPage.NextLastID)
 }
 
-func TestPostService_GetPostsByTag_RejectsOverflowLimit(t *testing.T) {
+func TestPostService_GetPostsByTag_RejectsTooLargeLimit(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -371,7 +370,7 @@ func TestPostService_GetPostsByTag_RejectsOverflowLimit(t *testing.T) {
 	_, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, userID, boardID)
 	require.NoError(t, err)
 
-	_, err = svc.GetPostsByTag(context.Background(), "go", math.MaxInt, 0)
+	_, err = svc.GetPostsByTag(context.Background(), "go", maxPageLimit+1, 0)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
 }
