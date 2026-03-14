@@ -118,8 +118,8 @@ func (s *PostService) createPost(ctx context.Context, title, content string, tag
 		if board == nil {
 			return customError.ErrBoardNotFound
 		}
-		if board.Hidden && !user.IsAdmin() {
-			return customError.ErrBoardNotFound
+		if err := policy.EnsureBoardVisible(board, user); err != nil {
+			return err
 		}
 		var saveErr error
 		postID, saveErr = tx.PostRepository().Save(txCtx, newPost)
@@ -155,8 +155,8 @@ func (s *PostService) GetPostsList(ctx context.Context, boardID int64, limit int
 		if board == nil {
 			return nil, customError.ErrBoardNotFound
 		}
-		if board.Hidden {
-			return nil, customError.ErrBoardNotFound
+		if err := policy.EnsureBoardVisible(board, nil); err != nil {
+			return nil, err
 		}
 
 		fetchLimit := limit
@@ -235,7 +235,10 @@ func (s *PostService) GetPostDetail(ctx context.Context, id int64) (*model.PostD
 		if err != nil {
 			return nil, customError.WrapRepository("select board by id for post detail visibility", err)
 		}
-		if board == nil || board.Hidden {
+		if board == nil {
+			return nil, customError.ErrPostNotFound
+		}
+		if err := policy.EnsureBoardVisible(board, nil); err != nil {
 			return nil, customError.ErrPostNotFound
 		}
 		return detail, nil

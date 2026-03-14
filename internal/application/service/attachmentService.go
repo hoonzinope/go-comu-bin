@@ -33,6 +33,7 @@ const attachmentDefaultMaxSizeBytes int64 = 10 << 20
 
 type AttachmentService struct {
 	userRepository       port.UserRepository
+	boardRepository      port.BoardRepository
 	postRepository       port.PostRepository
 	attachmentRepository port.AttachmentRepository
 	unitOfWork           port.UnitOfWork
@@ -59,9 +60,10 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
-func NewAttachmentService(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
+func NewAttachmentService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
 	return NewAttachmentServiceWithActionDispatcher(
 		userRepository,
+		boardRepository,
 		postRepository,
 		attachmentRepository,
 		unitOfWork,
@@ -75,11 +77,11 @@ func NewAttachmentService(userRepository port.UserRepository, postRepository por
 	)
 }
 
-func NewAttachmentServiceWithOptions(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
-	return NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
+func NewAttachmentServiceWithOptions(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
+	return NewAttachmentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
 }
 
-func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
+func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
 	}
@@ -88,6 +90,7 @@ func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository
 	}
 	return &AttachmentService{
 		userRepository:       userRepository,
+		boardRepository:      boardRepository,
 		postRepository:       postRepository,
 		attachmentRepository: attachmentRepository,
 		unitOfWork:           unitOfWork,
@@ -122,6 +125,9 @@ func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, us
 		}
 		if requester == nil {
 			return customError.ErrUserNotFound
+		}
+		if err := s.ensureBoardVisibleTx(tx, requester, post.BoardID); err != nil {
+			return err
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
@@ -172,6 +178,9 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, us
 	if requester == nil {
 		return nil, customError.ErrUserNotFound
 	}
+	if err := s.ensureBoardVisible(ctx, requester, post.BoardID); err != nil {
+		return nil, err
+	}
 	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 		return nil, err
 	}
@@ -206,6 +215,9 @@ func (s *AttachmentService) GetPostAttachments(ctx context.Context, postID int64
 	if post == nil {
 		return nil, customError.ErrPostNotFound
 	}
+	if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
+		return nil, err
+	}
 	items, err := s.attachmentRepository.SelectByPostID(ctx, postID)
 	if err != nil {
 		return nil, customError.WrapRepository("select attachments by post id", err)
@@ -236,6 +248,9 @@ func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postID, a
 	}
 	if post == nil {
 		return nil, customError.ErrPostNotFound
+	}
+	if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
+		return nil, err
 	}
 	attachment, err := s.attachmentRepository.SelectByID(ctx, attachmentID)
 	if err != nil {
@@ -274,6 +289,9 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, po
 	}
 	if requester == nil {
 		return nil, customError.ErrUserNotFound
+	}
+	if err := s.ensureBoardVisible(ctx, requester, post.BoardID); err != nil {
+		return nil, err
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 		return nil, err
@@ -317,6 +335,9 @@ func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postID, at
 		}
 		if requester == nil {
 			return customError.ErrUserNotFound
+		}
+		if err := s.ensureBoardVisibleTx(tx, requester, post.BoardID); err != nil {
+			return err
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
@@ -386,6 +407,22 @@ func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Tim
 		deletedCount++
 	}
 	return deletedCount, nil
+}
+
+func (s *AttachmentService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
+	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
+	if err != nil {
+		return customError.WrapRepository("select board by id for attachment board visibility", err)
+	}
+	return policy.EnsureBoardVisible(board, user)
+}
+
+func (s *AttachmentService) ensureBoardVisibleTx(tx port.TxScope, user *entity.User, boardID int64) error {
+	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), boardID)
+	if err != nil {
+		return customError.WrapRepository("select board by id for attachment board visibility", err)
+	}
+	return policy.EnsureBoardVisible(board, user)
 }
 
 func buildAttachmentStorageKey(postID int64, fileName string) string {
