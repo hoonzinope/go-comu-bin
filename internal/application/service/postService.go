@@ -235,9 +235,6 @@ func (s *PostService) GetPostDetail(ctx context.Context, id int64) (*model.PostD
 		if err != nil {
 			return nil, customError.WrapRepository("select board by id for post detail visibility", err)
 		}
-		if board == nil {
-			return nil, customError.ErrPostNotFound
-		}
 		if err := policy.EnsureBoardVisible(board, nil); err != nil {
 			return nil, customError.ErrPostNotFound
 		}
