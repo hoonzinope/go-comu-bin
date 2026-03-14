@@ -11,10 +11,7 @@ func EnsureBoardVisible(board *entity.Board, user *entity.User) error {
 	if board == nil {
 		return customError.ErrBoardNotFound
 	}
-	if !board.Hidden {
-		return nil
-	}
-	if user != nil && user.IsAdmin() {
+	if !board.Hidden || (user != nil && user.IsAdmin()) {
 		return nil
 	}
 	return customError.ErrBoardNotFound

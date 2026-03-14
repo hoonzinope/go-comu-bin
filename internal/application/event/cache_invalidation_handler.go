@@ -23,7 +23,7 @@ func NewCacheInvalidationHandler(cache port.Cache, logger *slog.Logger) *CacheIn
 func (h *CacheInvalidationHandler) Handle(ctx context.Context, event port.DomainEvent) error {
 	switch e := event.(type) {
 	case BoardChanged:
-		h.bestEffortDeleteByPrefix(ctx, key.BoardListPrefix(), "invalidate board list by event")
+		h.handleBoardChanged(ctx, e)
 	case PostChanged:
 		h.handlePostChanged(ctx, e)
 	case CommentChanged:
@@ -34,6 +34,19 @@ func (h *CacheInvalidationHandler) Handle(ctx context.Context, event port.Domain
 		h.bestEffortDelete(ctx, key.PostDetail(e.PostID), "invalidate post detail by attachment event")
 	}
 	return nil
+}
+
+func (h *CacheInvalidationHandler) handleBoardChanged(ctx context.Context, e BoardChanged) {
+	h.bestEffortDeleteByPrefix(ctx, key.BoardListPrefix(), "invalidate board list by event")
+	h.bestEffortDeleteByPrefix(ctx, key.PostListPrefix(e.BoardID), "invalidate post list by board event")
+	if e.Operation != "visibility" {
+		return
+	}
+	// Visibility changes can conceal/expose many cached resources.
+	h.bestEffortDeleteByPrefix(ctx, key.PostDetailPrefix(), "invalidate post detail by board visibility event")
+	h.bestEffortDeleteByPrefix(ctx, key.CommentListGlobalPrefix(), "invalidate comment list by board visibility event")
+	h.bestEffortDeleteByPrefix(ctx, key.ReactionListPrefix(), "invalidate reaction list by board visibility event")
+	h.bestEffortDeleteByPrefix(ctx, key.TagPostListGlobalPrefix(), "invalidate tag post list by board visibility event")
 }
 
 func (h *CacheInvalidationHandler) handlePostChanged(ctx context.Context, e PostChanged) {
