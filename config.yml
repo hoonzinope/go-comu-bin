@@ -27,6 +27,8 @@ delivery:
       enabled: true
       windowSeconds: 60
       writeRequests: 60
+    sanitizer:
+      enabled: true
     auth:
       secret: ""
 

@@ -38,6 +38,7 @@ import (
 	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	rateLimitInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/ratelimit/inmemory"
+	inputSanitizer "github.com/hoonzinope/go-comu-bin/internal/infrastructure/sanitizer/escape"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	objectstorage "github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/object"
 )
@@ -77,6 +78,7 @@ func main() {
 	}
 	cache := cacheInMemory.NewInMemoryCache()
 	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
+	sanitizer := inputSanitizer.NewInputSanitizer()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logger
@@ -148,12 +150,14 @@ func main() {
 		ReportUseCase:            reportUseCase,
 		OutboxAdminUseCase:       outboxAdminUseCase,
 		RateLimiter:              rateLimiter,
+		InputSanitizer:           sanitizer,
 		AttachmentUploadMaxBytes: cfg.Storage.Attachment.MaxUploadSizeBytes,
 		MaxJSONBodyBytes:         cfg.Delivery.HTTP.MaxJSONBodyBytes,
 		DefaultPageLimit:         cfg.Delivery.HTTP.DefaultPageLimit,
 		RateLimitEnabled:         cfg.Delivery.HTTP.RateLimit.Enabled,
 		RateLimitWindowSecond:    cfg.Delivery.HTTP.RateLimit.WindowSeconds,
 		RateLimitWriteRequest:    cfg.Delivery.HTTP.RateLimit.WriteRequests,
+		SanitizerEnabled:         cfg.Delivery.HTTP.Sanitizer.Enabled,
 		Logger:                   appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)

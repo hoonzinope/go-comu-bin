@@ -25,6 +25,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	rateLimitInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/ratelimit/inmemory"
+	inputSanitizer "github.com/hoonzinope/go-comu-bin/internal/infrastructure/sanitizer/escape"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -612,6 +613,39 @@ func newTestHandlerWithRateLimit(
 		RateLimitEnabled:      enabled,
 		RateLimitWindowSecond: windowSeconds,
 		RateLimitWriteRequest: writeRequests,
+	}).Handler
+}
+
+func newTestHandlerWithSanitizer(
+	user authUserPort,
+	account port.AccountUseCase,
+	board port.BoardUseCase,
+	post port.PostUseCase,
+	comment port.CommentUseCase,
+	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
+	enabled bool,
+) http.Handler {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	reportUseCase := &fakeReportUseCase{}
+	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	sanitizer := inputSanitizer.NewInputSanitizer()
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:     sessionUseCase,
+		UserUseCase:        user,
+		AccountUseCase:     account,
+		BoardUseCase:       board,
+		PostUseCase:        post,
+		CommentUseCase:     comment,
+		ReactionUseCase:    reaction,
+		AttachmentUseCase:  attachment,
+		ReportUseCase:      reportUseCase,
+		OutboxAdminUseCase: outboxAdminUseCase,
+		InputSanitizer:     sanitizer,
+		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
+		SanitizerEnabled:   enabled,
 	}).Handler
 }
 
@@ -1517,6 +1551,34 @@ func TestHTTP_WriteRateLimit_ReturnsTooManyRequests(t *testing.T) {
 	third := doJSONRequest(t, handler, http.MethodPost, "/signup", reqBody)
 	assert.Equal(t, http.StatusTooManyRequests, third.Code)
 	assert.JSONEq(t, `{"error":"too many requests"}`, third.Body.String())
+}
+
+func TestHTTP_BoardPostsPost_SanitizesInput(t *testing.T) {
+	post := &fakePostUseCase{
+		createPost: func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+			assert.Equal(t, "hello &lt;script&gt;alert(1)&lt;/script&gt;", title)
+			assert.Equal(t, "body &lt;img src=x onerror=alert(1)&gt;", content)
+			assert.Equal(t, int64(1), authorID)
+			assert.Equal(t, int64(3), boardID)
+			return 10, nil
+		},
+	}
+	handler := newTestHandlerWithSanitizer(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		post,
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		true,
+	)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/3/posts", map[string]any{
+		"title":   "hello <script>alert(1)</script>",
+		"content": "body <img src=x onerror=alert(1)>",
+		"tags":    []string{"go"},
+	}, 1)
+	assert.Equal(t, http.StatusCreated, rr.Code)
 }
 
 func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {

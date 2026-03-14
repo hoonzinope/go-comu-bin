@@ -58,6 +58,9 @@ type Config struct {
 				WindowSeconds int  `yaml:"windowSeconds"`
 				WriteRequests int  `yaml:"writeRequests"`
 			} `yaml:"rateLimit"`
+			Sanitizer struct {
+				Enabled bool `yaml:"enabled"`
+			} `yaml:"sanitizer"`
 			Auth struct {
 				Secret string `yaml:"secret"`
 			} `yaml:"auth"`
@@ -112,6 +115,7 @@ func Load() (*Config, error) {
 		"delivery.http.rateLimit.enabled",
 		"delivery.http.rateLimit.windowSeconds",
 		"delivery.http.rateLimit.writeRequests",
+		"delivery.http.sanitizer.enabled",
 		"delivery.http.auth.secret",
 		"event.outbox.workerCount",
 		"event.outbox.batchSize",
@@ -155,6 +159,7 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("delivery.http.rateLimit.enabled", true)
 	v.SetDefault("delivery.http.rateLimit.windowSeconds", 60)
 	v.SetDefault("delivery.http.rateLimit.writeRequests", 60)
+	v.SetDefault("delivery.http.sanitizer.enabled", true)
 	v.SetDefault("event.outbox.workerCount", 1)
 	v.SetDefault("event.outbox.batchSize", 100)
 	v.SetDefault("event.outbox.pollIntervalMillis", 100)

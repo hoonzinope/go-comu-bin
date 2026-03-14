@@ -2037,3 +2037,38 @@
 - `internal/delivery/http.go`
 - `internal/config/config.go`
 - `docs/CONFIG.md`
+
+## 2026-03-14 - Step 3의 XSS 방어는 입력 경계에서 HTML escape sanitizer 파이프라인으로 시작한다
+
+상태
+
+- decided
+
+배경
+
+- Rate limit 도입 이후에도 저장형 XSS를 줄이기 위한 입력 정제가 필요하다.
+- 현재 게시판/게시글/댓글/신고 텍스트 입력은 별도 sanitizer 없이 그대로 저장될 수 있다.
+
+관찰
+
+- 본 서비스는 markdown 기반 텍스트를 주로 다루며, HTML raw input 허용이 필수 요구사항으로 고정되어 있지 않다.
+- delivery 계층은 요청 파싱과 경계 검증 책임을 이미 가지므로 sanitizer 파이프라인의 첫 적용 지점으로 적합하다.
+
+결론
+
+- `InputSanitizer` 포트를 추가하고 기본 구현은 HTML escape 전략으로 시작한다.
+- `/api/v1` 쓰기 핸들러에서 게시판/게시글/댓글/신고 관련 텍스트를 usecase 전달 전에 sanitize한다.
+- 설정 키 `delivery.http.sanitizer.enabled`로 on/off 제어를 제공하고 기본값은 `true`로 둔다.
+
+후속 작업
+
+- sanitizer 어댑터를 policy 기반 allowlist(예: markdown-safe subset)로 확장할지 검토한다.
+- 추후 non-HTTP ingress(consumer/batch)에서도 동일 sanitizer policy를 재사용할 수 있게 경계를 정리한다.
+
+관련 문서/코드
+
+- `internal/application/port/input_sanitizer.go`
+- `internal/infrastructure/sanitizer/escape`
+- `internal/delivery/http.go`
+- `internal/config/config.go`
+- `docs/CONFIG.md`

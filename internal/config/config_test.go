@@ -45,6 +45,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.True(t, cfg.Delivery.HTTP.RateLimit.Enabled)
 	assert.Equal(t, 60, cfg.Delivery.HTTP.RateLimit.WindowSeconds)
 	assert.Equal(t, 60, cfg.Delivery.HTTP.RateLimit.WriteRequests)
+	assert.True(t, cfg.Delivery.HTTP.Sanitizer.Enabled)
 	assert.Equal(t, 3, cfg.Event.Outbox.WorkerCount)
 	assert.Equal(t, 200, cfg.Event.Outbox.BatchSize)
 	assert.Equal(t, 50, cfg.Event.Outbox.PollIntervalMillis)
