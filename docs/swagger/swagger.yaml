@@ -28,6 +28,11 @@ definitions:
         example: free
         type: string
     type: object
+  delivery.boardVisibilityRequest:
+    properties:
+      hidden:
+        type: boolean
+    type: object
   delivery.commentRequest:
     properties:
       content:
@@ -61,6 +66,36 @@ definitions:
         example: ok
         type: string
     type: object
+  delivery.outboxDeadListResponse:
+    properties:
+      has_more:
+        type: boolean
+      last_id:
+        type: string
+      limit:
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/delivery.outboxDeadMessageResponse'
+        type: array
+      next_last_id:
+        type: string
+    type: object
+  delivery.outboxDeadMessageResponse:
+    properties:
+      attempt_count:
+        type: integer
+      event_name:
+        type: string
+      id:
+        type: string
+      last_error:
+        type: string
+      next_attempt_at:
+        type: string
+      occurred_at:
+        type: string
+    type: object
   delivery.passwordOnlyRequest:
     properties:
       password:
@@ -87,6 +122,76 @@ definitions:
     properties:
       reaction_type:
         example: like
+        type: string
+    type: object
+  delivery.reportCreateRequest:
+    properties:
+      reason_code:
+        example: spam
+        type: string
+      reason_detail:
+        example: repeated spam
+        type: string
+      target_id:
+        example: 1
+        type: integer
+      target_type:
+        example: post
+        type: string
+    type: object
+  delivery.reportListResponse:
+    properties:
+      has_more:
+        type: boolean
+      last_id:
+        type: integer
+      limit:
+        type: integer
+      next_last_id:
+        type: integer
+      reports:
+        items:
+          $ref: '#/definitions/delivery.reportResponse'
+        type: array
+    type: object
+  delivery.reportResolveRequest:
+    properties:
+      resolution_note:
+        example: confirmed
+        type: string
+      status:
+        example: accepted
+        type: string
+    type: object
+  delivery.reportResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      reason_code:
+        type: string
+      reason_detail:
+        type: string
+      reporter_user_id:
+        type: integer
+      reporter_uuid:
+        type: string
+      resolution_note:
+        type: string
+      resolved_at:
+        type: string
+      resolved_by:
+        type: integer
+      resolved_by_uuid:
+        type: string
+      status:
+        type: string
+      target_id:
+        type: integer
+      target_type:
+        type: string
+      updated_at:
         type: string
     type: object
   delivery.signUpResponse:
@@ -297,6 +402,257 @@ info:
   title: go-comu-bin API
   version: "1.0"
 paths:
+  /admin/boards/{boardID}/visibility:
+    put:
+      consumes:
+      - application/json
+      description: Set board hidden visibility (admin only).
+      parameters:
+      - description: Board ID
+        in: path
+        name: boardID
+        required: true
+        type: integer
+      - description: Visibility payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.boardVisibilityRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set Board Visibility
+      tags:
+      - Admin
+  /admin/outbox/dead:
+    get:
+      description: List dead outbox messages (admin only).
+      parameters:
+      - description: Page size
+        in: query
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Cursor id
+        in: query
+        name: last_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.outboxDeadListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Dead Outbox Messages
+      tags:
+      - Admin
+  /admin/outbox/dead/{messageID}:
+    delete:
+      description: Permanently discard one dead outbox message (admin only).
+      parameters:
+      - description: Outbox Message ID
+        in: path
+        name: messageID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Discard Dead Outbox Message
+      tags:
+      - Admin
+  /admin/outbox/dead/{messageID}/requeue:
+    post:
+      description: Requeue one dead outbox message (admin only).
+      parameters:
+      - description: Outbox Message ID
+        in: path
+        name: messageID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Requeue Dead Outbox Message
+      tags:
+      - Admin
+  /admin/reports:
+    get:
+      description: List reports (admin only).
+      parameters:
+      - description: Report status filter
+        in: query
+        name: status
+        type: string
+      - description: Page size
+        in: query
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Cursor id
+        in: query
+        minimum: 0
+        name: last_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.reportListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Reports
+      tags:
+      - Admin
+  /admin/reports/{reportID}/resolve:
+    put:
+      consumes:
+      - application/json
+      description: Resolve report with accepted/rejected status (admin only).
+      parameters:
+      - description: Report ID
+        in: path
+        name: reportID
+        required: true
+        type: integer
+      - description: Resolve payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.reportResolveRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Resolve Report
+      tags:
+      - Admin
   /auth/login:
     post:
       consumes:
@@ -1381,6 +1737,50 @@ paths:
       summary: Set My Reaction for Post
       tags:
       - Reaction
+  /reports:
+    post:
+      consumes:
+      - application/json
+      description: Create a report for a post or comment.
+      parameters:
+      - description: Report payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.reportCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/delivery.idResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Report
+      tags:
+      - Report
   /signup:
     post:
       consumes:

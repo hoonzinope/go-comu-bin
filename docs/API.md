@@ -37,6 +37,37 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `DELETE /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자 쓰기 제재를 해제합니다.
 
+## Report
+
+- `POST /api/v1/reports` (인증 필요)
+  - 신고를 생성합니다.
+  - 요청 본문: `target_type`, `target_id`, `reason_code`, 선택적 `reason_detail`
+  - `target_type` 허용값: `post`, `comment`
+  - `reason_code` 허용값: `spam`, `abuse`, `sexual`, `violence`, `illegal`, `other`
+  - 동일 사용자는 동일 대상(`target_type`, `target_id`)을 한 번만 신고할 수 있습니다. 중복 신고는 `409 Conflict`
+
+## Admin Operations
+
+- `GET /api/v1/admin/reports?status=&limit=10&last_id=0` (인증 필요, admin)
+  - 신고 목록을 조회합니다.
+  - 기본 정렬은 `pending` 우선 + 최신순입니다.
+  - `status` 필터는 선택값이며, 허용값은 `pending`, `accepted`, `rejected`
+- `PUT /api/v1/admin/reports/{reportID}/resolve` (인증 필요, admin)
+  - 신고를 수동 처리합니다.
+  - 요청 본문: `status`, 선택적 `resolution_note`
+  - `status` 허용값: `accepted`, `rejected`
+  - 신고 처리만 수행하며, 콘텐츠 숨김/유저 제재는 자동 적용하지 않습니다.
+- `GET /api/v1/admin/outbox/dead?limit=10&last_id=` (인증 필요, admin)
+  - dead outbox 메시지 목록을 조회합니다.
+  - 응답 최소 필드: `id`, `event_name`, `attempt_count`, `last_error`, `occurred_at`, `next_attempt_at`
+- `POST /api/v1/admin/outbox/dead/{messageID}/requeue` (인증 필요, admin)
+  - dead 메시지를 재처리 큐로 되돌립니다.
+- `DELETE /api/v1/admin/outbox/dead/{messageID}` (인증 필요, admin)
+  - dead 메시지를 폐기(discard)합니다.
+- `PUT /api/v1/admin/boards/{boardID}/visibility` (인증 필요, admin)
+  - 게시판 `hidden` 상태를 변경합니다.
+  - 요청 본문: `hidden` (`true|false`)
+
 ## Board
 
 - `GET /api/v1/boards?limit=10&last_id=0`
@@ -47,6 +78,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `DELETE /api/v1/boards/{boardID}` (인증 필요, admin)
   - 비어 있는 게시판에만 허용됩니다.
   - 삭제되지 않은 게시글이 하나라도 있으면 `409 Conflict`
+  - `hidden` 게시판은 비admin에게 완전 비노출됩니다.
 
 ## Post
 
