@@ -8,7 +8,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,7 @@ func TestCommentService_UpdateComment_ForbiddenForNonOwnerNonAdmin(t *testing.T)
 
 	err = svc.UpdateComment(context.Background(), commentID, otherID, "new-comment")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestCommentService_UpdateComment_AllowedForAdmin(t *testing.T) {
@@ -69,7 +69,7 @@ func TestCommentService_CreateComment_InvalidInput(t *testing.T) {
 
 	_, err := svc.CreateComment(context.Background(), " ", userID, postID, nil)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestCommentService_CreateComment_BlockedForSuspendedUser(t *testing.T) {
@@ -84,7 +84,7 @@ func TestCommentService_CreateComment_BlockedForSuspendedUser(t *testing.T) {
 
 	_, err = svc.CreateComment(context.Background(), "comment", userID, postID, nil)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrUserSuspended))
+	assert.True(t, errors.Is(err, customerror.ErrUserSuspended))
 }
 
 func TestCommentService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
@@ -102,11 +102,11 @@ func TestCommentService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
 
 	_, err = svc.CreateComment(context.Background(), "comment", userID, postID, nil)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 
 	_, err = svc.GetCommentsByPost(context.Background(), postID, 10, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
 
 func TestCommentService_GetCommentsByPost_HasMoreAndNextCursor(t *testing.T) {
@@ -137,7 +137,7 @@ func TestCommentService_GetCommentsByPost_InvalidLimit(t *testing.T) {
 
 	_, err := svc.GetCommentsByPost(context.Background(), postID, 0, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestCommentService_GetCommentsByPost_ReturnsPostNotFound_WhenPostDeleted(t *testing.T) {
@@ -151,7 +151,7 @@ func TestCommentService_GetCommentsByPost_ReturnsPostNotFound_WhenPostDeleted(t 
 
 	_, err := svc.GetCommentsByPost(context.Background(), postID, 10, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrPostNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 }
 
 func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
@@ -212,7 +212,7 @@ func TestCommentService_GetCommentsByPost_ReturnsCacheFailure_WhenCacheLoadFails
 
 	_, err := svc.GetCommentsByPost(context.Background(), 1, 10, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+	assert.True(t, errors.Is(err, customerror.ErrCacheFailure))
 }
 
 func TestCommentService_DeleteComment_SoftDeletedCommentIsNoLongerVisible(t *testing.T) {
@@ -308,7 +308,7 @@ func TestCommentService_CreateReplyComment_RejectsNestedReply(t *testing.T) {
 
 	_, err := svc.CreateComment(context.Background(), "nested", userID, postID, &replyID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestCommentService_CreateReplyComment_RejectsParentFromAnotherPost(t *testing.T) {
@@ -322,5 +322,5 @@ func TestCommentService_CreateReplyComment_RejectsParentFromAnotherPost(t *testi
 
 	_, err := svc.CreateComment(context.Background(), "reply", userID, postID, &parentID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }

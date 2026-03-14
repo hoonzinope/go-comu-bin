@@ -32,4 +32,3 @@ func TestReportRepository_SelectReturnsClone(t *testing.T) {
 	require.NotNil(t, again)
 	assert.Equal(t, "detail", again.ReasonDetail)
 }
-

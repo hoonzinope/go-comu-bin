@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
 func AuthWithSession(sessionUseCase port.SessionUseCase, writeError func(*gin.Context, int, error)) gin.HandlerFunc {
@@ -32,11 +32,11 @@ func AuthWithSession(sessionUseCase port.SessionUseCase, writeError func(*gin.Co
 
 func statusForAuthError(err error) int {
 	switch {
-	case errors.Is(err, customError.ErrMissingAuthHeader):
+	case errors.Is(err, customerror.ErrMissingAuthHeader):
 		return http.StatusUnauthorized
-	case errors.Is(err, customError.ErrInvalidToken):
+	case errors.Is(err, customerror.ErrInvalidToken):
 		return http.StatusUnauthorized
-	case errors.Is(err, customError.ErrUnauthorized):
+	case errors.Is(err, customerror.ErrUnauthorized):
 		return http.StatusUnauthorized
 	default:
 		return http.StatusInternalServerError
@@ -63,12 +63,12 @@ func Token(c *gin.Context) (string, bool) {
 
 func extractToken(raw string) (string, error) {
 	if raw == "" {
-		return "", customError.ErrMissingAuthHeader
+		return "", customerror.ErrMissingAuthHeader
 	}
 
 	parts := strings.Fields(raw)
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
-		return "", customError.ErrInvalidToken
+		return "", customerror.ErrInvalidToken
 	}
 	return parts[1], nil
 }

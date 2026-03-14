@@ -9,7 +9,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
 var _ port.OutboxAdminUseCase = (*OutboxAdminService)(nil)
@@ -40,7 +40,7 @@ func (s *OutboxAdminService) GetDeadMessages(ctx context.Context, adminID int64,
 	lastID = strings.TrimSpace(lastID)
 	messages, err := s.outboxStore.SelectDead(limit+1, lastID)
 	if err != nil {
-		return nil, customError.WrapRepository("select dead outbox list", err)
+		return nil, customerror.WrapRepository("select dead outbox list", err)
 	}
 	hasMore := false
 	var nextLastID *string
@@ -78,13 +78,13 @@ func (s *OutboxAdminService) RequeueDeadMessage(ctx context.Context, adminID int
 	}
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	if err := s.ensureDeadMessage(messageID); err != nil {
 		return err
 	}
 	if err := s.outboxStore.MarkRetry(messageID, time.Now(), "manual requeue by admin"); err != nil {
-		return customError.WrapRepository("requeue dead outbox message", err)
+		return customerror.WrapRepository("requeue dead outbox message", err)
 	}
 	s.logger.Info("admin requeued dead outbox message", "message_id", messageID, "admin_id", adminID)
 	return nil
@@ -96,13 +96,13 @@ func (s *OutboxAdminService) DiscardDeadMessage(ctx context.Context, adminID int
 	}
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	if err := s.ensureDeadMessage(messageID); err != nil {
 		return err
 	}
 	if err := s.outboxStore.MarkSucceeded(messageID); err != nil {
-		return customError.WrapRepository("discard dead outbox message", err)
+		return customerror.WrapRepository("discard dead outbox message", err)
 	}
 	s.logger.Info("admin discarded dead outbox message", "message_id", messageID, "admin_id", adminID)
 	return nil
@@ -111,10 +111,10 @@ func (s *OutboxAdminService) DiscardDeadMessage(ctx context.Context, adminID int
 func (s *OutboxAdminService) ensureAdmin(ctx context.Context, adminID int64) error {
 	admin, err := s.userRepository.SelectUserByID(ctx, adminID)
 	if err != nil {
-		return customError.WrapRepository("select admin by id for outbox admin", err)
+		return customerror.WrapRepository("select admin by id for outbox admin", err)
 	}
 	if admin == nil {
-		return customError.ErrUserNotFound
+		return customerror.ErrUserNotFound
 	}
 	return s.authorizationPolicy.AdminOnly(admin)
 }
@@ -122,10 +122,10 @@ func (s *OutboxAdminService) ensureAdmin(ctx context.Context, adminID int64) err
 func (s *OutboxAdminService) ensureDeadMessage(messageID string) error {
 	message, err := s.outboxStore.SelectByID(messageID)
 	if err != nil {
-		return customError.WrapRepository("select outbox message by id for dead operation", err)
+		return customerror.WrapRepository("select outbox message by id for dead operation", err)
 	}
 	if message == nil || message.Status != port.OutboxStatusDead {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	return nil
 }

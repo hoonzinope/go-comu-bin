@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,6 +50,30 @@ type spyFileStorage struct {
 	deleteKey    string
 	deleteErr    error
 }
+
+type attachmentSpyLogger struct {
+	warns int
+}
+
+func (l *attachmentSpyLogger) Logger() *slog.Logger {
+	return slog.New(&attachmentSpyHandler{logger: l})
+}
+
+type attachmentSpyHandler struct {
+	logger *attachmentSpyLogger
+}
+
+func (h *attachmentSpyHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *attachmentSpyHandler) Handle(_ context.Context, record slog.Record) error {
+	if record.Level >= slog.LevelWarn {
+		h.logger.warns++
+	}
+	return nil
+}
+
+func (h *attachmentSpyHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *attachmentSpyHandler) WithGroup(string) slog.Handler      { return h }
 
 func (s *spyFileStorage) Save(ctx context.Context, key string, content io.Reader) error {
 	_ = ctx
@@ -229,7 +254,7 @@ func TestAttachmentService_GetPostAttachments_RequiresPublishedPost(t *testing.T
 
 	_, err := svc.GetPostAttachments(context.Background(), post)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrPostNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 }
 
 func TestAttachmentService_GetPostAttachments_ExcludesOrphaned(t *testing.T) {
@@ -266,11 +291,11 @@ func TestAttachmentService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
 
 	_, err = svc.GetPostAttachments(context.Background(), postID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 
 	_, err = svc.UploadPostAttachment(context.Background(), postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
 
 func TestAttachmentService_DeletePostAttachment_ForbiddenForNonOwner(t *testing.T) {
@@ -285,7 +310,7 @@ func TestAttachmentService_DeletePostAttachment_ForbiddenForNonOwner(t *testing.
 
 	err = svc.DeletePostAttachment(context.Background(), postID, attachmentID, otherID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestAttachmentService_DeletePostAttachment_InvalidatesPostDetailCache(t *testing.T) {
@@ -328,7 +353,7 @@ func TestAttachmentService_DeletePostAttachment_RejectsReferencedAttachment(t *t
 
 	err = svc.DeletePostAttachment(context.Background(), postID, attachmentID, userID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 	assert.Empty(t, storage.deleteKey)
 
 	stillThere, err := repositories.attachment.SelectByID(context.Background(), attachmentID)
@@ -345,7 +370,7 @@ func TestAttachmentService_DeletePostAttachment_ReturnsAttachmentNotFound_WhenAt
 
 	err := svc.DeletePostAttachment(context.Background(), postID, 999, userID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrAttachmentNotFound))
 }
 
 func TestAttachmentService_DeletePostAttachment_MarksPendingDeleteWithoutDeletingStoredFile(t *testing.T) {
@@ -385,11 +410,11 @@ func TestAttachmentService_DeletePostAttachment_HidesPendingDeleteAttachment(t *
 
 	_, err = svc.GetPostAttachmentFile(context.Background(), postID, attachmentID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrAttachmentNotFound))
 
 	_, err = svc.GetPostAttachmentPreviewFile(context.Background(), postID, attachmentID, userID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrAttachmentNotFound))
 }
 
 func TestAttachmentService_UploadPostAttachment_SavesFileAndMetadata(t *testing.T) {
@@ -487,6 +512,42 @@ func TestAttachmentService_UploadPostAttachment_DeletesStoredFileWhenMetadataSav
 	assert.Equal(t, storage.savedKey, storage.deleteKey)
 }
 
+func TestAttachmentService_UploadPostAttachment_LogsWarnWhenRollbackDeleteFails(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{deleteErr: errors.New("delete failed")}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	failingUoW := testUnitOfWork{scope: testTxScope{
+		user:       repositories.user,
+		board:      repositories.board,
+		post:       repositories.post,
+		tag:        repositories.tag,
+		postTag:    repositories.postTag,
+		comment:    repositories.comment,
+		reaction:   repositories.reaction,
+		attachment: &failingAttachmentRepository{saveErr: errors.New("save metadata failed")},
+	}}
+	spy := &attachmentSpyLogger{}
+	svc := NewAttachmentService(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		&failingAttachmentRepository{saveErr: errors.New("save metadata failed")},
+		failingUoW,
+		storage,
+		newTestCache(),
+		attachmentDefaultMaxSizeBytes,
+		newTestAuthorizationPolicy(),
+		spy.Logger(),
+	)
+
+	_, err := svc.UploadPostAttachment(context.Background(), postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
+	require.Error(t, err)
+	assert.GreaterOrEqual(t, spy.warns, 1)
+	assert.Contains(t, err.Error(), "rollback upload file")
+}
+
 func TestAttachmentService_UploadPostAttachment_OptimizesJPEGBeforeSaving(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{}
@@ -561,7 +622,7 @@ func TestAttachmentService_UploadPostAttachment_RejectsUnsupportedContentType(t 
 
 	_, err := svc.UploadPostAttachment(context.Background(), postID, userID, "a.svg", "image/svg+xml", bytes.NewReader([]byte("<svg></svg>")))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 	assert.Empty(t, storage.savedKey)
 }
 
@@ -593,7 +654,7 @@ func TestAttachmentService_UploadPostAttachment_RejectsMismatchedSniffedContentT
 
 	_, err := svc.UploadPostAttachment(context.Background(), postID, userID, "a.png", "image/png", strings.NewReader("plain text"))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 	assert.Empty(t, storage.savedKey)
 }
 
@@ -608,7 +669,7 @@ func TestAttachmentService_UploadPostAttachment_RejectsOversizedFile(t *testing.
 	oversized := append(testPNGBytes(), bytes.Repeat([]byte{0}, int(attachmentDefaultMaxSizeBytes))...)
 	_, err := svc.UploadPostAttachment(context.Background(), postID, userID, "a.png", "image/png", bytes.NewReader(oversized))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 	assert.Empty(t, storage.savedKey)
 }
 
@@ -622,7 +683,7 @@ func TestAttachmentService_UploadPostAttachment_UsesConfiguredMaxSize(t *testing
 
 	_, err := svc.UploadPostAttachment(context.Background(), postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestAttachmentService_UploadPostAttachment_StopsReadingAfterConfiguredLimit(t *testing.T) {
@@ -636,7 +697,7 @@ func TestAttachmentService_UploadPostAttachment_StopsReadingAfterConfiguredLimit
 	reader := &countingReader{data: append(testPNGBytes(), bytes.Repeat([]byte{1}, 1024)...)}
 	_, err := svc.UploadPostAttachment(context.Background(), postID, userID, "a.png", "image/png", reader)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 	assert.Equal(t, 5, reader.readBytes)
 	assert.Empty(t, storage.savedKey)
 }
@@ -705,7 +766,7 @@ func TestAttachmentService_GetPostAttachmentFile_RejectsOrphaned(t *testing.T) {
 
 	_, err = svc.GetPostAttachmentFile(context.Background(), postID, attachmentID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrAttachmentNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrAttachmentNotFound))
 }
 
 func TestAttachmentService_GetPostAttachmentPreviewFile_AllowedForOwner(t *testing.T) {

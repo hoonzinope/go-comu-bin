@@ -1827,6 +1827,40 @@
 - `internal/application/service/postService.go`
 - `internal/application/service/postService_test.go`
 
+## 2026-03-14 - Round 25 잔여 항목(R25-02/04/05)을 운영 추적성과 코드 일관성 중심으로 반영한다
+
+상태
+
+- decided
+
+배경
+
+- Round 25에서 남아 있던 잔여 항목은 업로드 롤백 실패 운영 추적성, error 패키지 경로 관례 불일치, 의미 없는 구현 주석 정리였다.
+
+관찰
+
+- 첨부 업로드에서 메타 저장 실패 후 스토리지 롤백이 실패하면 운영자가 즉시 원인을 추적하기 어려웠다.
+- `internal/customError` 디렉토리와 `package customerror` 명칭이 불일치했다.
+- board/comment 서비스에 스캐폴딩성 주석이 남아 코드 가독성을 저해했다.
+
+결론
+
+- 첨부 업로드 롤백 실패 시 `storage_key`를 포함한 warn 로그를 남긴다.
+- error 패키지 디렉토리를 `internal/customerror`로 정렬하고 import 경로를 일괄 갱신한다.
+- 구현 설명성 주석(`게시판/댓글 ... 로직 구현`)은 제거한다.
+
+후속 작업
+
+- 스토리지-DB 보상 전략(2-phase 또는 outbox 기반) 고도화는 별도 설계 항목으로 유지한다.
+
+관련 문서/코드
+
+- `internal/application/service/attachmentService.go`
+- `internal/application/service/attachmentService_test.go`
+- `internal/customerror`
+- `internal/application/service/boardService.go`
+- `internal/application/service/commentService.go`
+
 ## 2026-03-14 - 태그 목록 hidden 필터 보완 후 리뷰 반영으로 페이징 overflow 방어와 배치 보드 조회를 추가한다
 
 상태

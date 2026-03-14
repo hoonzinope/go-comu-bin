@@ -20,7 +20,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
@@ -439,14 +439,14 @@ func (f *fakeAttachmentUseCase) GetPostAttachmentFile(ctx context.Context, postI
 	if f.getPostAttachmentFile != nil {
 		return f.getPostAttachmentFile(ctx, postID, attachmentID)
 	}
-	return nil, customError.ErrAttachmentNotFound
+	return nil, customerror.ErrAttachmentNotFound
 }
 
 func (f *fakeAttachmentUseCase) GetPostAttachmentPreviewFile(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
 	if f.getPostAttachmentPreviewFile != nil {
 		return f.getPostAttachmentPreviewFile(ctx, postID, attachmentID, userID)
 	}
-	return nil, customError.ErrAttachmentNotFound
+	return nil, customerror.ErrAttachmentNotFound
 }
 
 func (f *fakeAttachmentUseCase) DeletePostAttachment(ctx context.Context, postID, attachmentID, userID int64) error {
@@ -1407,7 +1407,7 @@ func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
 func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 	user := &fakeUserUseCase{
 		signUp: func(ctx context.Context, username, password string) (string, error) {
-			return "", customError.ErrUserAlreadyExists
+			return "", customerror.ErrUserAlreadyExists
 		},
 	}
 	handler := newTestHandler(user, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
@@ -1617,7 +1617,7 @@ func TestHTTP_BoardPostsPost_SanitizesInput(t *testing.T) {
 func TestHTTP_UserDeleteMe_Unauthorized(t *testing.T) {
 	account := &fakeAccountUseCase{
 		deleteMyAccount: func(ctx context.Context, userID int64, password string) error {
-			return customError.ErrInvalidCredential
+			return customerror.ErrInvalidCredential
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, account, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
@@ -1645,7 +1645,7 @@ func TestHTTP_ProtectedRoute_InvalidAuthorizationScheme(t *testing.T) {
 func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 	board := &fakeBoardUseCase{
 		createBoard: func(ctx context.Context, userID int64, name, description string) (int64, error) {
-			return 0, customError.ErrForbidden
+			return 0, customerror.ErrForbidden
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, board, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
@@ -1907,7 +1907,7 @@ func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 func TestHTTP_PostDetail_NotFound(t *testing.T) {
 	post := &fakePostUseCase{
 		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
-			return nil, customError.ErrPostNotFound
+			return nil, customerror.ErrPostNotFound
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})

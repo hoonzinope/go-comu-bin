@@ -70,7 +70,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
 
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 ```
 

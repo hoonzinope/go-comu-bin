@@ -9,7 +9,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +25,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 
 	err := svc.UpdatePost(context.Background(), postID, otherID, "new-title", "new-content", nil)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
@@ -69,7 +69,7 @@ func TestPostService_CreatePost_InvalidInput(t *testing.T) {
 
 	_, err := svc.CreatePost(context.Background(), " ", "content", nil, userID, boardID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
@@ -83,7 +83,7 @@ func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
 
 	_, err = svc.CreatePost(context.Background(), "title", "content", nil, userID, boardID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrUserSuspended))
+	assert.True(t, errors.Is(err, customerror.ErrUserSuspended))
 }
 
 func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
@@ -112,7 +112,7 @@ func TestPostService_GetPostsList_InvalidLimit(t *testing.T) {
 
 	_, err := svc.GetPostsList(context.Background(), boardID, 0, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testing.T) {
@@ -125,7 +125,7 @@ func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testi
 
 	_, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
 
 func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
@@ -206,7 +206,7 @@ func TestPostService_GetPostDetail_ReturnsCacheFailure_WhenCacheLoadFails(t *tes
 
 	_, err := svc.GetPostDetail(context.Background(), 1)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+	assert.True(t, errors.Is(err, customerror.ErrCacheFailure))
 }
 
 func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
@@ -220,7 +220,7 @@ func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
 
 	_, err := svc.GetPostDetail(context.Background(), postID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrPostNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 
 	list, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
 	require.NoError(t, err)
@@ -372,7 +372,7 @@ func TestPostService_GetPostsByTag_RejectsTooLargeLimit(t *testing.T) {
 
 	_, err = svc.GetPostsByTag(context.Background(), "go", maxPageLimit+1, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestPostService_CreatePost_InvalidTags(t *testing.T) {
@@ -383,7 +383,7 @@ func TestPostService_CreatePost_InvalidTags(t *testing.T) {
 
 	_, err := svc.CreatePost(context.Background(), "title", "content", []string{" "}, userID, boardID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestPostService_DeletePost_OrphansAttachmentsAndSoftDeletesComments(t *testing.T) {
@@ -497,7 +497,7 @@ func TestPostService_UpdatePost_RejectsForeignAttachmentReference(t *testing.T) 
 
 	err = svc.UpdatePost(context.Background(), postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(foreignAttachmentID, 10)+")", nil)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestPostService_PublishPost_RejectsMissingAttachmentReference(t *testing.T) {
@@ -509,7 +509,7 @@ func TestPostService_PublishPost_RejectsMissingAttachmentReference(t *testing.T)
 
 	err := svc.PublishPost(context.Background(), postID, userID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {

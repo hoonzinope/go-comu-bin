@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -18,7 +18,7 @@ func userUUIDByID(ctx context.Context, userRepository port.UserRepository, userI
 	}
 	userUUID, ok := usersByID[userID]
 	if !ok {
-		return "", customError.WrapRepository("select user by id including deleted", fmt.Errorf("user %d: %w", userID, errors.New("not found")))
+		return "", customerror.WrapRepository("select user by id including deleted", fmt.Errorf("user %d: %w", userID, errors.New("not found")))
 	}
 	return userUUID, nil
 }
@@ -27,13 +27,13 @@ func userUUIDsByIDs(ctx context.Context, userRepository port.UserRepository, ids
 	uniqueIDs := uniqueInt64s(ids)
 	usersByID, err := userRepository.SelectUsersByIDsIncludingDeleted(ctx, uniqueIDs)
 	if err != nil {
-		return nil, customError.WrapRepository("select users by ids including deleted", err)
+		return nil, customerror.WrapRepository("select users by ids including deleted", err)
 	}
 	out := make(map[int64]string, len(usersByID))
 	for _, id := range uniqueIDs {
 		user, ok := usersByID[id]
 		if !ok || user == nil {
-			return nil, customError.WrapRepository("select users by ids including deleted", fmt.Errorf("user %d: %w", id, errors.New("not found")))
+			return nil, customerror.WrapRepository("select users by ids including deleted", fmt.Errorf("user %d: %w", id, errors.New("not found")))
 		}
 		out[id] = user.UUID
 	}

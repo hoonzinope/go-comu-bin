@@ -13,4 +13,3 @@ type ReportRepository interface {
 	SelectList(ctx context.Context, status *entity.ReportStatus, limit int, lastID int64) ([]*entity.Report, error)
 	Update(ctx context.Context, report *entity.Report) error
 }
-

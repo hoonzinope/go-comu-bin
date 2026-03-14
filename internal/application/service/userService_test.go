@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +28,7 @@ func TestUserService_SignUp_Duplicate(t *testing.T) {
 
 	_, err := svc.SignUp(context.Background(), "alice", "pw2")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
+	assert.True(t, errors.Is(err, customerror.ErrUserAlreadyExists))
 }
 
 func TestUserService_SignUp_TrimsUsernameBeforePersist(t *testing.T) {
@@ -52,7 +52,7 @@ func TestUserService_SignUp_DuplicateAfterWhitespaceNormalization(t *testing.T) 
 
 	_, err = svc.SignUp(context.Background(), " alice ", "pw2")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrUserAlreadyExists))
+	assert.True(t, errors.Is(err, customerror.ErrUserAlreadyExists))
 }
 
 func TestUserService_SignUp_InvalidInput(t *testing.T) {
@@ -61,7 +61,7 @@ func TestUserService_SignUp_InvalidInput(t *testing.T) {
 
 	_, err := svc.SignUp(context.Background(), " ", "pw")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
@@ -74,7 +74,7 @@ func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 
 	err = svc.DeleteMe(context.Background(), user.ID, "wrong")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidCredential))
 }
 
 func TestUserService_DeleteMe_Success(t *testing.T) {
@@ -94,7 +94,7 @@ func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 
 	err := svc.DeleteMe(context.Background(), 999, "pw")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrUserNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrUserNotFound))
 }
 
 func TestUserService_DeleteMe_SucceedsEvenWhenUserHasPostsCommentsAndReactions(t *testing.T) {
@@ -145,7 +145,7 @@ func TestUserService_DeleteMe_InvalidatesCredentialsAfterSoftDelete(t *testing.T
 
 	_, err = svc.VerifyCredentials(context.Background(), "alice", "pw")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidCredential))
 }
 
 func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
@@ -154,7 +154,7 @@ func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 
 	_, err := svc.VerifyCredentials(context.Background(), "nope", "pw")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidCredential))
 }
 
 func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
@@ -164,7 +164,7 @@ func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 
 	_, err := svc.VerifyCredentials(context.Background(), "alice", "wrong")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidCredential))
 }
 
 func TestUserService_VerifyCredentials_TrimsUsername(t *testing.T) {
@@ -209,7 +209,7 @@ func TestUserService_SuspendUser_ForbiddenForNonAdmin(t *testing.T) {
 
 	err = svc.SuspendUser(context.Background(), userID, target.UUID, "spam", "7d")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestUserService_UnsuspendUser_Success(t *testing.T) {
@@ -265,5 +265,5 @@ func TestUserService_GetUserSuspension_ForbiddenForNonAdmin(t *testing.T) {
 
 	_, err = svc.GetUserSuspension(context.Background(), userID, target.UUID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }

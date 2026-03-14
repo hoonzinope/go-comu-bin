@@ -10,7 +10,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -54,17 +54,17 @@ func NewReportServiceWithActionDispatcher(
 
 func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
 	if targetID <= 0 {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	if _, ok := entity.ParseReportTargetType(string(targetType)); !ok {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	if _, ok := entity.ParseReportReasonCode(string(reasonCode)); !ok {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	reasonDetail = strings.TrimSpace(reasonDetail)
 	if len(reasonDetail) > maxReportReasonDetailLength {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 
 	report := entity.NewReport(targetType, targetID, reporterUserID, reasonCode, reasonDetail)
@@ -73,10 +73,10 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, reporterUserID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for create report", err)
+			return customerror.WrapRepository("select user by id for create report", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 
 		if err := s.ensureReportTargetExistsTx(tx, targetType, targetID); err != nil {
@@ -84,10 +84,10 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 		}
 		reportID, err = tx.ReportRepository().Save(txCtx, report)
 		if err != nil {
-			if errors.Is(err, customError.ErrReportAlreadyExists) {
-				return customError.ErrReportAlreadyExists
+			if errors.Is(err, customerror.ErrReportAlreadyExists) {
+				return customerror.ErrReportAlreadyExists
 			}
-			return customError.WrapRepository("save report", err)
+			return customerror.WrapRepository("save report", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReportChanged("created", reportID, string(entity.ReportStatusPending))); err != nil {
 			return err
@@ -106,7 +106,7 @@ func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *e
 	}
 	if status != nil {
 		if _, ok := entity.ParseReportStatus(string(*status)); !ok {
-			return nil, customError.ErrInvalidInput
+			return nil, customerror.ErrInvalidInput
 		}
 	}
 
@@ -115,10 +115,10 @@ func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *e
 		txCtx := tx.Context()
 		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
 		if err != nil {
-			return customError.WrapRepository("select admin by id for get reports", err)
+			return customerror.WrapRepository("select admin by id for get reports", err)
 		}
 		if admin == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 			return err
@@ -126,7 +126,7 @@ func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *e
 
 		items, err := tx.ReportRepository().SelectList(txCtx, status, limit+1, lastID)
 		if err != nil {
-			return customError.WrapRepository("select report list", err)
+			return customerror.WrapRepository("select report list", err)
 		}
 		hasMore := false
 		var nextLastID *int64
@@ -159,40 +159,40 @@ func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *e
 
 func (s *ReportService) ResolveReport(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error {
 	if reportID <= 0 {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	if status != entity.ReportStatusAccepted && status != entity.ReportStatusRejected {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	resolutionNote = strings.TrimSpace(resolutionNote)
 	if len(resolutionNote) > maxReportResolutionNoteLength {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
 		if err != nil {
-			return customError.WrapRepository("select admin by id for resolve report", err)
+			return customerror.WrapRepository("select admin by id for resolve report", err)
 		}
 		if admin == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
 			return err
 		}
 		report, err := tx.ReportRepository().SelectByID(txCtx, reportID)
 		if err != nil {
-			return customError.WrapRepository("select report by id for resolve report", err)
+			return customerror.WrapRepository("select report by id for resolve report", err)
 		}
 		if report == nil {
-			return customError.ErrReportNotFound
+			return customerror.ErrReportNotFound
 		}
 		if !report.Resolve(status, resolutionNote, adminID) {
-			return customError.ErrInvalidInput
+			return customerror.ErrInvalidInput
 		}
 		if err := tx.ReportRepository().Update(txCtx, report); err != nil {
-			return customError.WrapRepository("update report for resolve", err)
+			return customerror.WrapRepository("update report for resolve", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReportChanged("resolved", report.ID, string(report.Status))); err != nil {
 			return err
@@ -209,23 +209,23 @@ func (s *ReportService) ensureReportTargetExistsTx(tx port.TxScope, targetType e
 	case entity.ReportTargetPost:
 		post, err := tx.PostRepository().SelectPostByID(txCtx, targetID)
 		if err != nil {
-			return customError.WrapRepository("select post by id for report target", err)
+			return customerror.WrapRepository("select post by id for report target", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		return nil
 	case entity.ReportTargetComment:
 		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, targetID)
 		if err != nil {
-			return customError.WrapRepository("select comment by id for report target", err)
+			return customerror.WrapRepository("select comment by id for report target", err)
 		}
 		if comment == nil {
-			return customError.ErrCommentNotFound
+			return customerror.ErrCommentNotFound
 		}
 		return nil
 	default:
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 }
 
@@ -248,7 +248,7 @@ func (s *ReportService) reportsFromEntities(ctx context.Context, reports []*enti
 	for _, report := range reports {
 		reporterUUID, ok := userUUIDs[report.ReporterUserID]
 		if !ok {
-			return nil, customError.WrapRepository("select users by ids including deleted", errors.New("reporter not found"))
+			return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("reporter not found"))
 		}
 		view := model.Report{
 			ID:             report.ID,
@@ -273,4 +273,3 @@ func (s *ReportService) reportsFromEntities(ctx context.Context, reports []*enti
 	}
 	return out, nil
 }
-

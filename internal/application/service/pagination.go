@@ -1,12 +1,12 @@
 package service
 
-import customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+import customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 
 const maxPageLimit = 1000
 
 func requirePositiveLimit(limit int) error {
 	if limit < 1 || limit > maxPageLimit {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	return nil
 }

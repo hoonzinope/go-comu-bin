@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +42,7 @@ func RunReportRepositoryContractTests(t *testing.T, newRepository func() port.Re
 
 		_, err = repo.Save(context.Background(), entity.NewReport(entity.ReportTargetPost, 10, 1, entity.ReportReasonAbuse, "second"))
 		require.Error(t, err)
-		assert.ErrorIs(t, err, customError.ErrReportAlreadyExists)
+		assert.ErrorIs(t, err, customerror.ErrReportAlreadyExists)
 	})
 
 	t.Run("list pending first then latest", func(t *testing.T) {
@@ -83,4 +83,3 @@ func RunReportRepositoryContractTests(t *testing.T, newRepository func() port.Re
 		assert.Equal(t, id3, list[0].ID)
 	})
 }
-

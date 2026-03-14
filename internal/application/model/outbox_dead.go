@@ -18,4 +18,3 @@ type OutboxDeadMessageList struct {
 	HasMore    bool
 	NextLastID *string
 }
-

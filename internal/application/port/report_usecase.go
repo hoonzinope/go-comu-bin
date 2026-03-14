@@ -10,4 +10,3 @@ type ReportUseCase interface {
 	GetReports(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error)
 	ResolveReport(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error
 }
-

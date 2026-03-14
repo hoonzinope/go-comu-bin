@@ -22,7 +22,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -106,7 +106,7 @@ func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository
 
 func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || strings.TrimSpace(storageKey) == "" || sizeBytes <= 0 {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	attachment := entity.NewAttachment(postID, fileName, contentType, sizeBytes, storageKey)
 	var id int64
@@ -114,17 +114,17 @@ func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, us
 		txCtx := tx.Context()
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, postID)
 		if err != nil {
-			return customError.WrapRepository("select post by id including unpublished for create attachment", err)
+			return customerror.WrapRepository("select post by id including unpublished for create attachment", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		requester, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for create attachment", err)
+			return customerror.WrapRepository("select user by id for create attachment", err)
 		}
 		if requester == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.ensureBoardVisibleTx(tx, requester, post.BoardID); err != nil {
 			return err
@@ -137,7 +137,7 @@ func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, us
 		}
 		id, err = tx.AttachmentRepository().Save(txCtx, attachment)
 		if err != nil {
-			return customError.WrapRepository("save attachment", err)
+			return customerror.WrapRepository("save attachment", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewAttachmentChanged("created", id, postID)); err != nil {
 			return err
@@ -152,31 +152,31 @@ func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, us
 
 func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || content == nil {
-		return nil, customError.ErrInvalidInput
+		return nil, customerror.ErrInvalidInput
 	}
 	data, err := readUploadContent(content, s.maxUploadSizeBytes)
 	if err != nil {
 		if errors.Is(err, errAttachmentTooLarge) {
-			return nil, customError.ErrInvalidInput
+			return nil, customerror.ErrInvalidInput
 		}
-		return nil, customError.Wrap(customError.ErrInternalServerError, "read upload content", err)
+		return nil, customerror.Wrap(customerror.ErrInternalServerError, "read upload content", err)
 	}
 	if err := validateAttachmentUpload(fileName, contentType, data, s.maxUploadSizeBytes); err != nil {
 		return nil, err
 	}
 	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(ctx, postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select post by id including unpublished for upload attachment", err)
+		return nil, customerror.WrapRepository("select post by id including unpublished for upload attachment", err)
 	}
 	if post == nil {
-		return nil, customError.ErrPostNotFound
+		return nil, customerror.ErrPostNotFound
 	}
 	requester, err := s.userRepository.SelectUserByID(ctx, userID)
 	if err != nil {
-		return nil, customError.WrapRepository("select user by id for upload attachment", err)
+		return nil, customerror.WrapRepository("select user by id for upload attachment", err)
 	}
 	if requester == nil {
-		return nil, customError.ErrUserNotFound
+		return nil, customerror.ErrUserNotFound
 	}
 	if err := s.ensureBoardVisible(ctx, requester, post.BoardID); err != nil {
 		return nil, err
@@ -191,12 +191,19 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, us
 	data = optimizeAttachmentImage(contentType, data, s.imageOptimization)
 	storageKey := buildAttachmentStorageKey(postID, fileName)
 	if err := s.fileStorage.Save(ctx, storageKey, bytes.NewReader(data)); err != nil {
-		return nil, customError.Wrap(customError.ErrInternalServerError, "save upload file", err)
+		return nil, customerror.Wrap(customerror.ErrInternalServerError, "save upload file", err)
 	}
 	id, err := s.CreatePostAttachment(ctx, postID, userID, fileName, contentType, int64(len(data)), storageKey)
 	if err != nil {
 		if deleteErr := s.fileStorage.Delete(ctx, storageKey); deleteErr != nil {
-			return nil, errors.Join(err, customError.Wrap(customError.ErrInternalServerError, "rollback upload file", deleteErr))
+			s.logger.Warn(
+				"attachment rollback file delete failed",
+				"storage_key", storageKey,
+				"post_id", postID,
+				"user_id", userID,
+				"error", deleteErr,
+			)
+			return nil, errors.Join(err, customerror.Wrap(customerror.ErrInternalServerError, "rollback upload file", deleteErr))
 		}
 		return nil, err
 	}
@@ -210,17 +217,17 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postID, us
 func (s *AttachmentService) GetPostAttachments(ctx context.Context, postID int64) ([]model.Attachment, error) {
 	post, err := s.postRepository.SelectPostByID(ctx, postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select post by id for get attachments", err)
+		return nil, customerror.WrapRepository("select post by id for get attachments", err)
 	}
 	if post == nil {
-		return nil, customError.ErrPostNotFound
+		return nil, customerror.ErrPostNotFound
 	}
 	if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
 		return nil, err
 	}
 	items, err := s.attachmentRepository.SelectByPostID(ctx, postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select attachments by post id", err)
+		return nil, customerror.WrapRepository("select attachments by post id", err)
 	}
 	out := make([]model.Attachment, 0, len(items))
 	for _, item := range items {
@@ -244,27 +251,27 @@ func (s *AttachmentService) GetPostAttachments(ctx context.Context, postID int64
 func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
 	post, err := s.postRepository.SelectPostByID(ctx, postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select post by id for get attachment file", err)
+		return nil, customerror.WrapRepository("select post by id for get attachment file", err)
 	}
 	if post == nil {
-		return nil, customError.ErrPostNotFound
+		return nil, customerror.ErrPostNotFound
 	}
 	if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
 		return nil, err
 	}
 	attachment, err := s.attachmentRepository.SelectByID(ctx, attachmentID)
 	if err != nil {
-		return nil, customError.WrapRepository("select attachment by id for get attachment file", err)
+		return nil, customerror.WrapRepository("select attachment by id for get attachment file", err)
 	}
 	if attachment == nil || attachment.PostID != postID {
-		return nil, customError.ErrAttachmentNotFound
+		return nil, customerror.ErrAttachmentNotFound
 	}
 	if attachment.IsOrphaned() || attachment.IsPendingDelete() {
-		return nil, customError.ErrAttachmentNotFound
+		return nil, customerror.ErrAttachmentNotFound
 	}
 	content, err := s.fileStorage.Open(ctx, attachment.StorageKey)
 	if err != nil {
-		return nil, customError.Wrap(customError.ErrInternalServerError, "open attachment file", err)
+		return nil, customerror.Wrap(customerror.ErrInternalServerError, "open attachment file", err)
 	}
 	return &model.AttachmentFile{
 		FileName:    attachment.FileName,
@@ -278,17 +285,17 @@ func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postID, a
 func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
 	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(ctx, postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select post by id including unpublished for preview attachment file", err)
+		return nil, customerror.WrapRepository("select post by id including unpublished for preview attachment file", err)
 	}
 	if post == nil {
-		return nil, customError.ErrPostNotFound
+		return nil, customerror.ErrPostNotFound
 	}
 	requester, err := s.userRepository.SelectUserByID(ctx, userID)
 	if err != nil {
-		return nil, customError.WrapRepository("select user by id for preview attachment file", err)
+		return nil, customerror.WrapRepository("select user by id for preview attachment file", err)
 	}
 	if requester == nil {
-		return nil, customError.ErrUserNotFound
+		return nil, customerror.ErrUserNotFound
 	}
 	if err := s.ensureBoardVisible(ctx, requester, post.BoardID); err != nil {
 		return nil, err
@@ -298,17 +305,17 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, po
 	}
 	attachment, err := s.attachmentRepository.SelectByID(ctx, attachmentID)
 	if err != nil {
-		return nil, customError.WrapRepository("select attachment by id for preview attachment file", err)
+		return nil, customerror.WrapRepository("select attachment by id for preview attachment file", err)
 	}
 	if attachment == nil || attachment.PostID != postID {
-		return nil, customError.ErrAttachmentNotFound
+		return nil, customerror.ErrAttachmentNotFound
 	}
 	if attachment.IsPendingDelete() {
-		return nil, customError.ErrAttachmentNotFound
+		return nil, customerror.ErrAttachmentNotFound
 	}
 	content, err := s.fileStorage.Open(ctx, attachment.StorageKey)
 	if err != nil {
-		return nil, customError.Wrap(customError.ErrInternalServerError, "open preview attachment file", err)
+		return nil, customerror.Wrap(customerror.ErrInternalServerError, "open preview attachment file", err)
 	}
 	return &model.AttachmentFile{
 		FileName:    attachment.FileName,
@@ -324,17 +331,17 @@ func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postID, at
 		txCtx := tx.Context()
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, postID)
 		if err != nil {
-			return customError.WrapRepository("select post by id including unpublished for delete attachment", err)
+			return customerror.WrapRepository("select post by id including unpublished for delete attachment", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		requester, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for delete attachment", err)
+			return customerror.WrapRepository("select user by id for delete attachment", err)
 		}
 		if requester == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.ensureBoardVisibleTx(tx, requester, post.BoardID); err != nil {
 			return err
@@ -347,20 +354,20 @@ func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postID, at
 		}
 		attachment, err := tx.AttachmentRepository().SelectByID(txCtx, attachmentID)
 		if err != nil {
-			return customError.WrapRepository("select attachment by id for delete attachment", err)
+			return customerror.WrapRepository("select attachment by id for delete attachment", err)
 		}
 		if attachment == nil || attachment.PostID != postID {
-			return customError.ErrAttachmentNotFound
+			return customerror.ErrAttachmentNotFound
 		}
 		for _, referencedAttachmentID := range extractAttachmentRefIDs(post.Content) {
 			if referencedAttachmentID == attachmentID {
-				return customError.ErrInvalidInput
+				return customerror.ErrInvalidInput
 			}
 		}
 		updatedAttachment := *attachment
 		updatedAttachment.MarkPendingDelete()
 		if err := tx.AttachmentRepository().Update(txCtx, &updatedAttachment); err != nil {
-			return customError.WrapRepository("mark attachment pending delete", err)
+			return customerror.WrapRepository("mark attachment pending delete", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewAttachmentChanged("deleted", attachmentID, postID)); err != nil {
 			return err
@@ -383,7 +390,7 @@ func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Tim
 	cutoff := now.Add(-gracePeriod)
 	items, err := s.attachmentRepository.SelectCleanupCandidatesBefore(ctx, cutoff, limit)
 	if err != nil {
-		return 0, customError.WrapRepository("select orphan attachments for cleanup", err)
+		return 0, customerror.WrapRepository("select orphan attachments for cleanup", err)
 	}
 	deletedCount := 0
 	for _, item := range items {
@@ -395,14 +402,14 @@ func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Tim
 		if !item.IsPendingDelete() {
 			item.MarkPendingDeleteAt(cutoff)
 			if err := s.attachmentRepository.Update(ctx, item); err != nil {
-				return deletedCount, customError.WrapRepository("mark attachment pending delete for cleanup", err)
+				return deletedCount, customerror.WrapRepository("mark attachment pending delete for cleanup", err)
 			}
 		}
 		if err := s.fileStorage.Delete(ctx, item.StorageKey); err != nil {
-			return deletedCount, customError.Wrap(customError.ErrInternalServerError, "delete orphan attachment file", err)
+			return deletedCount, customerror.Wrap(customerror.ErrInternalServerError, "delete orphan attachment file", err)
 		}
 		if err := s.attachmentRepository.Delete(ctx, item.ID); err != nil {
-			return deletedCount, customError.WrapRepository("delete orphan attachment metadata", err)
+			return deletedCount, customerror.WrapRepository("delete orphan attachment metadata", err)
 		}
 		deletedCount++
 	}
@@ -412,7 +419,7 @@ func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Tim
 func (s *AttachmentService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
 	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
 	if err != nil {
-		return customError.WrapRepository("select board by id for attachment board visibility", err)
+		return customerror.WrapRepository("select board by id for attachment board visibility", err)
 	}
 	return policy.EnsureBoardVisible(board, user)
 }
@@ -420,7 +427,7 @@ func (s *AttachmentService) ensureBoardVisible(ctx context.Context, user *entity
 func (s *AttachmentService) ensureBoardVisibleTx(tx port.TxScope, user *entity.User, boardID int64) error {
 	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), boardID)
 	if err != nil {
-		return customError.WrapRepository("select board by id for attachment board visibility", err)
+		return customerror.WrapRepository("select board by id for attachment board visibility", err)
 	}
 	return policy.EnsureBoardVisible(board, user)
 }
@@ -447,14 +454,14 @@ func buildAttachmentETag(attachment *entity.Attachment) string {
 
 func validateAttachmentUpload(fileName, contentType string, data []byte, maxUploadSizeBytes int64) error {
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	if len(data) == 0 || int64(len(data)) > maxUploadSizeBytes {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	normalizedContentType := normalizeAttachmentContentType(contentType)
 	if _, ok := allowedAttachmentContentTypes[normalizedContentType]; !ok {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	sniffed := http.DetectContentType(data)
 	if sniffed == "application/octet-stream" && normalizedContentType == "image/webp" {
@@ -464,7 +471,7 @@ func validateAttachmentUpload(fileName, contentType string, data []byte, maxUplo
 		}
 	}
 	if sniffed != normalizedContentType {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	return nil
 }

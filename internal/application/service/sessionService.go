@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
 var _ port.SessionUseCase = (*SessionService)(nil)
@@ -33,11 +33,11 @@ func (s *SessionService) Login(ctx context.Context, username, password string) (
 
 	token, err := s.tokenPort.IdToToken(userID)
 	if err != nil {
-		return "", customError.WrapToken("issue login token", err)
+		return "", customerror.WrapToken("issue login token", err)
 	}
 
 	if err := s.sessionRepository.Save(ctx, userID, token, s.tokenPort.TTLSeconds()); err != nil {
-		return "", customError.WrapRepository("save session", err)
+		return "", customerror.WrapRepository("save session", err)
 	}
 	return token, nil
 }
@@ -48,14 +48,14 @@ func (s *SessionService) Logout(ctx context.Context, token string) error {
 		return nil
 	}
 	if err := s.sessionRepository.Delete(ctx, userID, token); err != nil {
-		return customError.WrapRepository("delete session", err)
+		return customerror.WrapRepository("delete session", err)
 	}
 	return nil
 }
 
 func (s *SessionService) InvalidateUserSessions(ctx context.Context, userID int64) error {
 	if err := s.sessionRepository.DeleteByUser(ctx, userID); err != nil {
-		return customError.WrapRepository("delete user sessions", err)
+		return customerror.WrapRepository("delete user sessions", err)
 	}
 	return nil
 }
@@ -68,17 +68,17 @@ func (s *SessionService) ValidateTokenToId(ctx context.Context, token string) (i
 
 	exists, err := s.sessionRepository.Exists(ctx, userID, token)
 	if err != nil {
-		return 0, customError.WrapRepository("lookup session", err)
+		return 0, customerror.WrapRepository("lookup session", err)
 	}
 	if !exists {
-		return 0, customError.ErrInvalidToken
+		return 0, customerror.ErrInvalidToken
 	}
 	user, err := s.userRepository.SelectUserByID(ctx, userID)
 	if err != nil {
-		return 0, customError.WrapRepository("select user by id for validate token", err)
+		return 0, customerror.WrapRepository("select user by id for validate token", err)
 	}
 	if user == nil {
-		return 0, customError.ErrInvalidToken
+		return 0, customerror.ErrInvalidToken
 	}
 
 	return userID, nil

@@ -3,7 +3,7 @@ package service
 import (
 	"errors"
 
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
 func normalizeCacheLoadError(op string, err error) error {
@@ -11,39 +11,39 @@ func normalizeCacheLoadError(op string, err error) error {
 		return nil
 	}
 	switch {
-	case errors.Is(err, customError.ErrCacheFailure):
+	case errors.Is(err, customerror.ErrCacheFailure):
 		return err
-	case errors.Is(err, customError.ErrRepositoryFailure):
+	case errors.Is(err, customerror.ErrRepositoryFailure):
 		return err
-	case errors.Is(err, customError.ErrTokenFailure):
+	case errors.Is(err, customerror.ErrTokenFailure):
 		return err
-	case errors.Is(err, customError.ErrUserAlreadyExists):
+	case errors.Is(err, customerror.ErrUserAlreadyExists):
 		return err
-	case errors.Is(err, customError.ErrUserNotFound):
+	case errors.Is(err, customerror.ErrUserNotFound):
 		return err
-	case errors.Is(err, customError.ErrBoardNotFound):
+	case errors.Is(err, customerror.ErrBoardNotFound):
 		return err
-	case errors.Is(err, customError.ErrPostNotFound):
+	case errors.Is(err, customerror.ErrPostNotFound):
 		return err
-	case errors.Is(err, customError.ErrTagNotFound):
+	case errors.Is(err, customerror.ErrTagNotFound):
 		return err
-	case errors.Is(err, customError.ErrCommentNotFound):
+	case errors.Is(err, customerror.ErrCommentNotFound):
 		return err
-	case errors.Is(err, customError.ErrReactionNotFound):
+	case errors.Is(err, customerror.ErrReactionNotFound):
 		return err
-	case errors.Is(err, customError.ErrInvalidCredential):
+	case errors.Is(err, customerror.ErrInvalidCredential):
 		return err
-	case errors.Is(err, customError.ErrInvalidInput):
+	case errors.Is(err, customerror.ErrInvalidInput):
 		return err
-	case errors.Is(err, customError.ErrUnauthorized):
+	case errors.Is(err, customerror.ErrUnauthorized):
 		return err
-	case errors.Is(err, customError.ErrMissingAuthHeader):
+	case errors.Is(err, customerror.ErrMissingAuthHeader):
 		return err
-	case errors.Is(err, customError.ErrInvalidToken):
+	case errors.Is(err, customerror.ErrInvalidToken):
 		return err
-	case errors.Is(err, customError.ErrForbidden):
+	case errors.Is(err, customerror.ErrForbidden):
 		return err
 	default:
-		return customError.WrapCache(op, err)
+		return customerror.WrapCache(op, err)
 	}
 }

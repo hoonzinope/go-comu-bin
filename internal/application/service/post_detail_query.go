@@ -8,7 +8,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -37,15 +37,15 @@ func newPostDetailQuery(userRepository port.UserRepository, postRepository port.
 func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail, error) {
 	post, err := q.postRepository.SelectPostByID(ctx, id)
 	if err != nil {
-		return nil, customError.WrapRepository("select post by id for post detail", err)
+		return nil, customerror.WrapRepository("select post by id for post detail", err)
 	}
 	if post == nil {
-		return nil, customError.ErrPostNotFound
+		return nil, customerror.ErrPostNotFound
 	}
 
 	postReactions, err := q.reactionRepository.GetByTarget(ctx, post.ID, entity.ReactionTargetPost)
 	if err != nil {
-		return nil, customError.WrapRepository("select post reactions for post detail", err)
+		return nil, customerror.WrapRepository("select post reactions for post detail", err)
 	}
 	comments, commentsHasMore, err := q.visibleCommentsForDetail(ctx, post.ID, commentDefaultLimit)
 	if err != nil {
@@ -57,7 +57,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}
 	commentReactionsByID, err := q.reactionRepository.GetByTargets(ctx, commentIDs, entity.ReactionTargetComment)
 	if err != nil {
-		return nil, customError.WrapRepository("select comment reactions for post detail", err)
+		return nil, customerror.WrapRepository("select comment reactions for post detail", err)
 	}
 	userUUIDs, err := userUUIDsForPostDetail(ctx, q.userRepository, post, comments, postReactions, commentReactionsByID)
 	if err != nil {
@@ -90,7 +90,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}
 	attachmentEntities, err := q.attachmentRepository.SelectByPostID(ctx, post.ID)
 	if err != nil {
-		return nil, customError.WrapRepository("select attachments for post detail", err)
+		return nil, customerror.WrapRepository("select attachments for post detail", err)
 	}
 	reactionModels, err := reactionsFromEntitiesWithUUIDs(postReactions, userUUIDs)
 	if err != nil {
@@ -110,7 +110,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 func (q *postDetailQuery) visibleCommentsForDetail(ctx context.Context, postID int64, limit int) ([]*entity.Comment, bool, error) {
 	comments, err := q.commentRepository.SelectVisibleComments(ctx, postID, limit+1, 0)
 	if err != nil {
-		return nil, false, customError.WrapRepository("select visible comments for post detail", err)
+		return nil, false, customerror.WrapRepository("select visible comments for post detail", err)
 	}
 	hasMore := false
 	if limit > 0 && len(comments) > limit {
@@ -139,7 +139,7 @@ func userUUIDsForPostDetail(ctx context.Context, userRepository port.UserReposit
 func postModelFromEntity(post *entity.Post, authorUUIDs map[int64]string) (model.Post, error) {
 	authorUUID, ok := authorUUIDs[post.AuthorID]
 	if !ok {
-		return model.Post{}, customError.WrapRepository("select users by ids including deleted", errors.New("post author not found"))
+		return model.Post{}, customerror.WrapRepository("select users by ids including deleted", errors.New("post author not found"))
 	}
 	out := mapper.PostFromEntity(post)
 	out.AuthorUUID = authorUUID
@@ -149,7 +149,7 @@ func postModelFromEntity(post *entity.Post, authorUUIDs map[int64]string) (model
 func commentModelFromEntity(comment *entity.Comment, authorUUIDs map[int64]string) (*model.Comment, error) {
 	authorUUID, ok := authorUUIDs[comment.AuthorID]
 	if !ok {
-		return nil, customError.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
+		return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
 	}
 	out := mapper.CommentFromEntity(comment)
 	out.AuthorUUID = authorUUID
@@ -161,7 +161,7 @@ func reactionsFromEntitiesWithUUIDs(reactions []*entity.Reaction, userUUIDs map[
 	for _, reaction := range reactions {
 		userUUID, ok := userUUIDs[reaction.UserID]
 		if !ok {
-			return nil, customError.WrapRepository("select users by ids including deleted", errors.New("reaction user not found"))
+			return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("reaction user not found"))
 		}
 		reactionModel := mapper.ReactionFromEntity(reaction)
 		reactionModel.UserUUID = userUUID
@@ -173,7 +173,7 @@ func reactionsFromEntitiesWithUUIDs(reactions []*entity.Reaction, userUUIDs map[
 func tagsForPost(ctx context.Context, postTagRepository port.PostTagRepository, tagRepository port.TagRepository, postID int64) ([]model.Tag, error) {
 	relations, err := postTagRepository.SelectActiveByPostID(ctx, postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select active tags by post id", err)
+		return nil, customerror.WrapRepository("select active tags by post id", err)
 	}
 	if len(relations) == 0 {
 		return []model.Tag{}, nil
@@ -184,7 +184,7 @@ func tagsForPost(ctx context.Context, postTagRepository port.PostTagRepository, 
 	}
 	tags, err := tagRepository.SelectByIDs(ctx, tagIDs)
 	if err != nil {
-		return nil, customError.WrapRepository("select tags by ids", err)
+		return nil, customerror.WrapRepository("select tags by ids", err)
 	}
 	sortTagsByName(tags)
 	return mapper.TagsFromEntities(tags), nil

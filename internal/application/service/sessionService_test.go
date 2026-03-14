@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
 type recordingCredentialVerifier struct {
@@ -78,7 +78,7 @@ func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 
 	_, err = svc.ValidateTokenToId(context.Background(), token)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidToken))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidToken))
 }
 
 func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
@@ -121,7 +121,7 @@ func TestSessionService_ValidateTokenToId_DeletedUser(t *testing.T) {
 
 	_, err = svc.ValidateTokenToId(context.Background(), token)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidToken))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidToken))
 }
 
 func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
@@ -145,11 +145,11 @@ func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 
 	_, err = svc.ValidateTokenToId(context.Background(), token1)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidToken))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidToken))
 
 	_, err = svc.ValidateTokenToId(context.Background(), token2)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidToken))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidToken))
 }
 
 func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails(t *testing.T) {
@@ -165,7 +165,7 @@ func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails
 
 	_, err = svc.Login(context.Background(), "alice", "pw")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrRepositoryFailure))
+	assert.True(t, errors.Is(err, customerror.ErrRepositoryFailure))
 }
 
 func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
@@ -187,7 +187,7 @@ func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t
 
 	err = svc.Logout(context.Background(), token)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrRepositoryFailure))
+	assert.True(t, errors.Is(err, customerror.ErrRepositoryFailure))
 }
 
 func TestSessionService_InvalidateUserSessions_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
@@ -206,5 +206,5 @@ func TestSessionService_InvalidateUserSessions_ReturnsRepositoryFailure_WhenSess
 
 	err = svc.InvalidateUserSessions(context.Background(), userID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrRepositoryFailure))
+	assert.True(t, errors.Is(err, customerror.ErrRepositoryFailure))
 }

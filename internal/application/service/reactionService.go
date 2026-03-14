@@ -12,7 +12,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -54,7 +54,7 @@ func (s *ReactionService) SetReaction(ctx context.Context, UserID, TargetID int6
 	created, changed, err := s.withReactionTransaction(ctx, UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
 		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(tx.Context(), UserID, TargetID, TargetType, ReactionType)
 		if err != nil {
-			return false, false, customError.WrapRepository("set user target reaction", err)
+			return false, false, customerror.WrapRepository("set user target reaction", err)
 		}
 		if (created || changed) && detailPostID != nil {
 			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("set", TargetType, TargetID, *detailPostID)); err != nil {
@@ -76,7 +76,7 @@ func (s *ReactionService) DeleteReaction(ctx context.Context, UserID, TargetID i
 	deleted, _, err := s.withReactionTransaction(ctx, UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
 		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(tx.Context(), UserID, TargetID, TargetType)
 		if err != nil {
-			return false, false, customError.WrapRepository("delete user target reaction", err)
+			return false, false, customerror.WrapRepository("delete user target reaction", err)
 		}
 		if deleted && detailPostID != nil {
 			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("unset", TargetType, TargetID, *detailPostID)); err != nil {
@@ -102,7 +102,7 @@ func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetID int
 		}
 		reactions, err := s.reactionRepository.GetByTarget(ctx, targetID, targetType)
 		if err != nil {
-			return nil, customError.WrapRepository("select reactions by target", err)
+			return nil, customerror.WrapRepository("select reactions by target", err)
 		}
 		reactionModels, err := s.reactionsFromEntities(ctx, reactions)
 		if err != nil {
@@ -115,7 +115,7 @@ func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetID int
 	}
 	reactions, ok := value.([]model.Reaction)
 	if !ok {
-		return nil, customError.Mark(customError.ErrCacheFailure, "decode reaction list cache payload")
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode reaction list cache payload")
 	}
 	return reactions, nil
 }
@@ -126,10 +126,10 @@ func (s *ReactionService) withReactionTransaction(ctx context.Context, userID, t
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		user, err := tx.UserRepository().SelectUserByID(tx.Context(), userID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for reaction", err)
+			return customerror.WrapRepository("select user by id for reaction", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		postID, err := s.ensureTargetExistsTx(tx, user, targetID, targetType)
 		if err != nil {
@@ -156,7 +156,7 @@ func (s *ReactionService) reactionsFromEntities(ctx context.Context, reactions [
 	for _, reaction := range reactions {
 		userUUID, ok := userUUIDs[reaction.UserID]
 		if !ok {
-			return nil, customError.WrapRepository("select users by ids including deleted", errors.New("reaction user not found"))
+			return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("reaction user not found"))
 		}
 		reactionModel := mapper.ReactionFromEntity(reaction)
 		reactionModel.UserUUID = userUUID
@@ -171,10 +171,10 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, user *entity.Use
 	case entity.ReactionTargetPost:
 		post, err := tx.PostRepository().SelectPostByID(txCtx, targetID)
 		if err != nil {
-			return nil, customError.WrapRepository("select post by id for ensure reaction target", err)
+			return nil, customerror.WrapRepository("select post by id for ensure reaction target", err)
 		}
 		if post == nil {
-			return nil, customError.ErrPostNotFound
+			return nil, customerror.ErrPostNotFound
 		}
 		if err := s.ensureBoardVisibleTx(tx, user, post.BoardID); err != nil {
 			return nil, err
@@ -184,17 +184,17 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, user *entity.Use
 	case entity.ReactionTargetComment:
 		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, targetID)
 		if err != nil {
-			return nil, customError.WrapRepository("select comment by id for ensure reaction target", err)
+			return nil, customerror.WrapRepository("select comment by id for ensure reaction target", err)
 		}
 		if comment == nil {
-			return nil, customError.ErrCommentNotFound
+			return nil, customerror.ErrCommentNotFound
 		}
 		post, err := tx.PostRepository().SelectPostByID(txCtx, comment.PostID)
 		if err != nil {
-			return nil, customError.WrapRepository("select post by id for ensure reaction target", err)
+			return nil, customerror.WrapRepository("select post by id for ensure reaction target", err)
 		}
 		if post == nil {
-			return nil, customError.ErrPostNotFound
+			return nil, customerror.ErrPostNotFound
 		}
 		if err := s.ensureBoardVisibleTx(tx, user, post.BoardID); err != nil {
 			return nil, err
@@ -202,7 +202,7 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, user *entity.Use
 		postID := comment.PostID
 		return &postID, nil
 	default:
-		return nil, customError.ErrInternalServerError
+		return nil, customerror.ErrInternalServerError
 	}
 }
 
@@ -211,37 +211,37 @@ func (s *ReactionService) ensureTargetExists(ctx context.Context, user *entity.U
 	case entity.ReactionTargetPost:
 		post, err := s.postRepository.SelectPostByID(ctx, targetID)
 		if err != nil {
-			return customError.WrapRepository("select post by id for ensure reaction target", err)
+			return customerror.WrapRepository("select post by id for ensure reaction target", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		return s.ensureBoardVisible(ctx, user, post.BoardID)
 	case entity.ReactionTargetComment:
 		comment, err := s.commentRepository.SelectCommentByID(ctx, targetID)
 		if err != nil {
-			return customError.WrapRepository("select comment by id for ensure reaction target", err)
+			return customerror.WrapRepository("select comment by id for ensure reaction target", err)
 		}
 		if comment == nil {
-			return customError.ErrCommentNotFound
+			return customerror.ErrCommentNotFound
 		}
 		post, err := s.postRepository.SelectPostByID(ctx, comment.PostID)
 		if err != nil {
-			return customError.WrapRepository("select post by id for ensure reaction target", err)
+			return customerror.WrapRepository("select post by id for ensure reaction target", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		return s.ensureBoardVisible(ctx, user, post.BoardID)
 	default:
-		return customError.ErrInternalServerError
+		return customerror.ErrInternalServerError
 	}
 }
 
 func (s *ReactionService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
 	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
 	if err != nil {
-		return customError.WrapRepository("select board by id for reaction board visibility", err)
+		return customerror.WrapRepository("select board by id for reaction board visibility", err)
 	}
 	return policy.EnsureBoardVisible(board, user)
 }
@@ -249,7 +249,7 @@ func (s *ReactionService) ensureBoardVisible(ctx context.Context, user *entity.U
 func (s *ReactionService) ensureBoardVisibleTx(tx port.TxScope, user *entity.User, boardID int64) error {
 	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), boardID)
 	if err != nil {
-		return customError.WrapRepository("select board by id for reaction board visibility", err)
+		return customerror.WrapRepository("select board by id for reaction board visibility", err)
 	}
 	return policy.EnsureBoardVisible(board, user)
 }

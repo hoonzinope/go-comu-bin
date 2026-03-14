@@ -8,7 +8,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +20,7 @@ func TestBoardService_CreateBoard_ForbiddenForNonAdmin(t *testing.T) {
 
 	_, err := svc.CreateBoard(context.Background(), userID, "free", "desc")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestBoardService_CreateBoard_SuccessForAdmin(t *testing.T) {
@@ -40,7 +40,7 @@ func TestBoardService_CreateBoard_InvalidInput(t *testing.T) {
 
 	_, err := svc.CreateBoard(context.Background(), adminID, " ", "desc")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestBoardService_GetBoards_Success(t *testing.T) {
@@ -75,11 +75,11 @@ func TestBoardService_GetBoards_InvalidLimit(t *testing.T) {
 
 	_, err := svc.GetBoards(context.Background(), 0, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
 	_, err = svc.GetBoards(context.Background(), maxPageLimit+1, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestBoardService_GetBoards_HasMoreAndNextCursor(t *testing.T) {
@@ -139,7 +139,7 @@ func TestBoardService_DeleteBoard_RejectsNonEmptyBoard(t *testing.T) {
 
 	err := svc.DeleteBoard(context.Background(), boardID, adminID)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotEmpty))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotEmpty))
 }
 
 func TestBoardService_SetBoardVisibility_AdminOnly(t *testing.T) {
@@ -150,7 +150,7 @@ func TestBoardService_SetBoardVisibility_AdminOnly(t *testing.T) {
 
 	err := svc.SetBoardVisibility(context.Background(), boardID, userID, true)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
@@ -201,5 +201,5 @@ func TestBoardService_GetBoards_ReturnsCacheFailure_WhenCacheLoadFails(t *testin
 
 	_, err := svc.GetBoards(context.Background(), 10, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+	assert.True(t, errors.Is(err, customerror.ErrCacheFailure))
 }

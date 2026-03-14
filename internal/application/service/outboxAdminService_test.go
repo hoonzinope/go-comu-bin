@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func TestOutboxAdminService_GetDeadMessages_AdminOnly(t *testing.T) {
 
 	_, err := svc.GetDeadMessages(context.Background(), userID, 10, "")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestOutboxAdminService_GetDeadMessages_Requeue_Discard(t *testing.T) {
@@ -61,9 +61,9 @@ func TestOutboxAdminService_RequeueDiscard_RejectsNonDeadMessage(t *testing.T) {
 
 	err := svc.RequeueDeadMessage(context.Background(), adminID, "pending-1")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
 	err = svc.DiscardDeadMessage(context.Background(), adminID, "pending-1")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }

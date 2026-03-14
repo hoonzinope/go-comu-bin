@@ -11,10 +11,10 @@ import (
 var _ port.TagRepository = (*TagRepository)(nil)
 
 type TagRepository struct {
-	mu          sync.RWMutex
-	coordinator *txCoordinator
+	mu             sync.RWMutex
+	coordinator    *txCoordinator
 	onSelectByName func(context.Context, string)
-	tagDB       struct {
+	tagDB          struct {
 		ID     int64
 		Data   map[int64]*entity.Tag
 		NameTo map[string]int64

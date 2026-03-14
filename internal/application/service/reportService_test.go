@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,7 +54,7 @@ func TestReportService_CreateReport_RejectsDuplicate(t *testing.T) {
 
 	_, err = svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postID, entity.ReportReasonAbuse, "again")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrReportAlreadyExists))
+	assert.True(t, errors.Is(err, customerror.ErrReportAlreadyExists))
 }
 
 func TestReportService_GetReports_AdminOnly(t *testing.T) {
@@ -72,7 +72,7 @@ func TestReportService_GetReports_AdminOnly(t *testing.T) {
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	_, err := svc.GetReports(context.Background(), userID, nil, 10, 0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrForbidden))
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestReportService_GetReports_PendingFirst(t *testing.T) {
@@ -161,5 +161,5 @@ func TestReportService_ResolveReport_RejectsAlreadyResolved(t *testing.T) {
 
 	err = svc.ResolveReport(context.Background(), adminID, reportID, entity.ReportStatusRejected, "retry")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }

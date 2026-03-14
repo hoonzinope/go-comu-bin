@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,7 +99,7 @@ func TestAccountService_DeleteMyAccount_StopsOnDeleteFailure(t *testing.T) {
 	svc := NewAccountService(
 		&stubUserUseCase{
 			deleteMe: func(ctx context.Context, userID int64, password string) error {
-				return customError.ErrInvalidCredential
+				return customerror.ErrInvalidCredential
 			},
 		},
 		&stubSessionUseCase{
@@ -112,7 +112,7 @@ func TestAccountService_DeleteMyAccount_StopsOnDeleteFailure(t *testing.T) {
 
 	err := svc.DeleteMyAccount(context.Background(), 10, "bad")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidCredential))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidCredential))
 	assert.False(t, calledInvalidate)
 }
 
@@ -133,7 +133,7 @@ func TestAccountService_DeleteMyAccount_IgnoresSessionInvalidationFailure(t *tes
 		&stubSessionUseCase{
 			invalidateUserSessions: func(ctx context.Context, userID int64) error {
 				calledInvalidate = true
-				return customError.WrapRepository("delete sessions", errors.New("cache unavailable"))
+				return customerror.WrapRepository("delete sessions", errors.New("cache unavailable"))
 			},
 		},
 	)

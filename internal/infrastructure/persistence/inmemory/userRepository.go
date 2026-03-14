@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -55,7 +55,7 @@ func (r *UserRepository) save(user *entity.User) (int64, error) {
 
 	for _, existingUser := range r.userDB.Data {
 		if existingUser.UUID == user.UUID || existingUser.Name == user.Name {
-			return 0, customError.ErrUserAlreadyExists
+			return 0, customerror.ErrUserAlreadyExists
 		}
 	}
 	r.userDB.ID++
@@ -178,7 +178,7 @@ func (r *UserRepository) update(user *entity.User) error {
 				continue
 			}
 			if existingUser.UUID == user.UUID || existingUser.Name == user.Name {
-				return customError.ErrUserAlreadyExists
+				return customerror.ErrUserAlreadyExists
 			}
 		}
 		r.userDB.Data[user.ID] = cloneUser(user)

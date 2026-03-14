@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -154,10 +154,10 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	})
 	r.HandleMethodNotAllowed = true
 	r.NoMethod(func(c *gin.Context) {
-		writeHTTPError(h.logger, c, http.StatusMethodNotAllowed, customError.ErrMethodNotAllowed)
+		writeHTTPError(h.logger, c, http.StatusMethodNotAllowed, customerror.ErrMethodNotAllowed)
 	})
 	r.NoRoute(func(c *gin.Context) {
-		writeHTTPError(h.logger, c, http.StatusNotFound, customError.ErrNotFound)
+		writeHTTPError(h.logger, c, http.StatusNotFound, customerror.ErrNotFound)
 	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -227,7 +227,7 @@ func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
 func (h *HTTPHandler) requireAuthUserID(c *gin.Context) (int64, bool) {
 	userID, ok := middleware.UserID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, errorResponse{Error: customError.ErrUnauthorized.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: customerror.ErrUnauthorized.Error()})
 		return 0, false
 	}
 	return userID, true
@@ -310,7 +310,7 @@ func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 	}
 	token, ok := middleware.Token(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, errorResponse{Error: customError.ErrUnauthorized.Error()})
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: customerror.ErrUnauthorized.Error()})
 		return
 	}
 	if err := h.sessionUseCase.Logout(c.Request.Context(), token); err != nil {
@@ -1109,7 +1109,7 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 	}
 	file, err := fileHeader.Open()
 	if err != nil {
-		writeUseCaseError(c, customError.Wrap(customError.ErrInternalServerError, "open upload file", err))
+		writeUseCaseError(c, customerror.Wrap(customerror.ErrInternalServerError, "open upload file", err))
 		return
 	}
 	defer file.Close()
@@ -1713,12 +1713,12 @@ func outboxDeadResponsesFromModel(items []model.OutboxDeadMessage) []outboxDeadM
 }
 
 func writeUseCaseError(c *gin.Context, err error) {
-	publicErr := customError.Public(err)
+	publicErr := customerror.Public(err)
 	writeHTTPError(loggerFromContext(c), c, statusForError(err), publicErr)
 }
 
 func writeHTTPError(logger *slog.Logger, c *gin.Context, status int, err error) {
-	publicErr := customError.Public(err)
+	publicErr := customerror.Public(err)
 	logAttrs := []any{
 		"method", c.Request.Method,
 		"path", c.FullPath(),
@@ -1753,43 +1753,43 @@ func loggerFromContext(c *gin.Context) *slog.Logger {
 
 func statusForError(err error) int {
 	switch {
-	case errors.Is(err, customError.ErrTooManyRequests):
+	case errors.Is(err, customerror.ErrTooManyRequests):
 		return http.StatusTooManyRequests
-	case errors.Is(err, customError.ErrUserAlreadyExists):
+	case errors.Is(err, customerror.ErrUserAlreadyExists):
 		return http.StatusConflict
-	case errors.Is(err, customError.ErrInvalidInput):
+	case errors.Is(err, customerror.ErrInvalidInput):
 		return http.StatusBadRequest
-	case errors.Is(err, customError.ErrUserNotFound):
+	case errors.Is(err, customerror.ErrUserNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrBoardNotFound):
+	case errors.Is(err, customerror.ErrBoardNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrBoardNotEmpty):
+	case errors.Is(err, customerror.ErrBoardNotEmpty):
 		return http.StatusConflict
-	case errors.Is(err, customError.ErrPostNotFound):
+	case errors.Is(err, customerror.ErrPostNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrTagNotFound):
+	case errors.Is(err, customerror.ErrTagNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrAttachmentNotFound):
+	case errors.Is(err, customerror.ErrAttachmentNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrCommentNotFound):
+	case errors.Is(err, customerror.ErrCommentNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrReactionNotFound):
+	case errors.Is(err, customerror.ErrReactionNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrReportNotFound):
+	case errors.Is(err, customerror.ErrReportNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, customError.ErrReportAlreadyExists):
+	case errors.Is(err, customerror.ErrReportAlreadyExists):
 		return http.StatusConflict
-	case errors.Is(err, customError.ErrInvalidCredential):
+	case errors.Is(err, customerror.ErrInvalidCredential):
 		return http.StatusUnauthorized
-	case errors.Is(err, customError.ErrUnauthorized):
+	case errors.Is(err, customerror.ErrUnauthorized):
 		return http.StatusUnauthorized
-	case errors.Is(err, customError.ErrMissingAuthHeader):
+	case errors.Is(err, customerror.ErrMissingAuthHeader):
 		return http.StatusUnauthorized
-	case errors.Is(err, customError.ErrInvalidToken):
+	case errors.Is(err, customerror.ErrInvalidToken):
 		return http.StatusUnauthorized
-	case errors.Is(err, customError.ErrForbidden):
+	case errors.Is(err, customerror.ErrForbidden):
 		return http.StatusForbidden
-	case errors.Is(err, customError.ErrUserSuspended):
+	case errors.Is(err, customerror.ErrUserSuspended):
 		return http.StatusForbidden
 	default:
 		return http.StatusInternalServerError
@@ -1813,11 +1813,11 @@ func (h *HTTPHandler) rateLimitGinMiddleware() gin.HandlerFunc {
 		key := c.Request.Method + ":" + path + ":" + c.ClientIP()
 		allowed, err := h.rateLimiter.Allow(c.Request.Context(), key, h.rateLimitWriteRequests, h.rateLimitWindow)
 		if err != nil {
-			writeHTTPError(h.logger, c, http.StatusInternalServerError, customError.Wrap(customError.ErrInternalServerError, "rate limit", err))
+			writeHTTPError(h.logger, c, http.StatusInternalServerError, customerror.Wrap(customerror.ErrInternalServerError, "rate limit", err))
 			return
 		}
 		if !allowed {
-			writeHTTPError(h.logger, c, http.StatusTooManyRequests, customError.ErrTooManyRequests)
+			writeHTTPError(h.logger, c, http.StatusTooManyRequests, customerror.ErrTooManyRequests)
 			return
 		}
 		c.Next()

@@ -15,7 +15,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -83,14 +83,14 @@ func (s *PostService) CreateDraftPost(ctx context.Context, title, content string
 
 func (s *PostService) createPost(ctx context.Context, title, content string, tags []string, authorID, boardID int64, draft bool) (int64, error) {
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	normalizedTags, err := normalizeTags(tags)
 	if err != nil {
 		return 0, err
 	}
 	if len(extractAttachmentRefIDs(content)) > 0 {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	var newPost *entity.Post
 	if draft {
@@ -104,20 +104,20 @@ func (s *PostService) createPost(ctx context.Context, title, content string, tag
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for create post", err)
+			return customerror.WrapRepository("select user by id for create post", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.CanWrite(user); err != nil {
 			return err
 		}
 		board, err := tx.BoardRepository().SelectBoardByID(txCtx, boardID)
 		if err != nil {
-			return customError.WrapRepository("select board by id for create post", err)
+			return customerror.WrapRepository("select board by id for create post", err)
 		}
 		if board == nil {
-			return customError.ErrBoardNotFound
+			return customerror.ErrBoardNotFound
 		}
 		if err := policy.EnsureBoardVisible(board, user); err != nil {
 			return err
@@ -125,7 +125,7 @@ func (s *PostService) createPost(ctx context.Context, title, content string, tag
 		var saveErr error
 		postID, saveErr = tx.PostRepository().Save(txCtx, newPost)
 		if saveErr != nil {
-			return customError.WrapRepository("save post", saveErr)
+			return customerror.WrapRepository("save post", saveErr)
 		}
 		if err := s.upsertPostTags(tx, postID, normalizedTags); err != nil {
 			return err
@@ -151,10 +151,10 @@ func (s *PostService) GetPostsList(ctx context.Context, boardID int64, limit int
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
 		board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
 		if err != nil {
-			return nil, customError.WrapRepository("select board by id for post list", err)
+			return nil, customerror.WrapRepository("select board by id for post list", err)
 		}
 		if board == nil {
-			return nil, customError.ErrBoardNotFound
+			return nil, customerror.ErrBoardNotFound
 		}
 		if err := policy.EnsureBoardVisible(board, nil); err != nil {
 			return nil, err
@@ -166,7 +166,7 @@ func (s *PostService) GetPostsList(ctx context.Context, boardID int64, limit int
 		}
 		posts, err := s.postRepository.SelectPosts(ctx, boardID, fetchLimit, lastID)
 		if err != nil {
-			return nil, customError.WrapRepository("select posts by board", err)
+			return nil, customerror.WrapRepository("select posts by board", err)
 		}
 
 		hasMore := false
@@ -197,7 +197,7 @@ func (s *PostService) GetPostsList(ctx context.Context, boardID int64, limit int
 	}
 	list, ok := value.(*model.PostList)
 	if !ok {
-		return nil, customError.Mark(customError.ErrCacheFailure, "decode post list cache payload")
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post list cache payload")
 	}
 	return list, nil
 }
@@ -208,7 +208,7 @@ func (s *PostService) GetPostsByTag(ctx context.Context, tagName string, limit i
 	}
 	normalizedName := normalizeTagName(tagName)
 	if normalizedName == "" || len(normalizedName) > maxTagLength {
-		return nil, customError.ErrInvalidInput
+		return nil, customerror.ErrInvalidInput
 	}
 
 	cacheKey := key.TagPostList(normalizedName, limit, lastID)
@@ -220,7 +220,7 @@ func (s *PostService) GetPostsByTag(ctx context.Context, tagName string, limit i
 	}
 	list, ok := value.(*model.PostList)
 	if !ok {
-		return nil, customError.Mark(customError.ErrCacheFailure, "decode tag post list cache payload")
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode tag post list cache payload")
 	}
 	return list, nil
 }
@@ -234,10 +234,10 @@ func (s *PostService) GetPostDetail(ctx context.Context, id int64) (*model.PostD
 		}
 		board, err := s.boardRepository.SelectBoardByID(ctx, detail.Post.BoardID)
 		if err != nil {
-			return nil, customError.WrapRepository("select board by id for post detail visibility", err)
+			return nil, customerror.WrapRepository("select board by id for post detail visibility", err)
 		}
 		if err := policy.EnsureBoardVisible(board, nil); err != nil {
-			return nil, customError.ErrPostNotFound
+			return nil, customerror.ErrPostNotFound
 		}
 		return detail, nil
 	})
@@ -246,7 +246,7 @@ func (s *PostService) GetPostDetail(ctx context.Context, id int64) (*model.PostD
 	}
 	detail, ok := value.(*model.PostDetail)
 	if !ok {
-		return nil, customError.Mark(customError.ErrCacheFailure, "decode post detail cache payload")
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post detail cache payload")
 	}
 	return detail, nil
 }
@@ -259,17 +259,17 @@ func (s *PostService) PublishPost(ctx context.Context, id, authorID int64) error
 		txCtx := tx.Context()
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select post by id including unpublished for publish post", err)
+			return customerror.WrapRepository("select post by id including unpublished for publish post", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		requester, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for publish post", err)
+			return customerror.WrapRepository("select user by id for publish post", err)
 		}
 		if requester == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
@@ -290,7 +290,7 @@ func (s *PostService) PublishPost(ctx context.Context, id, authorID int64) error
 		publishedPost := *post
 		publishedPost.Publish()
 		if updateErr := tx.PostRepository().Update(txCtx, &publishedPost); updateErr != nil {
-			return customError.WrapRepository("publish post", updateErr)
+			return customerror.WrapRepository("publish post", updateErr)
 		}
 		boardID = post.BoardID
 		postID = post.ID
@@ -351,7 +351,7 @@ func (s *PostService) reactionsFromEntities(ctx context.Context, reactions []*en
 
 func (s *PostService) UpdatePost(ctx context.Context, id, authorID int64, title, content string, tags []string) error {
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	normalizedTags, err := normalizeTags(tags)
 	if err != nil {
@@ -364,17 +364,17 @@ func (s *PostService) UpdatePost(ctx context.Context, id, authorID int64, title,
 		txCtx := tx.Context()
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select post by id for update post", err)
+			return customerror.WrapRepository("select post by id for update post", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		requester, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for update post", err)
+			return customerror.WrapRepository("select user by id for update post", err)
 		}
 		if requester == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
@@ -395,7 +395,7 @@ func (s *PostService) UpdatePost(ctx context.Context, id, authorID int64, title,
 		updatedPost := *post
 		updatedPost.Update(title, content)
 		if updateErr := tx.PostRepository().Update(txCtx, &updatedPost); updateErr != nil {
-			return customError.WrapRepository("update post", updateErr)
+			return customerror.WrapRepository("update post", updateErr)
 		}
 		if err := s.syncPostTags(tx, post.ID, normalizedTags); err != nil {
 			return err
@@ -420,17 +420,17 @@ func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error 
 		txCtx := tx.Context()
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select post by id for delete post", err)
+			return customerror.WrapRepository("select post by id for delete post", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		requester, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for delete post", err)
+			return customerror.WrapRepository("select user by id for delete post", err)
 		}
 		if requester == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
@@ -446,16 +446,16 @@ func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error 
 			return err
 		}
 		if deleteErr := tx.PostRepository().Delete(txCtx, post.ID); deleteErr != nil {
-			return customError.WrapRepository("delete post", deleteErr)
+			return customerror.WrapRepository("delete post", deleteErr)
 		}
 		if deleteErr := tx.PostTagRepository().SoftDeleteByPostID(txCtx, post.ID); deleteErr != nil {
-			return customError.WrapRepository("soft delete post tags", deleteErr)
+			return customerror.WrapRepository("soft delete post tags", deleteErr)
 		}
 		if orphanErr := s.orphanPostAttachments(txCtx, tx.AttachmentRepository(), post.ID); orphanErr != nil {
 			return orphanErr
 		}
 		if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, post.ID, entity.ReactionTargetPost); reactionErr != nil {
-			return customError.WrapRepository("delete post reactions", reactionErr)
+			return customerror.WrapRepository("delete post reactions", reactionErr)
 		}
 		postID = post.ID
 		boardID = post.BoardID
@@ -476,17 +476,17 @@ func (s *PostService) deletePostCommentsInBatches(tx port.TxScope, postID int64)
 	for {
 		comments, err := tx.CommentRepository().SelectComments(txCtx, postID, postDeleteBatchSize, lastID)
 		if err != nil {
-			return customError.WrapRepository("select comments for delete post", err)
+			return customerror.WrapRepository("select comments for delete post", err)
 		}
 		if len(comments) == 0 {
 			return nil
 		}
 		for _, comment := range comments {
 			if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, comment.ID, entity.ReactionTargetComment); reactionErr != nil {
-				return customError.WrapRepository("delete post comment reactions", reactionErr)
+				return customerror.WrapRepository("delete post comment reactions", reactionErr)
 			}
 			if deleteErr := tx.CommentRepository().Delete(txCtx, comment.ID); deleteErr != nil {
-				return customError.WrapRepository("soft delete post comments", deleteErr)
+				return customerror.WrapRepository("soft delete post comments", deleteErr)
 			}
 		}
 		if len(comments) < postDeleteBatchSize {
@@ -512,7 +512,7 @@ func (s *PostService) tagsForPostTx(tx port.TxScope, postID int64) ([]model.Tag,
 	txCtx := tx.Context()
 	relations, err := tx.PostTagRepository().SelectActiveByPostID(txCtx, postID)
 	if err != nil {
-		return nil, customError.WrapRepository("select active tags by post id", err)
+		return nil, customerror.WrapRepository("select active tags by post id", err)
 	}
 	if len(relations) == 0 {
 		return []model.Tag{}, nil
@@ -523,7 +523,7 @@ func (s *PostService) tagsForPostTx(tx port.TxScope, postID int64) ([]model.Tag,
 	}
 	tags, err := tx.TagRepository().SelectByIDs(txCtx, tagIDs)
 	if err != nil {
-		return nil, customError.WrapRepository("select tags by ids", err)
+		return nil, customerror.WrapRepository("select tags by ids", err)
 	}
 	sort.Slice(tags, func(i, j int) bool {
 		return tags[i].Name < tags[j].Name
@@ -534,10 +534,10 @@ func (s *PostService) tagsForPostTx(tx port.TxScope, postID int64) ([]model.Tag,
 func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedName string, limit int, lastID int64) (*model.PostList, error) {
 	tag, err := s.tagRepository.SelectByName(ctx, normalizedName)
 	if err != nil {
-		return nil, customError.WrapRepository("select tag by name for post list", err)
+		return nil, customerror.WrapRepository("select tag by name for post list", err)
 	}
 	if tag == nil {
-		return nil, customError.ErrTagNotFound
+		return nil, customerror.ErrTagNotFound
 	}
 
 	fetchLimit, err := cursorFetchLimit(limit)
@@ -551,7 +551,7 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 	for len(visiblePosts) < fetchLimit {
 		publishedPosts, err := s.postRepository.SelectPublishedPostsByTagName(ctx, normalizedName, fetchLimit, cursor)
 		if err != nil {
-			return nil, customError.WrapRepository("select published posts by tag name", err)
+			return nil, customerror.WrapRepository("select published posts by tag name", err)
 		}
 		if len(publishedPosts) == 0 {
 			break
@@ -615,7 +615,7 @@ func (s *PostService) resolveBoardVisibility(ctx context.Context, posts []*entit
 	}
 	boardsByID, err := s.boardRepository.SelectBoardsByIDs(ctx, uncachedBoardIDs)
 	if err != nil {
-		return customError.WrapRepository("select boards by ids for tag post visibility", err)
+		return customerror.WrapRepository("select boards by ids for tag post visibility", err)
 	}
 	for _, boardID := range uncachedBoardIDs {
 		boardVisibility[boardID] = policy.EnsureBoardVisible(boardsByID[boardID], nil) == nil
@@ -627,7 +627,7 @@ func (s *PostService) syncPostTags(tx port.TxScope, postID int64, normalizedTags
 	txCtx := tx.Context()
 	currentRelations, err := tx.PostTagRepository().SelectActiveByPostID(txCtx, postID)
 	if err != nil {
-		return customError.WrapRepository("select active post tags for sync", err)
+		return customerror.WrapRepository("select active post tags for sync", err)
 	}
 
 	targetTagIDs := make(map[int64]struct{}, len(normalizedTags))
@@ -638,7 +638,7 @@ func (s *PostService) syncPostTags(tx port.TxScope, postID int64, normalizedTags
 		}
 		targetTagIDs[tagID] = struct{}{}
 		if upsertErr := tx.PostTagRepository().UpsertActive(txCtx, postID, tagID); upsertErr != nil {
-			return customError.WrapRepository("upsert active post tag", upsertErr)
+			return customerror.WrapRepository("upsert active post tag", upsertErr)
 		}
 	}
 	for _, relation := range currentRelations {
@@ -646,7 +646,7 @@ func (s *PostService) syncPostTags(tx port.TxScope, postID int64, normalizedTags
 			continue
 		}
 		if deleteErr := tx.PostTagRepository().SoftDelete(txCtx, postID, relation.TagID); deleteErr != nil {
-			return customError.WrapRepository("soft delete post tag", deleteErr)
+			return customerror.WrapRepository("soft delete post tag", deleteErr)
 		}
 	}
 	return nil
@@ -659,7 +659,7 @@ func (s *PostService) upsertPostTags(tx port.TxScope, postID int64, normalizedTa
 			return err
 		}
 		if err := tx.PostTagRepository().UpsertActive(tx.Context(), postID, tagID); err != nil {
-			return customError.WrapRepository("upsert post tag relation", err)
+			return customerror.WrapRepository("upsert post tag relation", err)
 		}
 	}
 	return nil
@@ -668,28 +668,28 @@ func (s *PostService) upsertPostTags(tx port.TxScope, postID int64, normalizedTa
 func (s *PostService) getOrCreateTagID(tx port.TxScope, tagName string) (int64, error) {
 	tag, err := tx.TagRepository().SelectByName(tx.Context(), tagName)
 	if err != nil {
-		return 0, customError.WrapRepository("select tag by name", err)
+		return 0, customerror.WrapRepository("select tag by name", err)
 	}
 	if tag != nil {
 		return tag.ID, nil
 	}
 	tagID, err := tx.TagRepository().Save(tx.Context(), entity.NewTag(tagName))
 	if err != nil {
-		return 0, customError.WrapRepository("save tag", err)
+		return 0, customerror.WrapRepository("save tag", err)
 	}
 	return tagID, nil
 }
 
 func normalizeTags(tags []string) ([]string, error) {
 	if len(tags) > maxPostTags {
-		return nil, customError.ErrInvalidInput
+		return nil, customerror.ErrInvalidInput
 	}
 	seen := make(map[string]struct{}, len(tags))
 	out := make([]string, 0, len(tags))
 	for _, tag := range tags {
 		normalized := normalizeTagName(tag)
 		if normalized == "" || len(normalized) > maxTagLength {
-			return nil, customError.ErrInvalidInput
+			return nil, customerror.ErrInvalidInput
 		}
 		if _, exists := seen[normalized]; exists {
 			continue
@@ -698,7 +698,7 @@ func normalizeTags(tags []string) ([]string, error) {
 		out = append(out, normalized)
 	}
 	if len(out) > maxPostTags {
-		return nil, customError.ErrInvalidInput
+		return nil, customerror.ErrInvalidInput
 	}
 	sort.Strings(out)
 	return out, nil
@@ -733,10 +733,10 @@ func (s *PostService) validateAttachmentRefsWithRepo(ctx context.Context, repo p
 	for _, attachmentID := range extractAttachmentRefIDs(content) {
 		attachment, err := repo.SelectByID(ctx, attachmentID)
 		if err != nil {
-			return customError.WrapRepository("select attachment by id for validate post attachments", err)
+			return customerror.WrapRepository("select attachment by id for validate post attachments", err)
 		}
 		if attachment == nil || attachment.PostID != postID || attachment.IsPendingDelete() {
-			return customError.ErrInvalidInput
+			return customerror.ErrInvalidInput
 		}
 	}
 	return nil
@@ -788,7 +788,7 @@ func attachmentsFromEntities(items []*entity.Attachment) []model.Attachment {
 func (s *PostService) syncPostAttachmentOrphans(ctx context.Context, repo port.AttachmentRepository, postID int64, content string) error {
 	items, err := repo.SelectByPostID(ctx, postID)
 	if err != nil {
-		return customError.WrapRepository("select attachments by post id for sync orphans", err)
+		return customerror.WrapRepository("select attachments by post id for sync orphans", err)
 	}
 	refIDs := make(map[int64]struct{})
 	for _, id := range extractAttachmentRefIDs(content) {
@@ -801,7 +801,7 @@ func (s *PostService) syncPostAttachmentOrphans(ctx context.Context, repo port.A
 			item.MarkOrphaned()
 		}
 		if err := repo.Update(ctx, item); err != nil {
-			return customError.WrapRepository("update attachment orphan state", err)
+			return customerror.WrapRepository("update attachment orphan state", err)
 		}
 	}
 	return nil
@@ -810,12 +810,12 @@ func (s *PostService) syncPostAttachmentOrphans(ctx context.Context, repo port.A
 func (s *PostService) orphanPostAttachments(ctx context.Context, repo port.AttachmentRepository, postID int64) error {
 	items, err := repo.SelectByPostID(ctx, postID)
 	if err != nil {
-		return customError.WrapRepository("select attachments by post id for delete post", err)
+		return customerror.WrapRepository("select attachments by post id for delete post", err)
 	}
 	for _, item := range items {
 		item.MarkOrphaned()
 		if err := repo.Update(ctx, item); err != nil {
-			return customError.WrapRepository("orphan attachments for delete post", err)
+			return customerror.WrapRepository("orphan attachments for delete post", err)
 		}
 	}
 	return nil

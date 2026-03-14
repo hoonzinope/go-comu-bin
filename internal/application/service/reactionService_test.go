@@ -8,7 +8,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +21,7 @@ func TestReactionService_SetReaction_InvalidTargetType(t *testing.T) {
 
 	_, err := svc.SetReaction(context.Background(), userID, 1, entity.ReactionTargetType("invalid"), entity.ReactionTypeLike)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInternalServerError))
+	assert.True(t, errors.Is(err, customerror.ErrInternalServerError))
 }
 
 func TestReactionService_GetReactionsByTarget_AndDeleteByOwner(t *testing.T) {
@@ -234,7 +234,7 @@ func TestReactionService_GetReactionsByTarget_ReturnsCacheFailure_WhenCacheLoadF
 
 	_, err := svc.GetReactionsByTarget(context.Background(), 1, entity.ReactionTargetPost)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrCacheFailure))
+	assert.True(t, errors.Is(err, customerror.ErrCacheFailure))
 }
 
 func TestReactionService_GetReactionsByTarget_ReturnsPostNotFound_WhenPostDeleted(t *testing.T) {
@@ -248,7 +248,7 @@ func TestReactionService_GetReactionsByTarget_ReturnsPostNotFound_WhenPostDelete
 
 	_, err := svc.GetReactionsByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrPostNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 }
 
 func TestReactionService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
@@ -266,9 +266,9 @@ func TestReactionService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
 
 	_, err = svc.GetReactionsByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 
 	_, err = svc.SetReaction(context.Background(), userID, postID, entity.ReactionTargetPost, entity.ReactionTypeLike)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrBoardNotFound))
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }

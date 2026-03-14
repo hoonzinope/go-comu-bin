@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,11 +16,11 @@ func TestRequirePositiveLimit(t *testing.T) {
 
 	err := requirePositiveLimit(0)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
 	err = requirePositiveLimit(maxPageLimit + 1)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestCursorFetchLimit(t *testing.T) {
@@ -30,9 +30,9 @@ func TestCursorFetchLimit(t *testing.T) {
 
 	_, err = cursorFetchLimit(maxPageLimit + 1)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
 	_, err = cursorFetchLimit(math.MaxInt)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }

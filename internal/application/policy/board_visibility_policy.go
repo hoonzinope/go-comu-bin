@@ -1,7 +1,7 @@
 package policy
 
 import (
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -9,10 +9,10 @@ import (
 // Hidden boards are treated as not found for non-admin users.
 func EnsureBoardVisible(board *entity.Board, user *entity.User) error {
 	if board == nil {
-		return customError.ErrBoardNotFound
+		return customerror.ErrBoardNotFound
 	}
 	if !board.Hidden || (user != nil && user.IsAdmin()) {
 		return nil
 	}
-	return customError.ErrBoardNotFound
+	return customerror.ErrBoardNotFound
 }

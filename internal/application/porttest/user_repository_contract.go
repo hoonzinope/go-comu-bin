@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,7 +48,7 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 
 		_, err = repo.Save(context.Background(), entity.NewUser("alice", "pw2"))
 		require.Error(t, err)
-		assert.ErrorIs(t, err, customError.ErrUserAlreadyExists)
+		assert.ErrorIs(t, err, customerror.ErrUserAlreadyExists)
 	})
 
 	t.Run("uuid is unique", func(t *testing.T) {
@@ -63,7 +63,7 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		user2.UUID = "fixed-uuid"
 		_, err = repo.Save(context.Background(), user2)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, customError.ErrUserAlreadyExists)
+		assert.ErrorIs(t, err, customerror.ErrUserAlreadyExists)
 	})
 
 	t.Run("concurrent save preserves username uniqueness", func(t *testing.T) {
@@ -89,7 +89,7 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 				successes++
 				continue
 			}
-			assert.ErrorIs(t, err, customError.ErrUserAlreadyExists)
+			assert.ErrorIs(t, err, customerror.ErrUserAlreadyExists)
 			failures++
 		}
 

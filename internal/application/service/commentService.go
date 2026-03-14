@@ -13,7 +13,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -54,9 +54,8 @@ func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, b
 }
 
 func (s *CommentService) CreateComment(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
-	// 댓글 생성 로직 구현
 	if strings.TrimSpace(content) == "" {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	newComment := entity.NewComment(content, authorID, postID, parentID)
 	var commentID int64
@@ -64,20 +63,20 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for create comment", err)
+			return customerror.WrapRepository("select user by id for create comment", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.CanWrite(user); err != nil {
 			return err
 		}
 		post, err := tx.PostRepository().SelectPostByID(txCtx, postID)
 		if err != nil {
-			return customError.WrapRepository("select post by id for create comment", err)
+			return customerror.WrapRepository("select post by id for create comment", err)
 		}
 		if post == nil {
-			return customError.ErrPostNotFound
+			return customerror.ErrPostNotFound
 		}
 		if err := s.ensureBoardVisibleByPostTx(tx, user, post.ID); err != nil {
 			return err
@@ -85,18 +84,18 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 		if parentID != nil {
 			parent, err := tx.CommentRepository().SelectCommentByID(txCtx, *parentID)
 			if err != nil {
-				return customError.WrapRepository("select parent comment by id for create comment", err)
+				return customerror.WrapRepository("select parent comment by id for create comment", err)
 			}
 			if parent == nil {
-				return customError.ErrCommentNotFound
+				return customerror.ErrCommentNotFound
 			}
 			if parent.PostID != postID || parent.ParentID != nil {
-				return customError.ErrInvalidInput
+				return customerror.ErrInvalidInput
 			}
 		}
 		commentID, err = tx.CommentRepository().Save(txCtx, newComment)
 		if err != nil {
-			return customError.WrapRepository("save comment", err)
+			return customerror.WrapRepository("save comment", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("created", commentID, postID)); err != nil {
 			return err
@@ -117,10 +116,10 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
 		post, err := s.postRepository.SelectPostByID(ctx, postID)
 		if err != nil {
-			return nil, customError.WrapRepository("select post by id for comment list", err)
+			return nil, customerror.WrapRepository("select post by id for comment list", err)
 		}
 		if post == nil {
-			return nil, customError.ErrPostNotFound
+			return nil, customerror.ErrPostNotFound
 		}
 		if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
 			return nil, err
@@ -128,7 +127,7 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 
 		comments, err := s.commentRepository.SelectVisibleComments(ctx, postID, limit+1, lastID)
 		if err != nil {
-			return nil, customError.WrapRepository("select visible comments by post", err)
+			return nil, customerror.WrapRepository("select visible comments by post", err)
 		}
 		hasMore := false
 		var nextLastID *int64
@@ -159,7 +158,7 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 	}
 	list, ok := value.(*model.CommentList)
 	if !ok {
-		return nil, customError.Mark(customError.ErrCacheFailure, "decode comment list cache payload")
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode comment list cache payload")
 	}
 	return list, nil
 }
@@ -173,7 +172,7 @@ func (s *CommentService) commentsFromEntities(ctx context.Context, comments []*e
 	for _, comment := range comments {
 		authorUUID, ok := authorUUIDs[comment.AuthorID]
 		if !ok {
-			return nil, customError.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
+			return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
 		}
 		commentModel := mapper.CommentFromEntity(comment)
 		commentModel.AuthorUUID = authorUUID
@@ -183,26 +182,25 @@ func (s *CommentService) commentsFromEntities(ctx context.Context, comments []*e
 }
 
 func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, content string) error {
-	// 댓글 수정 로직 구현
 	if strings.TrimSpace(content) == "" {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	var postID int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select comment by id for update comment", err)
+			return customerror.WrapRepository("select comment by id for update comment", err)
 		}
 		if comment == nil {
-			return customError.ErrCommentNotFound
+			return customerror.ErrCommentNotFound
 		}
 		requester, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for update comment", err)
+			return customerror.WrapRepository("select user by id for update comment", err)
 		}
 		if requester == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
@@ -216,7 +214,7 @@ func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, 
 		updatedComment := *comment
 		updatedComment.Update(content)
 		if err := tx.CommentRepository().Update(txCtx, &updatedComment); err != nil {
-			return customError.WrapRepository("update comment", err)
+			return customerror.WrapRepository("update comment", err)
 		}
 		postID = updatedComment.PostID
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("updated", id, postID)); err != nil {
@@ -231,23 +229,22 @@ func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, 
 }
 
 func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) error {
-	// 댓글 삭제 로직 구현
 	var commentID, postID int64
 	if err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select comment by id for delete comment", err)
+			return customerror.WrapRepository("select comment by id for delete comment", err)
 		}
 		if comment == nil {
-			return customError.ErrCommentNotFound
+			return customerror.ErrCommentNotFound
 		}
 		requester, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for delete comment", err)
+			return customerror.WrapRepository("select user by id for delete comment", err)
 		}
 		if requester == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
@@ -259,10 +256,10 @@ func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) 
 			return err
 		}
 		if deleteErr := tx.CommentRepository().Delete(txCtx, comment.ID); deleteErr != nil {
-			return customError.WrapRepository("delete comment", deleteErr)
+			return customerror.WrapRepository("delete comment", deleteErr)
 		}
 		if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, comment.ID, entity.ReactionTargetComment); reactionErr != nil {
-			return customError.WrapRepository("delete comment reactions", reactionErr)
+			return customerror.WrapRepository("delete comment reactions", reactionErr)
 		}
 		commentID = comment.ID
 		postID = comment.PostID
@@ -279,7 +276,7 @@ func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) 
 func (s *CommentService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
 	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
 	if err != nil {
-		return customError.WrapRepository("select board by id for comment board visibility", err)
+		return customerror.WrapRepository("select board by id for comment board visibility", err)
 	}
 	return policy.EnsureBoardVisible(board, user)
 }
@@ -287,14 +284,14 @@ func (s *CommentService) ensureBoardVisible(ctx context.Context, user *entity.Us
 func (s *CommentService) ensureBoardVisibleByPostTx(tx port.TxScope, user *entity.User, postID int64) error {
 	post, err := tx.PostRepository().SelectPostByID(tx.Context(), postID)
 	if err != nil {
-		return customError.WrapRepository("select post by id for comment board visibility", err)
+		return customerror.WrapRepository("select post by id for comment board visibility", err)
 	}
 	if post == nil {
-		return customError.ErrPostNotFound
+		return customerror.ErrPostNotFound
 	}
 	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), post.BoardID)
 	if err != nil {
-		return customError.WrapRepository("select board by id for comment board visibility", err)
+		return customerror.WrapRepository("select board by id for comment board visibility", err)
 	}
 	return policy.EnsureBoardVisible(board, user)
 }

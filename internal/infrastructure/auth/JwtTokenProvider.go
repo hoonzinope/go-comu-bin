@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
 type JwtTokenProvider struct {
@@ -36,7 +36,7 @@ func (p *JwtTokenProvider) IdToToken(userID int64) (string, error) {
 	})
 	signed, err := token.SignedString([]byte(p.secretKey))
 	if err != nil {
-		return "", customError.WrapToken("sign jwt", err)
+		return "", customerror.WrapToken("sign jwt", err)
 	}
 	return signed, nil
 }
@@ -54,12 +54,12 @@ func (p *JwtTokenProvider) ValidateTokenToId(token string) (int64, error) {
 		return []byte(p.secretKey), nil
 	})
 	if err != nil {
-		return 0, customError.Wrap(customError.ErrInvalidToken, "parse jwt", err)
+		return 0, customerror.Wrap(customerror.ErrInvalidToken, "parse jwt", err)
 	}
 
 	if parsedToken.Valid && claims.UserID > 0 {
 		return claims.UserID, nil
 	}
 
-	return 0, customError.Wrap(customError.ErrInvalidToken, "decode jwt claims", errors.New("invalid token claims"))
+	return 0, customerror.Wrap(customerror.ErrInvalidToken, "decode jwt claims", errors.New("invalid token claims"))
 }

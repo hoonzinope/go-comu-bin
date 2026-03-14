@@ -9,4 +9,3 @@ type OutboxAdminUseCase interface {
 	RequeueDeadMessage(ctx context.Context, adminID int64, messageID string) error
 	DiscardDeadMessage(ctx context.Context, adminID int64, messageID string) error
 }
-

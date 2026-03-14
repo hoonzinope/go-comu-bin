@@ -26,4 +26,3 @@ type ReportList struct {
 	HasMore    bool
 	NextLastID *int64
 }
-

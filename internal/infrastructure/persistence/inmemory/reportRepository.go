@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -55,7 +55,7 @@ func (r *ReportRepository) save(report *entity.Report) (int64, error) {
 
 	for _, existing := range r.reportDB.Data {
 		if existing.ReporterUserID == report.ReporterUserID && existing.TargetType == report.TargetType && existing.TargetID == report.TargetID {
-			return 0, customError.ErrReportAlreadyExists
+			return 0, customerror.ErrReportAlreadyExists
 		}
 	}
 	r.reportDB.ID++
@@ -204,4 +204,3 @@ func cloneReport(report *entity.Report) *entity.Report {
 	}
 	return &out
 }
-

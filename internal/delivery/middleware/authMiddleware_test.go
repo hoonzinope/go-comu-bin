@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,7 +66,7 @@ func TestAuthWithSessionRejectsInvalidToken(t *testing.T) {
 	r := gin.New()
 	r.Use(AuthWithSession(stubSessionUseCase{
 		validate: func(token string) (int64, error) {
-			return 0, customError.ErrInvalidToken
+			return 0, customerror.ErrInvalidToken
 		},
 	}, func(c *gin.Context, status int, err error) {
 		c.AbortWithStatus(status)
@@ -88,7 +88,7 @@ func TestAuthWithSessionReturnsInternalServerErrorOnRepositoryFailure(t *testing
 	r := gin.New()
 	r.Use(AuthWithSession(stubSessionUseCase{
 		validate: func(token string) (int64, error) {
-			return 0, customError.WrapRepository("lookup session", errors.New("cache down"))
+			return 0, customerror.WrapRepository("lookup session", errors.New("cache down"))
 		},
 	}, func(c *gin.Context, status int, err error) {
 		c.AbortWithStatus(status)

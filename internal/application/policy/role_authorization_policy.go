@@ -1,7 +1,7 @@
 package policy
 
 import (
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -15,30 +15,30 @@ func NewRoleAuthorizationPolicy() *RoleAuthorizationPolicy {
 
 func (p *RoleAuthorizationPolicy) AdminOnly(user *entity.User) error {
 	if user == nil {
-		return customError.ErrUnauthorized
+		return customerror.ErrUnauthorized
 	}
 	if !user.IsAdmin() {
-		return customError.ErrForbidden
+		return customerror.ErrForbidden
 	}
 	return nil
 }
 
 func (p *RoleAuthorizationPolicy) OwnerOrAdmin(user *entity.User, resourceOwnerID int64) error {
 	if user == nil {
-		return customError.ErrUnauthorized
+		return customerror.ErrUnauthorized
 	}
 	if user.ID != resourceOwnerID && !user.IsAdmin() {
-		return customError.ErrForbidden
+		return customerror.ErrForbidden
 	}
 	return nil
 }
 
 func (p *RoleAuthorizationPolicy) CanWrite(user *entity.User) error {
 	if user == nil {
-		return customError.ErrUnauthorized
+		return customerror.ErrUnauthorized
 	}
 	if user.IsSuspended() {
-		return customError.ErrUserSuspended
+		return customerror.ErrUserSuspended
 	}
 	return nil
 }

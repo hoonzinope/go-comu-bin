@@ -8,7 +8,7 @@ import (
 
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
 var defaultEventSerializer port.EventSerializer = appevent.NewJSONEventSerializer()
@@ -38,11 +38,11 @@ func dispatchDomainActions(tx port.TxScope, dispatcher port.ActionHookDispatcher
 	for _, event := range events {
 		eventName, payload, occurredAt, err := defaultEventSerializer.Serialize(event)
 		if err != nil {
-			return customError.Mark(customError.ErrInternalServerError, fmt.Sprintf("serialize event for outbox: %v", err))
+			return customerror.Mark(customerror.ErrInternalServerError, fmt.Sprintf("serialize event for outbox: %v", err))
 		}
 		id, err := newOutboxMessageID()
 		if err != nil {
-			return customError.Mark(customError.ErrInternalServerError, fmt.Sprintf("generate outbox message id: %v", err))
+			return customerror.Mark(customerror.ErrInternalServerError, fmt.Sprintf("generate outbox message id: %v", err))
 		}
 		if occurredAt.IsZero() {
 			occurredAt = time.Now()
@@ -57,7 +57,7 @@ func dispatchDomainActions(tx port.TxScope, dispatcher port.ActionHookDispatcher
 		})
 	}
 	if err := outbox.Append(messages...); err != nil {
-		return customError.WrapRepository("append outbox messages", err)
+		return customerror.WrapRepository("append outbox messages", err)
 	}
 	return nil
 }

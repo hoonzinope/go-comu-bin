@@ -12,7 +12,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -61,7 +61,7 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 
 		visibleBoards, err := s.boardRepository.SelectBoardList(ctx, fetchLimit, lastID)
 		if err != nil {
-			return nil, customError.WrapRepository("select board list", err)
+			return nil, customerror.WrapRepository("select board list", err)
 		}
 
 		hasMore := false
@@ -88,15 +88,14 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 	}
 	list, ok := value.(*model.BoardList)
 	if !ok {
-		return nil, customError.Mark(customError.ErrCacheFailure, "decode board list cache payload")
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode board list cache payload")
 	}
 	return list, nil
 }
 
 func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, description string) (int64, error) {
-	// 게시판 생성 로직 구현
 	if strings.TrimSpace(name) == "" {
-		return 0, customError.ErrInvalidInput
+		return 0, customerror.ErrInvalidInput
 	}
 	newBoard := entity.NewBoard(name, description)
 	var boardID int64
@@ -104,17 +103,17 @@ func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, desc
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for create board", err)
+			return customerror.WrapRepository("select user by id for create board", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
 		boardID, err = tx.BoardRepository().Save(txCtx, newBoard)
 		if err != nil {
-			return customError.WrapRepository("save board", err)
+			return customerror.WrapRepository("save board", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("created", boardID)); err != nil {
 			return err
@@ -130,30 +129,30 @@ func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, desc
 func (s *BoardService) UpdateBoard(ctx context.Context, id, userID int64, name, description string) error {
 	// 게시판 수정 로직 구현
 	if strings.TrimSpace(name) == "" {
-		return customError.ErrInvalidInput
+		return customerror.ErrInvalidInput
 	}
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for update board", err)
+			return customerror.WrapRepository("select user by id for update board", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
 		existingBoard, err := tx.BoardRepository().SelectBoardByID(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select board by id for update board", err)
+			return customerror.WrapRepository("select board by id for update board", err)
 		}
 		if existingBoard == nil {
-			return customError.ErrBoardNotFound
+			return customerror.ErrBoardNotFound
 		}
 		existingBoard.Update(name, description)
 		if err := tx.BoardRepository().Update(txCtx, existingBoard); err != nil {
-			return customError.WrapRepository("update board", err)
+			return customerror.WrapRepository("update board", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("updated", id)); err != nil {
 			return err
@@ -172,30 +171,30 @@ func (s *BoardService) DeleteBoard(ctx context.Context, id, userID int64) error 
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for delete board", err)
+			return customerror.WrapRepository("select user by id for delete board", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
 		existingBoard, err := tx.BoardRepository().SelectBoardByID(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select board by id for delete board", err)
+			return customerror.WrapRepository("select board by id for delete board", err)
 		}
 		if existingBoard == nil {
-			return customError.ErrBoardNotFound
+			return customerror.ErrBoardNotFound
 		}
 		hasPosts, err := tx.PostRepository().ExistsByBoardID(txCtx, existingBoard.ID)
 		if err != nil {
-			return customError.WrapRepository("check board posts before delete board", err)
+			return customerror.WrapRepository("check board posts before delete board", err)
 		}
 		if hasPosts {
-			return customError.ErrBoardNotEmpty
+			return customerror.ErrBoardNotEmpty
 		}
 		if err := tx.BoardRepository().Delete(txCtx, existingBoard.ID); err != nil {
-			return customError.WrapRepository("delete board", err)
+			return customerror.WrapRepository("delete board", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("deleted", id)); err != nil {
 			return err
@@ -213,24 +212,24 @@ func (s *BoardService) SetBoardVisibility(ctx context.Context, id, userID int64,
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
-			return customError.WrapRepository("select user by id for set board visibility", err)
+			return customerror.WrapRepository("select user by id for set board visibility", err)
 		}
 		if user == nil {
-			return customError.ErrUserNotFound
+			return customerror.ErrUserNotFound
 		}
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
 		existingBoard, err := tx.BoardRepository().SelectBoardByID(txCtx, id)
 		if err != nil {
-			return customError.WrapRepository("select board by id for set board visibility", err)
+			return customerror.WrapRepository("select board by id for set board visibility", err)
 		}
 		if existingBoard == nil {
-			return customError.ErrBoardNotFound
+			return customerror.ErrBoardNotFound
 		}
 		existingBoard.SetHidden(hidden)
 		if err := tx.BoardRepository().Update(txCtx, existingBoard); err != nil {
-			return customError.WrapRepository("update board visibility", err)
+			return customerror.WrapRepository("update board visibility", err)
 		}
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("visibility", id)); err != nil {
 			return err

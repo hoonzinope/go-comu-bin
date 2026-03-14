@@ -12,7 +12,7 @@ import (
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
@@ -220,10 +220,10 @@ func (c *errorCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds
 	_ = key
 	_ = ttlSeconds
 	if c.getOrSetWithTTLErr != nil {
-		return nil, customError.WrapCache("get or set cache", c.getOrSetWithTTLErr)
+		return nil, customerror.WrapCache("get or set cache", c.getOrSetWithTTLErr)
 	}
 	if c.getErr != nil {
-		return nil, customError.WrapCache("get cache", c.getErr)
+		return nil, customerror.WrapCache("get cache", c.getErr)
 	}
 	return loader(ctx)
 }
@@ -240,7 +240,7 @@ func assertCacheFailure(t interface {
 	Helper()
 }, err error) {
 	t.Helper()
-	if !errors.Is(err, customError.ErrCacheFailure) {
+	if !errors.Is(err, customerror.ErrCacheFailure) {
 		t.Errorf("expected cache failure, got %v", err)
 	}
 }

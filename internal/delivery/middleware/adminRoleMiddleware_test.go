@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,7 +48,7 @@ func TestAdminOnly_RejectsNonAdmin(t *testing.T) {
 			return entity.NewUser("user", "pw"), nil
 		},
 	}, func(c *gin.Context, status int, err error) {
-		c.AbortWithStatusJSON(status, gin.H{"error": customError.Public(err).Error()})
+		c.AbortWithStatusJSON(status, gin.H{"error": customerror.Public(err).Error()})
 	}))
 	r.GET("/admin", func(c *gin.Context) {
 		c.Status(http.StatusOK)
