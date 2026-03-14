@@ -1826,3 +1826,38 @@
 - `internal/application/policy/board_visibility_policy.go`
 - `internal/application/service/postService.go`
 - `internal/application/service/postService_test.go`
+
+## 2026-03-14 - 태그 목록 hidden 필터 보완 후 리뷰 반영으로 페이징 overflow 방어와 배치 보드 조회를 추가한다
+
+상태
+
+- decided
+
+배경
+
+- 태그 목록 visibility-aware 구현 이후 코드리뷰에서 `limit+1` overflow panic 가능성과 보드 조회 N+1 가능성이 지적됐다.
+
+관찰
+
+- 공개 API의 `limit`은 하한(1)만 검증하고 상한은 서비스 레이어에 위임된다.
+- `loadPublishedPostsByTag`는 hidden 게시판 차단을 위해 게시글별 보드 조회를 수행하므로, 게시글이 여러 보드에 분산되면 호출 수가 증가할 수 있다.
+
+결론
+
+- 커서 조회용 `limit+1` 계산은 overflow-safe helper를 통해 수행한다.
+- 태그 목록 visibility 판단 시 배치 단위로 보드를 조회하는 `SelectBoardsByIDs` 포트를 추가해 조회 횟수를 줄인다.
+- visibility bool 계산은 `policy.EnsureBoardVisible(board, nil) == nil` 형태로 단순화한다.
+
+후속 작업
+
+- `BoardRepository`/in-memory 구현/contract test에 `SelectBoardsByIDs` 추가
+- `PostService` 태그 목록 경로에 overflow-safe 페이징 + 배치 보드 조회 적용
+- 관련 회귀 테스트(대형 limit 입력) 보강
+
+관련 문서/코드
+
+- `internal/application/service/pagination.go`
+- `internal/application/port/board_repository.go`
+- `internal/infrastructure/persistence/inmemory/boardRepository.go`
+- `internal/application/service/postService.go`
+- `internal/application/service/postService_test.go`

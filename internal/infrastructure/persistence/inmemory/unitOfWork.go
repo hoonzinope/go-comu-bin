@@ -398,6 +398,10 @@ func (r boardTxRepository) SelectBoardByID(ctx context.Context, id int64) (*enti
 	_ = ctx
 	return r.repo.selectBoardByID(id)
 }
+func (r boardTxRepository) SelectBoardsByIDs(ctx context.Context, ids []int64) (map[int64]*entity.Board, error) {
+	_ = ctx
+	return r.repo.selectBoardsByIDs(ids)
+}
 func (r boardTxRepository) SelectBoardList(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error) {
 	_ = ctx
 	return r.repo.selectBoardList(limit, lastID)

@@ -527,7 +527,10 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 		return nil, customError.ErrTagNotFound
 	}
 
-	fetchLimit := limit + 1
+	fetchLimit, err := cursorFetchLimit(limit)
+	if err != nil {
+		return nil, err
+	}
 	cursor := lastID
 	visiblePosts := make([]*entity.Post, 0, fetchLimit)
 	boardVisibility := make(map[int64]bool)
@@ -541,21 +544,30 @@ func (s *PostService) loadPublishedPostsByTag(ctx context.Context, normalizedNam
 			break
 		}
 
+		uncachedBoardIDs := make([]int64, 0)
+		seenBoardIDs := make(map[int64]struct{}, len(publishedPosts))
 		for _, post := range publishedPosts {
-			visible, checked := boardVisibility[post.BoardID]
-			if !checked {
-				board, boardErr := s.boardRepository.SelectBoardByID(ctx, post.BoardID)
-				if boardErr != nil {
-					return nil, customError.WrapRepository("select board by id for tag post visibility", boardErr)
-				}
-				if ensureErr := policy.EnsureBoardVisible(board, nil); ensureErr != nil {
-					visible = false
-				} else {
-					visible = true
-				}
-				boardVisibility[post.BoardID] = visible
+			if _, ok := boardVisibility[post.BoardID]; ok {
+				continue
 			}
-			if visible {
+			if _, seen := seenBoardIDs[post.BoardID]; seen {
+				continue
+			}
+			seenBoardIDs[post.BoardID] = struct{}{}
+			uncachedBoardIDs = append(uncachedBoardIDs, post.BoardID)
+		}
+		if len(uncachedBoardIDs) > 0 {
+			boardsByID, boardErr := s.boardRepository.SelectBoardsByIDs(ctx, uncachedBoardIDs)
+			if boardErr != nil {
+				return nil, customError.WrapRepository("select boards by ids for tag post visibility", boardErr)
+			}
+			for _, boardID := range uncachedBoardIDs {
+				boardVisibility[boardID] = policy.EnsureBoardVisible(boardsByID[boardID], nil) == nil
+			}
+		}
+
+		for _, post := range publishedPosts {
+			if boardVisibility[post.BoardID] {
 				visiblePosts = append(visiblePosts, post)
 				if len(visiblePosts) >= fetchLimit {
 					break

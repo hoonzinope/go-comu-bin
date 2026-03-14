@@ -75,6 +75,18 @@ func RunBoardRepositoryContractTests(t *testing.T, newRepository func() port.Boa
 		assert.Empty(t, boards)
 	})
 
+	t.Run("select boards by ids returns existing only", func(t *testing.T) {
+		repo := newRepository()
+		id1, _ := repo.Save(context.Background(), entity.NewBoard("b1", "d1"))
+		id2, _ := repo.Save(context.Background(), entity.NewBoard("b2", "d2"))
+
+		selected, err := repo.SelectBoardsByIDs(context.Background(), []int64{id1, 999, id2})
+		require.NoError(t, err)
+		require.Len(t, selected, 2)
+		assert.Equal(t, id1, selected[id1].ID)
+		assert.Equal(t, id2, selected[id2].ID)
+	})
+
 	t.Run("update and delete missing id are no-op", func(t *testing.T) {
 		repo := newRepository()
 

@@ -49,6 +49,13 @@ func (r *BoardRepository) SelectBoardByID(ctx context.Context, id int64) (*entit
 	return r.selectBoardByID(id)
 }
 
+func (r *BoardRepository) SelectBoardsByIDs(ctx context.Context, ids []int64) (map[int64]*entity.Board, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectBoardsByIDs(ids)
+}
+
 func (r *BoardRepository) selectBoardByID(id int64) (*entity.Board, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -57,6 +64,19 @@ func (r *BoardRepository) selectBoardByID(id int64) (*entity.Board, error) {
 		return cloneBoard(board), nil
 	}
 	return nil, nil
+}
+
+func (r *BoardRepository) selectBoardsByIDs(ids []int64) (map[int64]*entity.Board, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	selected := make(map[int64]*entity.Board, len(ids))
+	for _, id := range ids {
+		if board, exists := r.boardDB.Data[id]; exists {
+			selected[id] = cloneBoard(board)
+		}
+	}
+	return selected, nil
 }
 
 func (r *BoardRepository) SelectBoardList(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error) {
