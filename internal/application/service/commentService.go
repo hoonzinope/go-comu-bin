@@ -21,6 +21,7 @@ var _ port.CommentUseCase = (*CommentService)(nil)
 
 type CommentService struct {
 	userRepository      port.UserRepository
+	boardRepository     port.BoardRepository
 	postRepository      port.PostRepository
 	commentRepository   port.CommentRepository
 	reactionRepository  port.ReactionRepository
@@ -32,13 +33,14 @@ type CommentService struct {
 	logger              *slog.Logger
 }
 
-func NewCommentService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
-	return NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
+func NewCommentService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
+	return NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
+func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
 	return &CommentService{
 		userRepository:      userRepository,
+		boardRepository:     boardRepository,
 		postRepository:      postRepository,
 		commentRepository:   commentRepository,
 		reactionRepository:  reactionRepository,
@@ -76,6 +78,9 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 		}
 		if post == nil {
 			return customError.ErrPostNotFound
+		}
+		if err := s.ensureBoardVisibleByPostTx(tx, user, post.ID); err != nil {
+			return err
 		}
 		if parentID != nil {
 			parent, err := tx.CommentRepository().SelectCommentByID(txCtx, *parentID)
@@ -116,6 +121,9 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 		}
 		if post == nil {
 			return nil, customError.ErrPostNotFound
+		}
+		if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
+			return nil, err
 		}
 
 		comments, err := s.commentRepository.SelectVisibleComments(ctx, postID, limit+1, lastID)
@@ -202,6 +210,9 @@ func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, 
 		if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 			return err
 		}
+		if err := s.ensureBoardVisibleByPostTx(tx, requester, comment.PostID); err != nil {
+			return err
+		}
 		updatedComment := *comment
 		updatedComment.Update(content)
 		if err := tx.CommentRepository().Update(txCtx, &updatedComment); err != nil {
@@ -244,6 +255,9 @@ func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) 
 		if err := s.authorizationPolicy.OwnerOrAdmin(requester, comment.AuthorID); err != nil {
 			return err
 		}
+		if err := s.ensureBoardVisibleByPostTx(tx, requester, comment.PostID); err != nil {
+			return err
+		}
 		if deleteErr := tx.CommentRepository().Delete(txCtx, comment.ID); deleteErr != nil {
 			return customError.WrapRepository("delete comment", deleteErr)
 		}
@@ -260,4 +274,27 @@ func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) 
 		return err
 	}
 	return nil
+}
+
+func (s *CommentService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
+	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
+	if err != nil {
+		return customError.WrapRepository("select board by id for comment board visibility", err)
+	}
+	return policy.EnsureBoardVisible(board, user)
+}
+
+func (s *CommentService) ensureBoardVisibleByPostTx(tx port.TxScope, user *entity.User, postID int64) error {
+	post, err := tx.PostRepository().SelectPostByID(tx.Context(), postID)
+	if err != nil {
+		return customError.WrapRepository("select post by id for comment board visibility", err)
+	}
+	if post == nil {
+		return customError.ErrPostNotFound
+	}
+	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), post.BoardID)
+	if err != nil {
+		return customError.WrapRepository("select board by id for comment board visibility", err)
+	}
+	return policy.EnsureBoardVisible(board, user)
 }

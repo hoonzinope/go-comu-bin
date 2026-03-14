@@ -10,6 +10,7 @@ import (
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -19,6 +20,7 @@ var _ port.ReactionUseCase = (*ReactionService)(nil)
 
 type ReactionService struct {
 	userRepository     port.UserRepository
+	boardRepository    port.BoardRepository
 	postRepository     port.PostRepository
 	commentRepository  port.CommentRepository
 	reactionRepository port.ReactionRepository
@@ -29,13 +31,14 @@ type ReactionService struct {
 	logger             *slog.Logger
 }
 
-func NewReactionService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
-	return NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, logger...)
+func NewReactionService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
+	return NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, logger...)
 }
 
-func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
+func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
 	return &ReactionService{
 		userRepository:     userRepository,
+		boardRepository:    boardRepository,
 		postRepository:     postRepository,
 		commentRepository:  commentRepository,
 		reactionRepository: reactionRepository,
@@ -94,7 +97,7 @@ func (s *ReactionService) DeleteReaction(ctx context.Context, UserID, TargetID i
 func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
 	cacheKey := key.ReactionList(string(targetType), targetID)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		if err := s.ensureTargetExists(ctx, targetID, targetType); err != nil {
+		if err := s.ensureTargetExists(ctx, nil, targetID, targetType); err != nil {
 			return nil, err
 		}
 		reactions, err := s.reactionRepository.GetByTarget(ctx, targetID, targetType)
@@ -128,7 +131,7 @@ func (s *ReactionService) withReactionTransaction(ctx context.Context, userID, t
 		if user == nil {
 			return customError.ErrUserNotFound
 		}
-		postID, err := s.ensureTargetExistsTx(tx, targetID, targetType)
+		postID, err := s.ensureTargetExistsTx(tx, user, targetID, targetType)
 		if err != nil {
 			return err
 		}
@@ -162,7 +165,7 @@ func (s *ReactionService) reactionsFromEntities(ctx context.Context, reactions [
 	return out, nil
 }
 
-func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, targetType entity.ReactionTargetType) (*int64, error) {
+func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, user *entity.User, targetID int64, targetType entity.ReactionTargetType) (*int64, error) {
 	txCtx := tx.Context()
 	switch targetType {
 	case entity.ReactionTargetPost:
@@ -172,6 +175,9 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, 
 		}
 		if post == nil {
 			return nil, customError.ErrPostNotFound
+		}
+		if err := s.ensureBoardVisibleTx(tx, user, post.BoardID); err != nil {
+			return nil, err
 		}
 		postID := post.ID
 		return &postID, nil
@@ -183,6 +189,16 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, 
 		if comment == nil {
 			return nil, customError.ErrCommentNotFound
 		}
+		post, err := tx.PostRepository().SelectPostByID(txCtx, comment.PostID)
+		if err != nil {
+			return nil, customError.WrapRepository("select post by id for ensure reaction target", err)
+		}
+		if post == nil {
+			return nil, customError.ErrPostNotFound
+		}
+		if err := s.ensureBoardVisibleTx(tx, user, post.BoardID); err != nil {
+			return nil, err
+		}
 		postID := comment.PostID
 		return &postID, nil
 	default:
@@ -190,7 +206,7 @@ func (s *ReactionService) ensureTargetExistsTx(tx port.TxScope, targetID int64, 
 	}
 }
 
-func (s *ReactionService) ensureTargetExists(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) error {
+func (s *ReactionService) ensureTargetExists(ctx context.Context, user *entity.User, targetID int64, targetType entity.ReactionTargetType) error {
 	switch targetType {
 	case entity.ReactionTargetPost:
 		post, err := s.postRepository.SelectPostByID(ctx, targetID)
@@ -200,7 +216,7 @@ func (s *ReactionService) ensureTargetExists(ctx context.Context, targetID int64
 		if post == nil {
 			return customError.ErrPostNotFound
 		}
-		return nil
+		return s.ensureBoardVisible(ctx, user, post.BoardID)
 	case entity.ReactionTargetComment:
 		comment, err := s.commentRepository.SelectCommentByID(ctx, targetID)
 		if err != nil {
@@ -209,8 +225,31 @@ func (s *ReactionService) ensureTargetExists(ctx context.Context, targetID int64
 		if comment == nil {
 			return customError.ErrCommentNotFound
 		}
-		return nil
+		post, err := s.postRepository.SelectPostByID(ctx, comment.PostID)
+		if err != nil {
+			return customError.WrapRepository("select post by id for ensure reaction target", err)
+		}
+		if post == nil {
+			return customError.ErrPostNotFound
+		}
+		return s.ensureBoardVisible(ctx, user, post.BoardID)
 	default:
 		return customError.ErrInternalServerError
 	}
+}
+
+func (s *ReactionService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
+	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
+	if err != nil {
+		return customError.WrapRepository("select board by id for reaction board visibility", err)
+	}
+	return policy.EnsureBoardVisible(board, user)
+}
+
+func (s *ReactionService) ensureBoardVisibleTx(tx port.TxScope, user *entity.User, boardID int64) error {
+	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), boardID)
+	if err != nil {
+		return customError.WrapRepository("select board by id for reaction board visibility", err)
+	}
+	return policy.EnsureBoardVisible(board, user)
 }

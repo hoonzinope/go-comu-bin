@@ -167,6 +167,24 @@ func TestOutboxRepository_SelectDead_WithCursor(t *testing.T) {
 	assert.Equal(t, "d1", next[0].ID)
 }
 
+func TestOutboxRepository_SelectByID(t *testing.T) {
+	repo := NewOutboxRepository()
+	now := time.Now()
+	require.NoError(t, repo.Append(
+		port.OutboxMessage{ID: "d1", EventName: "e1", Status: port.OutboxStatusDead, OccurredAt: now, NextAttemptAt: now},
+	))
+
+	message, err := repo.SelectByID("d1")
+	require.NoError(t, err)
+	require.NotNil(t, message)
+	assert.Equal(t, "d1", message.ID)
+	assert.Equal(t, port.OutboxStatusDead, message.Status)
+
+	missing, err := repo.SelectByID("missing")
+	require.NoError(t, err)
+	assert.Nil(t, missing)
+}
+
 func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 	userRepository := NewUserRepository()
 	boardRepository := NewBoardRepository()

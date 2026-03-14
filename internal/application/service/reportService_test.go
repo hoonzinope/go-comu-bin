@@ -137,3 +137,29 @@ func TestReportService_ResolveReport_Success(t *testing.T) {
 	assert.Equal(t, "rejected", list.Reports[0].Status)
 }
 
+func TestReportService_ResolveReport_RejectsAlreadyResolved(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewReportServiceWithActionDispatcher(
+		repositories.user,
+		repositories.post,
+		repositories.comment,
+		repositories.report,
+		repositories.unitOfWork,
+		newTestActionDispatcher(t, repositories, newTestCache()),
+		newTestAuthorizationPolicy(),
+	)
+
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	reporterID := seedUser(repositories.user, "reporter", "pw", "user")
+	authorID := seedUser(repositories.user, "author", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
+
+	reportID, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postID, entity.ReportReasonSpam, "detail")
+	require.NoError(t, err)
+	require.NoError(t, svc.ResolveReport(context.Background(), adminID, reportID, entity.ReportStatusAccepted, "ok"))
+
+	err = svc.ResolveReport(context.Background(), adminID, reportID, entity.ReportStatusRejected, "retry")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrInvalidInput))
+}

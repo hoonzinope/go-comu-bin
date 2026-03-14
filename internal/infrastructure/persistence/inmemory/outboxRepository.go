@@ -139,6 +139,20 @@ func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMe
 	return ready, nil
 }
 
+func (r *OutboxRepository) SelectByID(id string) (*port.OutboxMessage, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	message, exists := r.data[id]
+	if !exists {
+		return nil, nil
+	}
+	cloned := cloneOutboxMessage(message)
+	return &cloned, nil
+}
+
 func (r *OutboxRepository) SelectDead(limit int, lastID string) ([]port.OutboxMessage, error) {
 	r.coordinator.enter()
 	defer r.coordinator.exit()

@@ -46,6 +46,19 @@ func (s *fakeOutboxStore) FetchReady(limit int, _ time.Time) ([]port.OutboxMessa
 	return out, nil
 }
 
+func (s *fakeOutboxStore) SelectByID(id string) (*port.OutboxMessage, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, message := range s.ready {
+		if message.ID != id {
+			continue
+		}
+		copied := message
+		return &copied, nil
+	}
+	return nil, nil
+}
+
 func (s *fakeOutboxStore) SelectDead(limit int, _ string) ([]port.OutboxMessage, error) {
 	_ = limit
 	return nil, nil

@@ -80,6 +80,9 @@ func (s *OutboxAdminService) RequeueDeadMessage(ctx context.Context, adminID int
 	if messageID == "" {
 		return customError.ErrInvalidInput
 	}
+	if err := s.ensureDeadMessage(messageID); err != nil {
+		return err
+	}
 	if err := s.outboxStore.MarkRetry(messageID, time.Now(), "manual requeue by admin"); err != nil {
 		return customError.WrapRepository("requeue dead outbox message", err)
 	}
@@ -94,6 +97,9 @@ func (s *OutboxAdminService) DiscardDeadMessage(ctx context.Context, adminID int
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return customError.ErrInvalidInput
+	}
+	if err := s.ensureDeadMessage(messageID); err != nil {
+		return err
 	}
 	if err := s.outboxStore.MarkSucceeded(messageID); err != nil {
 		return customError.WrapRepository("discard dead outbox message", err)
@@ -113,3 +119,13 @@ func (s *OutboxAdminService) ensureAdmin(ctx context.Context, adminID int64) err
 	return s.authorizationPolicy.AdminOnly(admin)
 }
 
+func (s *OutboxAdminService) ensureDeadMessage(messageID string) error {
+	message, err := s.outboxStore.SelectByID(messageID)
+	if err != nil {
+		return customError.WrapRepository("select outbox message by id for dead operation", err)
+	}
+	if message == nil || message.Status != port.OutboxStatusDead {
+		return customError.ErrInvalidInput
+	}
+	return nil
+}

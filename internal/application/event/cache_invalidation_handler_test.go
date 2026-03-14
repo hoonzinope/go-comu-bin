@@ -20,11 +20,41 @@ func TestCacheInvalidationHandler_BoardChanged(t *testing.T) {
 	h := NewCacheInvalidationHandler(cache, logger)
 
 	require.NoError(t, cache.Set(context.Background(), key.BoardList(10, 0), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.PostList(1, 10, 0), "cached"))
 	require.NoError(t, h.Handle(context.Background(), NewBoardChanged("updated", 1)))
 
-	_, ok, err := cache.Get(context.Background(), key.BoardList(10, 0))
-	require.NoError(t, err)
-	assert.False(t, ok)
+	for _, cacheKey := range []string{
+		key.BoardList(10, 0),
+		key.PostList(1, 10, 0),
+	} {
+		_, ok, err := cache.Get(context.Background(), cacheKey)
+		require.NoError(t, err)
+		assert.False(t, ok)
+	}
+}
+
+func TestCacheInvalidationHandler_BoardVisibilityChanged_InvalidatesVisibilitySensitiveCaches(t *testing.T) {
+	cache := testutil.NewSpyCache()
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	h := NewCacheInvalidationHandler(cache, logger)
+
+	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.CommentList(11, 10, 0), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetPost), 11), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.TagPostList("go", 10, 0), "cached"))
+
+	require.NoError(t, h.Handle(context.Background(), NewBoardChanged("visibility", 2)))
+
+	for _, cacheKey := range []string{
+		key.PostDetail(11),
+		key.CommentList(11, 10, 0),
+		key.ReactionList(string(entity.ReactionTargetPost), 11),
+		key.TagPostList("go", 10, 0),
+	} {
+		_, ok, err := cache.Get(context.Background(), cacheKey)
+		require.NoError(t, err)
+		assert.False(t, ok)
+	}
 }
 
 func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
@@ -90,8 +120,10 @@ type recordingCache struct {
 	deleteByPrefixCtx context.Context
 }
 
-func (c *recordingCache) Get(context.Context, string) (interface{}, bool, error) { return nil, false, nil }
-func (c *recordingCache) Set(context.Context, string, interface{}) error          { return nil }
+func (c *recordingCache) Get(context.Context, string) (interface{}, bool, error) {
+	return nil, false, nil
+}
+func (c *recordingCache) Set(context.Context, string, interface{}) error { return nil }
 func (c *recordingCache) SetWithTTL(context.Context, string, interface{}, int) error {
 	return nil
 }
