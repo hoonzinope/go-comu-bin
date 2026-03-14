@@ -99,6 +99,9 @@ func (r *BoardRepository) selectBoardList(limit int, lastID int64) ([]*entity.Bo
 		if lastID > 0 && board.ID >= lastID {
 			continue
 		}
+		if board.Hidden {
+			continue
+		}
 		boards = append(boards, cloneBoard(board))
 	}
 	sort.Slice(boards, func(i, j int) bool {

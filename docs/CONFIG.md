@@ -41,6 +41,7 @@ delivery:
   http:
     port: 18577
     maxJSONBodyBytes: 1048576
+    defaultPageLimit: 10
     auth:
       secret: "replace-with-real-secret"
 
@@ -71,6 +72,7 @@ jobs:
 
 - `delivery.http.port`: `1..65535`
 - `delivery.http.maxJSONBodyBytes`: `> 0`
+- `delivery.http.defaultPageLimit`: `1..1000`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
 - `delivery.http.auth.secret`: 최소 길이 `32`자 이상

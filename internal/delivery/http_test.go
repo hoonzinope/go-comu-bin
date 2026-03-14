@@ -546,6 +546,37 @@ func newTestHandlerWithJSONLimit(
 	}).Handler
 }
 
+func newTestHandlerWithDefaultPageLimit(
+	user authUserPort,
+	account port.AccountUseCase,
+	board port.BoardUseCase,
+	post port.PostUseCase,
+	comment port.CommentUseCase,
+	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
+	defaultPageLimit int,
+) http.Handler {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	reportUseCase := &fakeReportUseCase{}
+	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:     sessionUseCase,
+		UserUseCase:        user,
+		AccountUseCase:     account,
+		BoardUseCase:       board,
+		PostUseCase:        post,
+		CommentUseCase:     comment,
+		ReactionUseCase:    reaction,
+		AttachmentUseCase:  attachment,
+		ReportUseCase:      reportUseCase,
+		OutboxAdminUseCase: outboxAdminUseCase,
+		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
+		DefaultPageLimit:   defaultPageLimit,
+	}).Handler
+}
+
 func newTestHandlerWithAdminUseCases(
 	user authUserPort,
 	account port.AccountUseCase,
@@ -1606,6 +1637,28 @@ func TestHTTP_BoardGet_BadLimit(t *testing.T) {
 
 	rr = doJSONRequest(t, handler, http.MethodGet, "/boards?limit=1001", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHTTP_BoardGet_UsesConfiguredDefaultPageLimit(t *testing.T) {
+	handler := newTestHandlerWithDefaultPageLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{
+			getBoards: func(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
+				assert.Equal(t, 7, limit)
+				assert.Equal(t, int64(0), lastID)
+				return &model.BoardList{Boards: []model.Board{}, Limit: limit, LastID: lastID}, nil
+			},
+		},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		7,
+	)
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/boards", nil)
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestHTTP_BoardGet_BadOffset(t *testing.T) {

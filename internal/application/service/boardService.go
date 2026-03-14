@@ -59,16 +59,9 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 			return nil, err
 		}
 
-		boards, err := s.boardRepository.SelectBoardList(ctx, fetchLimit, lastID)
+		visibleBoards, err := s.boardRepository.SelectBoardList(ctx, fetchLimit, lastID)
 		if err != nil {
 			return nil, customError.WrapRepository("select board list", err)
-		}
-		visibleBoards := make([]*entity.Board, 0, len(boards))
-		for _, board := range boards {
-			if err := policy.EnsureBoardVisible(board, nil); err != nil {
-				continue
-			}
-			visibleBoards = append(visibleBoards, board)
 		}
 
 		hasMore := false

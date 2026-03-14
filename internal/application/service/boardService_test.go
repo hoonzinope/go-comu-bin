@@ -97,6 +97,28 @@ func TestBoardService_GetBoards_HasMoreAndNextCursor(t *testing.T) {
 	assert.Equal(t, list.Boards[len(list.Boards)-1].ID, *list.NextLastID)
 }
 
+func TestBoardService_GetBoards_HasMoreRemainsCorrectWithHiddenBoardsAtTop(t *testing.T) {
+	repositories := newTestRepositories()
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	_ = seedBoard(repositories.board, "v1", "d1")
+	_ = seedBoard(repositories.board, "v2", "d2")
+	visibleTopID := seedBoard(repositories.board, "v3", "d3")
+	hidden1ID := seedBoard(repositories.board, "h1", "d4")
+	hidden2ID := seedBoard(repositories.board, "h2", "d5")
+	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	require.NoError(t, svc.SetBoardVisibility(context.Background(), hidden1ID, adminID, true))
+	require.NoError(t, svc.SetBoardVisibility(context.Background(), hidden2ID, adminID, true))
+
+	list, err := svc.GetBoards(context.Background(), 2, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Boards, 2)
+	assert.Equal(t, visibleTopID, list.Boards[0].ID)
+	assert.True(t, list.HasMore)
+	require.NotNil(t, list.NextLastID)
+	assert.Equal(t, list.Boards[len(list.Boards)-1].ID, *list.NextLastID)
+}
+
 func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
 	repositories := newTestRepositories()
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")

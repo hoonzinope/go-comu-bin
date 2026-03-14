@@ -11,6 +11,8 @@ import (
 const placeholderJWTSecret = "commu-bin-secret-key"
 const placeholderBootstrapPassword = "admin"
 const minJWTSecretLength = 32
+const minDefaultPageLimit = 1
+const maxDefaultPageLimit = 1000
 
 type Config struct {
 	Cache struct {
@@ -48,6 +50,7 @@ type Config struct {
 		HTTP struct {
 			Port             int   `yaml:"port"`
 			MaxJSONBodyBytes int64 `yaml:"maxJSONBodyBytes"`
+			DefaultPageLimit int   `yaml:"defaultPageLimit"`
 			Auth             struct {
 				Secret string `yaml:"secret"`
 			} `yaml:"auth"`
@@ -98,6 +101,7 @@ func Load() (*Config, error) {
 		"storage.attachment.imageOptimization.jpegQuality",
 		"delivery.http.port",
 		"delivery.http.maxJSONBodyBytes",
+		"delivery.http.defaultPageLimit",
 		"delivery.http.auth.secret",
 		"event.outbox.workerCount",
 		"event.outbox.batchSize",
@@ -137,6 +141,7 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("storage.attachment.imageOptimization.enabled", true)
 	v.SetDefault("storage.attachment.imageOptimization.jpegQuality", 82)
 	v.SetDefault("delivery.http.maxJSONBodyBytes", int64(1<<20))
+	v.SetDefault("delivery.http.defaultPageLimit", 10)
 	v.SetDefault("event.outbox.workerCount", 1)
 	v.SetDefault("event.outbox.batchSize", 100)
 	v.SetDefault("event.outbox.pollIntervalMillis", 100)
@@ -167,6 +172,14 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Delivery.HTTP.MaxJSONBodyBytes <= 0 {
 		return fmt.Errorf("invalid delivery.http.maxJSONBodyBytes: %d (must be > 0)", cfg.Delivery.HTTP.MaxJSONBodyBytes)
+	}
+	if cfg.Delivery.HTTP.DefaultPageLimit < minDefaultPageLimit || cfg.Delivery.HTTP.DefaultPageLimit > maxDefaultPageLimit {
+		return fmt.Errorf(
+			"invalid delivery.http.defaultPageLimit: %d (must be %d..%d)",
+			cfg.Delivery.HTTP.DefaultPageLimit,
+			minDefaultPageLimit,
+			maxDefaultPageLimit,
+		)
 	}
 	secret := strings.TrimSpace(cfg.Delivery.HTTP.Auth.Secret)
 	if secret == "" {

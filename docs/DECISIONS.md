@@ -1965,3 +1965,37 @@
 - `docs/CONFIG.md`
 - `internal/application/service/boardService.go`
 - `internal/infrastructure/persistence/inmemory/boardRepository.go`
+
+## 2026-03-14 - 보드 목록은 반복조회 대신 조회계층에서 visible 커서를 보장하고 페이지 기본값만 설정화한다
+
+상태
+
+- decided
+
+배경
+
+- hidden 보드가 상위 ID 구간을 차지하면, 서비스 후처리 필터 방식은 `has_more` 정합성이 깨질 수 있다.
+- 운영 튜닝 요구가 있으나, 안전 상한(`max page limit`)은 보안 경계이므로 런타임 설정으로 열지 않는 것이 안전하다.
+
+관찰
+
+- 보드 목록은 `fetchLimit=limit+1` 조회 후 hidden 후처리를 수행한다.
+- 페이지 상한은 서비스/딜리버리에서 `1000`으로 고정되어 있으며 DoS 방어 경계 역할을 한다.
+
+결론
+
+- 보드 공개 목록은 조회 계층에서 hidden 제외 + 커서 적용을 수행해 반복조회 없이 정합성을 보장한다.
+- 페이지 설정은 `default page limit`만 config로 노출하고, `max page limit(1000)`은 코드 상수로 유지한다.
+
+후속 작업
+
+- board list hidden+cursor 정합성 회귀 테스트 추가
+- `delivery.http.defaultPageLimit` 설정 추가 및 검증(`1..1000`)
+- HTTP 파서 기본값을 설정값으로 주입
+
+관련 문서/코드
+
+- `internal/application/service/boardService.go`
+- `internal/infrastructure/persistence/inmemory/boardRepository.go`
+- `internal/delivery/http.go`
+- `internal/config/config.go`

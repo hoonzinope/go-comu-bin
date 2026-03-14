@@ -42,6 +42,7 @@ type HTTPHandler struct {
 	outboxAdminUseCase       port.OutboxAdminUseCase
 	attachmentUploadMaxBytes int64
 	maxJSONBodyBytes         int64
+	defaultPageLimit         int
 	logger                   *slog.Logger
 	authGinMiddleware        gin.HandlerFunc
 }
@@ -59,6 +60,7 @@ type HTTPDependencies struct {
 	OutboxAdminUseCase       port.OutboxAdminUseCase
 	AttachmentUploadMaxBytes int64
 	MaxJSONBodyBytes         int64
+	DefaultPageLimit         int
 	Logger                   *slog.Logger
 }
 
@@ -80,6 +82,7 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		outboxAdminUseCase:       deps.OutboxAdminUseCase,
 		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
 		maxJSONBodyBytes:         resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
+		defaultPageLimit:         resolveDefaultPageLimit(deps.DefaultPageLimit),
 		logger:                   logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
@@ -93,6 +96,13 @@ func resolveMaxJSONBodyBytes(size int64) int64 {
 		return defaultMaxJSONBodyBytes
 	}
 	return size
+}
+
+func resolveDefaultPageLimit(limit int) int {
+	if limit < 1 || limit > maxPageLimit {
+		return defaultPageLimit
+	}
+	return limit
 }
 
 func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
@@ -471,7 +481,7 @@ func (h *HTTPHandler) handleAdminReportsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	limit, lastID, ok := parseLimitLastID(c)
+	limit, lastID, ok := h.parseLimitLastID(c)
 	if !ok {
 		return
 	}
@@ -559,7 +569,7 @@ func (h *HTTPHandler) handleAdminDeadOutboxGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	limit, lastID, ok := parseLimitLastIDString(c)
+	limit, lastID, ok := h.parseLimitLastIDString(c)
 	if !ok {
 		return
 	}
@@ -686,7 +696,7 @@ func (h *HTTPHandler) handleAdminBoardVisibilityPut(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /boards [get]
 func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
-	limit, lastID, ok := parseLimitLastID(c)
+	limit, lastID, ok := h.parseLimitLastID(c)
 	if !ok {
 		return
 	}
@@ -824,7 +834,7 @@ func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
 		return
 	}
 
-	limit, lastID, ok := parseLimitLastID(c)
+	limit, lastID, ok := h.parseLimitLastID(c)
 	if !ok {
 		return
 	}
@@ -937,7 +947,7 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 		badRequest(c, errors.New("tagName is required"))
 		return
 	}
-	limit, lastID, ok := parseLimitLastID(c)
+	limit, lastID, ok := h.parseLimitLastID(c)
 	if !ok {
 		return
 	}
@@ -1301,7 +1311,7 @@ func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
 		return
 	}
 
-	limit, lastID, ok := parseLimitLastID(c)
+	limit, lastID, ok := h.parseLimitLastID(c)
 	if !ok {
 		return
 	}
@@ -1726,11 +1736,11 @@ func statusForError(err error) int {
 	}
 }
 
-func parseLimitLastID(c *gin.Context) (int, int64, bool) {
+func (h *HTTPHandler) parseLimitLastID(c *gin.Context) (int, int64, bool) {
 	limitStr := c.Query("limit")
 	lastIDStr := c.Query("last_id")
 
-	limit := defaultPageLimit
+	limit := h.defaultPageLimit
 	var lastID int64
 
 	if limitStr != "" {
@@ -1754,11 +1764,11 @@ func parseLimitLastID(c *gin.Context) (int, int64, bool) {
 	return limit, lastID, true
 }
 
-func parseLimitLastIDString(c *gin.Context) (int, string, bool) {
+func (h *HTTPHandler) parseLimitLastIDString(c *gin.Context) (int, string, bool) {
 	limitStr := c.Query("limit")
 	lastID := strings.TrimSpace(c.Query("last_id"))
 
-	limit := defaultPageLimit
+	limit := h.defaultPageLimit
 	if limitStr != "" {
 		v, err := strconv.Atoi(limitStr)
 		if err != nil || v < 1 || v > maxPageLimit {

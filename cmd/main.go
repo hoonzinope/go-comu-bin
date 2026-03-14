@@ -147,6 +147,7 @@ func main() {
 		OutboxAdminUseCase:       outboxAdminUseCase,
 		AttachmentUploadMaxBytes: cfg.Storage.Attachment.MaxUploadSizeBytes,
 		MaxJSONBodyBytes:         cfg.Delivery.HTTP.MaxJSONBodyBytes,
+		DefaultPageLimit:         cfg.Delivery.HTTP.DefaultPageLimit,
 		Logger:                   appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)

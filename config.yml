@@ -22,6 +22,7 @@ delivery:
   http:
     port: 18577
     maxJSONBodyBytes: 1048576
+    defaultPageLimit: 10
     auth:
       secret: ""
 
