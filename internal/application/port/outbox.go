@@ -28,6 +28,7 @@ type OutboxAppender interface {
 type OutboxStore interface {
 	OutboxAppender
 	FetchReady(limit int, now time.Time) ([]OutboxMessage, error)
+	SelectDead(limit int, lastID string) ([]OutboxMessage, error)
 	MarkSucceeded(ids ...string) error
 	MarkRetry(id string, nextAttemptAt time.Time, err string) error
 	MarkDead(id string, err string) error

@@ -54,6 +54,21 @@ func TestBoardService_GetBoards_Success(t *testing.T) {
 	assert.Len(t, list.Boards, 2)
 }
 
+func TestBoardService_GetBoards_ExcludesHiddenBoards(t *testing.T) {
+	repositories := newTestRepositories()
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	visibleBoardID := seedBoard(repositories.board, "visible", "d1")
+	hiddenBoardID := seedBoard(repositories.board, "hidden", "d2")
+	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	require.NoError(t, svc.SetBoardVisibility(context.Background(), hiddenBoardID, adminID, true))
+
+	list, err := svc.GetBoards(context.Background(), 10, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Boards, 1)
+	assert.Equal(t, visibleBoardID, list.Boards[0].ID)
+}
+
 func TestBoardService_GetBoards_InvalidLimit(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
@@ -99,6 +114,17 @@ func TestBoardService_DeleteBoard_RejectsNonEmptyBoard(t *testing.T) {
 	err := svc.DeleteBoard(context.Background(), boardID, adminID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customError.ErrBoardNotEmpty))
+}
+
+func TestBoardService_SetBoardVisibility_AdminOnly(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	err := svc.SetBoardVisibility(context.Background(), boardID, userID, true)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customError.ErrForbidden))
 }
 
 func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {

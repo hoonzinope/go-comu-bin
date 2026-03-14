@@ -21,6 +21,7 @@ func TestUnitOfWork_WithinTransaction_PassesContextToCallback(t *testing.T) {
 		NewCommentRepository(),
 		NewReactionRepository(),
 		NewAttachmentRepository(),
+		NewReportRepository(),
 		NewOutboxRepository(),
 	)
 

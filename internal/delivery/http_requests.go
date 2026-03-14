@@ -40,6 +40,22 @@ type reactionRequest struct {
 	ReactionType string `json:"reaction_type" example:"like"`
 }
 
+type reportCreateRequest struct {
+	TargetType   string `json:"target_type" example:"post"`
+	TargetID     int64  `json:"target_id" example:"1"`
+	ReasonCode   string `json:"reason_code" example:"spam"`
+	ReasonDetail string `json:"reason_detail,omitempty" example:"repeated spam"`
+}
+
+type reportResolveRequest struct {
+	Status         string `json:"status" example:"accepted"`
+	ResolutionNote string `json:"resolution_note,omitempty" example:"confirmed"`
+}
+
+type boardVisibilityRequest struct {
+	Hidden bool `json:"hidden"`
+}
+
 func (r userCredentialRequest) validate() error {
 	if r.Username == "" || r.Password == "" {
 		return errors.New("username and password are required")
@@ -98,4 +114,30 @@ func (r userSuspensionRequest) parse() (string, entity.SuspensionDuration, error
 		return "", "", errors.New("invalid duration")
 	}
 	return r.Reason, duration, nil
+}
+
+func (r reportCreateRequest) parse() (entity.ReportTargetType, int64, entity.ReportReasonCode, string, error) {
+	targetType, ok := entity.ParseReportTargetType(r.TargetType)
+	if !ok {
+		return "", 0, "", "", errors.New("invalid target_type")
+	}
+	if r.TargetID < 1 {
+		return "", 0, "", "", errors.New("invalid target_id")
+	}
+	reasonCode, ok := entity.ParseReportReasonCode(r.ReasonCode)
+	if !ok {
+		return "", 0, "", "", errors.New("invalid reason_code")
+	}
+	return targetType, r.TargetID, reasonCode, r.ReasonDetail, nil
+}
+
+func (r reportResolveRequest) parseStatus() (entity.ReportStatus, string, error) {
+	status, ok := entity.ParseReportStatus(r.Status)
+	if !ok {
+		return "", "", errors.New("invalid status")
+	}
+	if status != entity.ReportStatusAccepted && status != entity.ReportStatusRejected {
+		return "", "", errors.New("status must be accepted or rejected")
+	}
+	return status, r.ResolutionNote, nil
 }

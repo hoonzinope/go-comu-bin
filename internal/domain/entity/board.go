@@ -6,6 +6,7 @@ type Board struct {
 	ID          int64
 	Name        string
 	Description string
+	Hidden      bool
 	CreatedAt   time.Time
 }
 
@@ -20,4 +21,8 @@ func NewBoard(name, description string) *Board {
 func (b *Board) Update(name, description string) {
 	b.Name = name
 	b.Description = description
+}
+
+func (b *Board) SetHidden(hidden bool) {
+	b.Hidden = hidden
 }

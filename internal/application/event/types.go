@@ -12,6 +12,7 @@ const (
 	EventNameCommentChanged    = "comment.changed"
 	EventNameReactionChanged   = "reaction.changed"
 	EventNameAttachmentChanged = "attachment.changed"
+	EventNameReportChanged     = "report.changed"
 )
 
 type BoardChanged struct {
@@ -108,5 +109,24 @@ func (e AttachmentChanged) EventName() string {
 }
 
 func (e AttachmentChanged) OccurredAt() time.Time {
+	return e.At
+}
+
+type ReportChanged struct {
+	Operation string    `json:"operation"`
+	ReportID  int64     `json:"report_id"`
+	Status    string    `json:"status"`
+	At        time.Time `json:"occurred_at"`
+}
+
+func NewReportChanged(operation string, reportID int64, status string) ReportChanged {
+	return ReportChanged{Operation: operation, ReportID: reportID, Status: status, At: time.Now()}
+}
+
+func (e ReportChanged) EventName() string {
+	return EventNameReportChanged
+}
+
+func (e ReportChanged) OccurredAt() time.Time {
 	return e.At
 }

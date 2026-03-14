@@ -64,20 +64,27 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 		if err != nil {
 			return nil, customError.WrapRepository("select board list", err)
 		}
+		visibleBoards := make([]*entity.Board, 0, len(boards))
+		for _, board := range boards {
+			if board.Hidden {
+				continue
+			}
+			visibleBoards = append(visibleBoards, board)
+		}
 
 		hasMore := false
 		var nextLastID *int64
-		if len(boards) > limit {
+		if len(visibleBoards) > limit {
 			hasMore = true
-			boards = boards[:limit]
+			visibleBoards = visibleBoards[:limit]
 		}
-		if hasMore && len(boards) > 0 {
-			next := boards[len(boards)-1].ID
+		if hasMore && len(visibleBoards) > 0 {
+			next := visibleBoards[len(visibleBoards)-1].ID
 			nextLastID = &next
 		}
 
 		return &model.BoardList{
-			Boards:     mapper.BoardsFromEntities(boards),
+			Boards:     mapper.BoardsFromEntities(visibleBoards),
 			Limit:      limit,
 			LastID:     lastID,
 			HasMore:    hasMore,
@@ -207,4 +214,36 @@ func (s *BoardService) DeleteBoard(ctx context.Context, id, userID int64) error 
 		return err
 	}
 	return nil
+}
+
+func (s *BoardService) SetBoardVisibility(ctx context.Context, id, userID int64, hidden bool) error {
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
+		if err != nil {
+			return customError.WrapRepository("select user by id for set board visibility", err)
+		}
+		if user == nil {
+			return customError.ErrUserNotFound
+		}
+		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+			return err
+		}
+		existingBoard, err := tx.BoardRepository().SelectBoardByID(txCtx, id)
+		if err != nil {
+			return customError.WrapRepository("select board by id for set board visibility", err)
+		}
+		if existingBoard == nil {
+			return customError.ErrBoardNotFound
+		}
+		existingBoard.SetHidden(hidden)
+		if err := tx.BoardRepository().Update(txCtx, existingBoard); err != nil {
+			return customError.WrapRepository("update board visibility", err)
+		}
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("visibility", id)); err != nil {
+			return err
+		}
+		s.logger.Info("admin board visibility changed", "board_id", id, "hidden", hidden, "admin_id", userID)
+		return nil
+	})
 }

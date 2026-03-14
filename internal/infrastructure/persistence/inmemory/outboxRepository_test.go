@@ -147,6 +147,26 @@ func TestOutboxRepository_DeadMessageCanBeRequeuedAndDiscarded(t *testing.T) {
 	assert.Empty(t, ready)
 }
 
+func TestOutboxRepository_SelectDead_WithCursor(t *testing.T) {
+	repo := NewOutboxRepository()
+	now := time.Now()
+	require.NoError(t, repo.Append(
+		port.OutboxMessage{ID: "d1", EventName: "e1", Status: port.OutboxStatusDead, OccurredAt: now, NextAttemptAt: now},
+		port.OutboxMessage{ID: "d2", EventName: "e2", Status: port.OutboxStatusDead, OccurredAt: now.Add(time.Second), NextAttemptAt: now},
+		port.OutboxMessage{ID: "p1", EventName: "e3", Status: port.OutboxStatusPending, OccurredAt: now, NextAttemptAt: now},
+	))
+
+	list, err := repo.SelectDead(1, "")
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "d2", list[0].ID)
+
+	next, err := repo.SelectDead(10, "d2")
+	require.NoError(t, err)
+	require.Len(t, next, 1)
+	assert.Equal(t, "d1", next[0].ID)
+}
+
 func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 	userRepository := NewUserRepository()
 	boardRepository := NewBoardRepository()
@@ -156,6 +176,7 @@ func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 	commentRepository := NewCommentRepository()
 	reactionRepository := NewReactionRepository()
 	attachmentRepository := NewAttachmentRepository()
+	reportRepository := NewReportRepository()
 	outboxRepository := NewOutboxRepository()
 	unitOfWork := NewUnitOfWork(
 		userRepository,
@@ -166,6 +187,7 @@ func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 		commentRepository,
 		reactionRepository,
 		attachmentRepository,
+		reportRepository,
 		outboxRepository,
 	)
 

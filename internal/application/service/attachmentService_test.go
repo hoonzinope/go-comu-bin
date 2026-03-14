@@ -132,6 +132,7 @@ func (s testTxScope) PostTagRepository() port.PostTagRepository       { return s
 func (s testTxScope) CommentRepository() port.CommentRepository       { return s.comment }
 func (s testTxScope) ReactionRepository() port.ReactionRepository     { return s.reaction }
 func (s testTxScope) AttachmentRepository() port.AttachmentRepository { return s.attachment }
+func (s testTxScope) ReportRepository() port.ReportRepository         { return nil }
 func (s testTxScope) Outbox() port.OutboxAppender                     { return s.outbox }
 
 type testUnitOfWork struct {

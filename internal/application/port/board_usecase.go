@@ -9,4 +9,5 @@ type BoardUseCase interface {
 	CreateBoard(ctx context.Context, userID int64, name, description string) (int64, error)
 	UpdateBoard(ctx context.Context, id, userID int64, name, description string) error
 	DeleteBoard(ctx context.Context, id, userID int64) error
+	SetBoardVisibility(ctx context.Context, id, userID int64, hidden bool) error
 }

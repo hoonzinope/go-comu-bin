@@ -29,6 +29,7 @@ type testRepositories struct {
 	comment    port.CommentRepository
 	reaction   port.ReactionRepository
 	attachment port.AttachmentRepository
+	report     port.ReportRepository
 	outbox     port.OutboxStore
 	unitOfWork port.UnitOfWork
 }
@@ -42,6 +43,7 @@ func newTestRepositories() testRepositories {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	reportRepository := inmemory.NewReportRepository()
 	outboxRepository := inmemory.NewOutboxRepository()
 	return testRepositories{
 		user:       userRepository,
@@ -52,8 +54,9 @@ func newTestRepositories() testRepositories {
 		comment:    commentRepository,
 		reaction:   reactionRepository,
 		attachment: attachmentRepository,
+		report:     reportRepository,
 		outbox:     outboxRepository,
-		unitOfWork: inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository),
+		unitOfWork: inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, outboxRepository),
 	}
 }
 
@@ -109,6 +112,7 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 	relay.Subscribe(appevent.EventNameCommentChanged, handler)
 	relay.Subscribe(appevent.EventNameReactionChanged, handler)
 	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
+	relay.Subscribe(appevent.EventNameReportChanged, handler)
 	relayCtx, relayCancel := context.WithCancel(context.Background())
 	relay.Start(relayCtx)
 	t.Cleanup(func() {

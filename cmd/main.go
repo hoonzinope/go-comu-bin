@@ -62,6 +62,7 @@ func main() {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	reportRepository := inmemory.NewReportRepository()
 	outboxRepository := inmemory.NewOutboxRepository()
 	fileStorage, err := newFileStorage(cfg)
 	if err != nil {
@@ -77,7 +78,7 @@ func main() {
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logger
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, outboxRepository)
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(
 		outboxRepository,
@@ -97,6 +98,7 @@ func main() {
 	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
 	outboxRelay.Start(appCtx)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
@@ -104,6 +106,8 @@ func main() {
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), appLogger)
+	reportUseCase := service.NewReportServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reportRepository, unitOfWork, nil, authorizationPolicy, appLogger)
+	outboxAdminUseCase := service.NewOutboxAdminService(userRepository, outboxRepository, authorizationPolicy, appLogger)
 	attachmentUseCase := service.NewAttachmentServiceWithActionDispatcher(
 		userRepository,
 		postRepository,
@@ -138,6 +142,8 @@ func main() {
 		CommentUseCase:           commentUseCase,
 		ReactionUseCase:          reactionUseCase,
 		AttachmentUseCase:        attachmentUseCase,
+		ReportUseCase:            reportUseCase,
+		OutboxAdminUseCase:       outboxAdminUseCase,
 		AttachmentUploadMaxBytes: cfg.Storage.Attachment.MaxUploadSizeBytes,
 		MaxJSONBodyBytes:         cfg.Delivery.HTTP.MaxJSONBodyBytes,
 		Logger:                   appLogger,

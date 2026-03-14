@@ -15,18 +15,21 @@ func TestChangedEvents_ExposeEventNameAndOccurredAt(t *testing.T) {
 	comment := NewCommentChanged("deleted", 40, 20)
 	reaction := NewReactionChanged("set", entity.ReactionTargetPost, 20, 20)
 	attachment := NewAttachmentChanged("deleted", 50, 20)
+	report := NewReportChanged("resolved", 77, "accepted")
 
 	assert.Equal(t, EventNameBoardChanged, board.EventName())
 	assert.Equal(t, EventNamePostChanged, post.EventName())
 	assert.Equal(t, EventNameCommentChanged, comment.EventName())
 	assert.Equal(t, EventNameReactionChanged, reaction.EventName())
 	assert.Equal(t, EventNameAttachmentChanged, attachment.EventName())
+	assert.Equal(t, EventNameReportChanged, report.EventName())
 
 	assert.WithinDuration(t, time.Now(), board.OccurredAt(), time.Second)
 	assert.WithinDuration(t, time.Now(), post.OccurredAt(), time.Second)
 	assert.WithinDuration(t, time.Now(), comment.OccurredAt(), time.Second)
 	assert.WithinDuration(t, time.Now(), reaction.OccurredAt(), time.Second)
 	assert.WithinDuration(t, time.Now(), attachment.OccurredAt(), time.Second)
+	assert.WithinDuration(t, time.Now(), report.OccurredAt(), time.Second)
 }
 
 func TestPostChanged_JSONPayloadContainsMinimalFields(t *testing.T) {

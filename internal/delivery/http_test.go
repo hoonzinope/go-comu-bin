@@ -203,10 +203,11 @@ func (h *spyHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *spyHandler) WithGroup(string) slog.Handler { return h }
 
 type fakeBoardUseCase struct {
-	getBoards   func(ctx context.Context, limit int, lastID int64) (*model.BoardList, error)
-	createBoard func(ctx context.Context, userID int64, name, description string) (int64, error)
-	updateBoard func(ctx context.Context, id, userID int64, name, description string) error
-	deleteBoard func(ctx context.Context, id, userID int64) error
+	getBoards          func(ctx context.Context, limit int, lastID int64) (*model.BoardList, error)
+	createBoard        func(ctx context.Context, userID int64, name, description string) (int64, error)
+	updateBoard        func(ctx context.Context, id, userID int64, name, description string) error
+	deleteBoard        func(ctx context.Context, id, userID int64) error
+	setBoardVisibility func(ctx context.Context, id, userID int64, hidden bool) error
 }
 
 func (f *fakeBoardUseCase) GetBoards(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
@@ -233,6 +234,67 @@ func (f *fakeBoardUseCase) UpdateBoard(ctx context.Context, id, userID int64, na
 func (f *fakeBoardUseCase) DeleteBoard(ctx context.Context, id, userID int64) error {
 	if f.deleteBoard != nil {
 		return f.deleteBoard(ctx, id, userID)
+	}
+	return nil
+}
+
+func (f *fakeBoardUseCase) SetBoardVisibility(ctx context.Context, id, userID int64, hidden bool) error {
+	if f.setBoardVisibility != nil {
+		return f.setBoardVisibility(ctx, id, userID, hidden)
+	}
+	return nil
+}
+
+type fakeReportUseCase struct {
+	createReport  func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error)
+	getReports    func(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error)
+	resolveReport func(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error
+}
+
+func (f *fakeReportUseCase) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+	if f.createReport != nil {
+		return f.createReport(ctx, reporterUserID, targetType, targetID, reasonCode, reasonDetail)
+	}
+	return 1, nil
+}
+
+func (f *fakeReportUseCase) GetReports(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
+	if f.getReports != nil {
+		return f.getReports(ctx, adminID, status, limit, lastID)
+	}
+	return &model.ReportList{}, nil
+}
+
+func (f *fakeReportUseCase) ResolveReport(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error {
+	if f.resolveReport != nil {
+		return f.resolveReport(ctx, adminID, reportID, status, resolutionNote)
+	}
+	return nil
+}
+
+type fakeOutboxAdminUseCase struct {
+	getDeadMessages    func(ctx context.Context, adminID int64, limit int, lastID string) (*model.OutboxDeadMessageList, error)
+	requeueDeadMessage func(ctx context.Context, adminID int64, messageID string) error
+	discardDeadMessage func(ctx context.Context, adminID int64, messageID string) error
+}
+
+func (f *fakeOutboxAdminUseCase) GetDeadMessages(ctx context.Context, adminID int64, limit int, lastID string) (*model.OutboxDeadMessageList, error) {
+	if f.getDeadMessages != nil {
+		return f.getDeadMessages(ctx, adminID, limit, lastID)
+	}
+	return &model.OutboxDeadMessageList{}, nil
+}
+
+func (f *fakeOutboxAdminUseCase) RequeueDeadMessage(ctx context.Context, adminID int64, messageID string) error {
+	if f.requeueDeadMessage != nil {
+		return f.requeueDeadMessage(ctx, adminID, messageID)
+	}
+	return nil
+}
+
+func (f *fakeOutboxAdminUseCase) DiscardDeadMessage(ctx context.Context, adminID int64, messageID string) error {
+	if f.discardDeadMessage != nil {
+		return f.discardDeadMessage(ctx, adminID, messageID)
 	}
 	return nil
 }
@@ -437,16 +499,20 @@ func newTestHandler(
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
 	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	reportUseCase := &fakeReportUseCase{}
+	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:    sessionUseCase,
-		UserUseCase:       user,
-		AccountUseCase:    account,
-		BoardUseCase:      board,
-		PostUseCase:       post,
-		CommentUseCase:    comment,
-		ReactionUseCase:   reaction,
-		AttachmentUseCase: attachment,
-		MaxJSONBodyBytes:  defaultMaxJSONBodyBytes,
+		SessionUseCase:     sessionUseCase,
+		UserUseCase:        user,
+		AccountUseCase:     account,
+		BoardUseCase:       board,
+		PostUseCase:        post,
+		CommentUseCase:     comment,
+		ReactionUseCase:    reaction,
+		AttachmentUseCase:  attachment,
+		ReportUseCase:      reportUseCase,
+		OutboxAdminUseCase: outboxAdminUseCase,
+		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
 	}).Handler
 }
 
@@ -463,16 +529,49 @@ func newTestHandlerWithJSONLimit(
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
 	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	reportUseCase := &fakeReportUseCase{}
+	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:    sessionUseCase,
-		UserUseCase:       user,
-		AccountUseCase:    account,
-		BoardUseCase:      board,
-		PostUseCase:       post,
-		CommentUseCase:    comment,
-		ReactionUseCase:   reaction,
-		AttachmentUseCase: attachment,
-		MaxJSONBodyBytes:  maxJSONBodyBytes,
+		SessionUseCase:     sessionUseCase,
+		UserUseCase:        user,
+		AccountUseCase:     account,
+		BoardUseCase:       board,
+		PostUseCase:        post,
+		CommentUseCase:     comment,
+		ReactionUseCase:    reaction,
+		AttachmentUseCase:  attachment,
+		ReportUseCase:      reportUseCase,
+		OutboxAdminUseCase: outboxAdminUseCase,
+		MaxJSONBodyBytes:   maxJSONBodyBytes,
+	}).Handler
+}
+
+func newTestHandlerWithAdminUseCases(
+	user authUserPort,
+	account port.AccountUseCase,
+	board port.BoardUseCase,
+	post port.PostUseCase,
+	comment port.CommentUseCase,
+	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
+	report port.ReportUseCase,
+	outboxAdmin port.OutboxAdminUseCase,
+) http.Handler {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:     sessionUseCase,
+		UserUseCase:        user,
+		AccountUseCase:     account,
+		BoardUseCase:       board,
+		PostUseCase:        post,
+		CommentUseCase:     comment,
+		ReactionUseCase:    reaction,
+		AttachmentUseCase:  attachment,
+		ReportUseCase:      report,
+		OutboxAdminUseCase: outboxAdmin,
+		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
 	}).Handler
 }
 
@@ -534,6 +633,86 @@ func TestHandleUserSuspend_Success(t *testing.T) {
 		"duration": "7d",
 	}, 1)
 
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleReportCreate_Success(t *testing.T) {
+	handler := newTestHandlerWithAdminUseCases(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		&fakeReportUseCase{
+			createReport: func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+				assert.Equal(t, int64(1), reporterUserID)
+				assert.Equal(t, entity.ReportTargetPost, targetType)
+				assert.Equal(t, int64(3), targetID)
+				assert.Equal(t, entity.ReportReasonSpam, reasonCode)
+				assert.Equal(t, "detail", reasonDetail)
+				return 77, nil
+			},
+		},
+		&fakeOutboxAdminUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/reports", map[string]any{
+		"target_type":   "post",
+		"target_id":     3,
+		"reason_code":   "spam",
+		"reason_detail": "detail",
+	}, 1)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"id":77`)
+}
+
+func TestHandleAdminBoardVisibilityPut_Success(t *testing.T) {
+	handler := newTestHandlerWithAdminUseCases(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{
+			setBoardVisibility: func(ctx context.Context, id, userID int64, hidden bool) error {
+				assert.Equal(t, int64(8), id)
+				assert.Equal(t, int64(1), userID)
+				assert.True(t, hidden)
+				return nil
+			},
+		},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		&fakeReportUseCase{},
+		&fakeOutboxAdminUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/admin/boards/8/visibility", map[string]any{"hidden": true}, 1)
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleAdminDeadOutboxRequeue_Success(t *testing.T) {
+	handler := newTestHandlerWithAdminUseCases(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		&fakeReportUseCase{},
+		&fakeOutboxAdminUseCase{
+			requeueDeadMessage: func(ctx context.Context, adminID int64, messageID string) error {
+				assert.Equal(t, int64(1), adminID)
+				assert.Equal(t, "dead-1", messageID)
+				return nil
+			},
+		},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/admin/outbox/dead/dead-1/requeue", nil, 1)
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 

@@ -118,6 +118,9 @@ func (s *PostService) createPost(ctx context.Context, title, content string, tag
 		if board == nil {
 			return customError.ErrBoardNotFound
 		}
+		if board.Hidden && !user.IsAdmin() {
+			return customError.ErrBoardNotFound
+		}
 		var saveErr error
 		postID, saveErr = tx.PostRepository().Save(txCtx, newPost)
 		if saveErr != nil {
@@ -150,6 +153,9 @@ func (s *PostService) GetPostsList(ctx context.Context, boardID int64, limit int
 			return nil, customError.WrapRepository("select board by id for post list", err)
 		}
 		if board == nil {
+			return nil, customError.ErrBoardNotFound
+		}
+		if board.Hidden {
 			return nil, customError.ErrBoardNotFound
 		}
 
@@ -221,7 +227,18 @@ func (s *PostService) GetPostsByTag(ctx context.Context, tagName string, limit i
 func (s *PostService) GetPostDetail(ctx context.Context, id int64) (*model.PostDetail, error) {
 	cacheKey := key.PostDetail(id)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.DetailTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		return s.postDetailQuery.Load(ctx, id)
+		detail, err := s.postDetailQuery.Load(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		board, err := s.boardRepository.SelectBoardByID(ctx, detail.Post.BoardID)
+		if err != nil {
+			return nil, customError.WrapRepository("select board by id for post detail visibility", err)
+		}
+		if board == nil || board.Hidden {
+			return nil, customError.ErrPostNotFound
+		}
+		return detail, nil
 	})
 	if err != nil {
 		return nil, normalizeCacheLoadError("load post detail cache", err)

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customError "github.com/hoonzinope/go-comu-bin/internal/customError"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
@@ -35,6 +36,8 @@ type HTTPHandler struct {
 	commentUseCase           port.CommentUseCase
 	reactionUseCase          port.ReactionUseCase
 	attachmentUseCase        port.AttachmentUseCase
+	reportUseCase            port.ReportUseCase
+	outboxAdminUseCase       port.OutboxAdminUseCase
 	attachmentUploadMaxBytes int64
 	maxJSONBodyBytes         int64
 	logger                   *slog.Logger
@@ -50,6 +53,8 @@ type HTTPDependencies struct {
 	CommentUseCase           port.CommentUseCase
 	ReactionUseCase          port.ReactionUseCase
 	AttachmentUseCase        port.AttachmentUseCase
+	ReportUseCase            port.ReportUseCase
+	OutboxAdminUseCase       port.OutboxAdminUseCase
 	AttachmentUploadMaxBytes int64
 	MaxJSONBodyBytes         int64
 	Logger                   *slog.Logger
@@ -69,6 +74,8 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		commentUseCase:           deps.CommentUseCase,
 		reactionUseCase:          deps.ReactionUseCase,
 		attachmentUseCase:        deps.AttachmentUseCase,
+		reportUseCase:            deps.ReportUseCase,
+		outboxAdminUseCase:       deps.OutboxAdminUseCase,
 		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
 		maxJSONBodyBytes:         resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
 		logger:                   logger,
@@ -105,6 +112,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/login", h.handleUserLogin)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
+	v1.POST("/reports", h.authGinMiddleware, h.handleReportCreate)
 	v1.GET("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspensionGet)
 	v1.PUT("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspend)
 	v1.DELETE("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserUnsuspend)
@@ -140,6 +148,14 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.GET("/comments/:commentID/reactions", h.handleCommentReactions)
 	v1.PUT("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionPut)
 	v1.DELETE("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionDelete)
+
+	admin := v1.Group("/admin", h.authGinMiddleware)
+	admin.GET("/reports", h.handleAdminReportsGet)
+	admin.PUT("/reports/:reportID/resolve", h.handleAdminReportResolve)
+	admin.GET("/outbox/dead", h.handleAdminDeadOutboxGet)
+	admin.POST("/outbox/dead/:messageID/requeue", h.handleAdminDeadOutboxRequeue)
+	admin.DELETE("/outbox/dead/:messageID", h.handleAdminDeadOutboxDiscard)
+	admin.PUT("/boards/:boardID/visibility", h.handleAdminBoardVisibilityPut)
 }
 
 func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
@@ -284,6 +300,44 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// handleReportCreate godoc
+// @Summary Create Report
+// @Description Create a report for a post or comment.
+// @Tags Report
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body reportCreateRequest true "Report payload"
+// @Success 201 {object} idResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 409 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /reports [post]
+func (h *HTTPHandler) handleReportCreate(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req reportCreateRequest
+	if err := h.decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	targetType, targetID, reasonCode, reasonDetail, err := req.parse()
+	if err != nil {
+		badRequest(c, err)
+		return
+	}
+	id, err := h.reportUseCase.CreateReport(c.Request.Context(), userID, targetType, targetID, reasonCode, reasonDetail)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, idResponse{ID: id})
+}
+
 // handleUserSuspensionGet godoc
 // @Summary Get User Suspension
 // @Description Returns the current suspension status for a user (admin only).
@@ -389,6 +443,229 @@ func (h *HTTPHandler) handleUserUnsuspend(c *gin.Context) {
 		return
 	}
 	if err := h.userUseCase.UnsuspendUser(c.Request.Context(), adminID, targetUserUUID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleAdminReportsGet godoc
+// @Summary List Reports
+// @Description List reports (admin only).
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param status query string false "Report status filter"
+// @Param limit query int false "Page size" minimum(1)
+// @Param last_id query int false "Cursor id" minimum(0)
+// @Success 200 {object} reportListResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /admin/reports [get]
+func (h *HTTPHandler) handleAdminReportsGet(c *gin.Context) {
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	limit, lastID, ok := parseLimitLastID(c)
+	if !ok {
+		return
+	}
+	var status *entity.ReportStatus
+	if raw := strings.TrimSpace(c.Query("status")); raw != "" {
+		parsed, parseOK := entity.ParseReportStatus(raw)
+		if !parseOK {
+			badRequest(c, errors.New("invalid status"))
+			return
+		}
+		status = &parsed
+	}
+	list, err := h.reportUseCase.GetReports(c.Request.Context(), adminID, status, limit, lastID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, reportListResponse{
+		Reports:    reportResponsesFromModel(list.Reports),
+		Limit:      list.Limit,
+		LastID:     list.LastID,
+		HasMore:    list.HasMore,
+		NextLastID: list.NextLastID,
+	})
+}
+
+// handleAdminReportResolve godoc
+// @Summary Resolve Report
+// @Description Resolve report with accepted/rejected status (admin only).
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param reportID path int true "Report ID"
+// @Param request body reportResolveRequest true "Resolve payload"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /admin/reports/{reportID}/resolve [put]
+func (h *HTTPHandler) handleAdminReportResolve(c *gin.Context) {
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	reportID, ok := parsePathID(c, "reportID", "report")
+	if !ok {
+		return
+	}
+	var req reportResolveRequest
+	if err := h.decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	status, resolutionNote, err := req.parseStatus()
+	if err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := h.reportUseCase.ResolveReport(c.Request.Context(), adminID, reportID, status, resolutionNote); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleAdminDeadOutboxGet godoc
+// @Summary List Dead Outbox Messages
+// @Description List dead outbox messages (admin only).
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "Page size" minimum(1)
+// @Param last_id query string false "Cursor id"
+// @Success 200 {object} outboxDeadListResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /admin/outbox/dead [get]
+func (h *HTTPHandler) handleAdminDeadOutboxGet(c *gin.Context) {
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	limit, lastID, ok := parseLimitLastIDString(c)
+	if !ok {
+		return
+	}
+	list, err := h.outboxAdminUseCase.GetDeadMessages(c.Request.Context(), adminID, limit, lastID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, outboxDeadListResponse{
+		Messages:   outboxDeadResponsesFromModel(list.Messages),
+		Limit:      list.Limit,
+		LastID:     list.LastID,
+		HasMore:    list.HasMore,
+		NextLastID: list.NextLastID,
+	})
+}
+
+// handleAdminDeadOutboxRequeue godoc
+// @Summary Requeue Dead Outbox Message
+// @Description Requeue one dead outbox message (admin only).
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param messageID path string true "Outbox Message ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /admin/outbox/dead/{messageID}/requeue [post]
+func (h *HTTPHandler) handleAdminDeadOutboxRequeue(c *gin.Context) {
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	messageID := strings.TrimSpace(c.Param("messageID"))
+	if messageID == "" {
+		badRequest(c, errors.New("invalid message id"))
+		return
+	}
+	if err := h.outboxAdminUseCase.RequeueDeadMessage(c.Request.Context(), adminID, messageID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleAdminDeadOutboxDiscard godoc
+// @Summary Discard Dead Outbox Message
+// @Description Permanently discard one dead outbox message (admin only).
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param messageID path string true "Outbox Message ID"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /admin/outbox/dead/{messageID} [delete]
+func (h *HTTPHandler) handleAdminDeadOutboxDiscard(c *gin.Context) {
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	messageID := strings.TrimSpace(c.Param("messageID"))
+	if messageID == "" {
+		badRequest(c, errors.New("invalid message id"))
+		return
+	}
+	if err := h.outboxAdminUseCase.DiscardDeadMessage(c.Request.Context(), adminID, messageID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleAdminBoardVisibilityPut godoc
+// @Summary Set Board Visibility
+// @Description Set board hidden visibility (admin only).
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param boardID path int true "Board ID"
+// @Param request body boardVisibilityRequest true "Visibility payload"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /admin/boards/{boardID}/visibility [put]
+func (h *HTTPHandler) handleAdminBoardVisibilityPut(c *gin.Context) {
+	adminID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	boardID, ok := parsePathID(c, "boardID", "board")
+	if !ok {
+		return
+	}
+	var req boardVisibilityRequest
+	if err := h.decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := h.boardUseCase.SetBoardVisibility(c.Request.Context(), boardID, adminID, req.Hidden); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1327,6 +1604,44 @@ func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetID int64, tar
 	c.Status(http.StatusNoContent)
 }
 
+func reportResponsesFromModel(items []model.Report) []reportResponse {
+	out := make([]reportResponse, 0, len(items))
+	for _, item := range items {
+		out = append(out, reportResponse{
+			ID:             item.ID,
+			TargetType:     item.TargetType,
+			TargetID:       item.TargetID,
+			ReporterUserID: item.ReporterUserID,
+			ReporterUUID:   item.ReporterUUID,
+			ReasonCode:     item.ReasonCode,
+			ReasonDetail:   item.ReasonDetail,
+			Status:         item.Status,
+			ResolutionNote: item.ResolutionNote,
+			ResolvedBy:     item.ResolvedBy,
+			ResolvedByUUID: item.ResolvedByUUID,
+			ResolvedAt:     item.ResolvedAt,
+			CreatedAt:      item.CreatedAt,
+			UpdatedAt:      item.UpdatedAt,
+		})
+	}
+	return out
+}
+
+func outboxDeadResponsesFromModel(items []model.OutboxDeadMessage) []outboxDeadMessageResponse {
+	out := make([]outboxDeadMessageResponse, 0, len(items))
+	for _, item := range items {
+		out = append(out, outboxDeadMessageResponse{
+			ID:            item.ID,
+			EventName:     item.EventName,
+			AttemptCount:  item.AttemptCount,
+			LastError:     item.LastError,
+			OccurredAt:    item.OccurredAt,
+			NextAttemptAt: item.NextAttemptAt,
+		})
+	}
+	return out
+}
+
 func writeUseCaseError(c *gin.Context, err error) {
 	publicErr := customError.Public(err)
 	writeHTTPError(loggerFromContext(c), c, statusForError(err), publicErr)
@@ -1388,6 +1703,10 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, customError.ErrReactionNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, customError.ErrReportNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, customError.ErrReportAlreadyExists):
+		return http.StatusConflict
 	case errors.Is(err, customError.ErrInvalidCredential):
 		return http.StatusUnauthorized
 	case errors.Is(err, customError.ErrUnauthorized):
@@ -1430,6 +1749,22 @@ func parseLimitLastID(c *gin.Context) (int, int64, bool) {
 		lastID = v
 	}
 
+	return limit, lastID, true
+}
+
+func parseLimitLastIDString(c *gin.Context) (int, string, bool) {
+	limitStr := c.Query("limit")
+	lastID := strings.TrimSpace(c.Query("last_id"))
+
+	limit := 10
+	if limitStr != "" {
+		v, err := strconv.Atoi(limitStr)
+		if err != nil || v < 1 {
+			badRequest(c, errors.New("invalid limit"))
+			return 0, "", false
+		}
+		limit = v
+	}
 	return limit, lastID, true
 }
 

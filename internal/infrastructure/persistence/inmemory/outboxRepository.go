@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -136,6 +137,50 @@ func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMe
 		}
 	}
 	return ready, nil
+}
+
+func (r *OutboxRepository) SelectDead(limit int, lastID string) ([]port.OutboxMessage, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if limit <= 0 {
+		return []port.OutboxMessage{}, nil
+	}
+
+	dead := make([]port.OutboxMessage, 0, len(r.data))
+	for _, message := range r.data {
+		if message.Status != port.OutboxStatusDead {
+			continue
+		}
+		dead = append(dead, cloneOutboxMessage(message))
+	}
+	sort.Slice(dead, func(i, j int) bool {
+		if dead[i].OccurredAt.Equal(dead[j].OccurredAt) {
+			return dead[i].ID > dead[j].ID
+		}
+		return dead[i].OccurredAt.After(dead[j].OccurredAt)
+	})
+
+	start := 0
+	if strings.TrimSpace(lastID) != "" {
+		start = len(dead)
+		for idx, message := range dead {
+			if message.ID == lastID {
+				start = idx + 1
+				break
+			}
+		}
+	}
+	if start >= len(dead) {
+		return []port.OutboxMessage{}, nil
+	}
+	end := start + limit
+	if end > len(dead) {
+		end = len(dead)
+	}
+	return dead[start:end], nil
 }
 
 func (r *OutboxRepository) MarkSucceeded(ids ...string) error {

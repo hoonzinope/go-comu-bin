@@ -41,6 +41,7 @@ func (s testTxScopeForOutboxEvents) PostTagRepository() port.PostTagRepository  
 func (s testTxScopeForOutboxEvents) CommentRepository() port.CommentRepository       { return nil }
 func (s testTxScopeForOutboxEvents) ReactionRepository() port.ReactionRepository     { return nil }
 func (s testTxScopeForOutboxEvents) AttachmentRepository() port.AttachmentRepository { return nil }
+func (s testTxScopeForOutboxEvents) ReportRepository() port.ReportRepository         { return nil }
 func (s testTxScopeForOutboxEvents) Outbox() port.OutboxAppender                     { return s.outbox }
 
 func TestDispatchDomainActions_UsesOutboxWithinTransaction(t *testing.T) {

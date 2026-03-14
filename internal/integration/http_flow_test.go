@@ -134,12 +134,13 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
+	reportRepository := inmemory.NewReportRepository()
 	outboxRepository := inmemory.NewOutboxRepository()
 	fileStorage := localfs.NewFileStorage(t.TempDir())
 
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, outboxRepository)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, outboxRepository)
 	appLogger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(outboxRepository, eventSerializer, appLogger, eventOutbox.RelayConfig{
@@ -155,6 +156,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
 	relayCtx, relayCancel := context.WithCancel(context.Background())
 	outboxRelay.Start(relayCtx)
 	t.Cleanup(func() {
@@ -173,6 +175,8 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy())
+	reportUseCase := service.NewReportServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reportRepository, unitOfWork, nil, authorizationPolicy)
+	outboxAdminUseCase := service.NewOutboxAdminService(userRepository, outboxRepository, authorizationPolicy)
 	attachmentUseCase := service.NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, 10<<20, service.ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, authorizationPolicy)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
@@ -180,14 +184,16 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	sessionUseCase := service.NewSessionService(userUseCase, userRepository, tokenProvider, sessionRepository)
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
-		SessionUseCase:    sessionUseCase,
-		UserUseCase:       userUseCase,
-		AccountUseCase:    accountUseCase,
-		BoardUseCase:      boardUseCase,
-		PostUseCase:       postUseCase,
-		CommentUseCase:    commentUseCase,
-		ReactionUseCase:   reactionUseCase,
-		AttachmentUseCase: attachmentUseCase,
+		SessionUseCase:     sessionUseCase,
+		UserUseCase:        userUseCase,
+		AccountUseCase:     accountUseCase,
+		BoardUseCase:       boardUseCase,
+		PostUseCase:        postUseCase,
+		CommentUseCase:     commentUseCase,
+		ReactionUseCase:    reactionUseCase,
+		AttachmentUseCase:  attachmentUseCase,
+		ReportUseCase:      reportUseCase,
+		OutboxAdminUseCase: outboxAdminUseCase,
 	})
 	return httptest.NewServer(httpServer.Handler)
 }

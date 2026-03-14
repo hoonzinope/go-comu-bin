@@ -46,6 +46,11 @@ func (s *fakeOutboxStore) FetchReady(limit int, _ time.Time) ([]port.OutboxMessa
 	return out, nil
 }
 
+func (s *fakeOutboxStore) SelectDead(limit int, _ string) ([]port.OutboxMessage, error) {
+	_ = limit
+	return nil, nil
+}
+
 func (s *fakeOutboxStore) MarkSucceeded(ids ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

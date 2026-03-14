@@ -19,15 +19,17 @@ var (
 	ErrUserSuspended       = errors.New("user suspended")
 
 	// Public/resource
-	ErrUserAlreadyExists  = errors.New("user already exists")
-	ErrUserNotFound       = errors.New("user not found")
-	ErrBoardNotFound      = errors.New("board not found")
-	ErrBoardNotEmpty      = errors.New("board not empty")
-	ErrPostNotFound       = errors.New("post not found")
-	ErrTagNotFound        = errors.New("tag not found")
-	ErrAttachmentNotFound = errors.New("attachment not found")
-	ErrCommentNotFound    = errors.New("comment not found")
-	ErrReactionNotFound   = errors.New("reaction not found")
+	ErrUserAlreadyExists   = errors.New("user already exists")
+	ErrUserNotFound        = errors.New("user not found")
+	ErrBoardNotFound       = errors.New("board not found")
+	ErrBoardNotEmpty       = errors.New("board not empty")
+	ErrPostNotFound        = errors.New("post not found")
+	ErrTagNotFound         = errors.New("tag not found")
+	ErrAttachmentNotFound  = errors.New("attachment not found")
+	ErrCommentNotFound     = errors.New("comment not found")
+	ErrReactionNotFound    = errors.New("reaction not found")
+	ErrReportNotFound      = errors.New("report not found")
+	ErrReportAlreadyExists = errors.New("report already exists")
 
 	// Internal categories
 	ErrRepositoryFailure = errors.New("repository failure")
@@ -78,6 +80,10 @@ func Public(err error) error {
 		return ErrCommentNotFound
 	case errors.Is(err, ErrReactionNotFound):
 		return ErrReactionNotFound
+	case errors.Is(err, ErrReportNotFound):
+		return ErrReportNotFound
+	case errors.Is(err, ErrReportAlreadyExists):
+		return ErrReportAlreadyExists
 	case errors.Is(err, ErrInvalidCredential):
 		return ErrInvalidCredential
 	case errors.Is(err, ErrUserSuspended):
