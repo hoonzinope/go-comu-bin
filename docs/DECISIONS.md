@@ -1747,3 +1747,50 @@
 - `internal/application/service/*Service.go`
 - `internal/application/service/common_test.go`
 - `internal/application/service/event_publisher.go`
+
+## 2026-03-14 - Report 도메인과 admin 운영 API(신고/Dead Outbox/게시판 hidden)를 1차 도입한다
+
+상태
+
+- decided
+
+배경
+
+- Step 2 미반영 범위인 `Report` 도메인을 도입해야 한다.
+- 운영 API는 현재 suspension/board CRUD 중심이라 신고 운영과 dead outbox 수동 처리 경로가 비어 있다.
+- 게시판 운영 관점에서 비노출(hidden) 제어가 필요하다.
+
+관찰
+
+- `docs/ROADMAP.md`는 `Report`와 dead 이벤트 운영 재처리(admin/ops) 경로를 다음 범위로 명시한다.
+- 현재 outbox 저장소는 `MarkRetry/MarkDead/MarkSucceeded`는 제공하지만 dead 목록 조회 read 계약은 없다.
+- 게시판 엔티티/저장소에는 hidden 상태가 없다.
+
+결론
+
+- 신고 대상은 `post`, `comment`로 제한한다.
+- 신고 상태는 `pending`, `accepted`, `rejected`로 두고 처리 시 자동 제재/자동 숨김은 하지 않는다.
+- 동일 `(reporter_user_id, target_type, target_id)` 중복 신고는 금지한다.
+- 신고 사유는 `enum + detail text`로 받는다.
+- admin 신고 목록은 `pending` 우선 + 최신순으로 제공한다.
+- dead outbox 운영 API는 `목록 + 재처리(requeue) + 폐기(discard)`를 제공한다.
+- 게시판 운영 확장은 `hidden`만 도입하고, hidden 게시판은 비admin에서 완전 비노출로 처리한다.
+- admin 조치(신고 처리, dead outbox 조치, hidden 변경)는 DB 감사로그 대신 구조화 로그로 시작한다.
+
+후속 작업
+
+- Report entity/repository/usecase/service + HTTP API 추가
+- OutboxStore에 dead 목록 조회 포트 추가 및 admin usecase/API 연결
+- Board hidden 상태 및 admin visibility API 추가
+- event 타입에 `report.changed` 추가 및 serializer/relay 구독 반영
+- 테스트(TDD) 보강 후 API/ARCHITECTURE/ROADMAP/Swagger 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `internal/domain/entity`
+- `internal/application/port`
+- `internal/application/service`
+- `internal/delivery/http.go`
+- `internal/infrastructure/persistence/inmemory`
