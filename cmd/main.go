@@ -141,6 +141,7 @@ func main() {
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
 		SessionUseCase:           sessionUseCase,
 		UserUseCase:              userUseCase,
+		UserRepository:           userRepository,
 		AccountUseCase:           accountUseCase,
 		BoardUseCase:             boardUseCase,
 		PostUseCase:              postUseCase,

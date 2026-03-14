@@ -435,6 +435,23 @@ func TestPostService_DeletePost_RemovesStoredReactionsForPostAndComments(t *test
 	assert.Empty(t, commentReactions)
 }
 
+func TestPostService_DeletePost_DeletesCommentsInBatches(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	for i := 0; i < postDeleteBatchSize+1; i++ {
+		seedComment(repositories.comment, userID, postID, "comment")
+	}
+	svc := newTestPostService(t, repositories, newTestCache())
+
+	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
+
+	comments, err := repositories.comment.SelectComments(context.Background(), postID, 10, 0)
+	require.NoError(t, err)
+	assert.Empty(t, comments)
+}
+
 func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")

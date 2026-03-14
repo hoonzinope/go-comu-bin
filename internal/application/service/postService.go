@@ -23,6 +23,7 @@ var (
 	commentDefaultLimit = 10
 	maxPostTags         = 10
 	maxTagLength        = 30
+	postDeleteBatchSize = 500
 )
 
 var _ port.PostUseCase = (*PostService)(nil)
@@ -415,7 +416,6 @@ func (s *PostService) UpdatePost(ctx context.Context, id, authorID int64, title,
 func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error {
 	var postID, boardID int64
 	var currentTagNames []string
-	var commentIDs []int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		post, err := tx.PostRepository().SelectPostByIDIncludingUnpublished(txCtx, id)
@@ -442,27 +442,14 @@ func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error 
 		if err != nil {
 			return err
 		}
-		comments, err := tx.CommentRepository().SelectComments(txCtx, post.ID, int(^uint(0)>>1), 0)
-		if err != nil {
-			return customError.WrapRepository("select comments for delete post", err)
-		}
-		commentIDs = commentIDs[:0]
-		for _, comment := range comments {
-			commentIDs = append(commentIDs, comment.ID)
+		if err := s.deletePostCommentsInBatches(tx, post.ID); err != nil {
+			return err
 		}
 		if deleteErr := tx.PostRepository().Delete(txCtx, post.ID); deleteErr != nil {
 			return customError.WrapRepository("delete post", deleteErr)
 		}
 		if deleteErr := tx.PostTagRepository().SoftDeleteByPostID(txCtx, post.ID); deleteErr != nil {
 			return customError.WrapRepository("soft delete post tags", deleteErr)
-		}
-		for _, comment := range comments {
-			if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, comment.ID, entity.ReactionTargetComment); reactionErr != nil {
-				return customError.WrapRepository("delete post comment reactions", reactionErr)
-			}
-			if deleteErr := tx.CommentRepository().Delete(txCtx, comment.ID); deleteErr != nil {
-				return customError.WrapRepository("soft delete post comments", deleteErr)
-			}
 		}
 		if orphanErr := s.orphanPostAttachments(txCtx, tx.AttachmentRepository(), post.ID); orphanErr != nil {
 			return orphanErr
@@ -472,7 +459,7 @@ func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error 
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, commentIDs)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, nil)); err != nil {
 			return err
 		}
 		return nil
@@ -481,6 +468,32 @@ func (s *PostService) DeletePost(ctx context.Context, id, authorID int64) error 
 		return err
 	}
 	return nil
+}
+
+func (s *PostService) deletePostCommentsInBatches(tx port.TxScope, postID int64) error {
+	txCtx := tx.Context()
+	lastID := int64(0)
+	for {
+		comments, err := tx.CommentRepository().SelectComments(txCtx, postID, postDeleteBatchSize, lastID)
+		if err != nil {
+			return customError.WrapRepository("select comments for delete post", err)
+		}
+		if len(comments) == 0 {
+			return nil
+		}
+		for _, comment := range comments {
+			if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, comment.ID, entity.ReactionTargetComment); reactionErr != nil {
+				return customError.WrapRepository("delete post comment reactions", reactionErr)
+			}
+			if deleteErr := tx.CommentRepository().Delete(txCtx, comment.ID); deleteErr != nil {
+				return customError.WrapRepository("soft delete post comments", deleteErr)
+			}
+		}
+		if len(comments) < postDeleteBatchSize {
+			return nil
+		}
+		lastID = comments[len(comments)-1].ID
+	}
 }
 
 func (s *PostService) activeTagNamesByPostIDTx(tx port.TxScope, postID int64) ([]string, error) {

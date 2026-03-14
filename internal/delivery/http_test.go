@@ -96,6 +96,9 @@ func (f *fakeUserUseCase) SelectUserByUUID(_ context.Context, userUUID string) (
 }
 
 func (f *fakeUserUseCase) SelectUserByID(_ context.Context, id int64) (*entity.User, error) {
+	if id == 1 {
+		return &entity.User{ID: id, Name: "admin", Role: "admin", Status: entity.UserStatusActive}, nil
+	}
 	return &entity.User{ID: id, Name: "user", Status: entity.UserStatusActive}, nil
 }
 
@@ -506,6 +509,7 @@ func newTestHandler(
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		UserUseCase:        user,
+		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -536,6 +540,7 @@ func newTestHandlerWithJSONLimit(
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		UserUseCase:        user,
+		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -566,6 +571,7 @@ func newTestHandlerWithDefaultPageLimit(
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		UserUseCase:        user,
+		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -600,6 +606,7 @@ func newTestHandlerWithRateLimit(
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:        sessionUseCase,
 		UserUseCase:           user,
+		UserRepository:        user,
 		AccountUseCase:        account,
 		BoardUseCase:          board,
 		PostUseCase:           post,
@@ -635,6 +642,7 @@ func newTestHandlerWithSanitizer(
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		UserUseCase:        user,
+		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -666,6 +674,7 @@ func newTestHandlerWithAdminUseCases(
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		UserUseCase:        user,
+		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -794,6 +803,29 @@ func TestHandleAdminBoardVisibilityPut_Success(t *testing.T) {
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/admin/boards/8/visibility", map[string]any{"hidden": true}, 1)
 	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleAdminBoardVisibilityPut_ForbiddenForNonAdminAtHTTPBoundary(t *testing.T) {
+	handler := newTestHandlerWithAdminUseCases(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{
+			setBoardVisibility: func(ctx context.Context, id, userID int64, hidden bool) error {
+				t.Fatal("service should not be called for non-admin at HTTP boundary")
+				return nil
+			},
+		},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		&fakeReportUseCase{},
+		&fakeOutboxAdminUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/admin/boards/8/visibility", map[string]any{"hidden": true}, 2)
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.JSONEq(t, `{"error":"forbidden"}`, rr.Body.String())
 }
 
 func TestHandleAdminDeadOutboxRequeue_Success(t *testing.T) {
@@ -1069,6 +1101,7 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 	handler := NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:  sessionUseCase,
 		UserUseCase:     user,
+		UserRepository:  user,
 		AccountUseCase:  &fakeAccountUseCase{},
 		BoardUseCase:    &fakeBoardUseCase{},
 		PostUseCase:     &fakePostUseCase{},
@@ -1953,6 +1986,7 @@ func TestHTTP_NotFound_UsesInjectedLogger(t *testing.T) {
 	handler := NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:    sessionUseCase,
 		UserUseCase:       user,
+		UserRepository:    user,
 		AccountUseCase:    &fakeAccountUseCase{},
 		BoardUseCase:      &fakeBoardUseCase{},
 		PostUseCase:       &fakePostUseCase{},

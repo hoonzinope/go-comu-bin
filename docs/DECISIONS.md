@@ -2038,6 +2038,39 @@
 - `internal/config/config.go`
 - `docs/CONFIG.md`
 
+## 2026-03-14 - RF-54/RF-55를 반영해 admin HTTP 경계를 강화하고 post 삭제 cascade를 배치화한다
+
+상태
+
+- decided
+
+배경
+
+- Round 25 리뷰에서 admin 라우트의 HTTP 방어 심도 부족과 post 삭제 경로의 대량 댓글 메모리 사용 위험이 지적됐다.
+
+관찰
+
+- 기존 `/api/v1/admin/**`는 인증 미들웨어만 걸려 있었고, 역할 검증은 서비스 계층에만 위임됐다.
+- `PostService.DeletePost`는 댓글 cascade를 위해 `math.MaxInt` 수준의 단일 조회를 사용해 대량 댓글 포스트에서 OOM 리스크가 있었다.
+
+결론
+
+- admin 라우트 그룹에 역할 미들웨어를 추가해 비admin 요청을 HTTP 레이어에서 즉시 `403`으로 차단한다.
+- 서비스 레이어의 `AdminOnly` 검증은 defense-in-depth를 위해 유지한다.
+- post 삭제의 댓글 cascade는 고정 배치 크기(`postDeleteBatchSize`) 반복 처리로 변경해 메모리 사용 상한을 `O(batch)`로 제한한다.
+
+후속 작업
+
+- 대규모 삭제 시 처리시간/락 점유를 줄이기 위한 저장소 bulk-delete contract 도입 여부를 별도 검토한다.
+- admin 라우트 추가 시 미들웨어 경계를 우회하지 않도록 라우팅 규칙을 리뷰 체크리스트에 포함한다.
+
+관련 문서/코드
+
+- `internal/delivery/middleware/adminRoleMiddleware.go`
+- `internal/delivery/http.go`
+- `internal/application/service/postService.go`
+- `internal/application/service/postService_test.go`
+
 ## 2026-03-14 - Step 3의 XSS 방어는 입력 경계에서 HTML escape sanitizer 파이프라인으로 시작한다
 
 상태

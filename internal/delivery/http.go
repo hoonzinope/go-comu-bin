@@ -35,6 +35,7 @@ const httpLoggerContextKey = "http_logger"
 type HTTPHandler struct {
 	sessionUseCase           port.SessionUseCase
 	userUseCase              port.UserUseCase
+	userRepository           port.UserRepository
 	accountUseCase           port.AccountUseCase
 	boardUseCase             port.BoardUseCase
 	postUseCase              port.PostUseCase
@@ -54,11 +55,13 @@ type HTTPHandler struct {
 	sanitizerEnabled         bool
 	logger                   *slog.Logger
 	authGinMiddleware        gin.HandlerFunc
+	adminGinMiddleware       gin.HandlerFunc
 }
 
 type HTTPDependencies struct {
 	SessionUseCase           port.SessionUseCase
 	UserUseCase              port.UserUseCase
+	UserRepository           port.UserRepository
 	AccountUseCase           port.AccountUseCase
 	BoardUseCase             port.BoardUseCase
 	PostUseCase              port.PostUseCase
@@ -87,6 +90,7 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 	handler := &HTTPHandler{
 		sessionUseCase:           deps.SessionUseCase,
 		userUseCase:              deps.UserUseCase,
+		userRepository:           deps.UserRepository,
 		accountUseCase:           deps.AccountUseCase,
 		boardUseCase:             deps.BoardUseCase,
 		postUseCase:              deps.PostUseCase,
@@ -107,6 +111,9 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		logger:                   logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
+		writeHTTPError(handler.logger, c, status, err)
+	})
+	handler.adminGinMiddleware = middleware.AdminOnly(deps.UserRepository, func(c *gin.Context, status int, err error) {
 		writeHTTPError(handler.logger, c, status, err)
 	})
 	return handler
@@ -197,7 +204,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.PUT("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionPut)
 	v1.DELETE("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionDelete)
 
-	admin := v1.Group("/admin", h.authGinMiddleware)
+	admin := v1.Group("/admin", h.authGinMiddleware, h.adminGinMiddleware)
 	admin.GET("/reports", h.handleAdminReportsGet)
 	admin.PUT("/reports/:reportID/resolve", h.handleAdminReportResolve)
 	admin.GET("/outbox/dead", h.handleAdminDeadOutboxGet)

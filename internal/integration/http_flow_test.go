@@ -186,6 +186,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		UserUseCase:        userUseCase,
+		UserRepository:     userRepository,
 		AccountUseCase:     accountUseCase,
 		BoardUseCase:       boardUseCase,
 		PostUseCase:        postUseCase,
