@@ -1713,3 +1713,37 @@
 - `internal/application/port/event.go`
 - `internal/infrastructure/persistence/inmemory/postRepository.go`
 - `internal/infrastructure/persistence/inmemory/unitOfWork.go`
+
+## 2026-03-14 - 서비스 생성자 경계를 ActionDispatcher 단일 경로로 정리한다
+
+상태
+
+- decided
+
+배경
+
+- 운영 경로는 outbox 기반 `ActionHookDispatcher`를 사용하지만, 서비스 API에는 `New*WithPublisher` 생성자가 병행 유지되고 있었다.
+- `resolveEventPublisher`/`noopEventPublisher`는 deprecated 상태로 남아 있으나 실제 비테스트 경로에서 사용되지 않는다.
+
+관찰
+
+- `cmd/main.go`는 `New*WithActionDispatcher(..., nil, ...)` 경로를 사용한다.
+- 서비스 테스트 다수는 여전히 `New*WithPublisher` + `newTestEventPublisher` 헬퍼를 사용한다.
+- `event_publisher.go`의 deprecated helper는 참조가 없다.
+
+결론
+
+- 서비스 생성자 표준 경계를 `New*WithActionDispatcher`로 단일화한다.
+- `New*WithPublisher` 생성자와 미사용 deprecated helper(`resolveEventPublisher`, `noopEventPublisher`)를 제거한다.
+- 테스트 헬퍼도 `port.ActionHookDispatcher` 기반으로 정렬한다.
+
+후속 작업
+
+- 서비스/테스트 컴파일 경계를 action dispatcher 기준으로 일괄 갱신
+- 전체 테스트 및 race/vet로 회귀 확인
+
+관련 문서/코드
+
+- `internal/application/service/*Service.go`
+- `internal/application/service/common_test.go`
+- `internal/application/service/event_publisher.go`

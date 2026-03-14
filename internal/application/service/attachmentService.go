@@ -101,11 +101,6 @@ func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository
 	}
 }
 
-// Deprecated: use NewAttachmentServiceWithActionDispatcher.
-func NewAttachmentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, publisher port.EventPublisher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
-	return NewAttachmentServiceWithActionDispatcher(userRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, wrapEventPublisherAsActionDispatcher(publisher), maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
-}
-
 func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || strings.TrimSpace(storageKey) == "" || sizeBytes <= 0 {
 		return 0, customError.ErrInvalidInput

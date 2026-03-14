@@ -50,7 +50,7 @@ func TestReactionService_GetReactionsByTarget_AndDeleteByOwner(t *testing.T) {
 func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(t, repositories, cache), newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithActionDispatcher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestActionDispatcher(t, repositories, cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -100,7 +100,7 @@ func TestReactionService_SetReaction_SucceedsWhenCacheInvalidationFails(t *testi
 func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(t, repositories, cache), newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithActionDispatcher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestActionDispatcher(t, repositories, cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -123,7 +123,7 @@ func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
 func TestReactionService_SetReaction_NoOpWhenSameType(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(t, repositories, cache), newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithActionDispatcher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestActionDispatcher(t, repositories, cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
@@ -197,7 +197,7 @@ func TestReactionService_DeleteReaction_DoesNotRemoveOtherUsersReaction(t *testi
 func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()
-	reactionSvc := NewReactionServiceWithPublisher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestEventPublisher(t, repositories, cache), newTestCachePolicy())
+	reactionSvc := NewReactionServiceWithActionDispatcher(repositories.user, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, cache, newTestActionDispatcher(t, repositories, cache), newTestCachePolicy())
 
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")

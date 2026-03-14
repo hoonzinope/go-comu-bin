@@ -47,11 +47,6 @@ func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, 
 	}
 }
 
-// Deprecated: use NewReactionServiceWithActionDispatcher.
-func NewReactionServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, logger ...*slog.Logger) *ReactionService {
-	return NewReactionServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, logger...)
-}
-
 func (s *ReactionService) SetReaction(ctx context.Context, UserID, TargetID int64, TargetType entity.ReactionTargetType, ReactionType entity.ReactionType) (bool, error) {
 	created, changed, err := s.withReactionTransaction(ctx, UserID, TargetID, TargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
 		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(tx.Context(), UserID, TargetID, TargetType, ReactionType)

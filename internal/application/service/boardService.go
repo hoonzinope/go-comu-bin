@@ -48,11 +48,6 @@ func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boa
 	}
 }
 
-// Deprecated: use NewBoardServiceWithActionDispatcher.
-func NewBoardServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *BoardService {
-	return NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
-}
-
 func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
 		return nil, err

@@ -30,15 +30,3 @@ func resolveActionDispatcher(dispatcher port.ActionHookDispatcher) port.ActionHo
 	}
 	return noopActionHookDispatcher{}
 }
-
-// Deprecated: use resolveActionDispatcher with port.ActionHookDispatcher.
-func resolveEventPublisher(publisher port.EventPublisher) port.EventPublisher {
-	if publisher != nil {
-		return publisher
-	}
-	return noopEventPublisher{}
-}
-
-type noopEventPublisher struct{}
-
-func (noopEventPublisher) Publish(events ...port.DomainEvent) {}

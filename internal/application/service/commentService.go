@@ -51,11 +51,6 @@ func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, p
 	}
 }
 
-// Deprecated: use NewCommentServiceWithActionDispatcher.
-func NewCommentServiceWithPublisher(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
-	return NewCommentServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
-}
-
 func (s *CommentService) CreateComment(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
 	// 댓글 생성 로직 구현
 	if strings.TrimSpace(content) == "" {

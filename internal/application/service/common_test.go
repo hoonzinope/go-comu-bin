@@ -118,33 +118,6 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 	return wrapEventPublisherAsActionDispatcher(eventOutbox.NewPublisher(repositories.outbox, serializer, logger))
 }
 
-// Deprecated: use newTestActionDispatcher.
-func newTestEventPublisher(t testing.TB, repositories testRepositories, cache port.Cache) port.EventPublisher {
-	t.Helper()
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	serializer := appevent.NewJSONEventSerializer()
-	relay := eventOutbox.NewRelay(repositories.outbox, serializer, logger, eventOutbox.RelayConfig{
-		WorkerCount:  1,
-		BatchSize:    64,
-		PollInterval: time.Millisecond,
-		MaxAttempts:  5,
-		BaseBackoff:  time.Millisecond,
-	})
-	handler := appevent.NewCacheInvalidationHandler(cache, logger)
-	relay.Subscribe(appevent.EventNameBoardChanged, handler)
-	relay.Subscribe(appevent.EventNamePostChanged, handler)
-	relay.Subscribe(appevent.EventNameCommentChanged, handler)
-	relay.Subscribe(appevent.EventNameReactionChanged, handler)
-	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
-	relayCtx, relayCancel := context.WithCancel(context.Background())
-	relay.Start(relayCtx)
-	t.Cleanup(func() {
-		relayCancel()
-		relay.Wait()
-	})
-	return eventOutbox.NewPublisher(repositories.outbox, serializer, logger)
-}
-
 func newTestPasswordHasher() port.PasswordHasher {
 	return auth.NewBcryptPasswordHasher(4)
 }

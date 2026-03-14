@@ -72,11 +72,6 @@ func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boar
 	return svc
 }
 
-// Deprecated: use NewPostServiceWithActionDispatcher.
-func NewPostServiceWithPublisher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, publisher port.EventPublisher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
-	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, wrapEventPublisherAsActionDispatcher(publisher), cachePolicy, authorizationPolicy, logger...)
-}
-
 func (s *PostService) CreatePost(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
 	return s.createPost(ctx, title, content, tags, authorID, boardID, false)
 }

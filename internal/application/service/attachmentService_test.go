@@ -271,7 +271,7 @@ func TestAttachmentService_DeletePostAttachment_InvalidatesPostDetailCache(t *te
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(t, repositories, cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
+	svc := NewAttachmentServiceWithActionDispatcher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestActionDispatcher(t, repositories, cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
 	attachmentID, err := svc.CreatePostAttachment(context.Background(), postID, userID, "a.png", "image/png", 10, "attachments/a.png")
 	require.NoError(t, err)
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(postID), "stale"))
@@ -417,7 +417,7 @@ func TestAttachmentService_UploadPostAttachment_InvalidatesPostDetailCache(t *te
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(postID), "stale"))
-	svc := NewAttachmentServiceWithPublisher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestEventPublisher(t, repositories, cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
+	svc := NewAttachmentServiceWithActionDispatcher(repositories.user, repositories.post, repositories.attachment, repositories.unitOfWork, storage, cache, newTestActionDispatcher(t, repositories, cache), attachmentDefaultMaxSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, newTestAuthorizationPolicy())
 
 	_, err := svc.UploadPostAttachment(context.Background(), postID, userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
 	require.NoError(t, err)
