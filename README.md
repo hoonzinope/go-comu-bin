@@ -1,10 +1,48 @@
 # go-comu-bin
 
-Go로 작성한 single-binary 커뮤니티 엔진입니다.
+Single-binary community backend written in Go.
 
-이 저장소는 기능 완성형 제품보다, 아키텍처/도메인 설계를 학습하고 확장 가능한 형태로 발전시키는 데 초점을 둡니다.
+`go-comu-bin`은 기능 구현 자체보다, 확장 가능한 구조(레이어드 + 포트/어댑터)와 운영 가능한 API 경계 설계를 목표로 하는 프로젝트입니다.
 
-## 빠른 시작
+## Highlights
+
+- Layered + Hexagonal Architecture (`delivery -> application -> domain -> infrastructure`)
+- JWT + session validation authentication flow
+- Role/owner-based authorization policy
+- Report domain + admin moderation APIs
+- Dead outbox operations (`list`, `requeue`, `discard`)
+- Hidden board visibility policy (non-admin 완전 비노출)
+- Cursor pagination (`limit`, `last_id`) with max page limit guard (`1..1000`)
+- OpenAPI/Swagger generation and verification pipeline
+
+## Architecture
+
+핵심 원칙:
+
+- Domain-centric design
+- Port/Adapter separation
+- `context.Context` first at boundary methods
+- Application-layer orchestration + policy
+- Infrastructure adapters for persistence/cache/auth/storage
+
+자세한 내용은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참고.
+
+## Quick Start
+
+Prerequisites:
+
+- Go 1.22+ (권장)
+- `make`
+
+1. 설정 파일 준비
+
+```bash
+cp config.yml config.local.yml
+```
+
+`config.yml` 또는 `config/config.yml` 경로를 사용하며, 최소한 `delivery.http.auth.secret`는 32자 이상 실제 값으로 설정해야 합니다.
+
+2. 실행
 
 ```bash
 make run
@@ -16,46 +54,87 @@ make run
 go run ./cmd
 ```
 
-기본 설정은 루트의 `config.yml`을 사용합니다.
-실행 전 `delivery.http.auth.secret`에는 실제 비밀값을 넣어야 합니다.
+3. Swagger 확인
 
-Swagger UI는 서버 실행 후 [http://localhost:18577/swagger/index.html](http://localhost:18577/swagger/index.html) 에서 확인할 수 있습니다.
+- [http://localhost:18577/swagger/index.html](http://localhost:18577/swagger/index.html)
 
-## 문서
+## Configuration
 
-상세 문서는 `docs/`로 분리되어 있습니다.
+주요 설정:
 
-- [로드맵](docs/ROADMAP.md)
-- [아키텍처](docs/ARCHITECTURE.md)
-- [결정 기록](docs/DECISIONS.md)
-- [설정](docs/CONFIG.md)
-- [HTTP API](docs/API.md)
-- [테스트 가이드](docs/TESTING.md)
+- `delivery.http.port`
+- `delivery.http.maxJSONBodyBytes`
+- `delivery.http.defaultPageLimit` (`1..1000`)
+- `delivery.http.auth.secret` (최소 32자)
+- `event.outbox.*`
+- `storage.*`
+- `admin.bootstrap.*`
+- `jobs.*`
 
-## 현재 구현 요약
+상세 규칙/예시는 [docs/CONFIG.md](docs/CONFIG.md) 참고.
 
-- Delivery: `gin` 기반 HTTP 어댑터
-- 인증: `SessionUseCase` 기반 JWT + `SessionRepository` 세션 검증
-- 인가: 주입 가능한 `AuthorizationPolicy` 기반(role/owner)
-- 비밀번호: `PasswordHasher` 포트 기반 bcrypt 해시 저장/비교
-- 사용자 식별자: 내부 `int64` + 외부 노출용 `uuid` 병행
-- 데이터 저장소: In-Memory 어댑터
-- 조회 캐시: 서비스 레이어 정책 + 캐시 포트(`GetOrSetWithTTL`, `DeleteByPrefix`)
-- 페이지네이션: `limit + last_id` 커서 기반
-- 모델 경계: `domain/entity` -> `application/model` -> `delivery/response`
-- 포트 구성: `internal/application/port`, 매핑: `internal/application/mapper`
-- API 규칙/스펙/운영 가이드는 `docs/` 문서를 단일 기준으로 관리
+## API
 
-## 개발 명령
+- Base path: `/api/v1`
+- OpenAPI docs: `docs/swagger/`
+- Human-readable API guide: [docs/API.md](docs/API.md)
+
+주요 엔드포인트 그룹:
+
+- Auth/User
+- Board/Post/Comment/Reaction
+- Attachment
+- Report/Admin Operations
+
+## Project Structure
+
+```text
+cmd/                      # composition root (wiring)
+internal/
+  application/            # use case, service, policy, ports
+  domain/                 # entities and domain rules
+  delivery/               # HTTP adapters
+  infrastructure/         # adapters (inmemory/cache/auth/storage/event)
+docs/                     # architecture, API, config, roadmap, decisions
+```
+
+## Development
 
 ```bash
 make help
 make build
 make run
+make test
 make swagger
 make verify
-make test
 ```
 
-Swagger 정합성 검증은 일상 개발 루프에 강제하지 않고, 명시적 품질 게이트인 `make verify`에만 포함합니다.
-선택적으로 로컬 pre-commit 훅을 설치하려면 `./scripts/install-githooks.sh`를 실행하면 됩니다.
+- `make verify` runs tests, `go vet`, and swagger sync verification.
+- 필요 시 로컬 훅 설치: `./scripts/install-githooks.sh`
+
+## Testing
+
+```bash
+go test ./...
+```
+
+패키지별/스타일 가이드는 [docs/TESTING.md](docs/TESTING.md) 참고.
+
+## Roadmap and Decisions
+
+- Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
+- Decision log: [docs/DECISIONS.md](docs/DECISIONS.md)
+
+프로젝트의 정책/범위 변경은 DECISIONS를 기준으로 추적합니다.
+
+## Contributing
+
+이 저장소는 문서-우선 변경 흐름을 사용합니다.
+
+- 결정 기록 -> TDD -> 구현 -> 테스트 -> 문서 정합성
+
+큰 변경 전에는 관련 `docs/`와 결정 기록을 먼저 확인해 주세요.
+
+## License
+
+Currently no license file is defined in this repository.
