@@ -481,11 +481,12 @@
 - 저장 모델은 계속 `parentID`를 사용한다.
 - 현재 서비스 정책은 1-depth 대댓글만 허용한다.
 - 부모 댓글은 같은 게시글에 속한 활성 댓글이어야 한다.
-- 조회는 기존 flat list + `parent_id` 노출을 유지하고, 최적화는 어댑터 책임으로 둔다.
+- 당시 공개 응답은 flat list + `parent_id` 노출을 유지하는 방향으로 정리했다.
+- 현재 공개 계약은 UUID 전환에 따라 flat list + `parent_uuid` 노출을 사용한다.
 
 후속 작업
 
-- comment create API에 `parent_id` 연결
+- comment create API에 부모 연결 값 추가
 - 1-depth 검증 로직 추가
 
 관련 문서/코드
@@ -593,7 +594,8 @@
 
 결론
 
-- 본문은 Markdown 이미지 문법으로 `attachment://{attachmentID}` 참조를 직접 가진다.
+- 당시 결정 기준으로 본문은 Markdown 이미지 문법의 attachment 참조를 직접 가진다.
+- 현재 공개 계약의 참조 형식은 `attachment://{attachmentUUID}` 이다.
 - upload API는 본문에 바로 넣을 수 있는 `embed_markdown`을 응답한다.
 - `PostDetail`은 attachment 목록을 함께 내려 클라이언트가 본문 참조를 해석할 수 있게 한다.
 - attachment 응답에는 실제 파일 조회용 `file_url`을 포함한다.
@@ -603,7 +605,7 @@
 - `file_url`은 `Cache-Control: public` + `ETag`를 사용하고, `preview_url`은 `private, no-store`로 둔다.
 - attachment 업로드는 우선 이미지 화이트리스트(`png`, `jpeg/jpg`, `gif`, `webp`)와 설정 가능한 최대 크기 제한을 둔다.
 - 업로드 MIME은 요청 헤더만 믿지 않고 본문 sniffing 결과와 일치해야 한다.
-- storage key는 같은 파일명 충돌을 피하기 위해 `postID/랜덤-sanitized-name` 규칙으로 생성한다.
+- storage key는 같은 파일명 충돌을 피하기 위해 내부 post 식별자 기반 경로(`postID/랜덤-sanitized-name`)를 사용한다.
 - `storage_key`는 내부 저장 메타데이터로만 유지하고 외부 응답에서는 숨긴다.
 - 외부 `manual metadata create API`는 제거하고 attachment 생성은 upload 기반으로만 연다.
 - post update/publish 시 본문에 들어 있는 attachment 참조가 실제로 해당 post의 attachment인지 검증한다.
@@ -1771,6 +1773,7 @@
 - 신고 대상은 `post`, `comment`로 제한한다.
 - 신고 상태는 `pending`, `accepted`, `rejected`로 두고 처리 시 자동 제재/자동 숨김은 하지 않는다.
 - 동일 `(reporter_user_id, target_type, target_id)` 중복 신고는 금지한다.
+- 현재 공개 API 입력은 `target_uuid`를 받지만, 내부 무결성 제약은 대상의 내부 식별자 기준으로 유지한다.
 - 신고 사유는 `enum + detail text`로 받는다.
 - admin 신고 목록은 `pending` 우선 + 최신순으로 제공한다.
 - dead outbox 운영 API는 `목록 + 재처리(requeue) + 폐기(discard)`를 제공한다.
@@ -1814,7 +1817,8 @@
 결론
 
 - 태그 목록 경로는 별도 hidden 필터를 추가하지 않고, 기존 `policy.EnsureBoardVisible`을 재사용해 정책 단일 경계를 유지한다.
-- hidden 게시판 게시글을 건너뛰는 동안에도 커서 pagination(`has_more`, `next_last_id`) 의미를 보존하도록 visibility-aware 조회를 적용한다.
+- 당시 구현 시 hidden 게시판 게시글을 건너뛰는 동안에도 커서 pagination(`has_more`, `next_last_id`) 의미를 보존하도록 visibility-aware 조회를 적용했다.
+- 현재 공개 목록 계약은 opaque `cursor`, `next_cursor`를 사용한다.
 
 후속 작업
 

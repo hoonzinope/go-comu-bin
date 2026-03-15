@@ -12,7 +12,7 @@ Single-binary community backend written in Go.
 - Report domain + admin moderation APIs
 - Dead outbox operations (`list`, `requeue`, `discard`)
 - Hidden board visibility policy (non-admin 완전 비노출)
-- Cursor pagination (`limit`, `last_id`) with max page limit guard (`1..1000`)
+- Public cursor pagination (`limit`, `cursor`) with max page limit guard (`1..1000`)
 - OpenAPI/Swagger generation and verification pipeline
 
 ## Architecture
