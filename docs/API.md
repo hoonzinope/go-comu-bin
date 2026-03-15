@@ -4,8 +4,8 @@
 로그인 성공 시 응답 헤더 `Authorization`에 `Bearer <token>` 형식으로 토큰이 반환됩니다.
 `Bearer` 스킴이 아니면 인증 실패(`401`)로 처리합니다.
 JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad Request`로 거부합니다.
-`delivery.http.rateLimit.enabled=true`이면 `/api/v1` 하위 쓰기 요청(`POST/PUT/DELETE/PATCH`)에 IP 기준 rate limit이 적용되며, 초과 시 `429 Too Many Requests`를 반환합니다.
-`delivery.http.sanitizer.enabled=true`이면 텍스트 입력 필드는 HTML escape 처리되어 XSS payload 저장을 기본 차단합니다.
+`delivery.http.rateLimit.enabled=true`이면 `/api/v1` 하위 read/write 요청에 IP 기준 rate limit이 적용되며, 초과 시 `429 Too Many Requests`를 반환합니다.
+텍스트 입력은 markdown 원문을 보존하기 위해 저장 전에 변형하지 않습니다. XSS 방어는 렌더링 경계의 escaping/sanitizing 책임으로 둡니다.
 
 ## OpenAPI / Swagger
 

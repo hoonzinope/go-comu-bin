@@ -2331,3 +2331,41 @@
 - `internal/delivery/middleware/adminRoleMiddleware.go`
 - `internal/delivery/http.go`
 - `internal/application/service/postService.go`
+
+## 2026-03-15 - Markdown 본문은 raw로 저장하고 HTTP rate limit은 read/write를 모두 다룬다
+
+상태
+
+- decided
+
+배경
+
+- Step 3의 입력 sanitizer는 저장 전에 `html.EscapeString`을 적용해 markdown 원문을 변형한다.
+- 현재 공개 계약은 게시글 본문과 첨부 참조를 markdown(`attachment://{attachmentUUID}`)로 다루며, 코드 블록이나 raw HTML 예제도 원문 그대로 보존될 필요가 있다.
+- 기존 HTTP rate limit은 쓰기 메서드만 제한해 GET flood에 대한 application-layer 방어가 없다.
+
+관찰
+
+- 입력 경계 escape는 XSS payload 저장을 줄이는 대신, markdown source of truth를 변경해 렌더링 책임을 backend 저장 단계와 섞는다.
+- 이 서비스는 HTML을 서버에서 렌더링하지 않고 JSON API를 제공하므로, 원문 보존과 출력 렌더러의 escaping/sanitizing 책임 분리가 더 일관된다.
+- 목록/상세 GET은 캐시가 있어도 반복 호출 시 애플리케이션과 저장소 자원을 계속 소비한다.
+
+결론
+
+- 게시판/게시글/댓글/신고/운영 메모 같은 텍스트 입력은 저장 전에 변형하지 않고 raw 그대로 use case로 전달한다.
+- `delivery.http.sanitizer.enabled`와 `InputSanitizer` 기반 입력 escape 파이프라인은 제거한다.
+- HTTP rate limit은 `/api/v1` 하위 IP 기준으로 read/write 모두 적용하되, 읽기 메서드(`GET/HEAD/OPTIONS`)는 별도 한도(`readRequests`)를 둔다.
+
+후속 작업
+
+- HTTP 테스트를 markdown raw 보존과 GET read rate limit 기준으로 갱신한다.
+- 설정/문서에서 sanitizer 항목을 제거하고 `delivery.http.rateLimit.readRequests`를 추가한다.
+- 프론트엔드 또는 향후 renderer 경계에서 output escaping/sanitizing 책임을 명시한다.
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `internal/config/config.go`
+- `internal/delivery/http_test.go`
+- `docs/API.md`
+- `docs/CONFIG.md`

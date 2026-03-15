@@ -26,9 +26,8 @@ delivery:
     rateLimit:
       enabled: true
       windowSeconds: 60
+      readRequests: 300
       writeRequests: 60
-    sanitizer:
-      enabled: true
     auth:
       secret: ""
 

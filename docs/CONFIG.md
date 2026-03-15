@@ -45,9 +45,8 @@ delivery:
     rateLimit:
       enabled: true
       windowSeconds: 60
+      readRequests: 300
       writeRequests: 60
-    sanitizer:
-      enabled: true
     auth:
       secret: "replace-with-real-secret"
 
@@ -80,8 +79,8 @@ jobs:
 - `delivery.http.maxJSONBodyBytes`: `> 0`
 - `delivery.http.defaultPageLimit`: `1..1000`
 - `delivery.http.rateLimit.windowSeconds`: `>= 1`
+- `delivery.http.rateLimit.readRequests`: `>= 1`
 - `delivery.http.rateLimit.writeRequests`: `>= 1`
-- `delivery.http.sanitizer.enabled`: `true|false`
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
 - `delivery.http.auth.secret`: 최소 길이 `32`자 이상
@@ -116,10 +115,8 @@ jobs:
 - JSON body 최대 크기(bytes): `cmd/main.go` -> `cfg.Delivery.HTTP.MaxJSONBodyBytes`
   - JSON API 요청 바디가 이 값을 초과하면 `400 Bad Request (request body too large)`를 반환합니다.
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
-- HTTP 쓰기 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
-  - `enabled=true`일 때 `/api/v1` 하위 `POST/PUT/DELETE/PATCH` 요청에 `method+route+client_ip` 기준 제한을 적용합니다.
-- HTTP 입력 sanitizer: `cmd/main.go` -> `cfg.Delivery.HTTP.Sanitizer.Enabled`
-  - `enabled=true`일 때 게시판/게시글/댓글/신고 관련 텍스트 입력은 HTML escape 후 use case로 전달됩니다.
+- HTTP read/write 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
+  - `enabled=true`일 때 `/api/v1` 하위 `GET/HEAD/OPTIONS` 요청은 `readRequests`, `POST/PUT/DELETE/PATCH` 요청은 `writeRequests`를 `method+route+client_ip` 기준으로 적용합니다.
 - outbox relay 워커 수: `cmd/main.go` -> `cfg.Event.Outbox.WorkerCount`
 - outbox relay 배치 크기: `cmd/main.go` -> `cfg.Event.Outbox.BatchSize`
 - outbox relay polling 주기(ms): `cmd/main.go` -> `cfg.Event.Outbox.PollIntervalMillis`
