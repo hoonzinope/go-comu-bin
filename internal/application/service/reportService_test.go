@@ -15,6 +15,7 @@ func TestReportService_CreateReport_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
+		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -37,6 +38,7 @@ func TestReportService_CreateReport_RejectsDuplicate(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
+		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -57,10 +59,39 @@ func TestReportService_CreateReport_RejectsDuplicate(t *testing.T) {
 	assert.True(t, errors.Is(err, customerror.ErrReportAlreadyExists))
 }
 
+func TestReportService_CreateReport_HiddenBoardBlockedForNonAdmin(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewReportServiceWithActionDispatcher(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		repositories.comment,
+		repositories.report,
+		repositories.unitOfWork,
+		newTestActionDispatcher(t, repositories, newTestCache()),
+		newTestAuthorizationPolicy(),
+	)
+
+	reporterID := seedUser(repositories.user, "reporter", "pw", "user")
+	authorID := seedUser(repositories.user, "author", "pw", "user")
+	boardID := seedBoard(repositories.board, "hidden", "desc")
+	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
+	board, err := repositories.board.SelectBoardByID(context.Background(), boardID)
+	require.NoError(t, err)
+	require.NotNil(t, board)
+	board.SetHidden(true)
+	require.NoError(t, repositories.board.Update(context.Background(), board))
+
+	_, err = svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, mustPostUUID(t, repositories.post, postID), entity.ReportReasonSpam, "spam")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
+}
+
 func TestReportService_GetReports_AdminOnly(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
+		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -79,6 +110,7 @@ func TestReportService_GetReports_PendingFirst(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
+		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -112,6 +144,7 @@ func TestReportService_ResolveReport_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
+		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -141,6 +174,7 @@ func TestReportService_ResolveReport_RejectsAlreadyResolved(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
+		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,

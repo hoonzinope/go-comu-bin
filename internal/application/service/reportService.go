@@ -21,6 +21,7 @@ var _ port.ReportUseCase = (*ReportService)(nil)
 
 type ReportService struct {
 	userRepository      port.UserRepository
+	boardRepository     port.BoardRepository
 	postRepository      port.PostRepository
 	commentRepository   port.CommentRepository
 	reportRepository    port.ReportRepository
@@ -32,6 +33,7 @@ type ReportService struct {
 
 func NewReportServiceWithActionDispatcher(
 	userRepository port.UserRepository,
+	boardRepository port.BoardRepository,
 	postRepository port.PostRepository,
 	commentRepository port.CommentRepository,
 	reportRepository port.ReportRepository,
@@ -42,6 +44,7 @@ func NewReportServiceWithActionDispatcher(
 ) *ReportService {
 	return &ReportService{
 		userRepository:      userRepository,
+		boardRepository:     boardRepository,
 		postRepository:      postRepository,
 		commentRepository:   commentRepository,
 		reportRepository:    reportRepository,
@@ -67,13 +70,8 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 	if len(reasonDetail) > maxReportReasonDetailLength {
 		return 0, customerror.ErrInvalidInput
 	}
-	targetID, err := s.resolveReportTargetID(ctx, targetType, targetUUID)
-	if err != nil {
-		return 0, err
-	}
-	report := entity.NewReport(targetType, targetID, reporterUserID, reasonCode, reasonDetail)
 	var reportID int64
-	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, reporterUserID)
 		if err != nil {
@@ -82,10 +80,11 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 		if user == nil {
 			return customerror.ErrUserNotFound
 		}
-
-		if err := s.ensureReportTargetExistsTx(tx, targetType, targetID); err != nil {
+		targetID, err := s.resolveVisibleReportTargetIDTx(tx, user, targetType, targetUUID)
+		if err != nil {
 			return err
 		}
+		report := entity.NewReport(targetType, targetID, reporterUserID, reasonCode, reasonDetail)
 		reportID, err = tx.ReportRepository().Save(txCtx, report)
 		if err != nil {
 			if errors.Is(err, customerror.ErrReportAlreadyExists) {
@@ -104,23 +103,45 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 	return reportID, nil
 }
 
-func (s *ReportService) resolveReportTargetID(ctx context.Context, targetType entity.ReportTargetType, targetUUID string) (int64, error) {
+func (s *ReportService) resolveVisibleReportTargetIDTx(tx port.TxScope, user *entity.User, targetType entity.ReportTargetType, targetUUID string) (int64, error) {
+	txCtx := tx.Context()
 	switch targetType {
 	case entity.ReportTargetPost:
-		post, err := s.postRepository.SelectPostByUUID(ctx, targetUUID)
+		post, err := tx.PostRepository().SelectPostByUUID(txCtx, targetUUID)
 		if err != nil {
 			return 0, customerror.WrapRepository("select post by uuid for report target", err)
 		}
 		if post == nil {
 			return 0, customerror.ErrPostNotFound
 		}
+		board, err := tx.BoardRepository().SelectBoardByID(txCtx, post.BoardID)
+		if err != nil {
+			return 0, customerror.WrapRepository("select board by id for report target", err)
+		}
+		if err := policy.EnsureBoardVisible(board, user); err != nil {
+			return 0, customerror.ErrPostNotFound
+		}
 		return post.ID, nil
 	case entity.ReportTargetComment:
-		comment, err := s.commentRepository.SelectCommentByUUID(ctx, targetUUID)
+		comment, err := tx.CommentRepository().SelectCommentByUUID(txCtx, targetUUID)
 		if err != nil {
 			return 0, customerror.WrapRepository("select comment by uuid for report target", err)
 		}
 		if comment == nil {
+			return 0, customerror.ErrCommentNotFound
+		}
+		post, err := tx.PostRepository().SelectPostByID(txCtx, comment.PostID)
+		if err != nil {
+			return 0, customerror.WrapRepository("select post by id for report target", err)
+		}
+		if post == nil {
+			return 0, customerror.ErrCommentNotFound
+		}
+		board, err := tx.BoardRepository().SelectBoardByID(txCtx, post.BoardID)
+		if err != nil {
+			return 0, customerror.WrapRepository("select board by id for report target", err)
+		}
+		if err := policy.EnsureBoardVisible(board, user); err != nil {
 			return 0, customerror.ErrCommentNotFound
 		}
 		return comment.ID, nil
