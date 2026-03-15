@@ -2178,6 +2178,11 @@
 - report 생성은 `target_uuid` 입력으로 전환한다.
 - attachment file/preview URL과 embed/response mapping을 UUID 기반으로 갱신한다.
 
+추가 정리
+
+- body 기반 UUID 입력(`target_uuid`, `parent_uuid`)도 path UUID와 동일하게 delivery 경계에서 형식 검증한다.
+- `parent_uuid` 응답 projection은 게시글의 전체 댓글 재조회 대신, 현재 응답에 필요한 parent ID 집합만 조회하는 방식으로 축소한다.
+
 관련 문서/코드
 
 - `internal/domain/entity`

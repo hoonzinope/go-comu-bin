@@ -183,15 +183,9 @@ func (s *CommentService) commentsFromEntities(ctx context.Context, postUUID stri
 	if err != nil {
 		return nil, err
 	}
-	parentUUIDs := map[int64]string{}
-	if len(comments) > 0 {
-		allComments, err := s.commentRepository.SelectCommentsIncludingDeleted(ctx, comments[0].PostID)
-		if err != nil {
-			return nil, customerror.WrapRepository("select comments including deleted for parent uuid mapping", err)
-		}
-		for _, item := range allComments {
-			parentUUIDs[item.ID] = item.UUID
-		}
+	parentUUIDs, err := loadParentCommentUUIDs(ctx, s.commentRepository, comments)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]model.Comment, 0, len(comments))
 	for _, comment := range comments {

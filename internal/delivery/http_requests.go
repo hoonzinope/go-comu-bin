@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
@@ -89,6 +90,11 @@ func (r commentRequest) validate() error {
 	if r.Content == "" {
 		return errors.New("content is required")
 	}
+	if r.ParentUUID != nil && strings.TrimSpace(*r.ParentUUID) != "" {
+		if _, err := uuid.Parse(strings.TrimSpace(*r.ParentUUID)); err != nil {
+			return errors.New("invalid parent_uuid")
+		}
+	}
 	return nil
 }
 
@@ -123,6 +129,9 @@ func (r reportCreateRequest) parse() (entity.ReportTargetType, string, entity.Re
 		return "", "", "", "", errors.New("invalid target_type")
 	}
 	if strings.TrimSpace(r.TargetUUID) == "" {
+		return "", "", "", "", errors.New("invalid target_uuid")
+	}
+	if _, err := uuid.Parse(strings.TrimSpace(r.TargetUUID)); err != nil {
 		return "", "", "", "", errors.New("invalid target_uuid")
 	}
 	reasonCode, ok := entity.ParseReportReasonCode(r.ReasonCode)

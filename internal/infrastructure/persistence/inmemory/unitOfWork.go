@@ -557,6 +557,10 @@ func (r commentTxRepository) SelectCommentByUUID(ctx context.Context, commentUUI
 	_ = ctx
 	return r.repo.selectCommentByUUID(commentUUID)
 }
+func (r commentTxRepository) SelectCommentUUIDsByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]string, error) {
+	_ = ctx
+	return r.repo.selectCommentUUIDsByIDsIncludingDeleted(ids)
+}
 func (r commentTxRepository) SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
 	_ = ctx
 	return r.repo.selectComments(postID, limit, lastID)

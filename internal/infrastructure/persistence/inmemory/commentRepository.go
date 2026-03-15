@@ -75,6 +75,13 @@ func (r *CommentRepository) SelectCommentByUUID(ctx context.Context, commentUUID
 	return r.selectCommentByUUID(commentUUID)
 }
 
+func (r *CommentRepository) SelectCommentUUIDsByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]string, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectCommentUUIDsByIDsIncludingDeleted(ids)
+}
+
 func (r *CommentRepository) selectCommentByID(id int64) (*entity.Comment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -95,6 +102,19 @@ func (r *CommentRepository) selectCommentByUUID(commentUUID string) (*entity.Com
 		}
 	}
 	return nil, nil
+}
+
+func (r *CommentRepository) selectCommentUUIDsByIDsIncludingDeleted(ids []int64) (map[int64]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[int64]string, len(ids))
+	for _, id := range ids {
+		if comment, exists := r.commentDB.Data[id]; exists {
+			out[id] = comment.UUID
+		}
+	}
+	return out, nil
 }
 
 func (r *CommentRepository) SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {

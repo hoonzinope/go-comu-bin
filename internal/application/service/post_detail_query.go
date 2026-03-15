@@ -74,7 +74,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}
 
 	commentDetails := make([]*model.CommentDetail, len(comments))
-	parentUUIDs, err := parentCommentUUIDsByID(ctx, q.commentRepository, post.ID)
+	parentUUIDs, err := loadParentCommentUUIDs(ctx, q.commentRepository, comments)
 	if err != nil {
 		return nil, err
 	}
@@ -176,16 +176,27 @@ func commentModelFromEntity(comment *entity.Comment, postUUID string, authorUUID
 	return &out, nil
 }
 
-func parentCommentUUIDsByID(ctx context.Context, commentRepository port.CommentRepository, postID int64) (map[int64]string, error) {
-	comments, err := commentRepository.SelectCommentsIncludingDeleted(ctx, postID)
-	if err != nil {
-		return nil, customerror.WrapRepository("select comments including deleted for post detail", err)
-	}
-	out := make(map[int64]string, len(comments))
+func loadParentCommentUUIDs(ctx context.Context, commentRepository port.CommentRepository, comments []*entity.Comment) (map[int64]string, error) {
+	parentIDs := make([]int64, 0, len(comments))
+	seen := make(map[int64]struct{}, len(comments))
 	for _, comment := range comments {
-		out[comment.ID] = comment.UUID
+		if comment.ParentID == nil {
+			continue
+		}
+		if _, ok := seen[*comment.ParentID]; ok {
+			continue
+		}
+		seen[*comment.ParentID] = struct{}{}
+		parentIDs = append(parentIDs, *comment.ParentID)
 	}
-	return out, nil
+	if len(parentIDs) == 0 {
+		return map[int64]string{}, nil
+	}
+	parentUUIDs, err := commentRepository.SelectCommentUUIDsByIDsIncludingDeleted(ctx, parentIDs)
+	if err != nil {
+		return nil, customerror.WrapRepository("select comment uuids by ids including deleted", err)
+	}
+	return parentUUIDs, nil
 }
 
 func reactionsFromEntitiesWithTargetUUID(reactions []*entity.Reaction, targetUUID string, userUUIDs map[int64]string) ([]model.Reaction, error) {

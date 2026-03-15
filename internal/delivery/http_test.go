@@ -782,6 +782,34 @@ func TestHandleReportCreate_Success(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), `"id":77`)
 }
 
+func TestHandleReportCreate_BadRequestForMalformedTargetUUID(t *testing.T) {
+	handler := newTestHandlerWithAdminUseCases(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		&fakeReportUseCase{
+			createReport: func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUIDArg string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+				t.Fatal("service should not be called for malformed target_uuid")
+				return 0, nil
+			},
+		},
+		&fakeOutboxAdminUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/reports", map[string]any{
+		"target_type": "post",
+		"target_uuid": "not-a-uuid",
+		"reason_code": "spam",
+	}, 1)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"invalid target_uuid"}`, rr.Body.String())
+}
+
 func TestHandleAdminBoardVisibilityPut_Success(t *testing.T) {
 	boardUUID := "550e8400-e29b-41d4-a716-446655440008"
 	handler := newTestHandlerWithAdminUseCases(
@@ -1001,6 +1029,32 @@ func TestHandleCreateComment_WithParentUUID_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
 	assert.JSONEq(t, `{"uuid":"550e8400-e29b-41d4-a716-446655440011"}`, rr.Body.String())
+}
+
+func TestHandleCreateComment_BadRequestForMalformedParentUUID(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{
+			createComment: func(ctx context.Context, content string, authorID int64, postUUIDArg string, parentUUIDArg *string) (string, error) {
+				t.Fatal("service should not be called for malformed parent_uuid")
+				return "", nil
+			},
+		},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/"+postUUID+"/comments", map[string]any{
+		"content":     "reply",
+		"parent_uuid": "not-a-uuid",
+	}, 1)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"invalid parent_uuid"}`, rr.Body.String())
 }
 
 func TestHandleGetAttachments_Success(t *testing.T) {
