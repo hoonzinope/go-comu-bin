@@ -2228,3 +2228,70 @@
 - `internal/application/service/commentService.go`
 - `internal/delivery/http.go`
 - `docs/API.md`
+
+## 2026-03-15 - code-quality-auditor 스킬은 트리거·감사 절차·산출물 갱신 규칙을 명시한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 `code-quality-auditor` 스킬은 목적과 출력 파일 위치만 간단히 적혀 있어, 다른 Codex가 언제 이 스킬을 써야 하는지와 어떤 순서로 검토/기록해야 하는지가 충분히 드러나지 않는다.
+- `assets/TEMPLATE.md`는 `scaffold_doc.py`가 치환하지 않는 placeholder를 포함해 실제 재사용성이 낮다.
+- `agents/openai.yaml`이 없어 UI 메타데이터와 기본 호출 문구도 제공되지 않는다.
+
+결론
+
+- 스킬 frontmatter description에 트리거 문장을 보강해 "코드 리뷰/리스크 점검/리뷰 문서 갱신" 요청에서 더 안정적으로 선택되게 한다.
+- SKILL 본문에는 감사 전 준비, 기존 리뷰 이력 확인, AI review 작성 규칙, refactor backlog 분리 기준, no-finding 처리, write guardrail을 명시한다.
+- 템플릿/참조 문서는 현재 `.documents/review` 구조와 일치하도록 정리하고, 스캐폴드 스크립트로 실제 사용할 수 있는 형태만 남긴다.
+- `agents/openai.yaml`을 추가해 display name, short description, default prompt를 제공한다.
+
+후속 작업
+
+- 스킬 문서와 리소스를 갱신한다.
+- 가능한 범위에서 스크립트/메타데이터 정합성을 검증한다.
+
+관련 문서/코드
+
+- `.agents/skills/code-quality-auditor/SKILL.md`
+- `.agents/skills/code-quality-auditor/references/*`
+- `.agents/skills/code-quality-auditor/assets/*`
+- `.agents/skills/code-quality-auditor/agents/openai.yaml`
+
+## 2026-03-15 - 댓글 projection과 hidden visibility guard는 service 내부 공통 helper로 수렴한다
+
+상태
+
+- decided
+
+배경
+
+- Round 28 리뷰에서 `parent_uuid` 조립과 hidden board visibility 확인은 동작은 맞지만 service별로 중복된다고 확인됐다.
+- 현재 단계는 외부 계약 변경보다 DB 어댑터 전환 전에 read-side/helper 책임을 정리하는 편이 더 적절하다.
+
+관찰
+
+- `comment list`, `post detail`, 단일 comment 모델화가 모두 `parent_id -> parent_uuid` 해석 규칙을 공유한다.
+- `CommentService`, `ReactionService`, `AttachmentService`, `ReportService`는 각자 board/post 조회 후 `EnsureBoardVisible`을 다시 조합한다.
+
+결론
+
+- `parent_uuid` projection은 `internal/application/service` 내부 전용 helper로 옮겨 comment 관련 read path가 재사용한다.
+- hidden visibility 확인도 service 내부 helper로 묶어 board/post/comment target 확인 흐름을 공통화한다.
+- 이번 정리는 포트/HTTP 계약을 바꾸지 않고 service 내부 중복 제거와 추후 저장소 최적화 진입점 정리에 집중한다.
+
+후속 작업
+
+- helper 단위 테스트를 추가해 visibility/not-found 수렴 규칙을 고정
+- comment list/post detail/comment 단건 모델화가 같은 parent UUID helper를 사용하도록 정리
+- comment/reaction/attachment/report service의 visibility lookup 중복을 helper로 대체
+
+관련 문서/코드
+
+- `internal/application/service/post_detail_query.go`
+- `internal/application/service/commentService.go`
+- `internal/application/service/reactionService.go`
+- `internal/application/service/attachmentService.go`
+- `internal/application/service/reportService.go`
