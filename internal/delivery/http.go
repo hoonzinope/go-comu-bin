@@ -410,9 +410,8 @@ func (h *HTTPHandler) handleReportCreate(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /users/{userUUID}/suspension [get]
 func (h *HTTPHandler) handleUserSuspensionGet(c *gin.Context) {
-	targetUserUUID := strings.TrimSpace(c.Param("userUUID"))
-	if targetUserUUID == "" {
-		badRequest(c, errors.New("invalid user uuid"))
+	targetUserUUID, ok := parsePathUUID(c, "userUUID", "user")
+	if !ok {
 		return
 	}
 	adminID, ok := h.requireAuthUserID(c)
@@ -449,9 +448,8 @@ func (h *HTTPHandler) handleUserSuspensionGet(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /users/{userUUID}/suspension [put]
 func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
-	targetUserUUID := strings.TrimSpace(c.Param("userUUID"))
-	if targetUserUUID == "" {
-		badRequest(c, errors.New("invalid user uuid"))
+	targetUserUUID, ok := parsePathUUID(c, "userUUID", "user")
+	if !ok {
 		return
 	}
 	adminID, ok := h.requireAuthUserID(c)
@@ -491,9 +489,8 @@ func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
 // @Failure 500 {object} errorResponse
 // @Router /users/{userUUID}/suspension [delete]
 func (h *HTTPHandler) handleUserUnsuspend(c *gin.Context) {
-	targetUserUUID := strings.TrimSpace(c.Param("userUUID"))
-	if targetUserUUID == "" {
-		badRequest(c, errors.New("invalid user uuid"))
+	targetUserUUID, ok := parsePathUUID(c, "userUUID", "user")
+	if !ok {
 		return
 	}
 	adminID, ok := h.requireAuthUserID(c)

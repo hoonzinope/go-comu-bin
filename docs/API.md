@@ -31,13 +31,16 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
 - `GET /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자의 현재 제재 상태를 조회합니다.
+  - `userUUID`는 유효한 UUID 형식이어야 하며, 형식 오류는 `400 Bad Request`
   - 응답 필드: `user_uuid`, `status`, `reason`, `suspended_until`
 - `PUT /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자 쓰기 제재를 설정합니다.
+  - `userUUID`는 유효한 UUID 형식이어야 하며, 형식 오류는 `400 Bad Request`
   - 요청 본문: `reason`, `duration`
   - `duration` 허용값: `7d`, `15d`, `30d`, `unlimited`
 - `DELETE /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자 쓰기 제재를 해제합니다.
+  - `userUUID`는 유효한 UUID 형식이어야 하며, 형식 오류는 `400 Bad Request`
 
 ## Report
 
@@ -47,6 +50,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - `target_type` 허용값: `post`, `comment`
   - `reason_code` 허용값: `spam`, `abuse`, `sexual`, `violence`, `illegal`, `other`
   - 동일 사용자는 동일 대상(`target_type`, `target_uuid`)을 한 번만 신고할 수 있습니다. 중복 신고는 `409 Conflict`
+  - hidden 게시판의 대상은 non-admin에게 기존 공개 조회와 동일하게 `not found`로 처리합니다.
 
 ## Admin Operations
 

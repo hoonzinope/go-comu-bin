@@ -722,11 +722,12 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 }
 
 func TestHandleUserSuspend_Success(t *testing.T) {
+	expectedTargetUserUUID := "550e8400-e29b-41d4-a716-446655440007"
 	handler := newTestHandler(
 		&fakeUserUseCase{
 			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
 				assert.Equal(t, int64(1), adminID)
-				assert.Equal(t, "user-uuid-7", targetUserUUID)
+				assert.Equal(t, expectedTargetUserUUID, targetUserUUID)
 				assert.Equal(t, "spam", reason)
 				assert.Equal(t, entity.SuspensionDuration7Days, duration)
 				return nil
@@ -740,7 +741,7 @@ func TestHandleUserSuspend_Success(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/user-uuid-7/suspension", map[string]any{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/"+expectedTargetUserUUID+"/suspension", map[string]any{
 		"reason":   "spam",
 		"duration": "7d",
 	}, 1)
@@ -884,13 +885,14 @@ func TestHandleAdminDeadOutboxRequeue_Success(t *testing.T) {
 
 func TestHandleUserSuspensionGet_Success(t *testing.T) {
 	until := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
+	expectedTargetUserUUID := "550e8400-e29b-41d4-a716-446655440007"
 	handler := newTestHandler(
 		&fakeUserUseCase{
 			getUserSuspension: func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 				assert.Equal(t, int64(1), adminID)
-				assert.Equal(t, "user-uuid-7", targetUserUUID)
+				assert.Equal(t, expectedTargetUserUUID, targetUserUUID)
 				return &model.UserSuspension{
-					UserUUID:       "user-uuid-7",
+					UserUUID:       expectedTargetUserUUID,
 					Status:         entity.UserStatusSuspended,
 					Reason:         "spam",
 					SuspendedUntil: &until,
@@ -905,15 +907,15 @@ func TestHandleUserSuspensionGet_Success(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/user-uuid-7/suspension", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/"+expectedTargetUserUUID+"/suspension", nil, 1)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.JSONEq(t, `{
-		"user_uuid": "user-uuid-7",
-		"status": "suspended",
-		"reason": "spam",
-		"suspended_until": "2026-03-15T10:00:00Z"
-	}`, rr.Body.String())
+		assert.JSONEq(t, `{
+			"user_uuid": "550e8400-e29b-41d4-a716-446655440007",
+			"status": "suspended",
+			"reason": "spam",
+			"suspended_until": "2026-03-15T10:00:00Z"
+		}`, rr.Body.String())
 }
 
 func TestHandleCreateDraftPost_Success(t *testing.T) {
@@ -1429,6 +1431,7 @@ func TestHandleGetAttachmentPreview_NotFound(t *testing.T) {
 }
 
 func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
+	targetUserUUID := "550e8400-e29b-41d4-a716-446655440007"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -1439,7 +1442,7 @@ func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/user-uuid-7/suspension", map[string]any{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/"+targetUserUUID+"/suspension", map[string]any{
 		"reason":   "spam",
 		"duration": "3d",
 	}, 1)
@@ -1448,11 +1451,12 @@ func TestHandleUserSuspend_BadRequestForInvalidDuration(t *testing.T) {
 }
 
 func TestHandleUserUnsuspend_Success(t *testing.T) {
+	expectedTargetUserUUID := "550e8400-e29b-41d4-a716-446655440007"
 	handler := newTestHandler(
 		&fakeUserUseCase{
 			unsuspendUser: func(ctx context.Context, adminID int64, targetUserUUID string) error {
 				assert.Equal(t, int64(1), adminID)
-				assert.Equal(t, "user-uuid-7", targetUserUUID)
+				assert.Equal(t, expectedTargetUserUUID, targetUserUUID)
 				return nil
 			},
 		},
@@ -1464,9 +1468,34 @@ func TestHandleUserUnsuspend_Success(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/user-uuid-7/suspension", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/"+expectedTargetUserUUID+"/suspension", nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHandleUserSuspend_BadRequestForMalformedUserUUID(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{
+			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+				t.Fatal("service should not be called for malformed user uuid")
+				return nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/not-a-uuid/suspension", map[string]any{
+		"reason":   "spam",
+		"duration": "7d",
+	}, 1)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"invalid user uuid"}`, rr.Body.String())
 }
 
 func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
