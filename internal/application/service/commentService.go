@@ -2,14 +2,12 @@ package service
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"strings"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
-	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -136,7 +134,7 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postUUID string,
 	}
 	cacheKey := key.CommentList(post.ID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
+		if err := ensureBoardVisibleForUser(ctx, s.boardRepository, nil, post.BoardID, customerror.ErrBoardNotFound, "comment board visibility"); err != nil {
 			return nil, err
 		}
 
@@ -183,25 +181,17 @@ func (s *CommentService) commentsFromEntities(ctx context.Context, postUUID stri
 	if err != nil {
 		return nil, err
 	}
-	parentUUIDs, err := loadParentCommentUUIDs(ctx, s.commentRepository, comments)
+	parentUUIDs, err := commentParentUUIDsByID(ctx, s.commentRepository, comments)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]model.Comment, 0, len(comments))
 	for _, comment := range comments {
-		authorUUID, ok := authorUUIDs[comment.AuthorID]
-		if !ok {
-			return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
+		commentModel, err := commentModelFromEntity(comment, postUUID, authorUUIDs, parentUUIDs)
+		if err != nil {
+			return nil, err
 		}
-		commentModel := mapper.CommentFromEntity(comment)
-		commentModel.AuthorUUID = authorUUID
-		commentModel.PostUUID = postUUID
-		if comment.ParentID != nil {
-			if parentUUID, ok := parentUUIDs[*comment.ParentID]; ok {
-				commentModel.ParentUUID = &parentUUID
-			}
-		}
-		out = append(out, commentModel)
+		out = append(out, *commentModel)
 	}
 	return out, nil
 }
@@ -298,25 +288,7 @@ func (s *CommentService) DeleteComment(ctx context.Context, commentUUID string, 
 	return nil
 }
 
-func (s *CommentService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
-	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
-	if err != nil {
-		return customerror.WrapRepository("select board by id for comment board visibility", err)
-	}
-	return policy.EnsureBoardVisible(board, user)
-}
-
 func (s *CommentService) ensureBoardVisibleByPostTx(tx port.TxScope, user *entity.User, postID int64) error {
-	post, err := tx.PostRepository().SelectPostByID(tx.Context(), postID)
-	if err != nil {
-		return customerror.WrapRepository("select post by id for comment board visibility", err)
-	}
-	if post == nil {
-		return customerror.ErrPostNotFound
-	}
-	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), post.BoardID)
-	if err != nil {
-		return customerror.WrapRepository("select board by id for comment board visibility", err)
-	}
-	return policy.EnsureBoardVisible(board, user)
+	_, err := ensurePostVisibleForUser(tx.Context(), tx.PostRepository(), tx.BoardRepository(), user, postID, customerror.ErrBoardNotFound, "comment board visibility")
+	return err
 }

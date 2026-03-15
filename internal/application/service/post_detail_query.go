@@ -74,7 +74,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}
 
 	commentDetails := make([]*model.CommentDetail, len(comments))
-	parentUUIDs, err := loadParentCommentUUIDs(ctx, q.commentRepository, comments)
+	parentUUIDs, err := commentParentUUIDsByID(ctx, q.commentRepository, comments)
 	if err != nil {
 		return nil, err
 	}
@@ -158,45 +158,6 @@ func postModelFromEntity(post *entity.Post, boardUUID string, authorUUIDs map[in
 	out.AuthorUUID = authorUUID
 	out.BoardUUID = boardUUID
 	return out, nil
-}
-
-func commentModelFromEntity(comment *entity.Comment, postUUID string, authorUUIDs map[int64]string, parentUUIDs map[int64]string) (*model.Comment, error) {
-	authorUUID, ok := authorUUIDs[comment.AuthorID]
-	if !ok {
-		return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
-	}
-	out := mapper.CommentFromEntity(comment)
-	out.AuthorUUID = authorUUID
-	out.PostUUID = postUUID
-	if comment.ParentID != nil {
-		if parentUUID, ok := parentUUIDs[*comment.ParentID]; ok {
-			out.ParentUUID = &parentUUID
-		}
-	}
-	return &out, nil
-}
-
-func loadParentCommentUUIDs(ctx context.Context, commentRepository port.CommentRepository, comments []*entity.Comment) (map[int64]string, error) {
-	parentIDs := make([]int64, 0, len(comments))
-	seen := make(map[int64]struct{}, len(comments))
-	for _, comment := range comments {
-		if comment.ParentID == nil {
-			continue
-		}
-		if _, ok := seen[*comment.ParentID]; ok {
-			continue
-		}
-		seen[*comment.ParentID] = struct{}{}
-		parentIDs = append(parentIDs, *comment.ParentID)
-	}
-	if len(parentIDs) == 0 {
-		return map[int64]string{}, nil
-	}
-	parentUUIDs, err := commentRepository.SelectCommentUUIDsByIDsIncludingDeleted(ctx, parentIDs)
-	if err != nil {
-		return nil, customerror.WrapRepository("select comment uuids by ids including deleted", err)
-	}
-	return parentUUIDs, nil
 }
 
 func reactionsFromEntitiesWithTargetUUID(reactions []*entity.Reaction, targetUUID string, userUUIDs map[int64]string) ([]model.Reaction, error) {

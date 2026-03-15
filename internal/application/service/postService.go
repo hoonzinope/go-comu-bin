@@ -393,7 +393,7 @@ func (s *PostService) commentFromEntity(ctx context.Context, comment *entity.Com
 	if post == nil {
 		return nil, customerror.ErrPostNotFound
 	}
-	parentUUIDs, err := loadParentCommentUUIDs(ctx, s.commentRepository, []*entity.Comment{comment})
+	parentUUIDs, err := commentParentUUIDsByID(ctx, s.commentRepository, []*entity.Comment{comment})
 	if err != nil {
 		return nil, err
 	}
