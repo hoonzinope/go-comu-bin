@@ -2295,3 +2295,39 @@
 - `internal/application/service/reactionService.go`
 - `internal/application/service/attachmentService.go`
 - `internal/application/service/reportService.go`
+
+## 2026-03-15 - Admin HTTP 권한 확인은 application port로 올리고 delivery의 repository 직접 의존을 제거한다
+
+상태
+
+- decided
+
+배경
+
+- Round 29 리뷰에서 admin HTTP 미들웨어는 보안상 유용하지만, 현재 구현이 repository port를 delivery 레이어까지 끌어올려 아키텍처 문서의 "delivery는 use case만 호출" 원칙과 어긋난다고 확인됐다.
+
+관찰
+
+- `adminRoleMiddleware`는 `UserRepository.SelectUserByID`를 직접 호출해 admin 여부를 판별한다.
+- 실제 권한 판정 규칙은 이미 application 레이어의 `AuthorizationPolicy`와 `UserService`가 알고 있다.
+- `PostService.commentFromEntity`는 현재 사용처가 없는 dead code다.
+
+결론
+
+- admin HTTP 미들웨어는 repository 대신 application port(`AdminAuthorizer`)만 의존한다.
+- `UserService`가 `AdminAuthorizer`를 구현해 delivery 경계의 admin role 확인을 담당한다.
+- 미사용 `PostService.commentFromEntity`는 제거해 comment projection 경로를 공통 helper로 단일화한다.
+
+후속 작업
+
+- middleware/HTTP 테스트를 `AdminAuthorizer` 기준으로 정리한다.
+- composition root와 test wiring에서 `AdminAuthorizer`를 주입한다.
+- 아키텍처 문서에서 admin HTTP 방어도 application port 경계로 설명한다.
+
+관련 문서/코드
+
+- `internal/application/port`
+- `internal/application/service/userService.go`
+- `internal/delivery/middleware/adminRoleMiddleware.go`
+- `internal/delivery/http.go`
+- `internal/application/service/postService.go`
