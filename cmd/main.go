@@ -140,8 +140,8 @@ func main() {
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase, appLogger)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
 		SessionUseCase:           sessionUseCase,
+		AdminAuthorizer:          userUseCase,
 		UserUseCase:              userUseCase,
-		UserRepository:           userRepository,
 		AccountUseCase:           accountUseCase,
 		BoardUseCase:             boardUseCase,
 		PostUseCase:              postUseCase,

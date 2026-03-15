@@ -39,6 +39,7 @@ type fakeUserUseCase struct {
 	suspendUser       func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error
 	unsuspendUser     func(ctx context.Context, adminID int64, targetUserUUID string) error
 	verifyCredential  func(ctx context.Context, username, password string) (int64, error)
+	ensureAdmin       func(ctx context.Context, userID int64) error
 }
 
 func (f *fakeUserUseCase) SignUp(ctx context.Context, username, password string) (string, error) {
@@ -81,6 +82,23 @@ func (f *fakeUserUseCase) VerifyCredentials(ctx context.Context, username, passw
 		return f.verifyCredential(ctx, username, password)
 	}
 	return 1, nil
+}
+
+func (f *fakeUserUseCase) EnsureAdmin(ctx context.Context, userID int64) error {
+	if f.ensureAdmin != nil {
+		return f.ensureAdmin(ctx, userID)
+	}
+	user, err := f.SelectUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return customerror.ErrUserNotFound
+	}
+	if !user.IsAdmin() {
+		return customerror.ErrForbidden
+	}
+	return nil
 }
 
 func (f *fakeUserUseCase) Save(context.Context, *entity.User) (int64, error) {
@@ -467,6 +485,7 @@ var testSessionRepository port.SessionRepository
 
 type authUserPort interface {
 	port.UserUseCase
+	port.AdminAuthorizer
 	port.CredentialVerifier
 	port.UserRepository
 }
@@ -508,8 +527,8 @@ func newTestHandler(
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
+		AdminAuthorizer:    user,
 		UserUseCase:        user,
-		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -539,8 +558,8 @@ func newTestHandlerWithJSONLimit(
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
+		AdminAuthorizer:    user,
 		UserUseCase:        user,
-		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -570,8 +589,8 @@ func newTestHandlerWithDefaultPageLimit(
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
+		AdminAuthorizer:    user,
 		UserUseCase:        user,
-		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -605,8 +624,8 @@ func newTestHandlerWithRateLimit(
 	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:        sessionUseCase,
+		AdminAuthorizer:       user,
 		UserUseCase:           user,
-		UserRepository:        user,
 		AccountUseCase:        account,
 		BoardUseCase:          board,
 		PostUseCase:           post,
@@ -641,8 +660,8 @@ func newTestHandlerWithSanitizer(
 	sanitizer := inputSanitizer.NewInputSanitizer()
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
+		AdminAuthorizer:    user,
 		UserUseCase:        user,
-		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -673,8 +692,8 @@ func newTestHandlerWithAdminUseCases(
 	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
+		AdminAuthorizer:    user,
 		UserUseCase:        user,
-		UserRepository:     user,
 		AccountUseCase:     account,
 		BoardUseCase:       board,
 		PostUseCase:        post,
@@ -910,7 +929,7 @@ func TestHandleUserSuspensionGet_Success(t *testing.T) {
 	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/"+expectedTargetUserUUID+"/suspension", nil, 1)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-		assert.JSONEq(t, `{
+	assert.JSONEq(t, `{
 			"user_uuid": "550e8400-e29b-41d4-a716-446655440007",
 			"status": "suspended",
 			"reason": "spam",
@@ -1169,8 +1188,8 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
 	handler := NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:  sessionUseCase,
+		AdminAuthorizer: user,
 		UserUseCase:     user,
-		UserRepository:  user,
 		AccountUseCase:  &fakeAccountUseCase{},
 		BoardUseCase:    &fakeBoardUseCase{},
 		PostUseCase:     &fakePostUseCase{},
@@ -2116,8 +2135,8 @@ func TestHTTP_NotFound_UsesInjectedLogger(t *testing.T) {
 	logger := &spyLogger{}
 	handler := NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:    sessionUseCase,
+		AdminAuthorizer:   user,
 		UserUseCase:       user,
-		UserRepository:    user,
 		AccountUseCase:    &fakeAccountUseCase{},
 		BoardUseCase:      &fakeBoardUseCase{},
 		PostUseCase:       &fakePostUseCase{},

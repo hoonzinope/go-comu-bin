@@ -15,6 +15,7 @@ import (
 
 var _ port.UserUseCase = (*UserService)(nil)
 var _ port.CredentialVerifier = (*UserService)(nil)
+var _ port.AdminAuthorizer = (*UserService)(nil)
 
 type UserService struct {
 	userRepository      port.UserRepository
@@ -117,6 +118,17 @@ func (s *UserService) VerifyCredentials(ctx context.Context, username, password 
 		return 0, customerror.ErrInvalidCredential
 	}
 	return existingUser.ID, nil
+}
+
+func (s *UserService) EnsureAdmin(ctx context.Context, userID int64) error {
+	user, err := s.userRepository.SelectUserByID(ctx, userID)
+	if err != nil {
+		return customerror.WrapRepository("select user by id for ensure admin", err)
+	}
+	if user == nil {
+		return customerror.ErrUserNotFound
+	}
+	return s.authorizationPolicy.AdminOnly(user)
 }
 
 func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {

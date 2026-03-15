@@ -35,8 +35,8 @@ const httpLoggerContextKey = "http_logger"
 
 type HTTPHandler struct {
 	sessionUseCase           port.SessionUseCase
+	adminAuthorizer          port.AdminAuthorizer
 	userUseCase              port.UserUseCase
-	userRepository           port.UserRepository
 	accountUseCase           port.AccountUseCase
 	boardUseCase             port.BoardUseCase
 	postUseCase              port.PostUseCase
@@ -61,8 +61,8 @@ type HTTPHandler struct {
 
 type HTTPDependencies struct {
 	SessionUseCase           port.SessionUseCase
+	AdminAuthorizer          port.AdminAuthorizer
 	UserUseCase              port.UserUseCase
-	UserRepository           port.UserRepository
 	AccountUseCase           port.AccountUseCase
 	BoardUseCase             port.BoardUseCase
 	PostUseCase              port.PostUseCase
@@ -90,8 +90,8 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 	}
 	handler := &HTTPHandler{
 		sessionUseCase:           deps.SessionUseCase,
+		adminAuthorizer:          deps.AdminAuthorizer,
 		userUseCase:              deps.UserUseCase,
-		userRepository:           deps.UserRepository,
 		accountUseCase:           deps.AccountUseCase,
 		boardUseCase:             deps.BoardUseCase,
 		postUseCase:              deps.PostUseCase,
@@ -114,7 +114,7 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
 		writeHTTPError(handler.logger, c, status, err)
 	})
-	handler.adminGinMiddleware = middleware.AdminOnly(deps.UserRepository, func(c *gin.Context, status int, err error) {
+	handler.adminGinMiddleware = middleware.AdminOnly(deps.AdminAuthorizer, func(c *gin.Context, status int, err error) {
 		writeHTTPError(handler.logger, c, status, err)
 	})
 	return handler

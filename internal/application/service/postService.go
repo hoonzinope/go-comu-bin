@@ -381,25 +381,6 @@ func (s *PostService) postFromEntity(ctx context.Context, post *entity.Post) (*m
 	return &postModel, nil
 }
 
-func (s *PostService) commentFromEntity(ctx context.Context, comment *entity.Comment) (*model.Comment, error) {
-	authorUUIDs, err := userUUIDsByIDs(ctx, s.userRepository, []int64{comment.AuthorID})
-	if err != nil {
-		return nil, err
-	}
-	post, err := s.postRepository.SelectPostByIDIncludingUnpublished(ctx, comment.PostID)
-	if err != nil {
-		return nil, customerror.WrapRepository("select post by id for comment model", err)
-	}
-	if post == nil {
-		return nil, customerror.ErrPostNotFound
-	}
-	parentUUIDs, err := commentParentUUIDsByID(ctx, s.commentRepository, []*entity.Comment{comment})
-	if err != nil {
-		return nil, err
-	}
-	return commentModelFromEntity(comment, post.UUID, authorUUIDs, parentUUIDs)
-}
-
 func (s *PostService) reactionsFromEntities(ctx context.Context, reactions []*entity.Reaction) ([]model.Reaction, error) {
 	userUUIDs, err := userUUIDsForReactions(ctx, s.userRepository, reactions)
 	if err != nil {

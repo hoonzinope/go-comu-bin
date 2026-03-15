@@ -8,33 +8,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type stubUserRepository struct {
-	selectByID func(ctx context.Context, id int64) (*entity.User, error)
+type stubAdminAuthorizer struct {
+	ensureAdmin func(ctx context.Context, userID int64) error
 }
 
-func (s stubUserRepository) Save(context.Context, *entity.User) (int64, error) { return 0, nil }
-func (s stubUserRepository) SelectUserByUsername(context.Context, string) (*entity.User, error) {
-	return nil, nil
+func (s stubAdminAuthorizer) EnsureAdmin(ctx context.Context, userID int64) error {
+	return s.ensureAdmin(ctx, userID)
 }
-func (s stubUserRepository) SelectUserByUUID(context.Context, string) (*entity.User, error) {
-	return nil, nil
-}
-func (s stubUserRepository) SelectUserByID(ctx context.Context, id int64) (*entity.User, error) {
-	return s.selectByID(ctx, id)
-}
-func (s stubUserRepository) SelectUserByIDIncludingDeleted(context.Context, int64) (*entity.User, error) {
-	return nil, nil
-}
-func (s stubUserRepository) SelectUsersByIDsIncludingDeleted(context.Context, []int64) (map[int64]*entity.User, error) {
-	return nil, nil
-}
-func (s stubUserRepository) Update(context.Context, *entity.User) error { return nil }
-func (s stubUserRepository) Delete(context.Context, int64) error        { return nil }
 
 func TestAdminOnly_RejectsNonAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -43,9 +27,10 @@ func TestAdminOnly_RejectsNonAdmin(t *testing.T) {
 		c.Set("user_id", int64(2))
 		c.Next()
 	})
-	r.Use(AdminOnly(stubUserRepository{
-		selectByID: func(ctx context.Context, id int64) (*entity.User, error) {
-			return entity.NewUser("user", "pw"), nil
+	r.Use(AdminOnly(stubAdminAuthorizer{
+		ensureAdmin: func(ctx context.Context, userID int64) error {
+			assert.Equal(t, int64(2), userID)
+			return customerror.ErrForbidden
 		},
 	}, func(c *gin.Context, status int, err error) {
 		c.AbortWithStatusJSON(status, gin.H{"error": customerror.Public(err).Error()})
@@ -67,9 +52,10 @@ func TestAdminOnly_AllowsAdmin(t *testing.T) {
 		c.Set("user_id", int64(1))
 		c.Next()
 	})
-	r.Use(AdminOnly(stubUserRepository{
-		selectByID: func(ctx context.Context, id int64) (*entity.User, error) {
-			return entity.NewAdmin("admin", "pw"), nil
+	r.Use(AdminOnly(stubAdminAuthorizer{
+		ensureAdmin: func(ctx context.Context, userID int64) error {
+			assert.Equal(t, int64(1), userID)
+			return nil
 		},
 	}, func(c *gin.Context, status int, err error) {
 		c.AbortWithStatus(status)

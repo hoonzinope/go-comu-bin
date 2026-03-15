@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,10 +9,10 @@ import (
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
-func AdminOnly(userRepository port.UserRepository, writeError func(*gin.Context, int, error)) gin.HandlerFunc {
+func AdminOnly(adminAuthorizer port.AdminAuthorizer, writeError func(*gin.Context, int, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if userRepository == nil {
-			writeError(c, http.StatusInternalServerError, customerror.Mark(customerror.ErrInternalServerError, "missing user repository"))
+		if adminAuthorizer == nil {
+			writeError(c, http.StatusInternalServerError, customerror.Mark(customerror.ErrInternalServerError, "missing admin authorizer"))
 			return
 		}
 		userID, ok := UserID(c)
@@ -19,13 +20,12 @@ func AdminOnly(userRepository port.UserRepository, writeError func(*gin.Context,
 			writeError(c, http.StatusUnauthorized, customerror.ErrUnauthorized)
 			return
 		}
-		user, err := userRepository.SelectUserByID(c.Request.Context(), userID)
-		if err != nil {
-			writeError(c, http.StatusInternalServerError, customerror.WrapRepository("select user by id for admin middleware", err))
-			return
-		}
-		if user == nil || !user.IsAdmin() {
-			writeError(c, http.StatusForbidden, customerror.ErrForbidden)
+		if err := adminAuthorizer.EnsureAdmin(c.Request.Context(), userID); err != nil {
+			if errors.Is(err, customerror.ErrForbidden) || errors.Is(err, customerror.ErrUnauthorized) || errors.Is(err, customerror.ErrUserNotFound) {
+				writeError(c, http.StatusForbidden, err)
+				return
+			}
+			writeError(c, http.StatusInternalServerError, err)
 			return
 		}
 		c.Next()
