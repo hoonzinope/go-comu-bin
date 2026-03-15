@@ -68,12 +68,31 @@ func (r *CommentRepository) SelectCommentByID(ctx context.Context, id int64) (*e
 	return r.selectCommentByID(id)
 }
 
+func (r *CommentRepository) SelectCommentByUUID(ctx context.Context, commentUUID string) (*entity.Comment, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectCommentByUUID(commentUUID)
+}
+
 func (r *CommentRepository) selectCommentByID(id int64) (*entity.Comment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	if comment, exists := r.commentDB.Data[id]; exists && comment.Status == entity.CommentStatusActive {
 		return cloneComment(comment), nil
+	}
+	return nil, nil
+}
+
+func (r *CommentRepository) selectCommentByUUID(commentUUID string) (*entity.Comment, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, comment := range r.commentDB.Data {
+		if comment.UUID == commentUUID {
+			return cloneComment(comment), nil
+		}
 	}
 	return nil, nil
 }

@@ -28,7 +28,7 @@ func TestReportService_CreateReport_Success(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
 
-	reportID, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postID, entity.ReportReasonSpam, "spam")
+	reportID, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, mustPostUUID(t, repositories.post, postID), entity.ReportReasonSpam, "spam")
 	require.NoError(t, err)
 	assert.NotZero(t, reportID)
 }
@@ -49,10 +49,10 @@ func TestReportService_CreateReport_RejectsDuplicate(t *testing.T) {
 	authorID := seedUser(repositories.user, "author", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
-	_, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postID, entity.ReportReasonSpam, "spam")
+	_, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, mustPostUUID(t, repositories.post, postID), entity.ReportReasonSpam, "spam")
 	require.NoError(t, err)
 
-	_, err = svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postID, entity.ReportReasonAbuse, "again")
+	_, err = svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, mustPostUUID(t, repositories.post, postID), entity.ReportReasonAbuse, "again")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrReportAlreadyExists))
 }
@@ -95,9 +95,9 @@ func TestReportService_GetReports_PendingFirst(t *testing.T) {
 	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
 	commentID := seedComment(repositories.comment, authorID, postID, "reply")
 
-	firstID, err := svc.CreateReport(context.Background(), reporter1, entity.ReportTargetPost, postID, entity.ReportReasonSpam, "first")
+	firstID, err := svc.CreateReport(context.Background(), reporter1, entity.ReportTargetPost, mustPostUUID(t, repositories.post, postID), entity.ReportReasonSpam, "first")
 	require.NoError(t, err)
-	secondID, err := svc.CreateReport(context.Background(), reporter2, entity.ReportTargetComment, commentID, entity.ReportReasonAbuse, "second")
+	secondID, err := svc.CreateReport(context.Background(), reporter2, entity.ReportTargetComment, mustCommentUUID(t, repositories.comment, commentID), entity.ReportReasonAbuse, "second")
 	require.NoError(t, err)
 	require.NoError(t, svc.ResolveReport(context.Background(), adminID, firstID, entity.ReportStatusAccepted, "ok"))
 
@@ -126,7 +126,7 @@ func TestReportService_ResolveReport_Success(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
 
-	reportID, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postID, entity.ReportReasonSpam, "detail")
+	reportID, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, mustPostUUID(t, repositories.post, postID), entity.ReportReasonSpam, "detail")
 	require.NoError(t, err)
 	require.NoError(t, svc.ResolveReport(context.Background(), adminID, reportID, entity.ReportStatusRejected, "no"))
 
@@ -155,7 +155,7 @@ func TestReportService_ResolveReport_RejectsAlreadyResolved(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
 
-	reportID, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postID, entity.ReportReasonSpam, "detail")
+	reportID, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, mustPostUUID(t, repositories.post, postID), entity.ReportReasonSpam, "detail")
 	require.NoError(t, err)
 	require.NoError(t, svc.ResolveReport(context.Background(), adminID, reportID, entity.ReportStatusAccepted, "ok"))
 

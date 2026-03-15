@@ -145,13 +145,13 @@ func TestSwaggerContracts_ResponseSchemasMatchHandlers(t *testing.T) {
 
 	assert.Equal(
 		t,
-		"#/definitions/delivery.idResponse",
+		"#/definitions/delivery.uuidResponse",
 		swaggerResponseSchemaRef(t, paths, "/boards", "post", "201"),
 	)
 	assert.Equal(
 		t,
 		"#/definitions/delivery.attachmentUploadResponse",
-		swaggerResponseSchemaRef(t, paths, "/posts/{postID}/attachments/upload", "post", "201"),
+		swaggerResponseSchemaRef(t, paths, "/posts/{postUUID}/attachments/upload", "post", "201"),
 	)
 }
 
@@ -208,57 +208,57 @@ func (h *spyHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *spyHandler) WithGroup(string) slog.Handler { return h }
 
 type fakeBoardUseCase struct {
-	getBoards          func(ctx context.Context, limit int, lastID int64) (*model.BoardList, error)
-	createBoard        func(ctx context.Context, userID int64, name, description string) (int64, error)
-	updateBoard        func(ctx context.Context, id, userID int64, name, description string) error
-	deleteBoard        func(ctx context.Context, id, userID int64) error
-	setBoardVisibility func(ctx context.Context, id, userID int64, hidden bool) error
+	getBoards          func(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	createBoard        func(ctx context.Context, userID int64, name, description string) (string, error)
+	updateBoard        func(ctx context.Context, boardUUID string, userID int64, name, description string) error
+	deleteBoard        func(ctx context.Context, boardUUID string, userID int64) error
+	setBoardVisibility func(ctx context.Context, boardUUID string, userID int64, hidden bool) error
 }
 
-func (f *fakeBoardUseCase) GetBoards(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
+func (f *fakeBoardUseCase) GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
 	if f.getBoards != nil {
-		return f.getBoards(ctx, limit, lastID)
+		return f.getBoards(ctx, limit, cursor)
 	}
 	return &model.BoardList{}, nil
 }
 
-func (f *fakeBoardUseCase) CreateBoard(ctx context.Context, userID int64, name, description string) (int64, error) {
+func (f *fakeBoardUseCase) CreateBoard(ctx context.Context, userID int64, name, description string) (string, error) {
 	if f.createBoard != nil {
 		return f.createBoard(ctx, userID, name, description)
 	}
-	return 1, nil
+	return "board-uuid-1", nil
 }
 
-func (f *fakeBoardUseCase) UpdateBoard(ctx context.Context, id, userID int64, name, description string) error {
+func (f *fakeBoardUseCase) UpdateBoard(ctx context.Context, boardUUID string, userID int64, name, description string) error {
 	if f.updateBoard != nil {
-		return f.updateBoard(ctx, id, userID, name, description)
+		return f.updateBoard(ctx, boardUUID, userID, name, description)
 	}
 	return nil
 }
 
-func (f *fakeBoardUseCase) DeleteBoard(ctx context.Context, id, userID int64) error {
+func (f *fakeBoardUseCase) DeleteBoard(ctx context.Context, boardUUID string, userID int64) error {
 	if f.deleteBoard != nil {
-		return f.deleteBoard(ctx, id, userID)
+		return f.deleteBoard(ctx, boardUUID, userID)
 	}
 	return nil
 }
 
-func (f *fakeBoardUseCase) SetBoardVisibility(ctx context.Context, id, userID int64, hidden bool) error {
+func (f *fakeBoardUseCase) SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error {
 	if f.setBoardVisibility != nil {
-		return f.setBoardVisibility(ctx, id, userID, hidden)
+		return f.setBoardVisibility(ctx, boardUUID, userID, hidden)
 	}
 	return nil
 }
 
 type fakeReportUseCase struct {
-	createReport  func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error)
+	createReport  func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUID string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error)
 	getReports    func(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error)
 	resolveReport func(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error
 }
 
-func (f *fakeReportUseCase) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+func (f *fakeReportUseCase) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUID string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
 	if f.createReport != nil {
-		return f.createReport(ctx, reporterUserID, targetType, targetID, reasonCode, reasonDetail)
+		return f.createReport(ctx, reporterUserID, targetType, targetUUID, reasonCode, reasonDetail)
 	}
 	return 1, nil
 }
@@ -305,162 +305,162 @@ func (f *fakeOutboxAdminUseCase) DiscardDeadMessage(ctx context.Context, adminID
 }
 
 type fakePostUseCase struct {
-	createPost      func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error)
-	createDraftPost func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error)
-	getPostsList    func(ctx context.Context, boardID int64, limit int, lastID int64) (*model.PostList, error)
-	getPostsByTag   func(ctx context.Context, tagName string, limit int, lastID int64) (*model.PostList, error)
-	getPostDetail   func(ctx context.Context, postID int64) (*model.PostDetail, error)
-	publishPost     func(ctx context.Context, id, authorID int64) error
-	updatePost      func(ctx context.Context, id, authorID int64, title, content string, tags []string) error
-	deletePost      func(ctx context.Context, id, authorID int64) error
+	createPost      func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
+	createDraftPost func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
+	getPostsList    func(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error)
+	getPostsByTag   func(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error)
+	getPostDetail   func(ctx context.Context, postUUID string) (*model.PostDetail, error)
+	publishPost     func(ctx context.Context, postUUID string, authorID int64) error
+	updatePost      func(ctx context.Context, postUUID string, authorID int64, title, content string, tags []string) error
+	deletePost      func(ctx context.Context, postUUID string, authorID int64) error
 }
 
-func (f *fakePostUseCase) CreatePost(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+func (f *fakePostUseCase) CreatePost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
 	if f.createPost != nil {
-		return f.createPost(ctx, title, content, tags, authorID, boardID)
+		return f.createPost(ctx, title, content, tags, authorID, boardUUID)
 	}
-	return 1, nil
+	return "post-uuid-1", nil
 }
 
-func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
 	if f.createDraftPost != nil {
-		return f.createDraftPost(ctx, title, content, tags, authorID, boardID)
+		return f.createDraftPost(ctx, title, content, tags, authorID, boardUUID)
 	}
-	return 1, nil
+	return "post-uuid-1", nil
 }
 
-func (f *fakePostUseCase) GetPostsList(ctx context.Context, boardID int64, limit int, lastID int64) (*model.PostList, error) {
+func (f *fakePostUseCase) GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error) {
 	if f.getPostsList != nil {
-		return f.getPostsList(ctx, boardID, limit, lastID)
+		return f.getPostsList(ctx, boardUUID, limit, cursor)
 	}
 	return &model.PostList{}, nil
 }
 
-func (f *fakePostUseCase) GetPostsByTag(ctx context.Context, tagName string, limit int, lastID int64) (*model.PostList, error) {
+func (f *fakePostUseCase) GetPostsByTag(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error) {
 	if f.getPostsByTag != nil {
-		return f.getPostsByTag(ctx, tagName, limit, lastID)
+		return f.getPostsByTag(ctx, tagName, limit, cursor)
 	}
 	return &model.PostList{}, nil
 }
 
-func (f *fakePostUseCase) GetPostDetail(ctx context.Context, postID int64) (*model.PostDetail, error) {
+func (f *fakePostUseCase) GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 	if f.getPostDetail != nil {
-		return f.getPostDetail(ctx, postID)
+		return f.getPostDetail(ctx, postUUID)
 	}
 	return &model.PostDetail{}, nil
 }
 
-func (f *fakePostUseCase) PublishPost(ctx context.Context, id, authorID int64) error {
+func (f *fakePostUseCase) PublishPost(ctx context.Context, postUUID string, authorID int64) error {
 	if f.publishPost != nil {
-		return f.publishPost(ctx, id, authorID)
+		return f.publishPost(ctx, postUUID, authorID)
 	}
 	return nil
 }
 
-func (f *fakePostUseCase) UpdatePost(ctx context.Context, id, authorID int64, title, content string, tags []string) error {
+func (f *fakePostUseCase) UpdatePost(ctx context.Context, postUUID string, authorID int64, title, content string, tags []string) error {
 	if f.updatePost != nil {
-		return f.updatePost(ctx, id, authorID, title, content, tags)
+		return f.updatePost(ctx, postUUID, authorID, title, content, tags)
 	}
 	return nil
 }
 
-func (f *fakePostUseCase) DeletePost(ctx context.Context, id, authorID int64) error {
+func (f *fakePostUseCase) DeletePost(ctx context.Context, postUUID string, authorID int64) error {
 	if f.deletePost != nil {
-		return f.deletePost(ctx, id, authorID)
+		return f.deletePost(ctx, postUUID, authorID)
 	}
 	return nil
 }
 
 type fakeCommentUseCase struct {
-	createComment     func(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error)
-	getCommentsByPost func(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error)
-	updateComment     func(ctx context.Context, id, authorID int64, content string) error
-	deleteComment     func(ctx context.Context, id, authorID int64) error
+	createComment     func(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error)
+	getCommentsByPost func(ctx context.Context, postUUID string, limit int, cursor string) (*model.CommentList, error)
+	updateComment     func(ctx context.Context, commentUUID string, authorID int64, content string) error
+	deleteComment     func(ctx context.Context, commentUUID string, authorID int64) error
 }
 
-func (f *fakeCommentUseCase) CreateComment(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
+func (f *fakeCommentUseCase) CreateComment(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error) {
 	if f.createComment != nil {
-		return f.createComment(ctx, content, authorID, postID, parentID)
+		return f.createComment(ctx, content, authorID, postUUID, parentUUID)
 	}
-	return 1, nil
+	return "comment-uuid-1", nil
 }
 
-func (f *fakeCommentUseCase) GetCommentsByPost(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error) {
+func (f *fakeCommentUseCase) GetCommentsByPost(ctx context.Context, postUUID string, limit int, cursor string) (*model.CommentList, error) {
 	if f.getCommentsByPost != nil {
-		return f.getCommentsByPost(ctx, postID, limit, lastID)
+		return f.getCommentsByPost(ctx, postUUID, limit, cursor)
 	}
 	return &model.CommentList{}, nil
 }
 
-func (f *fakeCommentUseCase) UpdateComment(ctx context.Context, id, authorID int64, content string) error {
+func (f *fakeCommentUseCase) UpdateComment(ctx context.Context, commentUUID string, authorID int64, content string) error {
 	if f.updateComment != nil {
-		return f.updateComment(ctx, id, authorID, content)
+		return f.updateComment(ctx, commentUUID, authorID, content)
 	}
 	return nil
 }
 
-func (f *fakeCommentUseCase) DeleteComment(ctx context.Context, id, authorID int64) error {
+func (f *fakeCommentUseCase) DeleteComment(ctx context.Context, commentUUID string, authorID int64) error {
 	if f.deleteComment != nil {
-		return f.deleteComment(ctx, id, authorID)
+		return f.deleteComment(ctx, commentUUID, authorID)
 	}
 	return nil
 }
 
 type fakeReactionUseCase struct {
-	setReaction          func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
-	deleteReaction       func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) error
-	getReactionsByTarget func(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
+	setReaction          func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
+	deleteReaction       func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error
+	getReactionsByTarget func(ctx context.Context, targetUUID string, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }
 
 type fakeAttachmentUseCase struct {
-	createPostAttachment         func(ctx context.Context, postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error)
-	getPostAttachments           func(ctx context.Context, postID int64) ([]model.Attachment, error)
-	getPostAttachmentFile        func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error)
-	getPostAttachmentPreviewFile func(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error)
-	deletePostAttachment         func(ctx context.Context, postID, attachmentID, userID int64) error
-	uploadPostAttachment         func(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
+	createPostAttachment         func(ctx context.Context, postUUID string, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (string, error)
+	getPostAttachments           func(ctx context.Context, postUUID string) ([]model.Attachment, error)
+	getPostAttachmentFile        func(ctx context.Context, postUUID, attachmentUUID string) (*model.AttachmentFile, error)
+	getPostAttachmentPreviewFile func(ctx context.Context, postUUID, attachmentUUID string, userID int64) (*model.AttachmentFile, error)
+	deletePostAttachment         func(ctx context.Context, postUUID, attachmentUUID string, userID int64) error
+	uploadPostAttachment         func(ctx context.Context, postUUID string, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error)
 }
 
-func (f *fakeAttachmentUseCase) CreatePostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (int64, error) {
+func (f *fakeAttachmentUseCase) CreatePostAttachment(ctx context.Context, postUUID string, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (string, error) {
 	if f.createPostAttachment != nil {
-		return f.createPostAttachment(ctx, postID, userID, fileName, contentType, sizeBytes, storageKey)
+		return f.createPostAttachment(ctx, postUUID, userID, fileName, contentType, sizeBytes, storageKey)
 	}
-	return 1, nil
+	return "attachment-uuid-1", nil
 }
 
-func (f *fakeAttachmentUseCase) GetPostAttachments(ctx context.Context, postID int64) ([]model.Attachment, error) {
+func (f *fakeAttachmentUseCase) GetPostAttachments(ctx context.Context, postUUID string) ([]model.Attachment, error) {
 	if f.getPostAttachments != nil {
-		return f.getPostAttachments(ctx, postID)
+		return f.getPostAttachments(ctx, postUUID)
 	}
 	return []model.Attachment{}, nil
 }
 
-func (f *fakeAttachmentUseCase) GetPostAttachmentFile(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
+func (f *fakeAttachmentUseCase) GetPostAttachmentFile(ctx context.Context, postUUID, attachmentUUID string) (*model.AttachmentFile, error) {
 	if f.getPostAttachmentFile != nil {
-		return f.getPostAttachmentFile(ctx, postID, attachmentID)
+		return f.getPostAttachmentFile(ctx, postUUID, attachmentUUID)
 	}
 	return nil, customerror.ErrAttachmentNotFound
 }
 
-func (f *fakeAttachmentUseCase) GetPostAttachmentPreviewFile(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+func (f *fakeAttachmentUseCase) GetPostAttachmentPreviewFile(ctx context.Context, postUUID, attachmentUUID string, userID int64) (*model.AttachmentFile, error) {
 	if f.getPostAttachmentPreviewFile != nil {
-		return f.getPostAttachmentPreviewFile(ctx, postID, attachmentID, userID)
+		return f.getPostAttachmentPreviewFile(ctx, postUUID, attachmentUUID, userID)
 	}
 	return nil, customerror.ErrAttachmentNotFound
 }
 
-func (f *fakeAttachmentUseCase) DeletePostAttachment(ctx context.Context, postID, attachmentID, userID int64) error {
+func (f *fakeAttachmentUseCase) DeletePostAttachment(ctx context.Context, postUUID, attachmentUUID string, userID int64) error {
 	if f.deletePostAttachment != nil {
-		return f.deletePostAttachment(ctx, postID, attachmentID, userID)
+		return f.deletePostAttachment(ctx, postUUID, attachmentUUID, userID)
 	}
 	return nil
 }
 
-func (f *fakeAttachmentUseCase) UploadPostAttachment(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+func (f *fakeAttachmentUseCase) UploadPostAttachment(ctx context.Context, postUUID string, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 	if f.uploadPostAttachment != nil {
-		return f.uploadPostAttachment(ctx, postID, userID, fileName, contentType, content)
+		return f.uploadPostAttachment(ctx, postUUID, userID, fileName, contentType, content)
 	}
-	return &model.AttachmentUpload{ID: 1, EmbedMarkdown: "![a.png](attachment://1)"}, nil
+	return &model.AttachmentUpload{UUID: "attachment-uuid-1", EmbedMarkdown: "![a.png](attachment://attachment-uuid-1)"}, nil
 }
 
 var testSessionRepository port.SessionRepository
@@ -471,23 +471,23 @@ type authUserPort interface {
 	port.UserRepository
 }
 
-func (f *fakeReactionUseCase) SetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+func (f *fakeReactionUseCase) SetReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
 	if f.setReaction != nil {
-		return f.setReaction(ctx, userID, targetID, targetType, reactionType)
+		return f.setReaction(ctx, userID, targetUUID, targetType, reactionType)
 	}
 	return false, nil
 }
 
-func (f *fakeReactionUseCase) DeleteReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) error {
+func (f *fakeReactionUseCase) DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error {
 	if f.deleteReaction != nil {
-		return f.deleteReaction(ctx, userID, targetID, targetType)
+		return f.deleteReaction(ctx, userID, targetUUID, targetType)
 	}
 	return nil
 }
 
-func (f *fakeReactionUseCase) GetReactionsByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
+func (f *fakeReactionUseCase) GetReactionsByTarget(ctx context.Context, targetUUID string, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
 	if f.getReactionsByTarget != nil {
-		return f.getReactionsByTarget(ctx, targetID, targetType)
+		return f.getReactionsByTarget(ctx, targetUUID, targetType)
 	}
 	return []model.Reaction{}, nil
 }
@@ -749,6 +749,7 @@ func TestHandleUserSuspend_Success(t *testing.T) {
 }
 
 func TestHandleReportCreate_Success(t *testing.T) {
+	targetUUID := "550e8400-e29b-41d4-a716-446655440003"
 	handler := newTestHandlerWithAdminUseCases(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -758,10 +759,10 @@ func TestHandleReportCreate_Success(t *testing.T) {
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{},
 		&fakeReportUseCase{
-			createReport: func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+			createReport: func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUIDArg string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
 				assert.Equal(t, int64(1), reporterUserID)
 				assert.Equal(t, entity.ReportTargetPost, targetType)
-				assert.Equal(t, int64(3), targetID)
+				assert.Equal(t, targetUUID, targetUUIDArg)
 				assert.Equal(t, entity.ReportReasonSpam, reasonCode)
 				assert.Equal(t, "detail", reasonDetail)
 				return 77, nil
@@ -772,7 +773,7 @@ func TestHandleReportCreate_Success(t *testing.T) {
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/reports", map[string]any{
 		"target_type":   "post",
-		"target_id":     3,
+		"target_uuid":   targetUUID,
 		"reason_code":   "spam",
 		"reason_detail": "detail",
 	}, 1)
@@ -782,12 +783,13 @@ func TestHandleReportCreate_Success(t *testing.T) {
 }
 
 func TestHandleAdminBoardVisibilityPut_Success(t *testing.T) {
+	boardUUID := "550e8400-e29b-41d4-a716-446655440008"
 	handler := newTestHandlerWithAdminUseCases(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{
-			setBoardVisibility: func(ctx context.Context, id, userID int64, hidden bool) error {
-				assert.Equal(t, int64(8), id)
+			setBoardVisibility: func(ctx context.Context, boardUUIDArg string, userID int64, hidden bool) error {
+				assert.Equal(t, boardUUID, boardUUIDArg)
 				assert.Equal(t, int64(1), userID)
 				assert.True(t, hidden)
 				return nil
@@ -801,16 +803,17 @@ func TestHandleAdminBoardVisibilityPut_Success(t *testing.T) {
 		&fakeOutboxAdminUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/admin/boards/8/visibility", map[string]any{"hidden": true}, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/admin/boards/"+boardUUID+"/visibility", map[string]any{"hidden": true}, 1)
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHandleAdminBoardVisibilityPut_ForbiddenForNonAdminAtHTTPBoundary(t *testing.T) {
+	boardUUID := "550e8400-e29b-41d4-a716-446655440008"
 	handler := newTestHandlerWithAdminUseCases(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{
-			setBoardVisibility: func(ctx context.Context, id, userID int64, hidden bool) error {
+			setBoardVisibility: func(ctx context.Context, boardUUIDArg string, userID int64, hidden bool) error {
 				t.Fatal("service should not be called for non-admin at HTTP boundary")
 				return nil
 			},
@@ -823,7 +826,7 @@ func TestHandleAdminBoardVisibilityPut_ForbiddenForNonAdminAtHTTPBoundary(t *tes
 		&fakeOutboxAdminUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/admin/boards/8/visibility", map[string]any{"hidden": true}, 2)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/admin/boards/"+boardUUID+"/visibility", map[string]any{"hidden": true}, 2)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.JSONEq(t, `{"error":"forbidden"}`, rr.Body.String())
 }
@@ -886,18 +889,19 @@ func TestHandleUserSuspensionGet_Success(t *testing.T) {
 }
 
 func TestHandleCreateDraftPost_Success(t *testing.T) {
+	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			createDraftPost: func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+			createDraftPost: func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUIDArg string) (string, error) {
 				assert.Equal(t, "draft", title)
 				assert.Equal(t, "content", content)
 				assert.Nil(t, tags)
 				assert.Equal(t, int64(1), authorID)
-				assert.Equal(t, int64(3), boardID)
-				return 9, nil
+				assert.Equal(t, boardUUID, boardUUIDArg)
+				return "550e8400-e29b-41d4-a716-446655440009", nil
 			},
 		},
 		&fakeCommentUseCase{},
@@ -905,28 +909,29 @@ func TestHandleCreateDraftPost_Success(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/3/posts/drafts", map[string]string{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/"+boardUUID+"/posts/drafts", map[string]string{
 		"title":   "draft",
 		"content": "content",
 	}, 1)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
-	assert.JSONEq(t, `{"id":9}`, rr.Body.String())
+	assert.JSONEq(t, `{"uuid":"550e8400-e29b-41d4-a716-446655440009"}`, rr.Body.String())
 }
 
 func TestHandleCreatePost_PassesTags(t *testing.T) {
+	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			createPost: func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+			createPost: func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUIDArg string) (string, error) {
 				assert.Equal(t, "hello", title)
 				assert.Equal(t, "body", content)
 				assert.Equal(t, []string{"go", "backend"}, tags)
 				assert.Equal(t, int64(1), authorID)
-				assert.Equal(t, int64(3), boardID)
-				return 11, nil
+				assert.Equal(t, boardUUID, boardUUIDArg)
+				return "550e8400-e29b-41d4-a716-446655440011", nil
 			},
 		},
 		&fakeCommentUseCase{},
@@ -934,24 +939,25 @@ func TestHandleCreatePost_PassesTags(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/3/posts", map[string]any{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/"+boardUUID+"/posts", map[string]any{
 		"title":   "hello",
 		"content": "body",
 		"tags":    []string{"go", "backend"},
 	}, 1)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
-	assert.JSONEq(t, `{"id":11}`, rr.Body.String())
+	assert.JSONEq(t, `{"uuid":"550e8400-e29b-41d4-a716-446655440011"}`, rr.Body.String())
 }
 
 func TestHandlePublishPost_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440005"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			publishPost: func(ctx context.Context, id, authorID int64) error {
-				assert.Equal(t, int64(5), id)
+			publishPost: func(ctx context.Context, postUUIDArg string, authorID int64) error {
+				assert.Equal(t, postUUID, postUUIDArg)
 				assert.Equal(t, int64(1), authorID)
 				return nil
 			},
@@ -961,41 +967,45 @@ func TestHandlePublishPost_Success(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/5/publish", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/"+postUUID+"/publish", nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
-func TestHandleCreateComment_WithParentID_Success(t *testing.T) {
+func TestHandleCreateComment_WithParentUUID_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	parentUUID := "550e8400-e29b-41d4-a716-446655440009"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{},
 		&fakeCommentUseCase{
-			createComment: func(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
+			createComment: func(ctx context.Context, content string, authorID int64, postUUIDArg string, parentUUIDArg *string) (string, error) {
 				assert.Equal(t, "reply", content)
 				assert.Equal(t, int64(1), authorID)
-				assert.Equal(t, int64(3), postID)
-				require.NotNil(t, parentID)
-				assert.Equal(t, int64(9), *parentID)
-				return 11, nil
+				assert.Equal(t, postUUID, postUUIDArg)
+				require.NotNil(t, parentUUIDArg)
+				assert.Equal(t, parentUUID, *parentUUIDArg)
+				return "550e8400-e29b-41d4-a716-446655440011", nil
 			},
 		},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/3/comments", map[string]any{
-		"content":   "reply",
-		"parent_id": 9,
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/"+postUUID+"/comments", map[string]any{
+		"content":     "reply",
+		"parent_uuid": parentUUID,
 	}, 1)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
-	assert.JSONEq(t, `{"id":11}`, rr.Body.String())
+	assert.JSONEq(t, `{"uuid":"550e8400-e29b-41d4-a716-446655440011"}`, rr.Body.String())
 }
 
 func TestHandleGetAttachments_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	attachmentUUID := "550e8400-e29b-41d4-a716-446655440007"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -1004,27 +1014,28 @@ func TestHandleGetAttachments_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachments: func(ctx context.Context, postID int64) ([]model.Attachment, error) {
-				assert.Equal(t, int64(3), postID)
+			getPostAttachments: func(ctx context.Context, postUUIDArg string) ([]model.Attachment, error) {
+				assert.Equal(t, postUUID, postUUIDArg)
 				return []model.Attachment{{
-					ID:          7,
-					PostID:      3,
+					UUID:        attachmentUUID,
+					PostUUID:    postUUID,
 					FileName:    "a.png",
 					ContentType: "image/png",
 					SizeBytes:   10,
-					StorageKey:  "attachments/a.png",
 				}}, nil
 			},
 		},
 	)
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/3/attachments", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/"+postUUID+"/attachments", nil)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.JSONEq(t, `{"attachments":[{"id":7,"post_id":3,"file_name":"a.png","content_type":"image/png","size_bytes":10,"file_url":"/api/v1/posts/3/attachments/7/file","preview_url":"/api/v1/posts/3/attachments/7/preview","created_at":"0001-01-01T00:00:00Z"}]}`, rr.Body.String())
+	assert.JSONEq(t, `{"attachments":[{"uuid":"550e8400-e29b-41d4-a716-446655440007","post_uuid":"550e8400-e29b-41d4-a716-446655440003","file_name":"a.png","content_type":"image/png","size_bytes":10,"file_url":"/api/v1/posts/550e8400-e29b-41d4-a716-446655440003/attachments/550e8400-e29b-41d4-a716-446655440007/file","preview_url":"/api/v1/posts/550e8400-e29b-41d4-a716-446655440003/attachments/550e8400-e29b-41d4-a716-446655440007/preview","created_at":"0001-01-01T00:00:00Z"}]}`, rr.Body.String())
 }
 
 func TestHandleDeleteAttachment_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	attachmentUUID := "550e8400-e29b-41d4-a716-446655440007"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -1033,21 +1044,23 @@ func TestHandleDeleteAttachment_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			deletePostAttachment: func(ctx context.Context, postID, attachmentID, userID int64) error {
-				assert.Equal(t, int64(3), postID)
-				assert.Equal(t, int64(7), attachmentID)
+			deletePostAttachment: func(ctx context.Context, postUUIDArg, attachmentUUIDArg string, userID int64) error {
+				assert.Equal(t, postUUID, postUUIDArg)
+				assert.Equal(t, attachmentUUID, attachmentUUIDArg)
 				assert.Equal(t, int64(1), userID)
 				return nil
 			},
 		},
 	)
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/3/attachments/7", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/"+postUUID+"/attachments/"+attachmentUUID, nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHandleUploadAttachment_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	attachmentUUID := "550e8400-e29b-41d4-a716-446655440008"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -1056,15 +1069,15 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			uploadPostAttachment: func(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
-				assert.Equal(t, int64(3), postID)
+			uploadPostAttachment: func(ctx context.Context, postUUIDArg string, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+				assert.Equal(t, postUUID, postUUIDArg)
 				assert.Equal(t, int64(1), userID)
 				assert.Equal(t, "a.png", fileName)
 				assert.Equal(t, "image/png", contentType)
 				data, err := io.ReadAll(content)
 				require.NoError(t, err)
 				assert.Equal(t, "hello", string(data))
-				return &model.AttachmentUpload{ID: 8, EmbedMarkdown: "![a.png](attachment://8)"}, nil
+				return &model.AttachmentUpload{UUID: attachmentUUID, EmbedMarkdown: "![a.png](attachment://" + attachmentUUID + ")"}, nil
 			},
 		},
 	)
@@ -1077,7 +1090,7 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 
-	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/posts/3/attachments/upload", &body)
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/posts/"+postUUID+"/attachments/upload", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
@@ -1089,7 +1102,7 @@ func TestHandleUploadAttachment_Success(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
-	assert.JSONEq(t, `{"id":8,"embed_markdown":"![a.png](attachment://8)","preview_url":"/api/v1/posts/3/attachments/8/preview"}`, rr.Body.String())
+	assert.JSONEq(t, `{"uuid":"550e8400-e29b-41d4-a716-446655440008","embed_markdown":"![a.png](attachment://550e8400-e29b-41d4-a716-446655440008)","preview_url":"/api/v1/posts/550e8400-e29b-41d4-a716-446655440003/attachments/550e8400-e29b-41d4-a716-446655440008/preview"}`, rr.Body.String())
 }
 
 func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testing.T) {
@@ -1108,7 +1121,7 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 		CommentUseCase:  &fakeCommentUseCase{},
 		ReactionUseCase: &fakeReactionUseCase{},
 		AttachmentUseCase: &fakeAttachmentUseCase{
-			uploadPostAttachment: func(ctx context.Context, postID, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
+			uploadPostAttachment: func(ctx context.Context, postUUID string, userID int64, fileName, contentType string, content io.Reader) (*model.AttachmentUpload, error) {
 				called = true
 				return nil, nil
 			},
@@ -1124,7 +1137,7 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 
-	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/posts/3/attachments/upload", &body)
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/posts/550e8400-e29b-41d4-a716-446655440003/attachments/upload", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
@@ -1139,6 +1152,8 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 }
 
 func TestHandleGetAttachmentFile_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	attachmentUUID := "550e8400-e29b-41d4-a716-446655440008"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -1147,9 +1162,9 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentFile: func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
-				assert.Equal(t, int64(3), postID)
-				assert.Equal(t, int64(8), attachmentID)
+			getPostAttachmentFile: func(ctx context.Context, postUUIDArg, attachmentUUIDArg string) (*model.AttachmentFile, error) {
+				assert.Equal(t, postUUID, postUUIDArg)
+				assert.Equal(t, attachmentUUID, attachmentUUIDArg)
 				return &model.AttachmentFile{
 					FileName:    "a.png",
 					ContentType: "image/png",
@@ -1161,7 +1176,7 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 		},
 	)
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/"+postUUID+"/attachments/"+attachmentUUID+"/file", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -1182,7 +1197,7 @@ func TestHandleGetAttachmentFile_EscapesContentDispositionFilename(t *testing.T)
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentFile: func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentFile: func(ctx context.Context, postUUID, attachmentUUID string) (*model.AttachmentFile, error) {
 				return &model.AttachmentFile{
 					FileName:    "a\"b.png",
 					ContentType: "image/png",
@@ -1193,7 +1208,7 @@ func TestHandleGetAttachmentFile_EscapesContentDispositionFilename(t *testing.T)
 		},
 	)
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/550e8400-e29b-41d4-a716-446655440003/attachments/550e8400-e29b-41d4-a716-446655440008/file", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -1212,7 +1227,7 @@ func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentFile: func(ctx context.Context, postID, attachmentID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentFile: func(ctx context.Context, postUUID, attachmentUUID string) (*model.AttachmentFile, error) {
 				return &model.AttachmentFile{
 					FileName:    "a.png",
 					ContentType: "image/png",
@@ -1224,7 +1239,7 @@ func TestHandleGetAttachmentFile_NotModifiedByETag(t *testing.T) {
 		},
 	)
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/550e8400-e29b-41d4-a716-446655440003/attachments/550e8400-e29b-41d4-a716-446655440008/file", nil)
 	req.Header.Set("If-None-Match", "\"att-8-5-0\"")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -1245,7 +1260,7 @@ func TestHandleGetAttachmentFile_NotFound(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/file", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/550e8400-e29b-41d4-a716-446655440003/attachments/550e8400-e29b-41d4-a716-446655440008/file", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -1254,6 +1269,8 @@ func TestHandleGetAttachmentFile_NotFound(t *testing.T) {
 }
 
 func TestHandleGetAttachmentPreview_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	attachmentUUID := "550e8400-e29b-41d4-a716-446655440008"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -1262,9 +1279,9 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentPreviewFile: func(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
-				assert.Equal(t, int64(3), postID)
-				assert.Equal(t, int64(8), attachmentID)
+			getPostAttachmentPreviewFile: func(ctx context.Context, postUUIDArg, attachmentUUIDArg string, userID int64) (*model.AttachmentFile, error) {
+				assert.Equal(t, postUUID, postUUIDArg)
+				assert.Equal(t, attachmentUUID, attachmentUUIDArg)
 				assert.Equal(t, int64(1), userID)
 				return &model.AttachmentFile{
 					FileName:    "a.png",
@@ -1277,7 +1294,7 @@ func TestHandleGetAttachmentPreview_Success(t *testing.T) {
 		},
 	)
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/preview", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/"+postUUID+"/attachments/"+attachmentUUID+"/preview", nil)
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
@@ -1303,7 +1320,7 @@ func TestHandleGetAttachmentPreview_EscapesContentDispositionFilename(t *testing
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{
-			getPostAttachmentPreviewFile: func(ctx context.Context, postID, attachmentID, userID int64) (*model.AttachmentFile, error) {
+			getPostAttachmentPreviewFile: func(ctx context.Context, postUUID, attachmentUUID string, userID int64) (*model.AttachmentFile, error) {
 				return &model.AttachmentFile{
 					FileName:    "a\"b.png",
 					ContentType: "image/png",
@@ -1314,7 +1331,7 @@ func TestHandleGetAttachmentPreview_EscapesContentDispositionFilename(t *testing
 		},
 	)
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/preview", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/550e8400-e29b-41d4-a716-446655440003/attachments/550e8400-e29b-41d4-a716-446655440008/preview", nil)
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
@@ -1331,6 +1348,8 @@ func TestHandleGetAttachmentPreview_EscapesContentDispositionFilename(t *testing
 }
 
 func TestHandleGetAttachmentPreview_NotFound(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	attachmentUUID := "550e8400-e29b-41d4-a716-446655440008"
 	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
@@ -1341,7 +1360,7 @@ func TestHandleGetAttachmentPreview_NotFound(t *testing.T) {
 		&fakeAttachmentUseCase{},
 	)
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/attachments/8/preview", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/"+postUUID+"/attachments/"+attachmentUUID+"/preview", nil)
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
@@ -1452,42 +1471,48 @@ func TestHTTP_UserLogout_Success(t *testing.T) {
 }
 
 func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440001"
 	reaction := &fakeReactionUseCase{
-		setReaction: func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+		setReaction: func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+			assert.Equal(t, postUUID, targetUUID)
 			return true, nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/posts/1/reactions/me", map[string]string{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/posts/"+postUUID+"/reactions/me", map[string]string{
 		"reaction_type": "like",
 	}, 1)
 	assert.Equal(t, http.StatusCreated, rr.Code)
 }
 
 func TestHTTP_CommentReactionMeUpdate_NoContent(t *testing.T) {
+	commentUUID := "550e8400-e29b-41d4-a716-446655440001"
 	reaction := &fakeReactionUseCase{
-		setReaction: func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+		setReaction: func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+			assert.Equal(t, commentUUID, targetUUID)
 			return false, nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/comments/1/reactions/me", map[string]string{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/comments/"+commentUUID+"/reactions/me", map[string]string{
 		"reaction_type": "dislike",
 	}, 1)
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_PostReactionMeDelete_NoContent(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440001"
 	reaction := &fakeReactionUseCase{
-		deleteReaction: func(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) error {
+		deleteReaction: func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error {
+			assert.Equal(t, postUUID, targetUUID)
 			return nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, reaction, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/1/reactions/me", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/"+postUUID+"/reactions/me", nil, 1)
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
@@ -1587,13 +1612,14 @@ func TestHTTP_WriteRateLimit_ReturnsTooManyRequests(t *testing.T) {
 }
 
 func TestHTTP_BoardPostsPost_SanitizesInput(t *testing.T) {
+	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
 	post := &fakePostUseCase{
-		createPost: func(ctx context.Context, title, content string, tags []string, authorID, boardID int64) (int64, error) {
+		createPost: func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUIDArg string) (string, error) {
 			assert.Equal(t, "hello &lt;script&gt;alert(1)&lt;/script&gt;", title)
 			assert.Equal(t, "body &lt;img src=x onerror=alert(1)&gt;", content)
 			assert.Equal(t, int64(1), authorID)
-			assert.Equal(t, int64(3), boardID)
-			return 10, nil
+			assert.Equal(t, boardUUID, boardUUIDArg)
+			return "550e8400-e29b-41d4-a716-446655440010", nil
 		},
 	}
 	handler := newTestHandlerWithSanitizer(
@@ -1606,7 +1632,7 @@ func TestHTTP_BoardPostsPost_SanitizesInput(t *testing.T) {
 		&fakeAttachmentUseCase{},
 		true,
 	)
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/3/posts", map[string]any{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/"+boardUUID+"/posts", map[string]any{
 		"title":   "hello <script>alert(1)</script>",
 		"content": "body <img src=x onerror=alert(1)>",
 		"tags":    []string{"go"},
@@ -1644,8 +1670,8 @@ func TestHTTP_ProtectedRoute_InvalidAuthorizationScheme(t *testing.T) {
 
 func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 	board := &fakeBoardUseCase{
-		createBoard: func(ctx context.Context, userID int64, name, description string) (int64, error) {
-			return 0, customerror.ErrForbidden
+		createBoard: func(ctx context.Context, userID int64, name, description string) (string, error) {
+			return "", customerror.ErrForbidden
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, board, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
@@ -1658,35 +1684,38 @@ func TestHTTP_BoardCreate_Forbidden(t *testing.T) {
 }
 
 func TestHTTP_BoardDelete_Success(t *testing.T) {
+	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
 	board := &fakeBoardUseCase{
-		deleteBoard: func(ctx context.Context, id, userID int64) error {
-			assert.Equal(t, int64(3), id)
+		deleteBoard: func(ctx context.Context, boardUUIDArg string, userID int64) error {
+			assert.Equal(t, boardUUID, boardUUIDArg)
 			assert.Equal(t, int64(1), userID)
 			return nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, board, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/boards/3", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/boards/"+boardUUID, nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_BoardPostsGet_Success(t *testing.T) {
+	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
+	postUUID := "550e8400-e29b-41d4-a716-446655440004"
 	post := &fakePostUseCase{
-		getPostsList: func(ctx context.Context, boardID int64, limit int, lastID int64) (*model.PostList, error) {
-			assert.Equal(t, int64(3), boardID)
+		getPostsList: func(ctx context.Context, boardUUIDArg string, limit int, cursor string) (*model.PostList, error) {
+			assert.Equal(t, boardUUID, boardUUIDArg)
 			assert.Equal(t, 2, limit)
-			assert.Equal(t, int64(9), lastID)
+			assert.Equal(t, "opaque-cursor-9", cursor)
 			return &model.PostList{
-				Posts: []model.Post{{ID: 4, Title: "hello", Content: "world", AuthorUUID: "user-uuid", BoardID: 3}},
-				Limit: limit, LastID: lastID, HasMore: false,
+				Posts: []model.Post{{UUID: postUUID, Title: "hello", Content: "world", AuthorUUID: "user-uuid", BoardUUID: boardUUID}},
+				Limit: limit, Cursor: cursor, HasMore: false,
 			}, nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/boards/3/posts?limit=2&last_id=9", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/boards/"+boardUUID+"/posts?limit=2&cursor=opaque-cursor-9", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -1695,9 +1724,10 @@ func TestHTTP_BoardPostsGet_Success(t *testing.T) {
 }
 
 func TestHTTP_PostDetailPut_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
 	post := &fakePostUseCase{
-		updatePost: func(ctx context.Context, id, authorID int64, title, content string, tags []string) error {
-			assert.Equal(t, int64(3), id)
+		updatePost: func(ctx context.Context, postUUIDArg string, authorID int64, title, content string, tags []string) error {
+			assert.Equal(t, postUUID, postUUIDArg)
 			assert.Equal(t, int64(1), authorID)
 			assert.Equal(t, "hello", title)
 			assert.Equal(t, "world", content)
@@ -1707,7 +1737,7 @@ func TestHTTP_PostDetailPut_Success(t *testing.T) {
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/posts/3", map[string]any{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/posts/"+postUUID, map[string]any{
 		"title":   "hello",
 		"content": "world",
 		"tags":    []string{"go"},
@@ -1717,35 +1747,38 @@ func TestHTTP_PostDetailPut_Success(t *testing.T) {
 }
 
 func TestHTTP_PostDetailDelete_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
 	post := &fakePostUseCase{
-		deletePost: func(ctx context.Context, id, authorID int64) error {
-			assert.Equal(t, int64(3), id)
+		deletePost: func(ctx context.Context, postUUIDArg string, authorID int64) error {
+			assert.Equal(t, postUUID, postUUIDArg)
 			assert.Equal(t, int64(1), authorID)
 			return nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/3", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/posts/"+postUUID, nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_PostCommentsGet_Success(t *testing.T) {
+	postUUID := "550e8400-e29b-41d4-a716-446655440003"
+	commentUUID := "550e8400-e29b-41d4-a716-446655440004"
 	comment := &fakeCommentUseCase{
-		getCommentsByPost: func(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error) {
-			assert.Equal(t, int64(3), postID)
+		getCommentsByPost: func(ctx context.Context, postUUIDArg string, limit int, cursor string) (*model.CommentList, error) {
+			assert.Equal(t, postUUID, postUUIDArg)
 			assert.Equal(t, 2, limit)
-			assert.Equal(t, int64(9), lastID)
+			assert.Equal(t, "opaque-cursor-9", cursor)
 			return &model.CommentList{
-				Comments: []model.Comment{{ID: 4, Content: "nice", AuthorUUID: "user-uuid", PostID: 3}},
-				Limit:    limit, LastID: lastID,
+				Comments: []model.Comment{{UUID: commentUUID, Content: "nice", AuthorUUID: "user-uuid", PostUUID: postUUID}},
+				Limit:    limit, Cursor: cursor,
 			}, nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, comment, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/3/comments?limit=2&last_id=9", nil)
+	req := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/posts/"+postUUID+"/comments?limit=2&cursor=opaque-cursor-9", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -1754,9 +1787,10 @@ func TestHTTP_PostCommentsGet_Success(t *testing.T) {
 }
 
 func TestHTTP_CommentPut_Success(t *testing.T) {
+	commentUUID := "550e8400-e29b-41d4-a716-446655440003"
 	comment := &fakeCommentUseCase{
-		updateComment: func(ctx context.Context, id, authorID int64, content string) error {
-			assert.Equal(t, int64(3), id)
+		updateComment: func(ctx context.Context, commentUUIDArg string, authorID int64, content string) error {
+			assert.Equal(t, commentUUID, commentUUIDArg)
 			assert.Equal(t, int64(1), authorID)
 			assert.Equal(t, "updated", content)
 			return nil
@@ -1764,7 +1798,7 @@ func TestHTTP_CommentPut_Success(t *testing.T) {
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, comment, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/comments/3", map[string]any{
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/comments/"+commentUUID, map[string]any{
 		"content": "updated",
 	}, 1)
 
@@ -1772,16 +1806,17 @@ func TestHTTP_CommentPut_Success(t *testing.T) {
 }
 
 func TestHTTP_CommentDelete_Success(t *testing.T) {
+	commentUUID := "550e8400-e29b-41d4-a716-446655440003"
 	comment := &fakeCommentUseCase{
-		deleteComment: func(ctx context.Context, id, authorID int64) error {
-			assert.Equal(t, int64(3), id)
+		deleteComment: func(ctx context.Context, commentUUIDArg string, authorID int64) error {
+			assert.Equal(t, commentUUID, commentUUIDArg)
 			assert.Equal(t, int64(1), authorID)
 			return nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, comment, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/comments/3", nil, 1)
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/comments/"+commentUUID, nil, 1)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
@@ -1804,10 +1839,10 @@ func TestHTTP_BoardGet_UsesConfiguredDefaultPageLimit(t *testing.T) {
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{
-			getBoards: func(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
+			getBoards: func(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
 				assert.Equal(t, 7, limit)
-				assert.Equal(t, int64(0), lastID)
-				return &model.BoardList{Boards: []model.Board{}, Limit: limit, LastID: lastID}, nil
+				assert.Equal(t, "", cursor)
+				return &model.BoardList{Boards: []model.Board{}, Limit: limit, Cursor: cursor}, nil
 			},
 		},
 		&fakePostUseCase{},
@@ -1821,14 +1856,27 @@ func TestHTTP_BoardGet_UsesConfiguredDefaultPageLimit(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestHTTP_BoardGet_BadOffset(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+func TestHTTP_BoardGet_PassesOpaqueCursor(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{
+			getBoards: func(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
+				assert.Equal(t, "bad", cursor)
+				return &model.BoardList{Boards: []model.Board{}, Limit: limit, Cursor: cursor}, nil
+			},
+		},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?last_id=bad", nil)
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/boards?cursor=bad", nil)
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestHTTP_BoardWithID_InvalidBoardID(t *testing.T) {
+func TestHTTP_BoardWithID_InvalidBoardUUID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/boards/abc", map[string]any{
@@ -1846,27 +1894,27 @@ func TestHTTP_BoardWithID_UnauthorizedBeforeValidation(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
-func TestHTTP_PostWithID_InvalidPostID(t *testing.T) {
+func TestHTTP_PostWithID_InvalidPostUUID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/abc", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
-func TestHTTP_PostWithID_NonPositivePostID(t *testing.T) {
+func TestHTTP_PostWithID_InvalidUUIDLikeValue(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/0", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 
-	rr = doJSONRequest(t, handler, http.MethodGet, "/posts/-1", nil)
+	rr = doJSONRequest(t, handler, http.MethodGet, "/posts/not-a-uuid", nil)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_ReactionDelete_BadUserID(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodDelete, "/posts/1/reactions/me", nil)
+	rr := doJSONRequest(t, handler, http.MethodDelete, "/posts/550e8400-e29b-41d4-a716-446655440001/reactions/me", nil)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
@@ -1887,63 +1935,63 @@ func TestHTTP_CommentReactionList_InvalidCommentID(t *testing.T) {
 func TestHTTP_ReactionWithID_MethodNotAllowed(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/1/reactions/me", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/550e8400-e29b-41d4-a716-446655440001/reactions/me", nil)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
 }
 
 func TestHTTP_PostDetail_InternalServerErrorFallback(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 			return nil, errors.New("unexpected")
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/550e8400-e29b-41d4-a716-446655440010", nil)
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 }
 
 func TestHTTP_PostDetail_NotFound(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 			return nil, customerror.ErrPostNotFound
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/550e8400-e29b-41d4-a716-446655440010", nil)
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func TestHTTP_PostDetail_IncludesCommentsHasMore(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 			return &model.PostDetail{
-				Post:            &model.Post{ID: postID, Title: "title"},
+				Post:            &model.Post{UUID: postUUID, Title: "title"},
 				CommentsHasMore: true,
 			}, nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/550e8400-e29b-41d4-a716-446655440010", nil)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"comments_has_more":true`)
 }
 
 func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostDetail: func(ctx context.Context, postID int64) (*model.PostDetail, error) {
+		getPostDetail: func(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 			return &model.PostDetail{
-				Post: &model.Post{ID: postID, Title: "hello"},
+				Post: &model.Post{UUID: postUUID, Title: "hello"},
 				Tags: []model.Tag{{ID: 1, Name: "go"}},
 			}, nil
 		},
 	}
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/10", nil)
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/550e8400-e29b-41d4-a716-446655440010", nil)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"tags":[{"id":1,"name":"go"`)
@@ -1951,12 +1999,12 @@ func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
 
 func TestHTTP_TagPosts_Success(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostsByTag: func(ctx context.Context, tagName string, limit int, lastID int64) (*model.PostList, error) {
+		getPostsByTag: func(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error) {
 			assert.Equal(t, "go", tagName)
 			assert.Equal(t, 10, limit)
-			assert.Equal(t, int64(0), lastID)
+			assert.Equal(t, "", cursor)
 			return &model.PostList{
-				Posts: []model.Post{{ID: 3, Title: "hello"}},
+				Posts: []model.Post{{UUID: "550e8400-e29b-41d4-a716-446655440003", Title: "hello"}},
 				Limit: limit,
 			}, nil
 		},
@@ -1966,7 +2014,7 @@ func TestHTTP_TagPosts_Success(t *testing.T) {
 	rr := doJSONRequest(t, handler, http.MethodGet, "/tags/go/posts?limit=10", nil)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Body.String(), `"posts":[{"id":3`)
+	assert.Contains(t, rr.Body.String(), `"posts":[{"uuid":"550e8400-e29b-41d4-a716-446655440003"`)
 }
 
 func TestHTTP_NotFound(t *testing.T) {

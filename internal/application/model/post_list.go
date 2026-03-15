@@ -3,7 +3,7 @@ package model
 type PostList struct {
 	Posts      []Post
 	Limit      int
-	LastID     int64
+	Cursor     string
 	HasMore    bool
-	NextLastID *int64
+	NextCursor *string
 }

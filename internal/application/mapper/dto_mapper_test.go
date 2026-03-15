@@ -11,15 +11,15 @@ import (
 func TestEntityMappers(t *testing.T) {
 	now := time.Unix(10, 0)
 
-	board := BoardFromEntity(&entity.Board{ID: 1, Name: "free", Description: "desc", CreatedAt: now})
-	post := PostFromEntity(&entity.Post{ID: 2, Title: "t", Content: "c", AuthorID: 3, BoardID: 4, CreatedAt: now, UpdatedAt: now})
-	comment := CommentFromEntity(&entity.Comment{ID: 5, Content: "nice", AuthorID: 6, PostID: 2, CreatedAt: now})
+	board := BoardFromEntity(&entity.Board{ID: 1, UUID: "board-uuid", Name: "free", Description: "desc", CreatedAt: now})
+	post := PostFromEntity(&entity.Post{ID: 2, UUID: "post-uuid", Title: "t", Content: "c", AuthorID: 3, BoardID: 4, CreatedAt: now, UpdatedAt: now})
+	comment := CommentFromEntity(&entity.Comment{ID: 5, UUID: "comment-uuid", Content: "nice", AuthorID: 6, PostID: 2, CreatedAt: now})
 	reaction := ReactionFromEntity(&entity.Reaction{ID: 7, TargetType: entity.ReactionTargetPost, TargetID: 2, Type: entity.ReactionTypeLike, UserID: 6, CreatedAt: now})
 	tag := TagFromEntity(&entity.Tag{ID: 8, Name: "go", CreatedAt: now})
 
-	assert.Equal(t, int64(1), board.ID)
-	assert.Equal(t, int64(2), post.ID)
-	assert.Equal(t, int64(5), comment.ID)
+	assert.Equal(t, "board-uuid", board.UUID)
+	assert.Equal(t, "post-uuid", post.UUID)
+	assert.Equal(t, "comment-uuid", comment.UUID)
 	assert.Equal(t, entity.ReactionTypeLike, reaction.Type)
 	assert.Equal(t, "go", tag.Name)
 	assert.Len(t, BoardsFromEntities([]*entity.Board{{ID: 1}, {ID: 2}}), 2)

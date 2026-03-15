@@ -1,9 +1,14 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Board struct {
 	ID          int64
+	UUID        string
 	Name        string
 	Description string
 	Hidden      bool
@@ -12,6 +17,7 @@ type Board struct {
 
 func NewBoard(name, description string) *Board {
 	return &Board{
+		UUID:        uuid.NewString(),
 		Name:        name,
 		Description: description,
 		CreatedAt:   time.Now(),

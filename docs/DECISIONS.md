@@ -2139,3 +2139,47 @@
 - `internal/delivery/http.go`
 - `internal/config/config.go`
 - `docs/CONFIG.md`
+
+## 2026-03-15 - 공개 리소스 식별자는 숫자 ID 대신 UUID를 사용하고 목록 커서는 opaque cursor로 전환한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 외부 API는 `User`만 UUID를 공개 식별자로 사용하고, `Board/Post/Comment/Attachment`는 숫자 ID를 그대로 노출한다.
+- 개발 단계이므로 하위호환 유지 비용 없이 외부 계약을 정리할 수 있다.
+- 목록 API의 `last_id`는 내부 정렬 키를 외부에 노출하므로, 공개 식별자 전환과 함께 경계를 정리할 필요가 있다.
+
+관찰
+
+- 내부 저장/연관/정렬은 숫자 PK/FK에 강하게 묶여 있으며, 트랜잭션과 저장소 구현도 이를 전제로 한다.
+- 공개 경계는 path param, 요청 본문(`report target_id`), 응답 payload, attachment URL, cursor query에 걸쳐 숫자 ID를 사용한다.
+- 운영용 리소스(`reportID`, `messageID`)는 공개 URL 가독성보다 운영 추적성이 중요하다.
+
+결론
+
+- `Board`, `Post`, `Comment`, `Attachment`는 생성 시 공개 UUID를 부여하고, 외부 API는 UUID만 사용한다.
+- 내부 저장의 주키/외래키는 계속 숫자 ID를 유지하고, 서비스가 UUID 조회 후 내부 ID로 기존 비즈니스 로직을 수행한다.
+- 공개 목록 API는 `last_id`를 제거하고 opaque `cursor`를 사용한다. 현재 정렬 의미는 유지하되 내부 정렬 키는 인코딩해 외부에 직접 노출하지 않는다.
+- admin 게시판 visibility API도 `boardUUID`로 통일한다.
+- 운영 리소스 식별자인 `reportID`, `messageID`는 이번 배치에서 유지한다.
+- 공개 응답의 리소스 기본 식별자는 `uuid`로 통일하고, 연관 표기는 기존 관례대로 `author_uuid`, `board_uuid`, `post_uuid` 등을 사용한다.
+
+후속 작업
+
+- 저장소 contract에 UUID 조회/유니크 규약을 추가한다.
+- HTTP/Swagger/API 문서에서 숫자 ID path/body/query 계약을 UUID/cursor 계약으로 일괄 교체한다.
+- report 생성은 `target_uuid` 입력으로 전환한다.
+- attachment file/preview URL과 embed/response mapping을 UUID 기반으로 갱신한다.
+
+관련 문서/코드
+
+- `internal/domain/entity`
+- `internal/application/port`
+- `internal/application/service`
+- `internal/delivery/http.go`
+- `internal/delivery/response`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`

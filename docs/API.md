@@ -43,10 +43,10 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 - `POST /api/v1/reports` (인증 필요)
   - 신고를 생성합니다.
-  - 요청 본문: `target_type`, `target_id`, `reason_code`, 선택적 `reason_detail`
+  - 요청 본문: `target_type`, `target_uuid`, `reason_code`, 선택적 `reason_detail`
   - `target_type` 허용값: `post`, `comment`
   - `reason_code` 허용값: `spam`, `abuse`, `sexual`, `violence`, `illegal`, `other`
-  - 동일 사용자는 동일 대상(`target_type`, `target_id`)을 한 번만 신고할 수 있습니다. 중복 신고는 `409 Conflict`
+  - 동일 사용자는 동일 대상(`target_type`, `target_uuid`)을 한 번만 신고할 수 있습니다. 중복 신고는 `409 Conflict`
 
 ## Admin Operations
 
@@ -68,18 +68,18 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - dead 메시지를 재처리 큐로 되돌립니다.
 - `DELETE /api/v1/admin/outbox/dead/{messageID}` (인증 필요, admin)
   - dead 메시지를 폐기(discard)합니다.
-- `PUT /api/v1/admin/boards/{boardID}/visibility` (인증 필요, admin)
+- `PUT /api/v1/admin/boards/{boardUUID}/visibility` (인증 필요, admin)
   - 게시판 `hidden` 상태를 변경합니다.
   - 요청 본문: `hidden` (`true|false`)
 
 ## Board
 
-- `GET /api/v1/boards?limit=10&last_id=0`
-  - 응답 메타: `has_more`, `next_last_id`
+- `GET /api/v1/boards?limit=10&cursor=`
+  - 응답 메타: `has_more`, `next_cursor`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
 - `POST /api/v1/boards` (인증 필요, admin)
-- `PUT /api/v1/boards/{boardID}` (인증 필요, admin)
-- `DELETE /api/v1/boards/{boardID}` (인증 필요, admin)
+- `PUT /api/v1/boards/{boardUUID}` (인증 필요, admin)
+- `DELETE /api/v1/boards/{boardUUID}` (인증 필요, admin)
   - 비어 있는 게시판에만 허용됩니다.
   - 삭제되지 않은 게시글이 하나라도 있으면 `409 Conflict`
   - `hidden` 게시판은 비admin에게 완전 비노출됩니다.
@@ -91,47 +91,47 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 현재 공개 글 생성 API는 임시저장 기능이 없으므로 생성 시 기본 상태는 `published`
   - 삭제 API는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식
   - 공개 목록/상세 조회에서는 `published`만 노출
-- `GET /api/v1/boards/{boardID}/posts?limit=10&last_id=0`
-  - 응답 메타: `has_more`, `next_last_id`
+- `GET /api/v1/boards/{boardUUID}/posts?limit=10&cursor=`
+  - 응답 메타: `has_more`, `next_cursor`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 게시판이 없으면 `404 Not Found`
-- `POST /api/v1/boards/{boardID}/posts` (인증 필요)
+- `POST /api/v1/boards/{boardUUID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
-  - 생성 시점 본문에는 `attachment://{id}` 참조를 포함할 수 없습니다.
+  - 생성 시점 본문에는 `attachment://{attachmentUUID}` 참조를 포함할 수 없습니다.
   - 첨부가 필요한 글은 먼저 draft를 만든 뒤 첨부 업로드와 본문 수정을 거쳐 publish 해야 합니다.
   - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
   - `tags`는 최대 10개, 각 항목 최대 30자이며, 앞뒤 공백 제거 후 영문 소문자로 정규화됩니다.
-- `POST /api/v1/boards/{boardID}/posts/drafts` (인증 필요)
+- `POST /api/v1/boards/{boardUUID}/posts/drafts` (인증 필요)
   - 임시저장 글을 생성합니다.
   - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
-  - 생성 시점 본문에는 `attachment://{id}` 참조를 포함할 수 없습니다.
+  - 생성 시점 본문에는 `attachment://{attachmentUUID}` 참조를 포함할 수 없습니다.
   - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
-- `GET /api/v1/posts/{postID}`
+- `GET /api/v1/posts/{postUUID}`
   - 응답 본문에는 `tags` 목록이 포함됩니다.
   - 응답 본문에는 `attachments` 목록이 포함됩니다.
   - 응답의 `comments` 는 최신 공개 댓글 최대 10개만 포함합니다.
   - `comments_has_more=true` 면 상세에 포함되지 않은 추가 댓글이 더 있다는 뜻입니다.
-  - 댓글 전체 목록이 필요하면 `GET /api/v1/posts/{postID}/comments` 를 사용합니다.
-  - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentID})` 형식을 사용합니다.
+  - 댓글 전체 목록이 필요하면 `GET /api/v1/posts/{postUUID}/comments` 를 사용합니다.
+  - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentUUID})` 형식을 사용합니다.
   - 각 attachment는 실제 파일 조회용 `file_url`과 draft 미리보기용 `preview_url`을 포함합니다.
-- `POST /api/v1/posts/{postID}/publish` (인증 필요, 작성자 또는 admin)
+- `POST /api/v1/posts/{postUUID}/publish` (인증 필요, 작성자 또는 admin)
   - `draft -> published` 상태 전이를 수행합니다.
-  - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
-- `PUT /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
+  - 본문에 포함된 `attachment://{attachmentUUID}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
+- `PUT /api/v1/posts/{postUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
-  - 본문에 포함된 `attachment://{id}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
+  - 본문에 포함된 `attachment://{attachmentUUID}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
   - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
-- `DELETE /api/v1/posts/{postID}` (인증 필요, 작성자 또는 admin)
+- `DELETE /api/v1/posts/{postUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - 하위 댓글은 soft delete 처리됩니다.
   - 첨부는 orphan 처리되어 cleanup job 대상이 됩니다.
 
 ## Tag
 
-- `GET /api/v1/tags/{tagName}/posts?limit=10&last_id=0`
+- `GET /api/v1/tags/{tagName}/posts?limit=10&cursor=`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
-  - 응답 메타: `has_more`, `next_last_id`
+  - 응답 메타: `has_more`, `next_cursor`
   - `tagName`은 내부적으로 앞뒤 공백 제거 후 영문 소문자로 정규화합니다.
   - tag가 없으면 `404 Not Found`
   - post 목록 응답에는 태그 정보가 포함되지 않습니다.
@@ -142,23 +142,23 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - 실제 파일 저장은 `FileStorage` 포트를 통해 수행하고, post 연결 메타데이터는 attachment 도메인이 관리합니다.
 - 외부 응답 필드: `file_name`, `content_type`, `size_bytes`, `file_url`, `preview_url`
 - `storage_key`는 내부 저장 메타데이터로만 유지하고 외부 응답에는 노출하지 않습니다.
-- 본문 내 직접 참조 형식: `![alt](attachment://{attachmentID})`
-- `GET /api/v1/posts/{postID}/attachments`
+- 본문 내 직접 참조 형식: `![alt](attachment://{attachmentUUID})`
+- `GET /api/v1/posts/{postUUID}/attachments`
   - published post 기준으로 attachment 목록을 조회합니다.
   - orphan attachment와 `pending_delete` attachment는 제외합니다.
-- `GET /api/v1/posts/{postID}/attachments/{attachmentID}/file`
+- `GET /api/v1/posts/{postUUID}/attachments/{attachmentUUID}/file`
   - published post의 attachment 파일 본문을 반환합니다.
   - `attachments[].file_url`이 이 경로를 가리킵니다.
   - `Cache-Control: public, max-age=300`과 `ETag`를 반환합니다.
   - `If-None-Match`가 일치하면 `304 Not Modified`를 반환합니다.
   - orphan attachment와 `pending_delete` attachment는 `404`로 숨깁니다.
-- `GET /api/v1/posts/{postID}/attachments/{attachmentID}/preview` (인증 필요, 작성자 또는 admin)
+- `GET /api/v1/posts/{postUUID}/attachments/{attachmentUUID}/preview` (인증 필요, 작성자 또는 admin)
   - draft/published post의 attachment 미리보기 파일 본문을 반환합니다.
   - `attachments[].preview_url` 및 upload 응답의 `preview_url`이 이 경로를 가리킵니다.
   - `Cache-Control: private, no-store`를 반환합니다.
   - orphan attachment는 owner/admin preview에서는 접근할 수 있습니다.
   - `pending_delete` attachment는 owner/admin preview에서도 접근할 수 없습니다.
-- `POST /api/v1/posts/{postID}/attachments/upload` (인증 필요, 작성자 또는 admin)
+- `POST /api/v1/posts/{postUUID}/attachments/upload` (인증 필요, 작성자 또는 admin)
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
   - 응답에는 본문에 바로 넣을 수 있는 `embed_markdown`이 포함됩니다.
@@ -169,9 +169,9 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 요청의 `Content-Type`은 실제 파일 sniffing 결과와 일치해야 합니다.
   - 서버 내부 저장본은 `storage.attachment.imageOptimization` 설정에 따라 `jpeg/jpg`, `png`를 최적화할 수 있습니다.
   - 저장 키는 같은 파일명 충돌을 피하기 위해 내부적으로 랜덤 suffix를 붙여 생성합니다.
-- `DELETE /api/v1/posts/{postID}/attachments/{attachmentID}` (인증 필요, 작성자 또는 admin)
+- `DELETE /api/v1/posts/{postUUID}/attachments/{attachmentUUID}` (인증 필요, 작성자 또는 admin)
   - attachment는 즉시 `pending_delete` 상태로 숨겨지고, 실제 파일/메타데이터 hard delete는 cleanup job이 비동기로 수행합니다.
-  - 게시글 본문에서 `attachment://{attachmentID}` 로 참조 중인 첨부는 삭제할 수 없습니다.
+  - 게시글 본문에서 `attachment://{attachmentUUID}` 로 참조 중인 첨부는 삭제할 수 없습니다.
 
 ## Comment
 
@@ -181,43 +181,43 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 공개 목록/상세 조회에서는 기본적으로 `active` 댓글만 노출한다.
   - 단, 활성 reply가 남아 있는 삭제된 부모 댓글은 `삭제된 댓글` tombstone으로 함께 노출한다.
 - 대댓글 규칙
-  - 생성 요청에서 `parent_id`를 받는다.
+  - 생성 요청에서 `parent_uuid`를 받는다.
   - 현재 정책은 1-depth 대댓글만 허용한다.
   - 부모 댓글은 같은 게시글에 속한 활성 댓글이어야 한다.
-  - 응답은 flat list를 유지하고 `parent_id`로 관계를 표현한다.
-- `GET /api/v1/posts/{postID}/comments?limit=10&last_id=0`
-  - 응답 메타: `has_more`, `next_last_id`
+  - 응답은 flat list를 유지하고 `parent_uuid`로 관계를 표현한다.
+- `GET /api/v1/posts/{postUUID}/comments?limit=10&cursor=`
+  - 응답 메타: `has_more`, `next_cursor`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 삭제된 게시글이면 `404 Not Found`
-- `POST /api/v1/posts/{postID}/comments` (인증 필요)
-  - 요청 본문은 `content`, 선택적 `parent_id`
+- `POST /api/v1/posts/{postUUID}/comments` (인증 필요)
+  - 요청 본문은 `content`, 선택적 `parent_uuid`
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
-- `PUT /api/v1/comments/{commentID}` (인증 필요, 작성자 또는 admin)
+- `PUT /api/v1/comments/{commentUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
-- `DELETE /api/v1/comments/{commentID}` (인증 필요, 작성자 또는 admin)
+- `DELETE /api/v1/comments/{commentUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - 부모 댓글을 삭제하면 해당 댓글은 `삭제된 댓글` tombstone으로 남습니다.
   - 하위 reply는 그대로 유지되어 계속 조회할 수 있습니다.
 
 ## Reaction
 
-- `GET /api/v1/posts/{postID}/reactions`
+- `GET /api/v1/posts/{postUUID}/reactions`
   - 삭제된 게시글이면 `404 Not Found`
-- `PUT /api/v1/posts/{postID}/reactions/me` (인증 필요)
+- `PUT /api/v1/posts/{postUUID}/reactions/me` (인증 필요)
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
   - 대상 게시글이 없으면 `404`
-- `DELETE /api/v1/posts/{postID}/reactions/me` (인증 필요)
+- `DELETE /api/v1/posts/{postUUID}/reactions/me` (인증 필요)
   - 내 리액션 삭제
   - 리액션이 없어도 `204`
   - 대상 게시글이 없으면 `404`
-- `GET /api/v1/comments/{commentID}/reactions`
+- `GET /api/v1/comments/{commentUUID}/reactions`
   - 삭제된 댓글이면 `404 Not Found`
-- `PUT /api/v1/comments/{commentID}/reactions/me` (인증 필요)
+- `PUT /api/v1/comments/{commentUUID}/reactions/me` (인증 필요)
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
   - 대상 댓글이 없으면 `404`
-- `DELETE /api/v1/comments/{commentID}/reactions/me` (인증 필요)
+- `DELETE /api/v1/comments/{commentUUID}/reactions/me` (인증 필요)
   - 내 리액션 삭제
   - 리액션이 없어도 `204`
   - 대상 댓글이 없으면 `404`
@@ -274,7 +274,7 @@ curl -X GET http://localhost:18577/api/v1/users/550e8400-e29b-41d4-a716-44665544
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X POST http://localhost:18577/api/v1/boards/1/posts/drafts \
+curl -X POST http://localhost:18577/api/v1/boards/550e8400-e29b-41d4-a716-446655440001/posts/drafts \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
   -d '{"title":"draft title","content":"draft body"}'
@@ -284,14 +284,14 @@ curl -X POST http://localhost:18577/api/v1/boards/1/posts/drafts \
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X POST http://localhost:18577/api/v1/posts/1/publish \
+curl -X POST http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/publish \
   -H "Authorization: $TOKEN"
 ```
 
 ### 게시글 첨부 메타데이터 조회
 
 ```bash
-curl -X GET http://localhost:18577/api/v1/posts/1/attachments
+curl -X GET http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/attachments
 ```
 
 응답 필드에는 `file_url`이 포함됩니다.
@@ -299,14 +299,14 @@ curl -X GET http://localhost:18577/api/v1/posts/1/attachments
 ### 게시글 첨부파일 조회
 
 ```bash
-curl -X GET http://localhost:18577/api/v1/posts/1/attachments/3/file --output a.png
+curl -X GET http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/attachments/550e8400-e29b-41d4-a716-446655440003/file --output a.png
 ```
 
 ### 게시글 첨부파일 업로드
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X POST http://localhost:18577/api/v1/posts/1/attachments/upload \
+curl -X POST http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/attachments/upload \
   -H "Authorization: $TOKEN" \
   -F "file=@./a.png"
 ```
@@ -315,9 +315,9 @@ curl -X POST http://localhost:18577/api/v1/posts/1/attachments/upload \
 
 ```json
 {
-  "id": 3,
-  "embed_markdown": "![a.png](attachment://3)",
-  "preview_url": "/api/v1/posts/1/attachments/3/preview"
+  "uuid": "550e8400-e29b-41d4-a716-446655440003",
+  "embed_markdown": "![a.png](attachment://550e8400-e29b-41d4-a716-446655440003)",
+  "preview_url": "/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/attachments/550e8400-e29b-41d4-a716-446655440003/preview"
 }
 ```
 
@@ -325,17 +325,17 @@ curl -X POST http://localhost:18577/api/v1/posts/1/attachments/upload \
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X POST http://localhost:18577/api/v1/posts/1/comments \
+curl -X POST http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/comments \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
-  -d '{"content":"reply","parent_id":5}'
+  -d '{"content":"reply","parent_uuid":"550e8400-e29b-41d4-a716-446655440004"}'
 ```
 
 ### 게시글 내 리액션 생성
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X PUT http://localhost:18577/api/v1/posts/1/reactions/me \
+curl -X PUT http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/reactions/me \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
   -d '{"reaction_type":"like"}'
@@ -345,7 +345,7 @@ curl -X PUT http://localhost:18577/api/v1/posts/1/reactions/me \
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X PUT http://localhost:18577/api/v1/posts/1/reactions/me \
+curl -X PUT http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/reactions/me \
   -H "Content-Type: application/json" \
   -H "Authorization: $TOKEN" \
   -d '{"reaction_type":"dislike"}'
@@ -355,6 +355,6 @@ curl -X PUT http://localhost:18577/api/v1/posts/1/reactions/me \
 
 ```bash
 TOKEN="로그인 응답 Authorization 헤더 값"
-curl -X DELETE http://localhost:18577/api/v1/posts/1/reactions/me \
+curl -X DELETE http://localhost:18577/api/v1/posts/550e8400-e29b-41d4-a716-446655440002/reactions/me \
   -H "Authorization: $TOKEN"
 ```

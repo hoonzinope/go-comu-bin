@@ -8,6 +8,7 @@ import (
 
 func TestBoard_NewBoardAndUpdateBoard(t *testing.T) {
 	b := NewBoard("free", "desc")
+	assert.NotEmpty(t, b.UUID)
 	assert.Equal(t, "free", b.Name)
 	assert.Equal(t, "desc", b.Description)
 	assert.False(t, b.CreatedAt.IsZero())

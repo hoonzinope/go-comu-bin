@@ -1,7 +1,7 @@
 package model
 
 type AttachmentUpload struct {
-	ID            int64
+	UUID          string
 	EmbedMarkdown string
 	PreviewURL    string
 }

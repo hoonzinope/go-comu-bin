@@ -53,13 +53,22 @@ func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, b
 	}
 }
 
-func (s *CommentService) CreateComment(ctx context.Context, content string, authorID, postID int64, parentID *int64) (int64, error) {
+func (s *CommentService) CreateComment(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error) {
 	if strings.TrimSpace(content) == "" {
-		return 0, customerror.ErrInvalidInput
+		return "", customerror.ErrInvalidInput
 	}
-	newComment := entity.NewComment(content, authorID, postID, parentID)
+	post, err := s.postRepository.SelectPostByUUID(ctx, postUUID)
+	if err != nil {
+		return "", customerror.WrapRepository("select post by uuid for create comment", err)
+	}
+	if post == nil {
+		return "", customerror.ErrPostNotFound
+	}
+	var parentID *int64
+	newComment := entity.NewComment(content, authorID, post.ID, parentID)
 	var commentID int64
-	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+	var commentUUID string
+	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, authorID)
 		if err != nil {
@@ -71,9 +80,9 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 		if err := s.authorizationPolicy.CanWrite(user); err != nil {
 			return err
 		}
-		post, err := tx.PostRepository().SelectPostByID(txCtx, postID)
+		post, err := tx.PostRepository().SelectPostByUUID(txCtx, postUUID)
 		if err != nil {
-			return customerror.WrapRepository("select post by id for create comment", err)
+			return customerror.WrapRepository("select post by uuid for create comment", err)
 		}
 		if post == nil {
 			return customerror.ErrPostNotFound
@@ -81,66 +90,72 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 		if err := s.ensureBoardVisibleByPostTx(tx, user, post.ID); err != nil {
 			return err
 		}
-		if parentID != nil {
-			parent, err := tx.CommentRepository().SelectCommentByID(txCtx, *parentID)
+		if parentUUID != nil && strings.TrimSpace(*parentUUID) != "" {
+			parent, err := tx.CommentRepository().SelectCommentByUUID(txCtx, strings.TrimSpace(*parentUUID))
 			if err != nil {
-				return customerror.WrapRepository("select parent comment by id for create comment", err)
+				return customerror.WrapRepository("select parent comment by uuid for create comment", err)
 			}
 			if parent == nil {
 				return customerror.ErrCommentNotFound
 			}
-			if parent.PostID != postID || parent.ParentID != nil {
+			if parent.PostID != post.ID || parent.ParentID != nil {
 				return customerror.ErrInvalidInput
 			}
+			newComment.ParentID = &parent.ID
 		}
 		commentID, err = tx.CommentRepository().Save(txCtx, newComment)
 		if err != nil {
 			return customerror.WrapRepository("save comment", err)
 		}
-		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("created", commentID, postID)); err != nil {
+		commentUUID = newComment.UUID
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("created", commentID, post.ID)); err != nil {
 			return err
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return commentID, nil
+	return commentUUID, nil
 }
 
-func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, limit int, lastID int64) (*model.CommentList, error) {
+func (s *CommentService) GetCommentsByPost(ctx context.Context, postUUID string, limit int, cursor string) (*model.CommentList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
-	cacheKey := key.CommentList(postID, limit, lastID)
+	lastID, err := decodeOpaqueCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	post, err := s.postRepository.SelectPostByUUID(ctx, postUUID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select post by uuid for comment list", err)
+	}
+	if post == nil {
+		return nil, customerror.ErrPostNotFound
+	}
+	cacheKey := key.CommentList(post.ID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		post, err := s.postRepository.SelectPostByID(ctx, postID)
-		if err != nil {
-			return nil, customerror.WrapRepository("select post by id for comment list", err)
-		}
-		if post == nil {
-			return nil, customerror.ErrPostNotFound
-		}
 		if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
 			return nil, err
 		}
 
-		comments, err := s.commentRepository.SelectVisibleComments(ctx, postID, limit+1, lastID)
+		comments, err := s.commentRepository.SelectVisibleComments(ctx, post.ID, limit+1, lastID)
 		if err != nil {
 			return nil, customerror.WrapRepository("select visible comments by post", err)
 		}
 		hasMore := false
-		var nextLastID *int64
+		var nextCursor *string
 		if len(comments) > limit {
 			hasMore = true
 			comments = comments[:limit]
 		}
 		if hasMore && len(comments) > 0 {
-			next := comments[len(comments)-1].ID
-			nextLastID = &next
+			next := encodeOpaqueCursor(comments[len(comments)-1].ID)
+			nextCursor = &next
 		}
 
-		commentModels, err := s.commentsFromEntities(ctx, comments)
+		commentModels, err := s.commentsFromEntities(ctx, post.UUID, comments)
 		if err != nil {
 			return nil, err
 		}
@@ -148,9 +163,9 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 		return &model.CommentList{
 			Comments:   commentModels,
 			Limit:      limit,
-			LastID:     lastID,
+			Cursor:     cursor,
 			HasMore:    hasMore,
-			NextLastID: nextLastID,
+			NextCursor: nextCursor,
 		}, nil
 	})
 	if err != nil {
@@ -163,10 +178,20 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postID int64, li
 	return list, nil
 }
 
-func (s *CommentService) commentsFromEntities(ctx context.Context, comments []*entity.Comment) ([]model.Comment, error) {
+func (s *CommentService) commentsFromEntities(ctx context.Context, postUUID string, comments []*entity.Comment) ([]model.Comment, error) {
 	authorUUIDs, err := userUUIDsForComments(ctx, s.userRepository, comments)
 	if err != nil {
 		return nil, err
+	}
+	parentUUIDs := map[int64]string{}
+	if len(comments) > 0 {
+		allComments, err := s.commentRepository.SelectCommentsIncludingDeleted(ctx, comments[0].PostID)
+		if err != nil {
+			return nil, customerror.WrapRepository("select comments including deleted for parent uuid mapping", err)
+		}
+		for _, item := range allComments {
+			parentUUIDs[item.ID] = item.UUID
+		}
 	}
 	out := make([]model.Comment, 0, len(comments))
 	for _, comment := range comments {
@@ -176,21 +201,27 @@ func (s *CommentService) commentsFromEntities(ctx context.Context, comments []*e
 		}
 		commentModel := mapper.CommentFromEntity(comment)
 		commentModel.AuthorUUID = authorUUID
+		commentModel.PostUUID = postUUID
+		if comment.ParentID != nil {
+			if parentUUID, ok := parentUUIDs[*comment.ParentID]; ok {
+				commentModel.ParentUUID = &parentUUID
+			}
+		}
 		out = append(out, commentModel)
 	}
 	return out, nil
 }
 
-func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, content string) error {
+func (s *CommentService) UpdateComment(ctx context.Context, commentUUID string, authorID int64, content string) error {
 	if strings.TrimSpace(content) == "" {
 		return customerror.ErrInvalidInput
 	}
 	var postID int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, id)
+		comment, err := tx.CommentRepository().SelectCommentByUUID(txCtx, commentUUID)
 		if err != nil {
-			return customerror.WrapRepository("select comment by id for update comment", err)
+			return customerror.WrapRepository("select comment by uuid for update comment", err)
 		}
 		if comment == nil {
 			return customerror.ErrCommentNotFound
@@ -217,7 +248,7 @@ func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, 
 			return customerror.WrapRepository("update comment", err)
 		}
 		postID = updatedComment.PostID
-		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("updated", id, postID)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewCommentChanged("updated", comment.ID, postID)); err != nil {
 			return err
 		}
 		return nil
@@ -228,13 +259,13 @@ func (s *CommentService) UpdateComment(ctx context.Context, id, authorID int64, 
 	return nil
 }
 
-func (s *CommentService) DeleteComment(ctx context.Context, id, authorID int64) error {
+func (s *CommentService) DeleteComment(ctx context.Context, commentUUID string, authorID int64) error {
 	var commentID, postID int64
 	if err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, id)
+		comment, err := tx.CommentRepository().SelectCommentByUUID(txCtx, commentUUID)
 		if err != nil {
-			return customerror.WrapRepository("select comment by id for delete comment", err)
+			return customerror.WrapRepository("select comment by uuid for delete comment", err)
 		}
 		if comment == nil {
 			return customerror.ErrCommentNotFound

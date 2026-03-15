@@ -3,7 +3,7 @@ package model
 type CommentList struct {
 	Comments   []Comment
 	Limit      int
-	LastID     int64
+	Cursor     string
 	HasMore    bool
-	NextLastID *int64
+	NextCursor *string
 }

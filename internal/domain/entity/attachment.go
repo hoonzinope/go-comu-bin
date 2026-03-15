@@ -1,9 +1,14 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Attachment struct {
 	ID              int64
+	UUID            string
 	PostID          int64
 	FileName        string
 	ContentType     string
@@ -17,6 +22,7 @@ type Attachment struct {
 func NewAttachment(postID int64, fileName, contentType string, sizeBytes int64, storageKey string) *Attachment {
 	now := time.Now()
 	return &Attachment{
+		UUID:        uuid.NewString(),
 		PostID:      postID,
 		FileName:    fileName,
 		ContentType: contentType,

@@ -14,6 +14,7 @@ import (
 
 type postDetailQuery struct {
 	userRepository       port.UserRepository
+	boardRepository      port.BoardRepository
 	postRepository       port.PostRepository
 	tagRepository        port.TagRepository
 	postTagRepository    port.PostTagRepository
@@ -22,9 +23,10 @@ type postDetailQuery struct {
 	reactionRepository   port.ReactionRepository
 }
 
-func newPostDetailQuery(userRepository port.UserRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository) *postDetailQuery {
+func newPostDetailQuery(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository) *postDetailQuery {
 	return &postDetailQuery{
 		userRepository:       userRepository,
+		boardRepository:      boardRepository,
 		postRepository:       postRepository,
 		tagRepository:        tagRepository,
 		postTagRepository:    postTagRepository,
@@ -41,6 +43,13 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}
 	if post == nil {
 		return nil, customerror.ErrPostNotFound
+	}
+	board, err := q.boardRepository.SelectBoardByID(ctx, post.BoardID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select board by id for post detail", err)
+	}
+	if board == nil {
+		return nil, customerror.ErrBoardNotFound
 	}
 
 	postReactions, err := q.reactionRepository.GetByTarget(ctx, post.ID, entity.ReactionTargetPost)
@@ -65,12 +74,16 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}
 
 	commentDetails := make([]*model.CommentDetail, len(comments))
+	parentUUIDs, err := parentCommentUUIDsByID(ctx, q.commentRepository, post.ID)
+	if err != nil {
+		return nil, err
+	}
 	for i, comment := range comments {
-		commentModel, err := commentModelFromEntity(comment, userUUIDs)
+		commentModel, err := commentModelFromEntity(comment, post.UUID, userUUIDs, parentUUIDs)
 		if err != nil {
 			return nil, err
 		}
-		commentReactionModels, err := reactionsFromEntitiesWithUUIDs(commentReactionsByID[comment.ID], userUUIDs)
+		commentReactionModels, err := reactionsFromEntitiesWithTargetUUID(commentReactionsByID[comment.ID], comment.UUID, userUUIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +93,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 		}
 	}
 
-	postModel, err := postModelFromEntity(post, userUUIDs)
+	postModel, err := postModelFromEntity(post, board.UUID, userUUIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +105,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	if err != nil {
 		return nil, customerror.WrapRepository("select attachments for post detail", err)
 	}
-	reactionModels, err := reactionsFromEntitiesWithUUIDs(postReactions, userUUIDs)
+	reactionModels, err := reactionsFromEntitiesWithTargetUUID(postReactions, post.UUID, userUUIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +113,7 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	return &model.PostDetail{
 		Post:            &postModel,
 		Tags:            tags,
-		Attachments:     attachmentsFromEntities(attachmentEntities),
+		Attachments:     attachmentsFromEntities(post.UUID, attachmentEntities),
 		Comments:        commentDetails,
 		CommentsHasMore: commentsHasMore,
 		Reactions:       reactionModels,
@@ -136,27 +149,46 @@ func userUUIDsForPostDetail(ctx context.Context, userRepository port.UserReposit
 	return userUUIDsByIDs(ctx, userRepository, userIDs)
 }
 
-func postModelFromEntity(post *entity.Post, authorUUIDs map[int64]string) (model.Post, error) {
+func postModelFromEntity(post *entity.Post, boardUUID string, authorUUIDs map[int64]string) (model.Post, error) {
 	authorUUID, ok := authorUUIDs[post.AuthorID]
 	if !ok {
 		return model.Post{}, customerror.WrapRepository("select users by ids including deleted", errors.New("post author not found"))
 	}
 	out := mapper.PostFromEntity(post)
 	out.AuthorUUID = authorUUID
+	out.BoardUUID = boardUUID
 	return out, nil
 }
 
-func commentModelFromEntity(comment *entity.Comment, authorUUIDs map[int64]string) (*model.Comment, error) {
+func commentModelFromEntity(comment *entity.Comment, postUUID string, authorUUIDs map[int64]string, parentUUIDs map[int64]string) (*model.Comment, error) {
 	authorUUID, ok := authorUUIDs[comment.AuthorID]
 	if !ok {
 		return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("comment author not found"))
 	}
 	out := mapper.CommentFromEntity(comment)
 	out.AuthorUUID = authorUUID
+	out.PostUUID = postUUID
+	if comment.ParentID != nil {
+		if parentUUID, ok := parentUUIDs[*comment.ParentID]; ok {
+			out.ParentUUID = &parentUUID
+		}
+	}
 	return &out, nil
 }
 
-func reactionsFromEntitiesWithUUIDs(reactions []*entity.Reaction, userUUIDs map[int64]string) ([]model.Reaction, error) {
+func parentCommentUUIDsByID(ctx context.Context, commentRepository port.CommentRepository, postID int64) (map[int64]string, error) {
+	comments, err := commentRepository.SelectCommentsIncludingDeleted(ctx, postID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select comments including deleted for post detail", err)
+	}
+	out := make(map[int64]string, len(comments))
+	for _, comment := range comments {
+		out[comment.ID] = comment.UUID
+	}
+	return out, nil
+}
+
+func reactionsFromEntitiesWithTargetUUID(reactions []*entity.Reaction, targetUUID string, userUUIDs map[int64]string) ([]model.Reaction, error) {
 	out := make([]model.Reaction, 0, len(reactions))
 	for _, reaction := range reactions {
 		userUUID, ok := userUUIDs[reaction.UserID]
@@ -164,6 +196,7 @@ func reactionsFromEntitiesWithUUIDs(reactions []*entity.Reaction, userUUIDs map[
 			return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("reaction user not found"))
 		}
 		reactionModel := mapper.ReactionFromEntity(reaction)
+		reactionModel.TargetUUID = targetUUID
 		reactionModel.UserUUID = userUUID
 		out = append(out, reactionModel)
 	}

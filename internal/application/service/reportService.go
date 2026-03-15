@@ -52,8 +52,9 @@ func NewReportServiceWithActionDispatcher(
 	}
 }
 
-func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
-	if targetID <= 0 {
+func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUID string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+	targetUUID = strings.TrimSpace(targetUUID)
+	if targetUUID == "" {
 		return 0, customerror.ErrInvalidInput
 	}
 	if _, ok := entity.ParseReportTargetType(string(targetType)); !ok {
@@ -66,10 +67,13 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 	if len(reasonDetail) > maxReportReasonDetailLength {
 		return 0, customerror.ErrInvalidInput
 	}
-
+	targetID, err := s.resolveReportTargetID(ctx, targetType, targetUUID)
+	if err != nil {
+		return 0, err
+	}
 	report := entity.NewReport(targetType, targetID, reporterUserID, reasonCode, reasonDetail)
 	var reportID int64
-	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, reporterUserID)
 		if err != nil {
@@ -98,6 +102,31 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 		return 0, err
 	}
 	return reportID, nil
+}
+
+func (s *ReportService) resolveReportTargetID(ctx context.Context, targetType entity.ReportTargetType, targetUUID string) (int64, error) {
+	switch targetType {
+	case entity.ReportTargetPost:
+		post, err := s.postRepository.SelectPostByUUID(ctx, targetUUID)
+		if err != nil {
+			return 0, customerror.WrapRepository("select post by uuid for report target", err)
+		}
+		if post == nil {
+			return 0, customerror.ErrPostNotFound
+		}
+		return post.ID, nil
+	case entity.ReportTargetComment:
+		comment, err := s.commentRepository.SelectCommentByUUID(ctx, targetUUID)
+		if err != nil {
+			return 0, customerror.WrapRepository("select comment by uuid for report target", err)
+		}
+		if comment == nil {
+			return 0, customerror.ErrCommentNotFound
+		}
+		return comment.ID, nil
+	default:
+		return 0, customerror.ErrInvalidInput
+	}
 }
 
 func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {

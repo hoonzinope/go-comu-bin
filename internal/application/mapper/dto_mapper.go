@@ -7,7 +7,7 @@ import (
 
 func BoardFromEntity(board *entity.Board) model.Board {
 	return model.Board{
-		ID:          board.ID,
+		UUID:        board.UUID,
 		Name:        board.Name,
 		Description: board.Description,
 		CreatedAt:   board.CreatedAt,
@@ -24,11 +24,10 @@ func BoardsFromEntities(items []*entity.Board) []model.Board {
 
 func PostFromEntity(post *entity.Post) model.Post {
 	return model.Post{
-		ID:        post.ID,
+		UUID:      post.UUID,
 		Title:     post.Title,
 		Content:   post.Content,
 		AuthorID:  post.AuthorID,
-		BoardID:   post.BoardID,
 		CreatedAt: post.CreatedAt,
 		UpdatedAt: post.UpdatedAt,
 	}
@@ -52,10 +51,9 @@ func PostsFromEntities(items []*entity.Post) []model.Post {
 
 func CommentFromEntity(comment *entity.Comment) model.Comment {
 	return model.Comment{
-		ID:        comment.ID,
+		UUID:      comment.UUID,
 		Content:   comment.Content,
 		AuthorID:  comment.AuthorID,
-		PostID:    comment.PostID,
 		ParentID:  comment.ParentID,
 		CreatedAt: comment.CreatedAt,
 	}
@@ -81,7 +79,6 @@ func ReactionFromEntity(reaction *entity.Reaction) model.Reaction {
 	return model.Reaction{
 		ID:         reaction.ID,
 		TargetType: reaction.TargetType,
-		TargetID:   reaction.TargetID,
 		Type:       reaction.Type,
 		UserID:     reaction.UserID,
 		CreatedAt:  reaction.CreatedAt,

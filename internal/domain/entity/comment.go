@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 const DeletedCommentPlaceholder = "삭제된 댓글"
 
@@ -13,6 +17,7 @@ const (
 
 type Comment struct {
 	ID        int64
+	UUID      string
 	Content   string
 	AuthorID  int64
 	PostID    int64
@@ -26,6 +31,7 @@ type Comment struct {
 func NewComment(content string, authorID, postID int64, parentID *int64) *Comment {
 	now := time.Now()
 	return &Comment{
+		UUID:      uuid.NewString(),
 		Content:   content,
 		AuthorID:  authorID,
 		PostID:    postID,

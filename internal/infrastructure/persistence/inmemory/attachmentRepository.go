@@ -69,12 +69,31 @@ func (r *AttachmentRepository) SelectByID(ctx context.Context, id int64) (*entit
 	return r.selectByID(id)
 }
 
+func (r *AttachmentRepository) SelectByUUID(ctx context.Context, attachmentUUID string) (*entity.Attachment, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectByUUID(attachmentUUID)
+}
+
 func (r *AttachmentRepository) selectByID(id int64) (*entity.Attachment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	if attachment, exists := r.attachmentDB.Data[id]; exists {
 		return cloneAttachment(attachment), nil
+	}
+	return nil, nil
+}
+
+func (r *AttachmentRepository) selectByUUID(attachmentUUID string) (*entity.Attachment, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, attachment := range r.attachmentDB.Data {
+		if attachment.UUID == attachmentUUID {
+			return cloneAttachment(attachment), nil
+		}
 	}
 	return nil, nil
 }

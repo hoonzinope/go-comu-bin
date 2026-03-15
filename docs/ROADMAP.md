@@ -62,6 +62,7 @@
     - 장기 과제: soft delete 데이터의 보존기간, 복구권한, 추가 파기 절차 명확화
 - 구조 개선
   - Offset -> Cursor 페이지네이션으로 DTO/Port 재설계
+    - 완료: 공개 API의 `Board/Post/Comment/Attachment` 식별자는 UUID로 전환했고, 공개 목록 조회는 opaque `cursor`를 사용한다.
   - SEO용 Slug 충돌 처리
   - Reaction 중복 방지 정책 도입
     - 동일 사용자의 리액션은 `target_id`/`target_type` 기준 단일 상태로 유지

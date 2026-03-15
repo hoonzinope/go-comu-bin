@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
@@ -174,35 +175,35 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 
 	v1.GET("/boards", h.handleBoardsGet)
 	v1.POST("/boards", h.authGinMiddleware, h.handleBoardsPost)
-	v1.PUT("/boards/:boardID", h.authGinMiddleware, h.handleBoardPut)
-	v1.DELETE("/boards/:boardID", h.authGinMiddleware, h.handleBoardDelete)
+	v1.PUT("/boards/:boardUUID", h.authGinMiddleware, h.handleBoardPut)
+	v1.DELETE("/boards/:boardUUID", h.authGinMiddleware, h.handleBoardDelete)
 
-	v1.GET("/boards/:boardID/posts", h.handleBoardPostsGet)
-	v1.POST("/boards/:boardID/posts", h.authGinMiddleware, h.handleBoardPostsPost)
-	v1.POST("/boards/:boardID/posts/drafts", h.authGinMiddleware, h.handleBoardDraftPostsPost)
+	v1.GET("/boards/:boardUUID/posts", h.handleBoardPostsGet)
+	v1.POST("/boards/:boardUUID/posts", h.authGinMiddleware, h.handleBoardPostsPost)
+	v1.POST("/boards/:boardUUID/posts/drafts", h.authGinMiddleware, h.handleBoardDraftPostsPost)
 	v1.GET("/tags/:tagName/posts", h.handleTagPostsGet)
 
-	v1.GET("/posts/:postID", h.handlePostDetailGet)
-	v1.POST("/posts/:postID/publish", h.authGinMiddleware, h.handlePostPublish)
-	v1.GET("/posts/:postID/attachments", h.handlePostAttachmentsGet)
-	v1.GET("/posts/:postID/attachments/:attachmentID/file", h.handlePostAttachmentFileGet)
-	v1.GET("/posts/:postID/attachments/:attachmentID/preview", h.authGinMiddleware, h.handlePostAttachmentPreviewGet)
-	v1.POST("/posts/:postID/attachments/upload", h.authGinMiddleware, h.handlePostAttachmentsUpload)
-	v1.DELETE("/posts/:postID/attachments/:attachmentID", h.authGinMiddleware, h.handlePostAttachmentDelete)
-	v1.PUT("/posts/:postID", h.authGinMiddleware, h.handlePostDetailPut)
-	v1.DELETE("/posts/:postID", h.authGinMiddleware, h.handlePostDetailDelete)
+	v1.GET("/posts/:postUUID", h.handlePostDetailGet)
+	v1.POST("/posts/:postUUID/publish", h.authGinMiddleware, h.handlePostPublish)
+	v1.GET("/posts/:postUUID/attachments", h.handlePostAttachmentsGet)
+	v1.GET("/posts/:postUUID/attachments/:attachmentUUID/file", h.handlePostAttachmentFileGet)
+	v1.GET("/posts/:postUUID/attachments/:attachmentUUID/preview", h.authGinMiddleware, h.handlePostAttachmentPreviewGet)
+	v1.POST("/posts/:postUUID/attachments/upload", h.authGinMiddleware, h.handlePostAttachmentsUpload)
+	v1.DELETE("/posts/:postUUID/attachments/:attachmentUUID", h.authGinMiddleware, h.handlePostAttachmentDelete)
+	v1.PUT("/posts/:postUUID", h.authGinMiddleware, h.handlePostDetailPut)
+	v1.DELETE("/posts/:postUUID", h.authGinMiddleware, h.handlePostDetailDelete)
 
-	v1.GET("/posts/:postID/comments", h.handlePostCommentsGet)
-	v1.POST("/posts/:postID/comments", h.authGinMiddleware, h.handlePostCommentsPost)
-	v1.GET("/posts/:postID/reactions", h.handlePostReactions)
-	v1.PUT("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionPut)
-	v1.DELETE("/posts/:postID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionDelete)
+	v1.GET("/posts/:postUUID/comments", h.handlePostCommentsGet)
+	v1.POST("/posts/:postUUID/comments", h.authGinMiddleware, h.handlePostCommentsPost)
+	v1.GET("/posts/:postUUID/reactions", h.handlePostReactions)
+	v1.PUT("/posts/:postUUID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionPut)
+	v1.DELETE("/posts/:postUUID/reactions/me", h.authGinMiddleware, h.handleMyPostReactionDelete)
 
-	v1.PUT("/comments/:commentID", h.authGinMiddleware, h.handleCommentPut)
-	v1.DELETE("/comments/:commentID", h.authGinMiddleware, h.handleCommentDelete)
-	v1.GET("/comments/:commentID/reactions", h.handleCommentReactions)
-	v1.PUT("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionPut)
-	v1.DELETE("/comments/:commentID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionDelete)
+	v1.PUT("/comments/:commentUUID", h.authGinMiddleware, h.handleCommentPut)
+	v1.DELETE("/comments/:commentUUID", h.authGinMiddleware, h.handleCommentDelete)
+	v1.GET("/comments/:commentUUID/reactions", h.handleCommentReactions)
+	v1.PUT("/comments/:commentUUID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionPut)
+	v1.DELETE("/comments/:commentUUID/reactions/me", h.authGinMiddleware, h.handleMyCommentReactionDelete)
 
 	admin := v1.Group("/admin", h.authGinMiddleware, h.adminGinMiddleware)
 	admin.GET("/reports", h.handleAdminReportsGet)
@@ -210,7 +211,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	admin.GET("/outbox/dead", h.handleAdminDeadOutboxGet)
 	admin.POST("/outbox/dead/:messageID/requeue", h.handleAdminDeadOutboxRequeue)
 	admin.DELETE("/outbox/dead/:messageID", h.handleAdminDeadOutboxDiscard)
-	admin.PUT("/boards/:boardID/visibility", h.handleAdminBoardVisibilityPut)
+	admin.PUT("/boards/:boardUUID/visibility", h.handleAdminBoardVisibilityPut)
 }
 
 func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
@@ -700,7 +701,7 @@ func (h *HTTPHandler) handleAdminDeadOutboxDiscard(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param boardID path int true "Board ID"
+// @Param boardUUID path string true "Board UUID" format(uuid)
 // @Param request body boardVisibilityRequest true "Visibility payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
@@ -708,13 +709,13 @@ func (h *HTTPHandler) handleAdminDeadOutboxDiscard(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /admin/boards/{boardID}/visibility [put]
+// @Router /admin/boards/{boardUUID}/visibility [put]
 func (h *HTTPHandler) handleAdminBoardVisibilityPut(c *gin.Context) {
 	adminID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
 	}
-	boardID, ok := parsePathID(c, "boardID", "board")
+	boardUUID, ok := parsePathUUID(c, "boardUUID", "board")
 	if !ok {
 		return
 	}
@@ -723,7 +724,7 @@ func (h *HTTPHandler) handleAdminBoardVisibilityPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.boardUseCase.SetBoardVisibility(c.Request.Context(), boardID, adminID, req.Hidden); err != nil {
+	if err := h.boardUseCase.SetBoardVisibility(c.Request.Context(), boardUUID, adminID, req.Hidden); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -736,17 +737,17 @@ func (h *HTTPHandler) handleAdminBoardVisibilityPut(c *gin.Context) {
 // @Tags Board
 // @Produce json
 // @Param limit query int false "Page size" minimum(1) maximum(1000)
-// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Param cursor query string false "Opaque cursor returned by previous list response"
 // @Success 200 {object} response.BoardList
 // @Failure 400 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /boards [get]
 func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
-	limit, lastID, ok := h.parseLimitLastID(c)
+	limit, cursor, ok := h.parseLimitCursor(c)
 	if !ok {
 		return
 	}
-	boards, err := h.boardUseCase.GetBoards(c.Request.Context(), limit, lastID)
+	boards, err := h.boardUseCase.GetBoards(c.Request.Context(), limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -762,7 +763,7 @@ func (h *HTTPHandler) handleBoardsGet(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body boardRequest true "Create board payload"
-// @Success 201 {object} idResponse
+// @Success 201 {object} uuidResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
@@ -789,17 +790,17 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 		writeUseCaseError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, idResponse{ID: id})
+	c.JSON(http.StatusCreated, uuidResponse{UUID: id})
 }
 
 // handleBoardPut godoc
 // @Summary Update Board
-// @Description Updates a board by id (admin only).
+// @Description Updates a board by UUID (admin only).
 // @Tags Board
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param boardID path int true "Board ID"
+// @Param boardUUID path string true "Board UUID" format(uuid)
 // @Param request body boardRequest true "Update board payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
@@ -807,9 +808,9 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /boards/{boardID} [put]
+// @Router /boards/{boardUUID} [put]
 func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
-	boardID, ok := parsePathID(c, "boardID", "board")
+	boardUUID, ok := parsePathUUID(c, "boardUUID", "board")
 	if !ok {
 		return
 	}
@@ -829,7 +830,7 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.boardUseCase.UpdateBoard(c.Request.Context(), boardID, userID, req.Name, req.Description); err != nil {
+	if err := h.boardUseCase.UpdateBoard(c.Request.Context(), boardUUID, userID, req.Name, req.Description); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -838,20 +839,20 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 
 // handleBoardDelete godoc
 // @Summary Delete Board
-// @Description Deletes a board by id (admin only).
+// @Description Deletes a board by UUID (admin only).
 // @Tags Board
 // @Produce json
 // @Security BearerAuth
-// @Param boardID path int true "Board ID"
+// @Param boardUUID path string true "Board UUID" format(uuid)
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /boards/{boardID} [delete]
+// @Router /boards/{boardUUID} [delete]
 func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
-	boardID, ok := parsePathID(c, "boardID", "board")
+	boardUUID, ok := parsePathUUID(c, "boardUUID", "board")
 	if !ok {
 		return
 	}
@@ -859,7 +860,7 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.boardUseCase.DeleteBoard(c.Request.Context(), boardID, userID); err != nil {
+	if err := h.boardUseCase.DeleteBoard(c.Request.Context(), boardUUID, userID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -871,24 +872,24 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 // @Description Returns posts in board with cursor pagination.
 // @Tags Post
 // @Produce json
-// @Param boardID path int true "Board ID"
+// @Param boardUUID path string true "Board UUID" format(uuid)
 // @Param limit query int false "Page size" minimum(1) maximum(1000)
-// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Param cursor query string false "Opaque cursor returned by previous list response"
 // @Success 200 {object} response.PostList
 // @Failure 400 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /boards/{boardID}/posts [get]
+// @Router /boards/{boardUUID}/posts [get]
 func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
-	boardID, ok := parsePathID(c, "boardID", "board")
+	boardUUID, ok := parsePathUUID(c, "boardUUID", "board")
 	if !ok {
 		return
 	}
 
-	limit, lastID, ok := h.parseLimitLastID(c)
+	limit, cursor, ok := h.parseLimitCursor(c)
 	if !ok {
 		return
 	}
-	posts, err := h.postUseCase.GetPostsList(c.Request.Context(), boardID, limit, lastID)
+	posts, err := h.postUseCase.GetPostsList(c.Request.Context(), boardUUID, limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -898,21 +899,21 @@ func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
 
 // handleBoardPostsPost godoc
 // @Summary Create Post
-// @Description Creates a post in board.
+// @Description Creates a post in a board identified by UUID.
 // @Tags Post
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param boardID path int true "Board ID"
+// @Param boardUUID path string true "Board UUID" format(uuid)
 // @Param request body postRequest true "Create post payload"
-// @Success 201 {object} idResponse
+// @Success 201 {object} uuidResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /boards/{boardID}/posts [post]
+// @Router /boards/{boardUUID}/posts [post]
 func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
-	boardID, ok := parsePathID(c, "boardID", "board")
+	boardUUID, ok := parsePathUUID(c, "boardUUID", "board")
 	if !ok {
 		return
 	}
@@ -931,31 +932,31 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreatePost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardID)
+	postID, err := h.postUseCase.CreatePost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, idResponse{ID: postID})
+	c.JSON(http.StatusCreated, uuidResponse{UUID: postID})
 }
 
 // handleBoardDraftPostsPost godoc
 // @Summary Create Draft Post
-// @Description Creates a draft post in board.
+// @Description Creates a draft post in a board identified by UUID.
 // @Tags Post
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param boardID path int true "Board ID"
+// @Param boardUUID path string true "Board UUID" format(uuid)
 // @Param request body postRequest true "Create draft post payload"
-// @Success 201 {object} idResponse
+// @Success 201 {object} uuidResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /boards/{boardID}/posts/drafts [post]
+// @Router /boards/{boardUUID}/posts/drafts [post]
 func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
-	boardID, ok := parsePathID(c, "boardID", "board")
+	boardUUID, ok := parsePathUUID(c, "boardUUID", "board")
 	if !ok {
 		return
 	}
@@ -974,12 +975,12 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreateDraftPost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardID)
+	postID, err := h.postUseCase.CreateDraftPost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, idResponse{ID: postID})
+	c.JSON(http.StatusCreated, uuidResponse{UUID: postID})
 }
 
 // handleTagPostsGet godoc
@@ -989,7 +990,7 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 // @Produce json
 // @Param tagName path string true "Normalized tag name"
 // @Param limit query int false "Page size" minimum(1) maximum(1000)
-// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Param cursor query string false "Opaque cursor returned by previous list response"
 // @Success 200 {object} response.PostList
 // @Failure 400 {object} errorResponse
 // @Failure 404 {object} errorResponse
@@ -1001,11 +1002,11 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 		badRequest(c, errors.New("tagName is required"))
 		return
 	}
-	limit, lastID, ok := h.parseLimitLastID(c)
+	limit, cursor, ok := h.parseLimitCursor(c)
 	if !ok {
 		return
 	}
-	posts, err := h.postUseCase.GetPostsByTag(c.Request.Context(), tagName, limit, lastID)
+	posts, err := h.postUseCase.GetPostsByTag(c.Request.Context(), tagName, limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1015,22 +1016,22 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 
 // handlePostDetailGet godoc
 // @Summary Get Post Detail
-// @Description Retrieves post detail by id.
+// @Description Retrieves post detail by UUID.
 // @Tags Post
 // @Produce json
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Success 200 {object} response.PostDetail
 // @Failure 400 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID} [get]
+// @Router /posts/{postUUID} [get]
 func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
 
-	post, err := h.postUseCase.GetPostDetail(c.Request.Context(), postID)
+	post, err := h.postUseCase.GetPostDetail(c.Request.Context(), postUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1043,18 +1044,18 @@ func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 // @Description Returns attachments for a published post.
 // @Tags Attachment
 // @Produce json
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Success 200 {object} attachmentListResponse
 // @Failure 400 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/attachments [get]
+// @Router /posts/{postUUID}/attachments [get]
 func (h *HTTPHandler) handlePostAttachmentsGet(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
-	items, err := h.attachmentUseCase.GetPostAttachments(c.Request.Context(), postID)
+	items, err := h.attachmentUseCase.GetPostAttachments(c.Request.Context(), postUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1069,7 +1070,7 @@ func (h *HTTPHandler) handlePostAttachmentsGet(c *gin.Context) {
 // @Accept mpfd
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Param file formData file true "Attachment file"
 // @Success 201 {object} attachmentUploadResponse
 // @Failure 400 {object} errorResponse
@@ -1077,9 +1078,9 @@ func (h *HTTPHandler) handlePostAttachmentsGet(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/attachments/upload [post]
+// @Router /posts/{postUUID}/attachments/upload [post]
 func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
@@ -1119,17 +1120,17 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 			contentType = guessed
 		}
 	}
-	upload, err := h.attachmentUseCase.UploadPostAttachment(c.Request.Context(), postID, userID, fileHeader.Filename, contentType, file)
+	upload, err := h.attachmentUseCase.UploadPostAttachment(c.Request.Context(), postUUID, userID, fileHeader.Filename, contentType, file)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
 	previewURL := upload.PreviewURL
 	if previewURL == "" {
-		previewURL = fmt.Sprintf("/api/v1/posts/%d/attachments/%d/preview", postID, upload.ID)
+		previewURL = fmt.Sprintf("/api/v1/posts/%s/attachments/%s/preview", postUUID, upload.UUID)
 	}
 	c.JSON(http.StatusCreated, attachmentUploadResponse{
-		ID:            upload.ID,
+		UUID:          upload.UUID,
 		EmbedMarkdown: upload.EmbedMarkdown,
 		PreviewURL:    previewURL,
 	})
@@ -1140,22 +1141,22 @@ func (h *HTTPHandler) handlePostAttachmentsUpload(c *gin.Context) {
 // @Description Returns the stored file for an attachment of a published post.
 // @Tags Attachment
 // @Produce application/octet-stream
-// @Param postID path int true "Post ID"
-// @Param attachmentID path int true "Attachment ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
+// @Param attachmentUUID path string true "Attachment UUID" format(uuid)
 // @Success 200 {file} file
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/attachments/{attachmentID}/file [get]
+// @Router /posts/{postUUID}/attachments/{attachmentUUID}/file [get]
 func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
-	attachmentID, ok := parsePathID(c, "attachmentID", "attachment")
+	attachmentUUID, ok := parsePathUUID(c, "attachmentUUID", "attachment")
 	if !ok {
 		return
 	}
-	file, err := h.attachmentUseCase.GetPostAttachmentFile(c.Request.Context(), postID, attachmentID)
+	file, err := h.attachmentUseCase.GetPostAttachmentFile(c.Request.Context(), postUUID, attachmentUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1179,20 +1180,20 @@ func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
 // @Tags Attachment
 // @Produce application/octet-stream
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
-// @Param attachmentID path int true "Attachment ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
+// @Param attachmentUUID path string true "Attachment UUID" format(uuid)
 // @Success 200 {file} file
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/attachments/{attachmentID}/preview [get]
+// @Router /posts/{postUUID}/attachments/{attachmentUUID}/preview [get]
 func (h *HTTPHandler) handlePostAttachmentPreviewGet(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
-	attachmentID, ok := parsePathID(c, "attachmentID", "attachment")
+	attachmentUUID, ok := parsePathUUID(c, "attachmentUUID", "attachment")
 	if !ok {
 		return
 	}
@@ -1200,7 +1201,7 @@ func (h *HTTPHandler) handlePostAttachmentPreviewGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	file, err := h.attachmentUseCase.GetPostAttachmentPreviewFile(c.Request.Context(), postID, attachmentID, userID)
+	file, err := h.attachmentUseCase.GetPostAttachmentPreviewFile(c.Request.Context(), postUUID, attachmentUUID, userID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1217,21 +1218,21 @@ func (h *HTTPHandler) handlePostAttachmentPreviewGet(c *gin.Context) {
 // @Tags Attachment
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
-// @Param attachmentID path int true "Attachment ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
+// @Param attachmentUUID path string true "Attachment UUID" format(uuid)
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/attachments/{attachmentID} [delete]
+// @Router /posts/{postUUID}/attachments/{attachmentUUID} [delete]
 func (h *HTTPHandler) handlePostAttachmentDelete(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
-	attachmentID, ok := parsePathID(c, "attachmentID", "attachment")
+	attachmentUUID, ok := parsePathUUID(c, "attachmentUUID", "attachment")
 	if !ok {
 		return
 	}
@@ -1239,7 +1240,7 @@ func (h *HTTPHandler) handlePostAttachmentDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.attachmentUseCase.DeletePostAttachment(c.Request.Context(), postID, attachmentID, userID); err != nil {
+	if err := h.attachmentUseCase.DeletePostAttachment(c.Request.Context(), postUUID, attachmentUUID, userID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1248,20 +1249,20 @@ func (h *HTTPHandler) handlePostAttachmentDelete(c *gin.Context) {
 
 // handlePostPublish godoc
 // @Summary Publish Post
-// @Description Publishes a draft post by id.
+// @Description Publishes a draft post by UUID.
 // @Tags Post
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/publish [post]
+// @Router /posts/{postUUID}/publish [post]
 func (h *HTTPHandler) handlePostPublish(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
@@ -1269,7 +1270,7 @@ func (h *HTTPHandler) handlePostPublish(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.postUseCase.PublishPost(c.Request.Context(), postID, authorID); err != nil {
+	if err := h.postUseCase.PublishPost(c.Request.Context(), postUUID, authorID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1278,12 +1279,12 @@ func (h *HTTPHandler) handlePostPublish(c *gin.Context) {
 
 // handlePostDetailPut godoc
 // @Summary Update Post
-// @Description Updates a post by id.
+// @Description Updates a post by UUID.
 // @Tags Post
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Param request body postRequest true "Update post payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
@@ -1291,9 +1292,9 @@ func (h *HTTPHandler) handlePostPublish(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID} [put]
+// @Router /posts/{postUUID} [put]
 func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
@@ -1312,7 +1313,7 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.postUseCase.UpdatePost(c.Request.Context(), postID, authorID, req.Title, req.Content, req.Tags); err != nil {
+	if err := h.postUseCase.UpdatePost(c.Request.Context(), postUUID, authorID, req.Title, req.Content, req.Tags); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1321,20 +1322,20 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 
 // handlePostDetailDelete godoc
 // @Summary Delete Post
-// @Description Deletes a post by id.
+// @Description Deletes a post by UUID.
 // @Tags Post
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID} [delete]
+// @Router /posts/{postUUID} [delete]
 func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
@@ -1342,7 +1343,7 @@ func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.postUseCase.DeletePost(c.Request.Context(), postID, authorID); err != nil {
+	if err := h.postUseCase.DeletePost(c.Request.Context(), postUUID, authorID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1354,24 +1355,24 @@ func (h *HTTPHandler) handlePostDetailDelete(c *gin.Context) {
 // @Description Returns comments in post with cursor pagination.
 // @Tags Comment
 // @Produce json
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Param limit query int false "Page size" minimum(1) maximum(1000)
-// @Param last_id query int false "Cursor id, fetch items with id < last_id" minimum(0)
+// @Param cursor query string false "Opaque cursor returned by previous list response"
 // @Success 200 {object} response.CommentList
 // @Failure 400 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/comments [get]
+// @Router /posts/{postUUID}/comments [get]
 func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
 
-	limit, lastID, ok := h.parseLimitLastID(c)
+	limit, cursor, ok := h.parseLimitCursor(c)
 	if !ok {
 		return
 	}
-	comments, err := h.commentUseCase.GetCommentsByPost(c.Request.Context(), postID, limit, lastID)
+	comments, err := h.commentUseCase.GetCommentsByPost(c.Request.Context(), postUUID, limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1386,16 +1387,16 @@ func (h *HTTPHandler) handlePostCommentsGet(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Param request body commentRequest true "Create comment payload"
-// @Success 201 {object} idResponse
+// @Success 201 {object} uuidResponse
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/comments [post]
+// @Router /posts/{postUUID}/comments [post]
 func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
@@ -1413,22 +1414,22 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	id, err := h.commentUseCase.CreateComment(c.Request.Context(), req.Content, authorID, postID, req.ParentID)
+	id, err := h.commentUseCase.CreateComment(c.Request.Context(), req.Content, authorID, postUUID, req.ParentUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, idResponse{ID: id})
+	c.JSON(http.StatusCreated, uuidResponse{UUID: id})
 }
 
 // handleCommentPut godoc
 // @Summary Update Comment
-// @Description Updates comment by id.
+// @Description Updates comment by UUID.
 // @Tags Comment
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param commentID path int true "Comment ID"
+// @Param commentUUID path string true "Comment UUID" format(uuid)
 // @Param request body commentRequest true "Update comment payload"
 // @Success 204
 // @Failure 400 {object} errorResponse
@@ -1436,9 +1437,9 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /comments/{commentID} [put]
+// @Router /comments/{commentUUID} [put]
 func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
-	commentID, ok := parsePathID(c, "commentID", "comment")
+	commentUUID, ok := parsePathUUID(c, "commentUUID", "comment")
 	if !ok {
 		return
 	}
@@ -1457,7 +1458,7 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.commentUseCase.UpdateComment(c.Request.Context(), commentID, authorID, req.Content); err != nil {
+	if err := h.commentUseCase.UpdateComment(c.Request.Context(), commentUUID, authorID, req.Content); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1470,16 +1471,16 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 // @Tags Comment
 // @Produce json
 // @Security BearerAuth
-// @Param commentID path int true "Comment ID"
+// @Param commentUUID path string true "Comment UUID" format(uuid)
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 403 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /comments/{commentID} [delete]
+// @Router /comments/{commentUUID} [delete]
 func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {
-	commentID, ok := parsePathID(c, "commentID", "comment")
+	commentUUID, ok := parsePathUUID(c, "commentUUID", "comment")
 	if !ok {
 		return
 	}
@@ -1487,7 +1488,7 @@ func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.commentUseCase.DeleteComment(c.Request.Context(), commentID, authorID); err != nil {
+	if err := h.commentUseCase.DeleteComment(c.Request.Context(), commentUUID, authorID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1500,17 +1501,17 @@ func (h *HTTPHandler) handleCommentDelete(c *gin.Context) {
 // @Tags Reaction
 // @Accept json
 // @Produce json
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Success 200 {array} response.Reaction
 // @Failure 400 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/reactions [get]
+// @Router /posts/{postUUID}/reactions [get]
 func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
-	h.handleReactionsByTarget(c, postID, entity.ReactionTargetPost)
+	h.handleReactionsByTarget(c, postUUID, entity.ReactionTargetPost)
 }
 
 // handleCommentReactions godoc
@@ -1519,17 +1520,17 @@ func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
 // @Tags Reaction
 // @Accept json
 // @Produce json
-// @Param commentID path int true "Comment ID"
+// @Param commentUUID path string true "Comment UUID" format(uuid)
 // @Success 200 {array} response.Reaction
 // @Failure 400 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /comments/{commentID}/reactions [get]
+// @Router /comments/{commentUUID}/reactions [get]
 func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
-	commentID, ok := parsePathID(c, "commentID", "comment")
+	commentUUID, ok := parsePathUUID(c, "commentUUID", "comment")
 	if !ok {
 		return
 	}
-	h.handleReactionsByTarget(c, commentID, entity.ReactionTargetComment)
+	h.handleReactionsByTarget(c, commentUUID, entity.ReactionTargetComment)
 }
 
 // handleMyPostReactionPut godoc
@@ -1540,7 +1541,7 @@ func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Param request body reactionRequest true "Set reaction payload"
 // @Success 201
 // @Success 204
@@ -1548,13 +1549,13 @@ func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 // @Failure 401 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/reactions/me [put]
+// @Router /posts/{postUUID}/reactions/me [put]
 func (h *HTTPHandler) handleMyPostReactionPut(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
-	h.handleMyReactionPut(c, postID, entity.ReactionTargetPost)
+	h.handleMyReactionPut(c, postUUID, entity.ReactionTargetPost)
 }
 
 // handleMyPostReactionDelete godoc
@@ -1564,19 +1565,19 @@ func (h *HTTPHandler) handleMyPostReactionPut(c *gin.Context) {
 // @Tags Reaction
 // @Produce json
 // @Security BearerAuth
-// @Param postID path int true "Post ID"
+// @Param postUUID path string true "Post UUID" format(uuid)
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /posts/{postID}/reactions/me [delete]
+// @Router /posts/{postUUID}/reactions/me [delete]
 func (h *HTTPHandler) handleMyPostReactionDelete(c *gin.Context) {
-	postID, ok := parsePathID(c, "postID", "post")
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
 	if !ok {
 		return
 	}
-	h.handleMyReactionDelete(c, postID, entity.ReactionTargetPost)
+	h.handleMyReactionDelete(c, postUUID, entity.ReactionTargetPost)
 }
 
 // handleMyCommentReactionPut godoc
@@ -1587,7 +1588,7 @@ func (h *HTTPHandler) handleMyPostReactionDelete(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param commentID path int true "Comment ID"
+// @Param commentUUID path string true "Comment UUID" format(uuid)
 // @Param request body reactionRequest true "Set reaction payload"
 // @Success 201
 // @Success 204
@@ -1595,13 +1596,13 @@ func (h *HTTPHandler) handleMyPostReactionDelete(c *gin.Context) {
 // @Failure 401 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /comments/{commentID}/reactions/me [put]
+// @Router /comments/{commentUUID}/reactions/me [put]
 func (h *HTTPHandler) handleMyCommentReactionPut(c *gin.Context) {
-	commentID, ok := parsePathID(c, "commentID", "comment")
+	commentUUID, ok := parsePathUUID(c, "commentUUID", "comment")
 	if !ok {
 		return
 	}
-	h.handleMyReactionPut(c, commentID, entity.ReactionTargetComment)
+	h.handleMyReactionPut(c, commentUUID, entity.ReactionTargetComment)
 }
 
 // handleMyCommentReactionDelete godoc
@@ -1611,23 +1612,23 @@ func (h *HTTPHandler) handleMyCommentReactionPut(c *gin.Context) {
 // @Tags Reaction
 // @Produce json
 // @Security BearerAuth
-// @Param commentID path int true "Comment ID"
+// @Param commentUUID path string true "Comment UUID" format(uuid)
 // @Success 204
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
-// @Router /comments/{commentID}/reactions/me [delete]
+// @Router /comments/{commentUUID}/reactions/me [delete]
 func (h *HTTPHandler) handleMyCommentReactionDelete(c *gin.Context) {
-	commentID, ok := parsePathID(c, "commentID", "comment")
+	commentUUID, ok := parsePathUUID(c, "commentUUID", "comment")
 	if !ok {
 		return
 	}
-	h.handleMyReactionDelete(c, commentID, entity.ReactionTargetComment)
+	h.handleMyReactionDelete(c, commentUUID, entity.ReactionTargetComment)
 }
 
-func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
-	reactions, err := h.reactionUseCase.GetReactionsByTarget(c.Request.Context(), targetID, targetType)
+func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetUUID string, targetType entity.ReactionTargetType) {
+	reactions, err := h.reactionUseCase.GetReactionsByTarget(c.Request.Context(), targetUUID, targetType)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1635,7 +1636,7 @@ func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetID int64, ta
 	c.JSON(http.StatusOK, response.ReactionsFromDTO(reactions))
 }
 
-func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
+func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetUUID string, targetType entity.ReactionTargetType) {
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
@@ -1650,7 +1651,7 @@ func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, target
 		badRequest(c, err)
 		return
 	}
-	created, err := h.reactionUseCase.SetReaction(c.Request.Context(), userID, targetID, targetType, reactionType)
+	created, err := h.reactionUseCase.SetReaction(c.Request.Context(), userID, targetUUID, targetType, reactionType)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1662,12 +1663,12 @@ func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetID int64, target
 	c.Status(http.StatusNoContent)
 }
 
-func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetID int64, targetType entity.ReactionTargetType) {
+func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetUUID string, targetType entity.ReactionTargetType) {
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
 	}
-	if err := h.reactionUseCase.DeleteReaction(c.Request.Context(), userID, targetID, targetType); err != nil {
+	if err := h.reactionUseCase.DeleteReaction(c.Request.Context(), userID, targetUUID, targetType); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -1845,6 +1846,23 @@ func (h *HTTPHandler) sanitizeInput(c *gin.Context, raw string) string {
 	return sanitized
 }
 
+func (h *HTTPHandler) parseLimitCursor(c *gin.Context) (int, string, bool) {
+	limitStr := c.Query("limit")
+	cursor := strings.TrimSpace(c.Query("cursor"))
+
+	limit := h.defaultPageLimit
+
+	if limitStr != "" {
+		v, err := strconv.Atoi(limitStr)
+		if err != nil || v < 1 || v > maxPageLimit {
+			badRequest(c, errors.New("invalid limit"))
+			return 0, "", false
+		}
+		limit = v
+	}
+	return limit, cursor, true
+}
+
 func (h *HTTPHandler) parseLimitLastID(c *gin.Context) (int, int64, bool) {
 	limitStr := c.Query("limit")
 	lastIDStr := c.Query("last_id")
@@ -1910,6 +1928,15 @@ func parsePathID(c *gin.Context, paramName, resourceName string) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+func parsePathUUID(c *gin.Context, paramName, resourceName string) (string, bool) {
+	raw := strings.TrimSpace(c.Param(paramName))
+	if _, err := uuid.Parse(raw); err != nil {
+		badRequest(c, errors.New("invalid "+resourceName+" uuid"))
+		return "", false
+	}
+	return raw, true
 }
 
 func (h *HTTPHandler) decodeJSON(c *gin.Context, dst any) error {

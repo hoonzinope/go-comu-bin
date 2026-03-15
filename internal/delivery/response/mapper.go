@@ -19,9 +19,9 @@ func BoardListFromDTO(list *model.BoardList) *BoardList {
 	return &BoardList{
 		Boards:     boards,
 		Limit:      list.Limit,
-		LastID:     list.LastID,
+		Cursor:     list.Cursor,
 		HasMore:    list.HasMore,
-		NextLastID: list.NextLastID,
+		NextCursor: list.NextCursor,
 	}
 }
 
@@ -38,9 +38,9 @@ func PostListFromDTO(list *model.PostList) *PostList {
 	return &PostList{
 		Posts:      posts,
 		Limit:      list.Limit,
-		LastID:     list.LastID,
+		Cursor:     list.Cursor,
 		HasMore:    list.HasMore,
-		NextLastID: list.NextLastID,
+		NextCursor: list.NextCursor,
 	}
 }
 
@@ -87,9 +87,9 @@ func CommentListFromDTO(list *model.CommentList) *CommentList {
 	return &CommentList{
 		Comments:   comments,
 		Limit:      list.Limit,
-		LastID:     list.LastID,
+		Cursor:     list.Cursor,
 		HasMore:    list.HasMore,
-		NextLastID: list.NextLastID,
+		NextCursor: list.NextCursor,
 	}
 }
 
@@ -119,7 +119,7 @@ func TagsFromDTO(items []model.Tag) []Tag {
 
 func boardFromDTO(board model.Board) Board {
 	return Board{
-		ID:          board.ID,
+		UUID:        board.UUID,
 		Name:        board.Name,
 		Description: board.Description,
 		CreatedAt:   board.CreatedAt,
@@ -128,11 +128,11 @@ func boardFromDTO(board model.Board) Board {
 
 func postFromDTO(post model.Post) Post {
 	return Post{
-		ID:         post.ID,
+		UUID:       post.UUID,
 		Title:      post.Title,
 		Content:    post.Content,
 		AuthorUUID: post.AuthorUUID,
-		BoardID:    post.BoardID,
+		BoardUUID:  post.BoardUUID,
 		CreatedAt:  post.CreatedAt,
 		UpdatedAt:  post.UpdatedAt,
 	}
@@ -148,11 +148,11 @@ func postPtrFromDTO(post *model.Post) *Post {
 
 func commentFromDTO(comment model.Comment) Comment {
 	return Comment{
-		ID:         comment.ID,
+		UUID:       comment.UUID,
 		Content:    comment.Content,
 		AuthorUUID: comment.AuthorUUID,
-		PostID:     comment.PostID,
-		ParentID:   comment.ParentID,
+		PostUUID:   comment.PostUUID,
+		ParentUUID: comment.ParentUUID,
 		CreatedAt:  comment.CreatedAt,
 	}
 }
@@ -183,7 +183,7 @@ func reactionFromDTO(reaction model.Reaction) Reaction {
 	return Reaction{
 		ID:         reaction.ID,
 		TargetType: string(reaction.TargetType),
-		TargetID:   reaction.TargetID,
+		TargetUUID: reaction.TargetUUID,
 		Type:       string(reaction.Type),
 		UserUUID:   reaction.UserUUID,
 		CreatedAt:  reaction.CreatedAt,
@@ -193,15 +193,15 @@ func reactionFromDTO(reaction model.Reaction) Reaction {
 func attachmentFromDTO(attachment model.Attachment) Attachment {
 	previewURL := attachment.PreviewURL
 	if previewURL == "" {
-		previewURL = fmt.Sprintf("/api/v1/posts/%d/attachments/%d/preview", attachment.PostID, attachment.ID)
+		previewURL = fmt.Sprintf("/api/v1/posts/%s/attachments/%s/preview", attachment.PostUUID, attachment.UUID)
 	}
 	return Attachment{
-		ID:          attachment.ID,
-		PostID:      attachment.PostID,
+		UUID:        attachment.UUID,
+		PostUUID:    attachment.PostUUID,
 		FileName:    attachment.FileName,
 		ContentType: attachment.ContentType,
 		SizeBytes:   attachment.SizeBytes,
-		FileURL:     fmt.Sprintf("/api/v1/posts/%d/attachments/%d/file", attachment.PostID, attachment.ID),
+		FileURL:     fmt.Sprintf("/api/v1/posts/%s/attachments/%s/file", attachment.PostUUID, attachment.UUID),
 		PreviewURL:  previewURL,
 		CreatedAt:   attachment.CreatedAt,
 	}

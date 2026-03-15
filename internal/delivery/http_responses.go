@@ -26,6 +26,10 @@ type idResponse struct {
 	ID int64 `json:"id" example:"1"`
 }
 
+type uuidResponse struct {
+	UUID string `json:"uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
 type userSuspensionResponse struct {
 	UserUUID       string     `json:"user_uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Status         string     `json:"status" example:"suspended"`
@@ -38,9 +42,9 @@ type attachmentListResponse struct {
 }
 
 type attachmentUploadResponse struct {
-	ID            int64  `json:"id" example:"1"`
-	EmbedMarkdown string `json:"embed_markdown" example:"![a.png](attachment://1)"`
-	PreviewURL    string `json:"preview_url" example:"/api/v1/posts/1/attachments/1/preview"`
+	UUID          string `json:"uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
+	EmbedMarkdown string `json:"embed_markdown" example:"![a.png](attachment://550e8400-e29b-41d4-a716-446655440000)"`
+	PreviewURL    string `json:"preview_url" example:"/api/v1/posts/550e8400-e29b-41d4-a716-446655440000/attachments/550e8400-e29b-41d4-a716-446655440000/preview"`
 }
 
 type reportResponse struct {

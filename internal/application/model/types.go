@@ -7,19 +7,19 @@ import (
 )
 
 type Board struct {
-	ID          int64
+	UUID        string
 	Name        string
 	Description string
 	CreatedAt   time.Time
 }
 
 type Post struct {
-	ID         int64
+	UUID       string
 	Title      string
 	Content    string
 	AuthorID   int64
 	AuthorUUID string
-	BoardID    int64
+	BoardUUID  string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
@@ -31,19 +31,20 @@ type Tag struct {
 }
 
 type Comment struct {
-	ID         int64
+	UUID       string
 	Content    string
 	AuthorID   int64
 	AuthorUUID string
-	PostID     int64
+	PostUUID   string
 	ParentID   *int64
+	ParentUUID *string
 	CreatedAt  time.Time
 }
 
 type Reaction struct {
 	ID         int64
 	TargetType entity.ReactionTargetType
-	TargetID   int64
+	TargetUUID string
 	Type       entity.ReactionType
 	UserID     int64
 	UserUUID   string

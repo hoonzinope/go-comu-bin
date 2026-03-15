@@ -28,9 +28,9 @@ func TestBoardService_CreateBoard_SuccessForAdmin(t *testing.T) {
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	boardID, err := svc.CreateBoard(context.Background(), adminID, "free", "desc")
+	boardUUID, err := svc.CreateBoard(context.Background(), adminID, "free", "desc")
 	require.NoError(t, err)
-	assert.NotZero(t, boardID)
+	assert.NotEmpty(t, boardUUID)
 }
 
 func TestBoardService_CreateBoard_InvalidInput(t *testing.T) {
@@ -49,7 +49,7 @@ func TestBoardService_GetBoards_Success(t *testing.T) {
 	seedBoard(repositories.board, "b2", "d2")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	list, err := svc.GetBoards(context.Background(), 10, 0)
+	list, err := svc.GetBoards(context.Background(), 10, "")
 	require.NoError(t, err)
 	assert.Len(t, list.Boards, 2)
 }
@@ -61,23 +61,23 @@ func TestBoardService_GetBoards_ExcludesHiddenBoards(t *testing.T) {
 	hiddenBoardID := seedBoard(repositories.board, "hidden", "d2")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	require.NoError(t, svc.SetBoardVisibility(context.Background(), hiddenBoardID, adminID, true))
+	require.NoError(t, svc.SetBoardVisibility(context.Background(), mustBoardUUID(t, repositories.board, hiddenBoardID), adminID, true))
 
-	list, err := svc.GetBoards(context.Background(), 10, 0)
+	list, err := svc.GetBoards(context.Background(), 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Boards, 1)
-	assert.Equal(t, visibleBoardID, list.Boards[0].ID)
+	assert.Equal(t, mustBoardUUID(t, repositories.board, visibleBoardID), list.Boards[0].UUID)
 }
 
 func TestBoardService_GetBoards_InvalidLimit(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	_, err := svc.GetBoards(context.Background(), 0, 0)
+	_, err := svc.GetBoards(context.Background(), 0, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
-	_, err = svc.GetBoards(context.Background(), maxPageLimit+1, 0)
+	_, err = svc.GetBoards(context.Background(), maxPageLimit+1, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -89,12 +89,12 @@ func TestBoardService_GetBoards_HasMoreAndNextCursor(t *testing.T) {
 	seedBoard(repositories.board, "b3", "d3")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	list, err := svc.GetBoards(context.Background(), 2, 0)
+	list, err := svc.GetBoards(context.Background(), 2, "")
 	require.NoError(t, err)
 	require.Len(t, list.Boards, 2)
 	assert.True(t, list.HasMore)
-	require.NotNil(t, list.NextLastID)
-	assert.Equal(t, list.Boards[len(list.Boards)-1].ID, *list.NextLastID)
+	require.NotNil(t, list.NextCursor)
+	assert.NotEmpty(t, *list.NextCursor)
 }
 
 func TestBoardService_GetBoards_HasMoreRemainsCorrectWithHiddenBoardsAtTop(t *testing.T) {
@@ -107,16 +107,16 @@ func TestBoardService_GetBoards_HasMoreRemainsCorrectWithHiddenBoardsAtTop(t *te
 	hidden2ID := seedBoard(repositories.board, "h2", "d5")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	require.NoError(t, svc.SetBoardVisibility(context.Background(), hidden1ID, adminID, true))
-	require.NoError(t, svc.SetBoardVisibility(context.Background(), hidden2ID, adminID, true))
+	require.NoError(t, svc.SetBoardVisibility(context.Background(), mustBoardUUID(t, repositories.board, hidden1ID), adminID, true))
+	require.NoError(t, svc.SetBoardVisibility(context.Background(), mustBoardUUID(t, repositories.board, hidden2ID), adminID, true))
 
-	list, err := svc.GetBoards(context.Background(), 2, 0)
+	list, err := svc.GetBoards(context.Background(), 2, "")
 	require.NoError(t, err)
 	require.Len(t, list.Boards, 2)
-	assert.Equal(t, visibleTopID, list.Boards[0].ID)
+	assert.Equal(t, mustBoardUUID(t, repositories.board, visibleTopID), list.Boards[0].UUID)
 	assert.True(t, list.HasMore)
-	require.NotNil(t, list.NextLastID)
-	assert.Equal(t, list.Boards[len(list.Boards)-1].ID, *list.NextLastID)
+	require.NotNil(t, list.NextCursor)
+	assert.NotEmpty(t, *list.NextCursor)
 }
 
 func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
@@ -125,8 +125,8 @@ func TestBoardService_UpdateDelete_SuccessForAdmin(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	require.NoError(t, svc.UpdateBoard(context.Background(), boardID, adminID, "new", "new-desc"))
-	require.NoError(t, svc.DeleteBoard(context.Background(), boardID, adminID))
+	require.NoError(t, svc.UpdateBoard(context.Background(), mustBoardUUID(t, repositories.board, boardID), adminID, "new", "new-desc"))
+	require.NoError(t, svc.DeleteBoard(context.Background(), mustBoardUUID(t, repositories.board, boardID), adminID))
 }
 
 func TestBoardService_DeleteBoard_RejectsNonEmptyBoard(t *testing.T) {
@@ -137,7 +137,7 @@ func TestBoardService_DeleteBoard_RejectsNonEmptyBoard(t *testing.T) {
 	seedPost(repositories.post, authorID, boardID, "title", "content")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	err := svc.DeleteBoard(context.Background(), boardID, adminID)
+	err := svc.DeleteBoard(context.Background(), mustBoardUUID(t, repositories.board, boardID), adminID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotEmpty))
 }
@@ -148,7 +148,7 @@ func TestBoardService_SetBoardVisibility_AdminOnly(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := NewBoardService(repositories.user, repositories.board, repositories.post, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	err := svc.SetBoardVisibility(context.Background(), boardID, userID, true)
+	err := svc.SetBoardVisibility(context.Background(), mustBoardUUID(t, repositories.board, boardID), userID, true)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
@@ -161,7 +161,7 @@ func TestBoardService_CreateBoard_InvalidatesBoardListCache(t *testing.T) {
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	seedBoard(repositories.board, "b1", "d1")
 
-	_, err := svc.GetBoards(context.Background(), 10, 0)
+	_, err := svc.GetBoards(context.Background(), 10, "")
 	require.NoError(t, err)
 	_, ok, err := cache.Get(context.Background(), key.BoardList(10, 0))
 	require.NoError(t, err)
@@ -184,11 +184,11 @@ func TestBoardService_CreateBoard_Succeeds_WhenInvalidationFails(t *testing.T) {
 		deleteByPrefixErr: newCacheFailure(nil),
 	}, newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	boardID, err := svc.CreateBoard(context.Background(), adminID, "free", "desc")
+	boardUUID, err := svc.CreateBoard(context.Background(), adminID, "free", "desc")
 	require.NoError(t, err)
-	assert.NotZero(t, boardID)
+	assert.NotEmpty(t, boardUUID)
 
-	board, repoErr := repositories.board.SelectBoardByID(context.Background(), boardID)
+	board, repoErr := repositories.board.SelectBoardByUUID(context.Background(), boardUUID)
 	require.NoError(t, repoErr)
 	assert.NotNil(t, board)
 }
@@ -199,7 +199,7 @@ func TestBoardService_GetBoards_ReturnsCacheFailure_WhenCacheLoadFails(t *testin
 		getOrSetWithTTLErr: newCacheFailure(nil),
 	}, newTestCachePolicy(), newTestAuthorizationPolicy())
 
-	_, err := svc.GetBoards(context.Background(), 10, 0)
+	_, err := svc.GetBoards(context.Background(), 10, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrCacheFailure))
 }

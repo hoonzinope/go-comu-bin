@@ -8,6 +8,7 @@ import (
 
 type BoardRepository interface {
 	SelectBoardByID(ctx context.Context, id int64) (*entity.Board, error)
+	SelectBoardByUUID(ctx context.Context, boardUUID string) (*entity.Board, error)
 	SelectBoardsByIDs(ctx context.Context, ids []int64) (map[int64]*entity.Board, error)
 	SelectBoardList(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error)
 	Save(ctx context.Context, board *entity.Board) (int64, error)

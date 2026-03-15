@@ -398,6 +398,10 @@ func (r boardTxRepository) SelectBoardByID(ctx context.Context, id int64) (*enti
 	_ = ctx
 	return r.repo.selectBoardByID(id)
 }
+func (r boardTxRepository) SelectBoardByUUID(ctx context.Context, boardUUID string) (*entity.Board, error) {
+	_ = ctx
+	return r.repo.selectBoardByUUID(boardUUID)
+}
 func (r boardTxRepository) SelectBoardsByIDs(ctx context.Context, ids []int64) (map[int64]*entity.Board, error) {
 	_ = ctx
 	return r.repo.selectBoardsByIDs(ids)
@@ -439,9 +443,17 @@ func (r postTxRepository) SelectPostByID(ctx context.Context, id int64) (*entity
 	_ = ctx
 	return r.repo.selectPostByID(id)
 }
+func (r postTxRepository) SelectPostByUUID(ctx context.Context, postUUID string) (*entity.Post, error) {
+	_ = ctx
+	return r.repo.selectPostByUUID(postUUID)
+}
 func (r postTxRepository) SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error) {
 	_ = ctx
 	return r.repo.selectPostByIDIncludingUnpublished(id)
+}
+func (r postTxRepository) SelectPostByUUIDIncludingUnpublished(ctx context.Context, postUUID string) (*entity.Post, error) {
+	_ = ctx
+	return r.repo.selectPostByUUIDIncludingUnpublished(postUUID)
 }
 func (r postTxRepository) SelectPosts(ctx context.Context, boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
 	_ = ctx
@@ -541,6 +553,10 @@ func (r commentTxRepository) SelectCommentByID(ctx context.Context, id int64) (*
 	_ = ctx
 	return r.repo.selectCommentByID(id)
 }
+func (r commentTxRepository) SelectCommentByUUID(ctx context.Context, commentUUID string) (*entity.Comment, error) {
+	_ = ctx
+	return r.repo.selectCommentByUUID(commentUUID)
+}
 func (r commentTxRepository) SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
 	_ = ctx
 	return r.repo.selectComments(postID, limit, lastID)
@@ -632,6 +648,10 @@ func (r attachmentTxRepository) Save(ctx context.Context, attachment *entity.Att
 func (r attachmentTxRepository) SelectByID(ctx context.Context, id int64) (*entity.Attachment, error) {
 	_ = ctx
 	return r.repo.selectByID(id)
+}
+func (r attachmentTxRepository) SelectByUUID(ctx context.Context, attachmentUUID string) (*entity.Attachment, error) {
+	_ = ctx
+	return r.repo.selectByUUID(attachmentUUID)
 }
 func (r attachmentTxRepository) SelectByPostID(ctx context.Context, postID int64) ([]*entity.Attachment, error) {
 	_ = ctx

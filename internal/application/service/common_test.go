@@ -18,6 +18,7 @@ import (
 	noopCache "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/noop"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
+	"github.com/stretchr/testify/require"
 )
 
 type testRepositories struct {
@@ -165,6 +166,38 @@ func seedCommentWithParent(commentRepository port.CommentRepository, authorID, p
 	comment := entity.NewComment(content, authorID, postID, parentID)
 	id, _ := commentRepository.Save(context.Background(), comment)
 	return id
+}
+
+func mustBoardUUID(t testing.TB, repo port.BoardRepository, boardID int64) string {
+	t.Helper()
+	board, err := repo.SelectBoardByID(context.Background(), boardID)
+	require.NoError(t, err)
+	require.NotNil(t, board)
+	return board.UUID
+}
+
+func mustPostUUID(t testing.TB, repo port.PostRepository, postID int64) string {
+	t.Helper()
+	post, err := repo.SelectPostByIDIncludingUnpublished(context.Background(), postID)
+	require.NoError(t, err)
+	require.NotNil(t, post)
+	return post.UUID
+}
+
+func mustCommentUUID(t testing.TB, repo port.CommentRepository, commentID int64) string {
+	t.Helper()
+	comment, err := repo.SelectCommentByID(context.Background(), commentID)
+	require.NoError(t, err)
+	require.NotNil(t, comment)
+	return comment.UUID
+}
+
+func mustAttachmentUUID(t testing.TB, repo port.AttachmentRepository, attachmentID int64) string {
+	t.Helper()
+	attachment, err := repo.SelectByID(context.Background(), attachmentID)
+	require.NoError(t, err)
+	require.NotNil(t, attachment)
+	return attachment.UUID
 }
 
 type errorCache struct {

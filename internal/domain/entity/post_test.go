@@ -9,6 +9,7 @@ import (
 
 func TestPost_NewPostAndUpdatePost(t *testing.T) {
 	p := NewPost("title", "content", 10, 20)
+	assert.NotEmpty(t, p.UUID)
 	assert.Equal(t, "title", p.Title)
 	assert.Equal(t, "content", p.Content)
 	assert.EqualValues(t, 10, p.AuthorID)
@@ -39,6 +40,7 @@ func TestPost_SoftDelete(t *testing.T) {
 func TestPost_NewDraftPost(t *testing.T) {
 	p := NewDraftPost("title", "content", 10, 20)
 
+	assert.NotEmpty(t, p.UUID)
 	assert.Equal(t, PostStatusDraft, p.Status)
 	assert.Nil(t, p.DeletedAt)
 }

@@ -15,7 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/admin/boards/{boardID}/visibility": {
+        "/admin/boards/{boardUUID}/visibility": {
             "put": {
                 "security": [
                     {
@@ -35,9 +35,10 @@ const docTemplate = `{
                 "summary": "Set Board Visibility",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Board ID",
-                        "name": "boardID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Board UUID",
+                        "name": "boardUUID",
                         "in": "path",
                         "required": true
                     },
@@ -520,10 +521,9 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Cursor id, fetch items with id \u003c last_id",
-                        "name": "last_id",
+                        "type": "string",
+                        "description": "Opaque cursor returned by previous list response",
+                        "name": "cursor",
                         "in": "query"
                     }
                 ],
@@ -580,7 +580,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
+                            "$ref": "#/definitions/delivery.uuidResponse"
                         }
                     },
                     "400": {
@@ -610,14 +610,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/boards/{boardID}": {
+        "/boards/{boardUUID}": {
             "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates a board by id (admin only).",
+                "description": "Updates a board by UUID (admin only).",
                 "consumes": [
                     "application/json"
                 ],
@@ -630,9 +630,10 @@ const docTemplate = `{
                 "summary": "Update Board",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Board ID",
-                        "name": "boardID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Board UUID",
+                        "name": "boardUUID",
                         "in": "path",
                         "required": true
                     },
@@ -688,7 +689,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes a board by id (admin only).",
+                "description": "Deletes a board by UUID (admin only).",
                 "produces": [
                     "application/json"
                 ],
@@ -698,9 +699,10 @@ const docTemplate = `{
                 "summary": "Delete Board",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Board ID",
-                        "name": "boardID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Board UUID",
+                        "name": "boardUUID",
                         "in": "path",
                         "required": true
                     }
@@ -742,7 +744,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/boards/{boardID}/posts": {
+        "/boards/{boardUUID}/posts": {
             "get": {
                 "description": "Returns posts in board with cursor pagination.",
                 "produces": [
@@ -754,9 +756,10 @@ const docTemplate = `{
                 "summary": "List Posts by Board",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Board ID",
-                        "name": "boardID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Board UUID",
+                        "name": "boardUUID",
                         "in": "path",
                         "required": true
                     },
@@ -769,10 +772,9 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Cursor id, fetch items with id \u003c last_id",
-                        "name": "last_id",
+                        "type": "string",
+                        "description": "Opaque cursor returned by previous list response",
+                        "name": "cursor",
                         "in": "query"
                     }
                 ],
@@ -803,7 +805,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a post in board.",
+                "description": "Creates a post in a board identified by UUID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -816,9 +818,10 @@ const docTemplate = `{
                 "summary": "Create Post",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Board ID",
-                        "name": "boardID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Board UUID",
+                        "name": "boardUUID",
                         "in": "path",
                         "required": true
                     },
@@ -836,7 +839,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
+                            "$ref": "#/definitions/delivery.uuidResponse"
                         }
                     },
                     "400": {
@@ -866,14 +869,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/boards/{boardID}/posts/drafts": {
+        "/boards/{boardUUID}/posts/drafts": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a draft post in board.",
+                "description": "Creates a draft post in a board identified by UUID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -886,9 +889,10 @@ const docTemplate = `{
                 "summary": "Create Draft Post",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Board ID",
-                        "name": "boardID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Board UUID",
+                        "name": "boardUUID",
                         "in": "path",
                         "required": true
                     },
@@ -906,7 +910,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
+                            "$ref": "#/definitions/delivery.uuidResponse"
                         }
                     },
                     "400": {
@@ -936,14 +940,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/comments/{commentID}": {
+        "/comments/{commentUUID}": {
             "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates comment by id.",
+                "description": "Updates comment by UUID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -956,9 +960,10 @@ const docTemplate = `{
                 "summary": "Update Comment",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Comment ID",
-                        "name": "commentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Comment UUID",
+                        "name": "commentUUID",
                         "in": "path",
                         "required": true
                     },
@@ -1024,9 +1029,10 @@ const docTemplate = `{
                 "summary": "Delete Comment",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Comment ID",
-                        "name": "commentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Comment UUID",
+                        "name": "commentUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1068,7 +1074,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/comments/{commentID}/reactions": {
+        "/comments/{commentUUID}/reactions": {
             "get": {
                 "description": "GET returns reactions for a comment.",
                 "consumes": [
@@ -1083,9 +1089,10 @@ const docTemplate = `{
                 "summary": "List Reactions for Comment",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Comment ID",
-                        "name": "commentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Comment UUID",
+                        "name": "commentUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1115,7 +1122,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/comments/{commentID}/reactions/me": {
+        "/comments/{commentUUID}/reactions/me": {
             "put": {
                 "security": [
                     {
@@ -1136,9 +1143,10 @@ const docTemplate = `{
                 "operationId": "setMyCommentReaction",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Comment ID",
-                        "name": "commentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Comment UUID",
+                        "name": "commentUUID",
                         "in": "path",
                         "required": true
                     },
@@ -1202,9 +1210,10 @@ const docTemplate = `{
                 "operationId": "deleteMyCommentReaction",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Comment ID",
-                        "name": "commentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Comment UUID",
+                        "name": "commentUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1240,9 +1249,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}": {
+        "/posts/{postUUID}": {
             "get": {
-                "description": "Retrieves post detail by id.",
+                "description": "Retrieves post detail by UUID.",
                 "produces": [
                     "application/json"
                 ],
@@ -1252,9 +1261,10 @@ const docTemplate = `{
                 "summary": "Get Post Detail",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1292,7 +1302,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates a post by id.",
+                "description": "Updates a post by UUID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1305,9 +1315,10 @@ const docTemplate = `{
                 "summary": "Update Post",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
@@ -1363,7 +1374,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes a post by id.",
+                "description": "Deletes a post by UUID.",
                 "produces": [
                     "application/json"
                 ],
@@ -1373,9 +1384,10 @@ const docTemplate = `{
                 "summary": "Delete Post",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1417,7 +1429,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/attachments": {
+        "/posts/{postUUID}/attachments": {
             "get": {
                 "description": "Returns attachments for a published post.",
                 "produces": [
@@ -1429,9 +1441,10 @@ const docTemplate = `{
                 "summary": "List Post Attachments",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1464,7 +1477,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/attachments/upload": {
+        "/posts/{postUUID}/attachments/upload": {
             "post": {
                 "security": [
                     {
@@ -1484,9 +1497,10 @@ const docTemplate = `{
                 "summary": "Upload Post Attachment",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
@@ -1538,7 +1552,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/attachments/{attachmentID}": {
+        "/posts/{postUUID}/attachments/{attachmentUUID}": {
             "delete": {
                 "security": [
                     {
@@ -1555,16 +1569,18 @@ const docTemplate = `{
                 "summary": "Delete Post Attachment",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Attachment ID",
-                        "name": "attachmentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Attachment UUID",
+                        "name": "attachmentUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1606,7 +1622,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/attachments/{attachmentID}/file": {
+        "/posts/{postUUID}/attachments/{attachmentUUID}/file": {
             "get": {
                 "description": "Returns the stored file for an attachment of a published post.",
                 "produces": [
@@ -1618,16 +1634,18 @@ const docTemplate = `{
                 "summary": "Get Post Attachment File",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Attachment ID",
-                        "name": "attachmentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Attachment UUID",
+                        "name": "attachmentUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1654,7 +1672,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/attachments/{attachmentID}/preview": {
+        "/posts/{postUUID}/attachments/{attachmentUUID}/preview": {
             "get": {
                 "security": [
                     {
@@ -1671,16 +1689,18 @@ const docTemplate = `{
                 "summary": "Preview Post Attachment File",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Attachment ID",
-                        "name": "attachmentID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Attachment UUID",
+                        "name": "attachmentUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1719,7 +1739,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/comments": {
+        "/posts/{postUUID}/comments": {
             "get": {
                 "description": "Returns comments in post with cursor pagination.",
                 "produces": [
@@ -1731,9 +1751,10 @@ const docTemplate = `{
                 "summary": "List Comments by Post",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
@@ -1746,10 +1767,9 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Cursor id, fetch items with id \u003c last_id",
-                        "name": "last_id",
+                        "type": "string",
+                        "description": "Opaque cursor returned by previous list response",
+                        "name": "cursor",
                         "in": "query"
                     }
                 ],
@@ -1793,9 +1813,10 @@ const docTemplate = `{
                 "summary": "Create Comment",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
@@ -1813,7 +1834,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/delivery.idResponse"
+                            "$ref": "#/definitions/delivery.uuidResponse"
                         }
                     },
                     "400": {
@@ -1843,14 +1864,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/publish": {
+        "/posts/{postUUID}/publish": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Publishes a draft post by id.",
+                "description": "Publishes a draft post by UUID.",
                 "produces": [
                     "application/json"
                 ],
@@ -1860,9 +1881,10 @@ const docTemplate = `{
                 "summary": "Publish Post",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1904,7 +1926,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/reactions": {
+        "/posts/{postUUID}/reactions": {
             "get": {
                 "description": "GET returns reactions for a post.",
                 "consumes": [
@@ -1919,9 +1941,10 @@ const docTemplate = `{
                 "summary": "List Reactions for Post",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     }
@@ -1951,7 +1974,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/posts/{postID}/reactions/me": {
+        "/posts/{postUUID}/reactions/me": {
             "put": {
                 "security": [
                     {
@@ -1972,9 +1995,10 @@ const docTemplate = `{
                 "operationId": "setMyPostReaction",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     },
@@ -2038,9 +2062,10 @@ const docTemplate = `{
                 "operationId": "deleteMyPostReaction",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Post ID",
-                        "name": "postID",
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Post UUID",
+                        "name": "postUUID",
                         "in": "path",
                         "required": true
                     }
@@ -2224,10 +2249,9 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 0,
-                        "type": "integer",
-                        "description": "Cursor id, fetch items with id \u003c last_id",
-                        "name": "last_id",
+                        "type": "string",
+                        "description": "Opaque cursor returned by previous list response",
+                        "name": "cursor",
                         "in": "query"
                     }
                 ],
@@ -2531,15 +2555,15 @@ const docTemplate = `{
             "properties": {
                 "embed_markdown": {
                     "type": "string",
-                    "example": "![a.png](attachment://1)"
-                },
-                "id": {
-                    "type": "integer",
-                    "example": 1
+                    "example": "![a.png](attachment://550e8400-e29b-41d4-a716-446655440000)"
                 },
                 "preview_url": {
                     "type": "string",
-                    "example": "/api/v1/posts/1/attachments/1/preview"
+                    "example": "/api/v1/posts/550e8400-e29b-41d4-a716-446655440000/attachments/550e8400-e29b-41d4-a716-446655440000/preview"
+                },
+                "uuid": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },
@@ -2571,9 +2595,9 @@ const docTemplate = `{
                     "type": "string",
                     "example": "nice post"
                 },
-                "parent_id": {
-                    "type": "integer",
-                    "example": 1
+                "parent_uuid": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },
@@ -2711,13 +2735,13 @@ const docTemplate = `{
                     "type": "string",
                     "example": "repeated spam"
                 },
-                "target_id": {
-                    "type": "integer",
-                    "example": 1
-                },
                 "target_type": {
                     "type": "string",
                     "example": "post"
+                },
+                "target_uuid": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },
@@ -2860,6 +2884,15 @@ const docTemplate = `{
                 }
             }
         },
+        "delivery.uuidResponse": {
+            "type": "object",
+            "properties": {
+                "uuid": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
         "response.Attachment": {
             "type": "object",
             "properties": {
@@ -2875,17 +2908,17 @@ const docTemplate = `{
                 "file_url": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "integer"
-                },
-                "post_id": {
-                    "type": "integer"
+                "post_uuid": {
+                    "type": "string"
                 },
                 "preview_url": {
                     "type": "string"
                 },
                 "size_bytes": {
                     "type": "integer"
+                },
+                "uuid": {
+                    "type": "string"
                 }
             }
         },
@@ -2898,10 +2931,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "integer"
-                },
                 "name": {
+                    "type": "string"
+                },
+                "uuid": {
                     "type": "string"
                 }
             }
@@ -2915,17 +2948,17 @@ const docTemplate = `{
                         "$ref": "#/definitions/response.Board"
                     }
                 },
+                "cursor": {
+                    "type": "string"
+                },
                 "has_more": {
                     "type": "boolean"
-                },
-                "last_id": {
-                    "type": "integer"
                 },
                 "limit": {
                     "type": "integer"
                 },
-                "next_last_id": {
-                    "type": "integer"
+                "next_cursor": {
+                    "type": "string"
                 }
             }
         },
@@ -2941,14 +2974,14 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "integer"
+                "parent_uuid": {
+                    "type": "string"
                 },
-                "parent_id": {
-                    "type": "integer"
+                "post_uuid": {
+                    "type": "string"
                 },
-                "post_id": {
-                    "type": "integer"
+                "uuid": {
+                    "type": "string"
                 }
             }
         },
@@ -2975,17 +3008,17 @@ const docTemplate = `{
                         "$ref": "#/definitions/response.Comment"
                     }
                 },
+                "cursor": {
+                    "type": "string"
+                },
                 "has_more": {
                     "type": "boolean"
-                },
-                "last_id": {
-                    "type": "integer"
                 },
                 "limit": {
                     "type": "integer"
                 },
-                "next_last_id": {
-                    "type": "integer"
+                "next_cursor": {
+                    "type": "string"
                 }
             }
         },
@@ -2995,8 +3028,8 @@ const docTemplate = `{
                 "author_uuid": {
                     "type": "string"
                 },
-                "board_id": {
-                    "type": "integer"
+                "board_uuid": {
+                    "type": "string"
                 },
                 "content": {
                     "type": "string"
@@ -3004,13 +3037,13 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "integer"
-                },
                 "title": {
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "uuid": {
                     "type": "string"
                 }
             }
@@ -3053,17 +3086,17 @@ const docTemplate = `{
         "response.PostList": {
             "type": "object",
             "properties": {
+                "cursor": {
+                    "type": "string"
+                },
                 "has_more": {
                     "type": "boolean"
-                },
-                "last_id": {
-                    "type": "integer"
                 },
                 "limit": {
                     "type": "integer"
                 },
-                "next_last_id": {
-                    "type": "integer"
+                "next_cursor": {
+                    "type": "string"
                 },
                 "posts": {
                     "type": "array",
@@ -3082,10 +3115,10 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
-                "target_id": {
-                    "type": "integer"
-                },
                 "target_type": {
+                    "type": "string"
+                },
+                "target_uuid": {
                     "type": "string"
                 },
                 "type": {

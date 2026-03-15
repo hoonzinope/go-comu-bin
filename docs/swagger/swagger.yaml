@@ -10,13 +10,13 @@ definitions:
   delivery.attachmentUploadResponse:
     properties:
       embed_markdown:
-        example: '![a.png](attachment://1)'
+        example: '![a.png](attachment://550e8400-e29b-41d4-a716-446655440000)'
         type: string
-      id:
-        example: 1
-        type: integer
       preview_url:
-        example: /api/v1/posts/1/attachments/1/preview
+        example: /api/v1/posts/550e8400-e29b-41d4-a716-446655440000/attachments/550e8400-e29b-41d4-a716-446655440000/preview
+        type: string
+      uuid:
+        example: 550e8400-e29b-41d4-a716-446655440000
         type: string
     type: object
   delivery.boardRequest:
@@ -38,9 +38,9 @@ definitions:
       content:
         example: nice post
         type: string
-      parent_id:
-        example: 1
-        type: integer
+      parent_uuid:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
     type: object
   delivery.errorResponse:
     properties:
@@ -132,11 +132,11 @@ definitions:
       reason_detail:
         example: repeated spam
         type: string
-      target_id:
-        example: 1
-        type: integer
       target_type:
         example: post
+        type: string
+      target_uuid:
+        example: 550e8400-e29b-41d4-a716-446655440000
         type: string
     type: object
   delivery.reportListResponse:
@@ -233,6 +233,12 @@ definitions:
         example: 550e8400-e29b-41d4-a716-446655440000
         type: string
     type: object
+  delivery.uuidResponse:
+    properties:
+      uuid:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
   response.Attachment:
     properties:
       content_type:
@@ -243,14 +249,14 @@ definitions:
         type: string
       file_url:
         type: string
-      id:
-        type: integer
-      post_id:
-        type: integer
+      post_uuid:
+        type: string
       preview_url:
         type: string
       size_bytes:
         type: integer
+      uuid:
+        type: string
     type: object
   response.Board:
     properties:
@@ -258,9 +264,9 @@ definitions:
         type: string
       description:
         type: string
-      id:
-        type: integer
       name:
+        type: string
+      uuid:
         type: string
     type: object
   response.BoardList:
@@ -269,14 +275,14 @@ definitions:
         items:
           $ref: '#/definitions/response.Board'
         type: array
+      cursor:
+        type: string
       has_more:
         type: boolean
-      last_id:
-        type: integer
       limit:
         type: integer
-      next_last_id:
-        type: integer
+      next_cursor:
+        type: string
     type: object
   response.Comment:
     properties:
@@ -286,12 +292,12 @@ definitions:
         type: string
       created_at:
         type: string
-      id:
-        type: integer
-      parent_id:
-        type: integer
-      post_id:
-        type: integer
+      parent_uuid:
+        type: string
+      post_uuid:
+        type: string
+      uuid:
+        type: string
     type: object
   response.CommentDetail:
     properties:
@@ -308,30 +314,30 @@ definitions:
         items:
           $ref: '#/definitions/response.Comment'
         type: array
+      cursor:
+        type: string
       has_more:
         type: boolean
-      last_id:
-        type: integer
       limit:
         type: integer
-      next_last_id:
-        type: integer
+      next_cursor:
+        type: string
     type: object
   response.Post:
     properties:
       author_uuid:
         type: string
-      board_id:
-        type: integer
+      board_uuid:
+        type: string
       content:
         type: string
       created_at:
         type: string
-      id:
-        type: integer
       title:
         type: string
       updated_at:
+        type: string
+      uuid:
         type: string
     type: object
   response.PostDetail:
@@ -359,14 +365,14 @@ definitions:
     type: object
   response.PostList:
     properties:
+      cursor:
+        type: string
       has_more:
         type: boolean
-      last_id:
-        type: integer
       limit:
         type: integer
-      next_last_id:
-        type: integer
+      next_cursor:
+        type: string
       posts:
         items:
           $ref: '#/definitions/response.Post'
@@ -378,9 +384,9 @@ definitions:
         type: string
       id:
         type: integer
-      target_id:
-        type: integer
       target_type:
+        type: string
+      target_uuid:
         type: string
       type:
         type: string
@@ -402,17 +408,18 @@ info:
   title: go-comu-bin API
   version: "1.0"
 paths:
-  /admin/boards/{boardID}/visibility:
+  /admin/boards/{boardUUID}/visibility:
     put:
       consumes:
       - application/json
       description: Set board hidden visibility (admin only).
       parameters:
-      - description: Board ID
+      - description: Board UUID
+        format: uuid
         in: path
-        name: boardID
+        name: boardUUID
         required: true
-        type: integer
+        type: string
       - description: Visibility payload
         in: body
         name: request
@@ -725,11 +732,10 @@ paths:
         minimum: 1
         name: limit
         type: integer
-      - description: Cursor id, fetch items with id < last_id
+      - description: Opaque cursor returned by previous list response
         in: query
-        minimum: 0
-        name: last_id
-        type: integer
+        name: cursor
+        type: string
       produces:
       - application/json
       responses:
@@ -765,7 +771,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/delivery.idResponse'
+            $ref: '#/definitions/delivery.uuidResponse'
         "400":
           description: Bad Request
           schema:
@@ -787,15 +793,16 @@ paths:
       summary: Create Board
       tags:
       - Board
-  /boards/{boardID}:
+  /boards/{boardUUID}:
     delete:
-      description: Deletes a board by id (admin only).
+      description: Deletes a board by UUID (admin only).
       parameters:
-      - description: Board ID
+      - description: Board UUID
+        format: uuid
         in: path
-        name: boardID
+        name: boardUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -829,13 +836,14 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates a board by id (admin only).
+      description: Updates a board by UUID (admin only).
       parameters:
-      - description: Board ID
+      - description: Board UUID
+        format: uuid
         in: path
-        name: boardID
+        name: boardUUID
         required: true
-        type: integer
+        type: string
       - description: Update board payload
         in: body
         name: request
@@ -872,26 +880,26 @@ paths:
       summary: Update Board
       tags:
       - Board
-  /boards/{boardID}/posts:
+  /boards/{boardUUID}/posts:
     get:
       description: Returns posts in board with cursor pagination.
       parameters:
-      - description: Board ID
+      - description: Board UUID
+        format: uuid
         in: path
-        name: boardID
+        name: boardUUID
         required: true
-        type: integer
+        type: string
       - description: Page size
         in: query
         maximum: 1000
         minimum: 1
         name: limit
         type: integer
-      - description: Cursor id, fetch items with id < last_id
+      - description: Opaque cursor returned by previous list response
         in: query
-        minimum: 0
-        name: last_id
-        type: integer
+        name: cursor
+        type: string
       produces:
       - application/json
       responses:
@@ -913,13 +921,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a post in board.
+      description: Creates a post in a board identified by UUID.
       parameters:
-      - description: Board ID
+      - description: Board UUID
+        format: uuid
         in: path
-        name: boardID
+        name: boardUUID
         required: true
-        type: integer
+        type: string
       - description: Create post payload
         in: body
         name: request
@@ -932,7 +941,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/delivery.idResponse'
+            $ref: '#/definitions/delivery.uuidResponse'
         "400":
           description: Bad Request
           schema:
@@ -954,17 +963,18 @@ paths:
       summary: Create Post
       tags:
       - Post
-  /boards/{boardID}/posts/drafts:
+  /boards/{boardUUID}/posts/drafts:
     post:
       consumes:
       - application/json
-      description: Creates a draft post in board.
+      description: Creates a draft post in a board identified by UUID.
       parameters:
-      - description: Board ID
+      - description: Board UUID
+        format: uuid
         in: path
-        name: boardID
+        name: boardUUID
         required: true
-        type: integer
+        type: string
       - description: Create draft post payload
         in: body
         name: request
@@ -977,7 +987,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/delivery.idResponse'
+            $ref: '#/definitions/delivery.uuidResponse'
         "400":
           description: Bad Request
           schema:
@@ -999,15 +1009,16 @@ paths:
       summary: Create Draft Post
       tags:
       - Post
-  /comments/{commentID}:
+  /comments/{commentUUID}:
     delete:
       description: Deletes comment by id.
       parameters:
-      - description: Comment ID
+      - description: Comment UUID
+        format: uuid
         in: path
-        name: commentID
+        name: commentUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1041,13 +1052,14 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates comment by id.
+      description: Updates comment by UUID.
       parameters:
-      - description: Comment ID
+      - description: Comment UUID
+        format: uuid
         in: path
-        name: commentID
+        name: commentUUID
         required: true
-        type: integer
+        type: string
       - description: Update comment payload
         in: body
         name: request
@@ -1084,17 +1096,18 @@ paths:
       summary: Update Comment
       tags:
       - Comment
-  /comments/{commentID}/reactions:
+  /comments/{commentUUID}/reactions:
     get:
       consumes:
       - application/json
       description: GET returns reactions for a comment.
       parameters:
-      - description: Comment ID
+      - description: Comment UUID
+        format: uuid
         in: path
-        name: commentID
+        name: commentUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1115,16 +1128,17 @@ paths:
       summary: List Reactions for Comment
       tags:
       - Reaction
-  /comments/{commentID}/reactions/me:
+  /comments/{commentUUID}/reactions/me:
     delete:
       description: DELETE removes the current user's reaction on a comment.
       operationId: deleteMyCommentReaction
       parameters:
-      - description: Comment ID
+      - description: Comment UUID
+        format: uuid
         in: path
-        name: commentID
+        name: commentUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1157,11 +1171,12 @@ paths:
       description: PUT creates or updates the current user's reaction on a comment.
       operationId: setMyCommentReaction
       parameters:
-      - description: Comment ID
+      - description: Comment UUID
+        format: uuid
         in: path
-        name: commentID
+        name: commentUUID
         required: true
-        type: integer
+        type: string
       - description: Set reaction payload
         in: body
         name: request
@@ -1196,15 +1211,16 @@ paths:
       summary: Set My Reaction for Comment
       tags:
       - Reaction
-  /posts/{postID}:
+  /posts/{postUUID}:
     delete:
-      description: Deletes a post by id.
+      description: Deletes a post by UUID.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1236,13 +1252,14 @@ paths:
       tags:
       - Post
     get:
-      description: Retrieves post detail by id.
+      description: Retrieves post detail by UUID.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1268,13 +1285,14 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates a post by id.
+      description: Updates a post by UUID.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       - description: Update post payload
         in: body
         name: request
@@ -1311,15 +1329,16 @@ paths:
       summary: Update Post
       tags:
       - Post
-  /posts/{postID}/attachments:
+  /posts/{postUUID}/attachments:
     get:
       description: Returns attachments for a published post.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1342,20 +1361,22 @@ paths:
       summary: List Post Attachments
       tags:
       - Attachment
-  /posts/{postID}/attachments/{attachmentID}:
+  /posts/{postUUID}/attachments/{attachmentUUID}:
     delete:
       description: Deletes attachment metadata from a post.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
-      - description: Attachment ID
+        type: string
+      - description: Attachment UUID
+        format: uuid
         in: path
-        name: attachmentID
+        name: attachmentUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1386,20 +1407,22 @@ paths:
       summary: Delete Post Attachment
       tags:
       - Attachment
-  /posts/{postID}/attachments/{attachmentID}/file:
+  /posts/{postUUID}/attachments/{attachmentUUID}/file:
     get:
       description: Returns the stored file for an attachment of a published post.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
-      - description: Attachment ID
+        type: string
+      - description: Attachment UUID
+        format: uuid
         in: path
-        name: attachmentID
+        name: attachmentUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/octet-stream
       responses:
@@ -1418,21 +1441,23 @@ paths:
       summary: Get Post Attachment File
       tags:
       - Attachment
-  /posts/{postID}/attachments/{attachmentID}/preview:
+  /posts/{postUUID}/attachments/{attachmentUUID}/preview:
     get:
       description: Returns the stored file for an attachment of a draft or published
         post for the owner or admin.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
-      - description: Attachment ID
+        type: string
+      - description: Attachment UUID
+        format: uuid
         in: path
-        name: attachmentID
+        name: attachmentUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/octet-stream
       responses:
@@ -1461,17 +1486,18 @@ paths:
       summary: Preview Post Attachment File
       tags:
       - Attachment
-  /posts/{postID}/attachments/upload:
+  /posts/{postUUID}/attachments/upload:
     post:
       consumes:
       - multipart/form-data
       description: Uploads a file and creates attachment metadata for a post.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       - description: Attachment file
         in: formData
         name: file
@@ -1509,26 +1535,26 @@ paths:
       summary: Upload Post Attachment
       tags:
       - Attachment
-  /posts/{postID}/comments:
+  /posts/{postUUID}/comments:
     get:
       description: Returns comments in post with cursor pagination.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       - description: Page size
         in: query
         maximum: 1000
         minimum: 1
         name: limit
         type: integer
-      - description: Cursor id, fetch items with id < last_id
+      - description: Opaque cursor returned by previous list response
         in: query
-        minimum: 0
-        name: last_id
-        type: integer
+        name: cursor
+        type: string
       produces:
       - application/json
       responses:
@@ -1552,11 +1578,12 @@ paths:
       - application/json
       description: Creates a comment on a post.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       - description: Create comment payload
         in: body
         name: request
@@ -1569,7 +1596,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/delivery.idResponse'
+            $ref: '#/definitions/delivery.uuidResponse'
         "400":
           description: Bad Request
           schema:
@@ -1591,15 +1618,16 @@ paths:
       summary: Create Comment
       tags:
       - Comment
-  /posts/{postID}/publish:
+  /posts/{postUUID}/publish:
     post:
-      description: Publishes a draft post by id.
+      description: Publishes a draft post by UUID.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1630,17 +1658,18 @@ paths:
       summary: Publish Post
       tags:
       - Post
-  /posts/{postID}/reactions:
+  /posts/{postUUID}/reactions:
     get:
       consumes:
       - application/json
       description: GET returns reactions for a post.
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1661,16 +1690,17 @@ paths:
       summary: List Reactions for Post
       tags:
       - Reaction
-  /posts/{postID}/reactions/me:
+  /posts/{postUUID}/reactions/me:
     delete:
       description: DELETE removes the current user's reaction on a post.
       operationId: deleteMyPostReaction
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -1703,11 +1733,12 @@ paths:
       description: PUT creates or updates the current user's reaction on a post.
       operationId: setMyPostReaction
       parameters:
-      - description: Post ID
+      - description: Post UUID
+        format: uuid
         in: path
-        name: postID
+        name: postUUID
         required: true
-        type: integer
+        type: string
       - description: Set reaction payload
         in: body
         name: request
@@ -1835,11 +1866,10 @@ paths:
         minimum: 1
         name: limit
         type: integer
-      - description: Cursor id, fetch items with id < last_id
+      - description: Opaque cursor returned by previous list response
         in: query
-        minimum: 0
-        name: last_id
-        type: integer
+        name: cursor
+        type: string
       produces:
       - application/json
       responses:

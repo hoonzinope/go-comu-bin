@@ -8,7 +8,7 @@ import (
 )
 
 type ReactionUseCase interface {
-	SetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
-	DeleteReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) error
-	GetReactionsByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]model.Reaction, error)
+	SetReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
+	DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error
+	GetReactionsByTarget(ctx context.Context, targetUUID string, targetType entity.ReactionTargetType) ([]model.Reaction, error)
 }

@@ -76,12 +76,31 @@ func (r *PostRepository) SelectPostByID(ctx context.Context, id int64) (*entity.
 	return r.selectPostByID(id)
 }
 
+func (r *PostRepository) SelectPostByUUID(ctx context.Context, postUUID string) (*entity.Post, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectPostByUUID(postUUID)
+}
+
 func (r *PostRepository) selectPostByID(id int64) (*entity.Post, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	if post, exists := r.postDB.Data[id]; exists && post.Status == entity.PostStatusPublished {
 		return clonePost(post), nil
+	}
+	return nil, nil
+}
+
+func (r *PostRepository) selectPostByUUID(postUUID string) (*entity.Post, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, post := range r.postDB.Data {
+		if post.UUID == postUUID && post.Status == entity.PostStatusPublished {
+			return clonePost(post), nil
+		}
 	}
 	return nil, nil
 }
@@ -93,12 +112,31 @@ func (r *PostRepository) SelectPostByIDIncludingUnpublished(ctx context.Context,
 	return r.selectPostByIDIncludingUnpublished(id)
 }
 
+func (r *PostRepository) SelectPostByUUIDIncludingUnpublished(ctx context.Context, postUUID string) (*entity.Post, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectPostByUUIDIncludingUnpublished(postUUID)
+}
+
 func (r *PostRepository) selectPostByIDIncludingUnpublished(id int64) (*entity.Post, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	if post, exists := r.postDB.Data[id]; exists && post.Status != entity.PostStatusDeleted {
 		return clonePost(post), nil
+	}
+	return nil, nil
+}
+
+func (r *PostRepository) selectPostByUUIDIncludingUnpublished(postUUID string) (*entity.Post, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, post := range r.postDB.Data {
+		if post.UUID == postUUID && post.Status != entity.PostStatusDeleted {
+			return clonePost(post), nil
+		}
 	}
 	return nil, nil
 }

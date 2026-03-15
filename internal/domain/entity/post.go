@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type PostStatus string
 
@@ -12,6 +16,7 @@ const (
 
 type Post struct {
 	ID        int64
+	UUID      string
 	Title     string
 	Content   string
 	AuthorID  int64
@@ -25,6 +30,7 @@ type Post struct {
 func NewPost(title, content string, authorID, boardID int64) *Post {
 	now := time.Now()
 	return &Post{
+		UUID:      uuid.NewString(),
 		Title:     title,
 		Content:   content,
 		AuthorID:  authorID,
@@ -38,6 +44,7 @@ func NewPost(title, content string, authorID, boardID int64) *Post {
 func NewDraftPost(title, content string, authorID, boardID int64) *Post {
 	now := time.Now()
 	return &Post{
+		UUID:      uuid.NewString(),
 		Title:     title,
 		Content:   content,
 		AuthorID:  authorID,

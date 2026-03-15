@@ -3,8 +3,8 @@ package model
 import "time"
 
 type Attachment struct {
-	ID          int64
-	PostID      int64
+	UUID        string
+	PostUUID    string
 	FileName    string
 	ContentType string
 	SizeBytes   int64

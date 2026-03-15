@@ -48,8 +48,12 @@ func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boa
 	}
 }
 
-func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (*model.BoardList, error) {
+func (s *BoardService) GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
+		return nil, err
+	}
+	lastID, err := decodeOpaqueCursor(cursor)
+	if err != nil {
 		return nil, err
 	}
 	cacheKey := key.BoardList(limit, lastID)
@@ -65,22 +69,22 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 		}
 
 		hasMore := false
-		var nextLastID *int64
+		var nextCursor *string
 		if len(visibleBoards) > limit {
 			hasMore = true
 			visibleBoards = visibleBoards[:limit]
 		}
 		if hasMore && len(visibleBoards) > 0 {
-			next := visibleBoards[len(visibleBoards)-1].ID
-			nextLastID = &next
+			next := encodeOpaqueCursor(visibleBoards[len(visibleBoards)-1].ID)
+			nextCursor = &next
 		}
 
 		return &model.BoardList{
 			Boards:     mapper.BoardsFromEntities(visibleBoards),
 			Limit:      limit,
-			LastID:     lastID,
+			Cursor:     cursor,
 			HasMore:    hasMore,
-			NextLastID: nextLastID,
+			NextCursor: nextCursor,
 		}, nil
 	})
 	if err != nil {
@@ -93,12 +97,12 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, lastID int64) (
 	return list, nil
 }
 
-func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, description string) (int64, error) {
+func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, description string) (string, error) {
 	if strings.TrimSpace(name) == "" {
-		return 0, customerror.ErrInvalidInput
+		return "", customerror.ErrInvalidInput
 	}
 	newBoard := entity.NewBoard(name, description)
-	var boardID int64
+	var boardUUID string
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
@@ -111,23 +115,23 @@ func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, desc
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
-		boardID, err = tx.BoardRepository().Save(txCtx, newBoard)
+		boardID, err := tx.BoardRepository().Save(txCtx, newBoard)
 		if err != nil {
 			return customerror.WrapRepository("save board", err)
 		}
+		boardUUID = newBoard.UUID
 		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("created", boardID)); err != nil {
 			return err
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return boardID, nil
+	return boardUUID, nil
 }
 
-func (s *BoardService) UpdateBoard(ctx context.Context, id, userID int64, name, description string) error {
-	// 게시판 수정 로직 구현
+func (s *BoardService) UpdateBoard(ctx context.Context, boardUUID string, userID int64, name, description string) error {
 	if strings.TrimSpace(name) == "" {
 		return customerror.ErrInvalidInput
 	}
@@ -143,7 +147,7 @@ func (s *BoardService) UpdateBoard(ctx context.Context, id, userID int64, name, 
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
-		existingBoard, err := tx.BoardRepository().SelectBoardByID(txCtx, id)
+		existingBoard, err := tx.BoardRepository().SelectBoardByUUID(txCtx, boardUUID)
 		if err != nil {
 			return customerror.WrapRepository("select board by id for update board", err)
 		}
@@ -154,7 +158,7 @@ func (s *BoardService) UpdateBoard(ctx context.Context, id, userID int64, name, 
 		if err := tx.BoardRepository().Update(txCtx, existingBoard); err != nil {
 			return customerror.WrapRepository("update board", err)
 		}
-		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("updated", id)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("updated", existingBoard.ID)); err != nil {
 			return err
 		}
 		return nil
@@ -165,8 +169,7 @@ func (s *BoardService) UpdateBoard(ctx context.Context, id, userID int64, name, 
 	return nil
 }
 
-func (s *BoardService) DeleteBoard(ctx context.Context, id, userID int64) error {
-	// 게시판 삭제 로직 구현
+func (s *BoardService) DeleteBoard(ctx context.Context, boardUUID string, userID int64) error {
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
@@ -179,7 +182,7 @@ func (s *BoardService) DeleteBoard(ctx context.Context, id, userID int64) error 
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
-		existingBoard, err := tx.BoardRepository().SelectBoardByID(txCtx, id)
+		existingBoard, err := tx.BoardRepository().SelectBoardByUUID(txCtx, boardUUID)
 		if err != nil {
 			return customerror.WrapRepository("select board by id for delete board", err)
 		}
@@ -196,7 +199,7 @@ func (s *BoardService) DeleteBoard(ctx context.Context, id, userID int64) error 
 		if err := tx.BoardRepository().Delete(txCtx, existingBoard.ID); err != nil {
 			return customerror.WrapRepository("delete board", err)
 		}
-		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("deleted", id)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("deleted", existingBoard.ID)); err != nil {
 			return err
 		}
 		return nil
@@ -207,7 +210,7 @@ func (s *BoardService) DeleteBoard(ctx context.Context, id, userID int64) error 
 	return nil
 }
 
-func (s *BoardService) SetBoardVisibility(ctx context.Context, id, userID int64, hidden bool) error {
+func (s *BoardService) SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error {
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
@@ -220,7 +223,7 @@ func (s *BoardService) SetBoardVisibility(ctx context.Context, id, userID int64,
 		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
 			return err
 		}
-		existingBoard, err := tx.BoardRepository().SelectBoardByID(txCtx, id)
+		existingBoard, err := tx.BoardRepository().SelectBoardByUUID(txCtx, boardUUID)
 		if err != nil {
 			return customerror.WrapRepository("select board by id for set board visibility", err)
 		}
@@ -231,10 +234,10 @@ func (s *BoardService) SetBoardVisibility(ctx context.Context, id, userID int64,
 		if err := tx.BoardRepository().Update(txCtx, existingBoard); err != nil {
 			return customerror.WrapRepository("update board visibility", err)
 		}
-		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("visibility", id)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewBoardChanged("visibility", existingBoard.ID)); err != nil {
 			return err
 		}
-		s.logger.Info("admin board visibility changed", "board_id", id, "hidden", hidden, "admin_id", userID)
+		s.logger.Info("admin board visibility changed", "board_id", existingBoard.ID, "board_uuid", existingBoard.UUID, "hidden", hidden, "admin_id", userID)
 		return nil
 	})
 }

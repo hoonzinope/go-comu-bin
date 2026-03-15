@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"strconv"
 	"testing"
 	"time"
 
@@ -23,7 +22,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	err := svc.UpdatePost(context.Background(), postID, otherID, "new-title", "new-content", nil)
+	err := svc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), otherID, "new-title", "new-content", nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
@@ -36,7 +35,7 @@ func TestPostService_UpdatePost_AllowedForAdmin(t *testing.T) {
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	require.NoError(t, svc.UpdatePost(context.Background(), postID, adminID, "new-title", "new-content", nil))
+	require.NoError(t, svc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), adminID, "new-title", "new-content", nil))
 }
 
 func TestPostService_CreateGetListDelete_Success(t *testing.T) {
@@ -45,18 +44,18 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	postID, err := svc.CreatePost(context.Background(), "title", "content", nil, userID, boardID)
+	postID, err := svc.CreatePost(context.Background(), "title", "content", nil, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
-	assert.NotZero(t, postID)
+	assert.NotEmpty(t, postID)
 
-	list, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
 	require.NoError(t, err)
 	assert.Len(t, list.Posts, 1)
 
 	detail, err := svc.GetPostDetail(context.Background(), postID)
 	require.NoError(t, err)
 	require.NotNil(t, detail.Post)
-	assert.Equal(t, postID, detail.Post.ID)
+	assert.Equal(t, postID, detail.Post.UUID)
 
 	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
 }
@@ -67,7 +66,7 @@ func TestPostService_CreatePost_InvalidInput(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.CreatePost(context.Background(), " ", "content", nil, userID, boardID)
+	_, err := svc.CreatePost(context.Background(), " ", "content", nil, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -81,7 +80,7 @@ func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err = svc.CreatePost(context.Background(), "title", "content", nil, userID, boardID)
+	_, err = svc.CreatePost(context.Background(), "title", "content", nil, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrUserSuspended))
 }
@@ -95,12 +94,12 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	seedPost(repositories.post, userID, boardID, "title3", "content3")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	list, err := svc.GetPostsList(context.Background(), boardID, 2, 0)
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 2, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 2)
 	assert.True(t, list.HasMore)
-	require.NotNil(t, list.NextLastID)
-	assert.Equal(t, list.Posts[len(list.Posts)-1].ID, *list.NextLastID)
+	require.NotNil(t, list.NextCursor)
+	assert.NotEmpty(t, *list.NextCursor)
 }
 
 func TestPostService_GetPostsList_InvalidLimit(t *testing.T) {
@@ -110,7 +109,7 @@ func TestPostService_GetPostsList_InvalidLimit(t *testing.T) {
 	seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.GetPostsList(context.Background(), boardID, 0, 0)
+	_, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 0, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -119,11 +118,12 @@ func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testi
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
+	boardUUID := mustBoardUUID(t, repositories.board, boardID)
 	seedPost(repositories.post, userID, boardID, "title", "content")
 	require.NoError(t, repositories.board.Delete(context.Background(), boardID))
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
+	_, err := svc.GetPostsList(context.Background(), boardUUID, 10, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
@@ -137,12 +137,12 @@ func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	detail1, err := postSvc.GetPostDetail(context.Background(), postID)
+	detail1, err := postSvc.GetPostDetail(context.Background(), mustPostUUID(t, repositories.post, postID))
 	require.NoError(t, err)
 	require.NotNil(t, detail1.Post)
 	assert.Equal(t, "title", detail1.Post.Title)
 
-	detail2, err := postSvc.GetPostDetail(context.Background(), postID)
+	detail2, err := postSvc.GetPostDetail(context.Background(), mustPostUUID(t, repositories.post, postID))
 	require.NoError(t, err)
 	require.NotNil(t, detail2.Post)
 	assert.Equal(t, "title", detail2.Post.Title)
@@ -159,12 +159,12 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	_, err := postSvc.GetPostDetail(context.Background(), postID)
+	_, err := postSvc.GetPostDetail(context.Background(), mustPostUUID(t, repositories.post, postID))
 	require.NoError(t, err)
-	_, err = postSvc.GetPostsList(context.Background(), boardID, 10, 0)
+	_, err = postSvc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
 	require.NoError(t, err)
 
-	require.NoError(t, postSvc.UpdatePost(context.Background(), postID, userID, "new", "new-content", nil))
+	require.NoError(t, postSvc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "new", "new-content", nil))
 
 	require.Eventually(t, func() bool {
 		_, ok, err := cache.Get(context.Background(), key.PostDetail(postID))
@@ -188,7 +188,7 @@ func TestPostService_UpdatePost_SucceedsWhenCacheInvalidationFails(t *testing.T)
 		deleteByPrefixErr: newCacheFailure(nil),
 	})
 
-	err := svc.UpdatePost(context.Background(), postID, userID, "new", "new-content", nil)
+	err := svc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "new", "new-content", nil)
 	require.NoError(t, err)
 
 	post, repoErr := repositories.post.SelectPostByIDIncludingUnpublished(context.Background(), postID)
@@ -200,11 +200,14 @@ func TestPostService_UpdatePost_SucceedsWhenCacheInvalidationFails(t *testing.T)
 
 func TestPostService_GetPostDetail_ReturnsCacheFailure_WhenCacheLoadFails(t *testing.T) {
 	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := newTestPostService(t, repositories, &errorCache{
 		getOrSetWithTTLErr: newCacheFailure(nil),
 	})
 
-	_, err := svc.GetPostDetail(context.Background(), 1)
+	_, err := svc.GetPostDetail(context.Background(), mustPostUUID(t, repositories.post, postID))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrCacheFailure))
 }
@@ -214,15 +217,16 @@ func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	postUUID := mustPostUUID(t, repositories.post, postID)
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
+	require.NoError(t, svc.DeletePost(context.Background(), postUUID, userID))
 
-	_, err := svc.GetPostDetail(context.Background(), postID)
+	_, err := svc.GetPostDetail(context.Background(), postUUID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 
-	list, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
 }
@@ -233,7 +237,7 @@ func TestPostService_CreatePost_NormalizesTagsAndIncludesThemInDetail(t *testing
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	postID, err := svc.CreatePost(context.Background(), "title", "content", []string{" Go ", "go", "Backend"}, userID, boardID)
+	postID, err := svc.CreatePost(context.Background(), "title", "content", []string{" Go ", "go", "Backend"}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 
 	detail, err := svc.GetPostDetail(context.Background(), postID)
@@ -249,21 +253,21 @@ func TestPostService_UpdatePost_SoftDeletesAndReactivatesTagRelations(t *testing
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	postID, err := svc.CreatePost(context.Background(), "title", "content", []string{"go", "backend"}, userID, boardID)
+	postID, err := svc.CreatePost(context.Background(), "title", "content", []string{"go", "backend"}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 
 	require.NoError(t, svc.UpdatePost(context.Background(), postID, userID, "title", "content", []string{"go"}))
 
-	backendList, err := svc.GetPostsByTag(context.Background(), "backend", 10, 0)
+	backendList, err := svc.GetPostsByTag(context.Background(), "backend", 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, backendList.Posts)
 
 	require.NoError(t, svc.UpdatePost(context.Background(), postID, userID, "title", "content", []string{"GO", "backend"}))
 
-	backendList, err = svc.GetPostsByTag(context.Background(), "backend", 10, 0)
+	backendList, err = svc.GetPostsByTag(context.Background(), "backend", 10, "")
 	require.NoError(t, err)
 	require.Len(t, backendList.Posts, 1)
-	assert.Equal(t, postID, backendList.Posts[0].ID)
+	assert.Equal(t, postID, backendList.Posts[0].UUID)
 }
 
 func TestPostService_DeletePost_RemovesPostFromTagList(t *testing.T) {
@@ -272,11 +276,11 @@ func TestPostService_DeletePost_RemovesPostFromTagList(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	postID, err := svc.CreatePost(context.Background(), "title", "content", []string{"go"}, userID, boardID)
+	postID, err := svc.CreatePost(context.Background(), "title", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
 
-	list, err := svc.GetPostsByTag(context.Background(), "go", 10, 0)
+	list, err := svc.GetPostsByTag(context.Background(), "go", 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
 }
@@ -287,16 +291,16 @@ func TestPostService_GetPostsByTag_ExcludesDraftPosts(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	draftID, err := svc.CreateDraftPost(context.Background(), "draft", "content", []string{"go"}, userID, boardID)
+	draftID, err := svc.CreateDraftPost(context.Background(), "draft", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
-	publishedID, err := svc.CreatePost(context.Background(), "post", "content", []string{"go"}, userID, boardID)
+	publishedID, err := svc.CreatePost(context.Background(), "post", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 	assert.NotEqual(t, draftID, publishedID)
 
-	list, err := svc.GetPostsByTag(context.Background(), "go", 10, 0)
+	list, err := svc.GetPostsByTag(context.Background(), "go", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
-	assert.Equal(t, publishedID, list.Posts[0].ID)
+	assert.Equal(t, publishedID, list.Posts[0].UUID)
 }
 
 func TestPostService_GetPostsByTag_ExcludesHiddenBoardPosts(t *testing.T) {
@@ -306,9 +310,9 @@ func TestPostService_GetPostsByTag_ExcludesHiddenBoardPosts(t *testing.T) {
 	hiddenBoardID := seedBoard(repositories.board, "secret", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	visiblePostID, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, userID, visibleBoardID)
+	visiblePostID, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, visibleBoardID))
 	require.NoError(t, err)
-	_, err = svc.CreatePost(context.Background(), "hidden", "content", []string{"go"}, userID, hiddenBoardID)
+	_, err = svc.CreatePost(context.Background(), "hidden", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, hiddenBoardID))
 	require.NoError(t, err)
 
 	hiddenBoard, err := repositories.board.SelectBoardByID(context.Background(), hiddenBoardID)
@@ -317,10 +321,10 @@ func TestPostService_GetPostsByTag_ExcludesHiddenBoardPosts(t *testing.T) {
 	hiddenBoard.SetHidden(true)
 	require.NoError(t, repositories.board.Update(context.Background(), hiddenBoard))
 
-	list, err := svc.GetPostsByTag(context.Background(), "go", 10, 0)
+	list, err := svc.GetPostsByTag(context.Background(), "go", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
-	assert.Equal(t, visiblePostID, list.Posts[0].ID)
+	assert.Equal(t, visiblePostID, list.Posts[0].UUID)
 }
 
 func TestPostService_GetPostsByTag_PaginationIgnoresHiddenBoards(t *testing.T) {
@@ -330,13 +334,13 @@ func TestPostService_GetPostsByTag_PaginationIgnoresHiddenBoards(t *testing.T) {
 	hiddenBoardID := seedBoard(repositories.board, "secret", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	visibleOlderID, err := svc.CreatePost(context.Background(), "visible-older", "content", []string{"go"}, userID, visibleBoardID)
+	visibleOlderID, err := svc.CreatePost(context.Background(), "visible-older", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, visibleBoardID))
 	require.NoError(t, err)
-	_, err = svc.CreatePost(context.Background(), "hidden-older", "content", []string{"go"}, userID, hiddenBoardID)
+	_, err = svc.CreatePost(context.Background(), "hidden-older", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, hiddenBoardID))
 	require.NoError(t, err)
-	visibleNewerID, err := svc.CreatePost(context.Background(), "visible-newer", "content", []string{"go"}, userID, visibleBoardID)
+	visibleNewerID, err := svc.CreatePost(context.Background(), "visible-newer", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, visibleBoardID))
 	require.NoError(t, err)
-	_, err = svc.CreatePost(context.Background(), "hidden-newer", "content", []string{"go"}, userID, hiddenBoardID)
+	_, err = svc.CreatePost(context.Background(), "hidden-newer", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, hiddenBoardID))
 	require.NoError(t, err)
 
 	hiddenBoard, err := repositories.board.SelectBoardByID(context.Background(), hiddenBoardID)
@@ -345,20 +349,20 @@ func TestPostService_GetPostsByTag_PaginationIgnoresHiddenBoards(t *testing.T) {
 	hiddenBoard.SetHidden(true)
 	require.NoError(t, repositories.board.Update(context.Background(), hiddenBoard))
 
-	firstPage, err := svc.GetPostsByTag(context.Background(), "go", 1, 0)
+	firstPage, err := svc.GetPostsByTag(context.Background(), "go", 1, "")
 	require.NoError(t, err)
 	require.Len(t, firstPage.Posts, 1)
-	assert.Equal(t, visibleNewerID, firstPage.Posts[0].ID)
+	assert.Equal(t, visibleNewerID, firstPage.Posts[0].UUID)
 	assert.True(t, firstPage.HasMore)
-	require.NotNil(t, firstPage.NextLastID)
-	assert.Equal(t, visibleNewerID, *firstPage.NextLastID)
+	require.NotNil(t, firstPage.NextCursor)
+	assert.NotEmpty(t, *firstPage.NextCursor)
 
-	secondPage, err := svc.GetPostsByTag(context.Background(), "go", 1, *firstPage.NextLastID)
+	secondPage, err := svc.GetPostsByTag(context.Background(), "go", 1, *firstPage.NextCursor)
 	require.NoError(t, err)
 	require.Len(t, secondPage.Posts, 1)
-	assert.Equal(t, visibleOlderID, secondPage.Posts[0].ID)
+	assert.Equal(t, visibleOlderID, secondPage.Posts[0].UUID)
 	assert.False(t, secondPage.HasMore)
-	assert.Nil(t, secondPage.NextLastID)
+	assert.Nil(t, secondPage.NextCursor)
 }
 
 func TestPostService_GetPostsByTag_RejectsTooLargeLimit(t *testing.T) {
@@ -367,10 +371,10 @@ func TestPostService_GetPostsByTag_RejectsTooLargeLimit(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, userID, boardID)
+	_, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 
-	_, err = svc.GetPostsByTag(context.Background(), "go", maxPageLimit+1, 0)
+	_, err = svc.GetPostsByTag(context.Background(), "go", maxPageLimit+1, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -381,7 +385,7 @@ func TestPostService_CreatePost_InvalidTags(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.CreatePost(context.Background(), "title", "content", []string{" "}, userID, boardID)
+	_, err := svc.CreatePost(context.Background(), "title", "content", []string{" "}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -401,7 +405,7 @@ func TestPostService_DeletePost_OrphansAttachmentsAndSoftDeletesComments(t *test
 	require.NoError(t, repositories.attachment.Update(context.Background(), attachment))
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
+	require.NoError(t, svc.DeletePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID))
 
 	comment, err := repositories.comment.SelectCommentByID(context.Background(), commentID)
 	require.NoError(t, err)
@@ -425,7 +429,7 @@ func TestPostService_DeletePost_RemovesStoredReactionsForPostAndComments(t *test
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
+	require.NoError(t, svc.DeletePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID))
 
 	postReactions, err := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, err)
@@ -445,7 +449,7 @@ func TestPostService_DeletePost_DeletesCommentsInBatches(t *testing.T) {
 	}
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
+	require.NoError(t, svc.DeletePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID))
 
 	comments, err := repositories.comment.SelectComments(context.Background(), postID, 10, 0)
 	require.NoError(t, err)
@@ -458,11 +462,11 @@ func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	postID, err := svc.CreateDraftPost(context.Background(), "draft-title", "draft-content", nil, userID, boardID)
+	postID, err := svc.CreateDraftPost(context.Background(), "draft-title", "draft-content", nil, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 	assert.NotZero(t, postID)
 
-	list, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
 }
@@ -473,16 +477,16 @@ func TestPostService_PublishPost_MakesDraftVisible(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	postID, err := svc.CreateDraftPost(context.Background(), "draft-title", "draft-content", nil, userID, boardID)
+	postID, err := svc.CreateDraftPost(context.Background(), "draft-title", "draft-content", nil, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 
 	err = svc.PublishPost(context.Background(), postID, userID)
 	require.NoError(t, err)
 
-	list, err := svc.GetPostsList(context.Background(), boardID, 10, 0)
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
-	assert.Equal(t, postID, list.Posts[0].ID)
+	assert.Equal(t, postID, list.Posts[0].UUID)
 }
 
 func TestPostService_UpdatePost_RejectsForeignAttachmentReference(t *testing.T) {
@@ -495,7 +499,7 @@ func TestPostService_UpdatePost_RejectsForeignAttachmentReference(t *testing.T) 
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	err = svc.UpdatePost(context.Background(), postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(foreignAttachmentID, 10)+")", nil)
+	err = svc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "title", "body ![a](attachment://"+mustAttachmentUUID(t, repositories.attachment, foreignAttachmentID)+")", nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -507,7 +511,7 @@ func TestPostService_PublishPost_RejectsMissingAttachmentReference(t *testing.T)
 	postID := seedDraftPost(repositories.post, userID, boardID, "title", "body ![a](attachment://999)")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	err := svc.PublishPost(context.Background(), postID, userID)
+	err := svc.PublishPost(context.Background(), mustPostUUID(t, repositories.post, postID), userID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -523,7 +527,7 @@ func TestPostService_GetPostDetail_IncludesAttachments(t *testing.T) {
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	detail, err := svc.GetPostDetail(context.Background(), postID)
+	detail, err := svc.GetPostDetail(context.Background(), mustPostUUID(t, repositories.post, postID))
 	require.NoError(t, err)
 	require.Len(t, detail.Attachments, 1)
 	assert.Equal(t, "a.png", detail.Attachments[0].FileName)
@@ -539,7 +543,7 @@ func TestPostService_GetPostDetail_ExposesCommentPreviewHasMore(t *testing.T) {
 	}
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	detail, err := svc.GetPostDetail(context.Background(), postID)
+	detail, err := svc.GetPostDetail(context.Background(), mustPostUUID(t, repositories.post, postID))
 	require.NoError(t, err)
 	require.Len(t, detail.Comments, 10)
 	assert.True(t, detail.CommentsHasMore)
@@ -554,6 +558,7 @@ func TestPostDetailQuery_Load_Success(t *testing.T) {
 
 	query := newPostDetailQuery(
 		repositories.user,
+		repositories.board,
 		repositories.post,
 		repositories.tag,
 		repositories.postTag,
@@ -566,7 +571,7 @@ func TestPostDetailQuery_Load_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, detail)
 	require.NotNil(t, detail.Post)
-	assert.Equal(t, postID, detail.Post.ID)
+	assert.Equal(t, mustPostUUID(t, repositories.post, postID), detail.Post.UUID)
 	assert.Len(t, detail.Comments, 1)
 }
 
@@ -583,7 +588,7 @@ func TestPostService_UpdatePost_MarksUnusedAttachmentsAsOrphaned(t *testing.T) {
 	require.NoError(t, err)
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	err = svc.UpdatePost(context.Background(), postID, userID, "title", "body ![a](attachment://"+strconv.FormatInt(referencedID, 10)+")", nil)
+	err = svc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "title", "body ![a](attachment://"+mustAttachmentUUID(t, repositories.attachment, referencedID)+")", nil)
 	require.NoError(t, err)
 
 	referencedAfter, err := repositories.attachment.SelectByID(context.Background(), referencedID)

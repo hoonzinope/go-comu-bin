@@ -11,6 +11,7 @@ import (
 func TestComment_NewCommentAndUpdateComment(t *testing.T) {
 	parentID := int64(9)
 	c := NewComment("hello", 1, 2, &parentID)
+	assert.NotEmpty(t, c.UUID)
 	assert.Equal(t, "hello", c.Content)
 	assert.EqualValues(t, 1, c.AuthorID)
 	assert.EqualValues(t, 2, c.PostID)

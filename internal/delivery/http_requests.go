@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -32,8 +33,8 @@ type postRequest struct {
 }
 
 type commentRequest struct {
-	Content  string `json:"content" example:"nice post"`
-	ParentID *int64 `json:"parent_id,omitempty" example:"1"`
+	Content    string  `json:"content" example:"nice post"`
+	ParentUUID *string `json:"parent_uuid,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
 type reactionRequest struct {
@@ -42,7 +43,7 @@ type reactionRequest struct {
 
 type reportCreateRequest struct {
 	TargetType   string `json:"target_type" example:"post"`
-	TargetID     int64  `json:"target_id" example:"1"`
+	TargetUUID   string `json:"target_uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
 	ReasonCode   string `json:"reason_code" example:"spam"`
 	ReasonDetail string `json:"reason_detail,omitempty" example:"repeated spam"`
 }
@@ -116,19 +117,19 @@ func (r userSuspensionRequest) parse() (string, entity.SuspensionDuration, error
 	return r.Reason, duration, nil
 }
 
-func (r reportCreateRequest) parse() (entity.ReportTargetType, int64, entity.ReportReasonCode, string, error) {
+func (r reportCreateRequest) parse() (entity.ReportTargetType, string, entity.ReportReasonCode, string, error) {
 	targetType, ok := entity.ParseReportTargetType(r.TargetType)
 	if !ok {
-		return "", 0, "", "", errors.New("invalid target_type")
+		return "", "", "", "", errors.New("invalid target_type")
 	}
-	if r.TargetID < 1 {
-		return "", 0, "", "", errors.New("invalid target_id")
+	if strings.TrimSpace(r.TargetUUID) == "" {
+		return "", "", "", "", errors.New("invalid target_uuid")
 	}
 	reasonCode, ok := entity.ParseReportReasonCode(r.ReasonCode)
 	if !ok {
-		return "", 0, "", "", errors.New("invalid reason_code")
+		return "", "", "", "", errors.New("invalid reason_code")
 	}
-	return targetType, r.TargetID, reasonCode, r.ReasonDetail, nil
+	return targetType, strings.TrimSpace(r.TargetUUID), reasonCode, r.ReasonDetail, nil
 }
 
 func (r reportResolveRequest) parseStatus() (entity.ReportStatus, string, error) {
