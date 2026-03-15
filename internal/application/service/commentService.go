@@ -98,7 +98,7 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 			if parent == nil {
 				return customerror.ErrCommentNotFound
 			}
-			if parent.PostID != post.ID || parent.ParentID != nil {
+			if parent.PostID != post.ID || parent.ParentID != nil || parent.Status != entity.CommentStatusActive {
 				return customerror.ErrInvalidInput
 			}
 			newComment.ParentID = &parent.ID

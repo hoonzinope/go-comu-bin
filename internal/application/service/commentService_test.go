@@ -334,3 +334,22 @@ func TestCommentService_CreateReplyComment_RejectsParentFromAnotherPost(t *testi
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
+
+func TestCommentService_CreateReplyComment_RejectsDeletedParent(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	parentID := seedComment(repositories.comment, userID, postID, "parent")
+	require.NoError(t, repositories.comment.Delete(context.Background(), parentID))
+	svc := NewCommentService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	parentUUID, err := repositories.comment.SelectCommentUUIDsByIDsIncludingDeleted(context.Background(), []int64{parentID})
+	require.NoError(t, err)
+	value, ok := parentUUID[parentID]
+	require.True(t, ok)
+
+	_, err = svc.CreateComment(context.Background(), "reply", userID, mustPostUUID(t, repositories.post, postID), &value)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
+}
