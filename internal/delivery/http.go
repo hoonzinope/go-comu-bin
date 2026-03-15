@@ -29,6 +29,7 @@ const multipartRequestOverheadBytes int64 = 1 << 20
 const defaultMaxJSONBodyBytes int64 = 1 << 20
 const defaultPageLimit = 10
 const defaultRateLimitWindow = 60 * time.Second
+const defaultRateLimitReadRequests = 300
 const defaultRateLimitWriteRequests = 60
 const maxPageLimit = 1000
 const httpLoggerContextKey = "http_logger"
@@ -46,14 +47,13 @@ type HTTPHandler struct {
 	reportUseCase            port.ReportUseCase
 	outboxAdminUseCase       port.OutboxAdminUseCase
 	rateLimiter              port.RateLimiter
-	inputSanitizer           port.InputSanitizer
 	attachmentUploadMaxBytes int64
 	maxJSONBodyBytes         int64
 	defaultPageLimit         int
 	rateLimitEnabled         bool
 	rateLimitWindow          time.Duration
+	rateLimitReadRequests    int
 	rateLimitWriteRequests   int
-	sanitizerEnabled         bool
 	logger                   *slog.Logger
 	authGinMiddleware        gin.HandlerFunc
 	adminGinMiddleware       gin.HandlerFunc
@@ -72,14 +72,13 @@ type HTTPDependencies struct {
 	ReportUseCase            port.ReportUseCase
 	OutboxAdminUseCase       port.OutboxAdminUseCase
 	RateLimiter              port.RateLimiter
-	InputSanitizer           port.InputSanitizer
 	AttachmentUploadMaxBytes int64
 	MaxJSONBodyBytes         int64
 	DefaultPageLimit         int
 	RateLimitEnabled         bool
 	RateLimitWindowSecond    int
+	RateLimitReadRequest     int
 	RateLimitWriteRequest    int
-	SanitizerEnabled         bool
 	Logger                   *slog.Logger
 }
 
@@ -101,14 +100,13 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		reportUseCase:            deps.ReportUseCase,
 		outboxAdminUseCase:       deps.OutboxAdminUseCase,
 		rateLimiter:              deps.RateLimiter,
-		inputSanitizer:           deps.InputSanitizer,
 		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
 		maxJSONBodyBytes:         resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
 		defaultPageLimit:         resolveDefaultPageLimit(deps.DefaultPageLimit),
 		rateLimitEnabled:         deps.RateLimitEnabled,
 		rateLimitWindow:          resolveRateLimitWindow(deps.RateLimitWindowSecond),
+		rateLimitReadRequests:    resolveRateLimitReadRequests(deps.RateLimitReadRequest),
 		rateLimitWriteRequests:   resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
-		sanitizerEnabled:         deps.SanitizerEnabled,
 		logger:                   logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
@@ -144,6 +142,13 @@ func resolveRateLimitWindow(windowSeconds int) time.Duration {
 func resolveRateLimitWriteRequests(requests int) int {
 	if requests <= 0 {
 		return defaultRateLimitWriteRequests
+	}
+	return requests
+}
+
+func resolveRateLimitReadRequests(requests int) int {
+	if requests <= 0 {
+		return defaultRateLimitReadRequests
 	}
 	return requests
 }
@@ -381,7 +386,6 @@ func (h *HTTPHandler) handleReportCreate(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.ReasonDetail = h.sanitizeInput(c, req.ReasonDetail)
 	targetType, targetID, reasonCode, reasonDetail, err := req.parse()
 	if err != nil {
 		badRequest(c, err)
@@ -466,7 +470,6 @@ func (h *HTTPHandler) handleUserSuspend(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	reason = h.sanitizeInput(c, reason)
 	if err := h.userUseCase.SuspendUser(c.Request.Context(), adminID, targetUserUUID, reason, duration); err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -581,7 +584,6 @@ func (h *HTTPHandler) handleAdminReportResolve(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.ResolutionNote = h.sanitizeInput(c, req.ResolutionNote)
 	status, resolutionNote, err := req.parseStatus()
 	if err != nil {
 		badRequest(c, err)
@@ -776,8 +778,6 @@ func (h *HTTPHandler) handleBoardsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.Name = h.sanitizeInput(c, req.Name)
-	req.Description = h.sanitizeInput(c, req.Description)
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
 		return
@@ -817,8 +817,6 @@ func (h *HTTPHandler) handleBoardPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.Name = h.sanitizeInput(c, req.Name)
-	req.Description = h.sanitizeInput(c, req.Description)
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
@@ -923,8 +921,6 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.Title = h.sanitizeInput(c, req.Title)
-	req.Content = h.sanitizeInput(c, req.Content)
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
 		return
@@ -966,8 +962,6 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.Title = h.sanitizeInput(c, req.Title)
-	req.Content = h.sanitizeInput(c, req.Content)
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
 		return
@@ -1304,8 +1298,6 @@ func (h *HTTPHandler) handlePostDetailPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.Title = h.sanitizeInput(c, req.Title)
-	req.Content = h.sanitizeInput(c, req.Content)
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
 		return
@@ -1406,7 +1398,6 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.Content = h.sanitizeInput(c, req.Content)
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
 		return
@@ -1450,7 +1441,6 @@ func (h *HTTPHandler) handleCommentPut(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	req.Content = h.sanitizeInput(c, req.Content)
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
 		return
@@ -1800,7 +1790,7 @@ func (h *HTTPHandler) rateLimitGinMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if !isWriteMethod(c.Request.Method) {
+		if !isWriteMethod(c.Request.Method) && !isReadMethod(c.Request.Method) {
 			c.Next()
 			return
 		}
@@ -1809,7 +1799,11 @@ func (h *HTTPHandler) rateLimitGinMiddleware() gin.HandlerFunc {
 			path = c.Request.URL.Path
 		}
 		key := c.Request.Method + ":" + path + ":" + c.ClientIP()
-		allowed, err := h.rateLimiter.Allow(c.Request.Context(), key, h.rateLimitWriteRequests, h.rateLimitWindow)
+		limit := h.rateLimitWriteRequests
+		if isReadMethod(c.Request.Method) {
+			limit = h.rateLimitReadRequests
+		}
+		allowed, err := h.rateLimiter.Allow(c.Request.Context(), key, limit, h.rateLimitWindow)
 		if err != nil {
 			writeHTTPError(h.logger, c, http.StatusInternalServerError, customerror.Wrap(customerror.ErrInternalServerError, "rate limit", err))
 			return
@@ -1831,16 +1825,13 @@ func isWriteMethod(method string) bool {
 	}
 }
 
-func (h *HTTPHandler) sanitizeInput(c *gin.Context, raw string) string {
-	if h == nil || !h.sanitizerEnabled || h.inputSanitizer == nil {
-		return raw
+func isReadMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
 	}
-	sanitized, err := h.inputSanitizer.Sanitize(c.Request.Context(), raw)
-	if err != nil {
-		h.logger.Warn("sanitize input failed", "error", err)
-		return raw
-	}
-	return sanitized
 }
 
 func (h *HTTPHandler) parseLimitCursor(c *gin.Context) (int, string, bool) {

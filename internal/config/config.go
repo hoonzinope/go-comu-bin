@@ -14,6 +14,7 @@ const minJWTSecretLength = 32
 const minDefaultPageLimit = 1
 const maxDefaultPageLimit = 1000
 const minRateLimitWindowSeconds = 1
+const minRateLimitReadRequests = 1
 const minRateLimitWriteRequests = 1
 
 type Config struct {
@@ -56,11 +57,9 @@ type Config struct {
 			RateLimit        struct {
 				Enabled       bool `yaml:"enabled"`
 				WindowSeconds int  `yaml:"windowSeconds"`
+				ReadRequests  int  `yaml:"readRequests"`
 				WriteRequests int  `yaml:"writeRequests"`
 			} `yaml:"rateLimit"`
-			Sanitizer struct {
-				Enabled bool `yaml:"enabled"`
-			} `yaml:"sanitizer"`
 			Auth struct {
 				Secret string `yaml:"secret"`
 			} `yaml:"auth"`
@@ -114,8 +113,8 @@ func Load() (*Config, error) {
 		"delivery.http.defaultPageLimit",
 		"delivery.http.rateLimit.enabled",
 		"delivery.http.rateLimit.windowSeconds",
+		"delivery.http.rateLimit.readRequests",
 		"delivery.http.rateLimit.writeRequests",
-		"delivery.http.sanitizer.enabled",
 		"delivery.http.auth.secret",
 		"event.outbox.workerCount",
 		"event.outbox.batchSize",
@@ -158,8 +157,8 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("delivery.http.defaultPageLimit", 10)
 	v.SetDefault("delivery.http.rateLimit.enabled", true)
 	v.SetDefault("delivery.http.rateLimit.windowSeconds", 60)
+	v.SetDefault("delivery.http.rateLimit.readRequests", 300)
 	v.SetDefault("delivery.http.rateLimit.writeRequests", 60)
-	v.SetDefault("delivery.http.sanitizer.enabled", true)
 	v.SetDefault("event.outbox.workerCount", 1)
 	v.SetDefault("event.outbox.batchSize", 100)
 	v.SetDefault("event.outbox.pollIntervalMillis", 100)
@@ -204,6 +203,13 @@ func validate(cfg *Config) error {
 			"invalid delivery.http.rateLimit.windowSeconds: %d (must be >= %d)",
 			cfg.Delivery.HTTP.RateLimit.WindowSeconds,
 			minRateLimitWindowSeconds,
+		)
+	}
+	if cfg.Delivery.HTTP.RateLimit.ReadRequests < minRateLimitReadRequests {
+		return fmt.Errorf(
+			"invalid delivery.http.rateLimit.readRequests: %d (must be >= %d)",
+			cfg.Delivery.HTTP.RateLimit.ReadRequests,
+			minRateLimitReadRequests,
 		)
 	}
 	if cfg.Delivery.HTTP.RateLimit.WriteRequests < minRateLimitWriteRequests {

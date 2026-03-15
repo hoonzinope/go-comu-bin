@@ -25,7 +25,6 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	rateLimitInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/ratelimit/inmemory"
-	inputSanitizer "github.com/hoonzinope/go-comu-bin/internal/infrastructure/sanitizer/escape"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -614,6 +613,7 @@ func newTestHandlerWithRateLimit(
 	attachment port.AttachmentUseCase,
 	enabled bool,
 	windowSeconds int,
+	readRequests int,
 	writeRequests int,
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
@@ -638,41 +638,8 @@ func newTestHandlerWithRateLimit(
 		MaxJSONBodyBytes:      defaultMaxJSONBodyBytes,
 		RateLimitEnabled:      enabled,
 		RateLimitWindowSecond: windowSeconds,
+		RateLimitReadRequest:  readRequests,
 		RateLimitWriteRequest: writeRequests,
-	}).Handler
-}
-
-func newTestHandlerWithSanitizer(
-	user authUserPort,
-	account port.AccountUseCase,
-	board port.BoardUseCase,
-	post port.PostUseCase,
-	comment port.CommentUseCase,
-	reaction port.ReactionUseCase,
-	attachment port.AttachmentUseCase,
-	enabled bool,
-) http.Handler {
-	tokenProvider := auth.NewJwtTokenProvider("test-secret")
-	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
-	reportUseCase := &fakeReportUseCase{}
-	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
-	sanitizer := inputSanitizer.NewInputSanitizer()
-	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:     sessionUseCase,
-		AdminAuthorizer:    user,
-		UserUseCase:        user,
-		AccountUseCase:     account,
-		BoardUseCase:       board,
-		PostUseCase:        post,
-		CommentUseCase:     comment,
-		ReactionUseCase:    reaction,
-		AttachmentUseCase:  attachment,
-		ReportUseCase:      reportUseCase,
-		OutboxAdminUseCase: outboxAdminUseCase,
-		InputSanitizer:     sanitizer,
-		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
-		SanitizerEnabled:   enabled,
 	}).Handler
 }
 
@@ -1697,6 +1664,7 @@ func TestHTTP_WriteRateLimit_ReturnsTooManyRequests(t *testing.T) {
 		&fakeAttachmentUseCase{},
 		true,
 		60,
+		50,
 		2,
 	)
 
@@ -1713,18 +1681,42 @@ func TestHTTP_WriteRateLimit_ReturnsTooManyRequests(t *testing.T) {
 	assert.JSONEq(t, `{"error":"too many requests"}`, third.Body.String())
 }
 
-func TestHTTP_BoardPostsPost_SanitizesInput(t *testing.T) {
+func TestHTTP_ReadRateLimit_ReturnsTooManyRequests(t *testing.T) {
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		true,
+		60,
+		2,
+		10,
+	)
+
+	first := doJSONRequest(t, handler, http.MethodGet, "/boards", nil)
+	assert.Equal(t, http.StatusOK, first.Code)
+	second := doJSONRequest(t, handler, http.MethodGet, "/boards", nil)
+	assert.Equal(t, http.StatusOK, second.Code)
+	third := doJSONRequest(t, handler, http.MethodGet, "/boards", nil)
+	assert.Equal(t, http.StatusTooManyRequests, third.Code)
+	assert.JSONEq(t, `{"error":"too many requests"}`, third.Body.String())
+}
+
+func TestHTTP_BoardPostsPost_PreservesRawMarkdownInput(t *testing.T) {
 	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
 	post := &fakePostUseCase{
 		createPost: func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUIDArg string) (string, error) {
-			assert.Equal(t, "hello &lt;script&gt;alert(1)&lt;/script&gt;", title)
-			assert.Equal(t, "body &lt;img src=x onerror=alert(1)&gt;", content)
+			assert.Equal(t, "hello <script>alert(1)</script>", title)
+			assert.Equal(t, "body <img src=x onerror=alert(1)> `code` ![a](attachment://550e8400-e29b-41d4-a716-446655440003)", content)
 			assert.Equal(t, int64(1), authorID)
 			assert.Equal(t, boardUUID, boardUUIDArg)
 			return "550e8400-e29b-41d4-a716-446655440010", nil
 		},
 	}
-	handler := newTestHandlerWithSanitizer(
+	handler := newTestHandler(
 		&fakeUserUseCase{},
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
@@ -1732,11 +1724,10 @@ func TestHTTP_BoardPostsPost_SanitizesInput(t *testing.T) {
 		&fakeCommentUseCase{},
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{},
-		true,
 	)
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/"+boardUUID+"/posts", map[string]any{
 		"title":   "hello <script>alert(1)</script>",
-		"content": "body <img src=x onerror=alert(1)>",
+		"content": "body <img src=x onerror=alert(1)> `code` ![a](attachment://550e8400-e29b-41d4-a716-446655440003)",
 		"tags":    []string{"go"},
 	}, 1)
 	assert.Equal(t, http.StatusCreated, rr.Code)
