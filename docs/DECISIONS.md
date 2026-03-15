@@ -2193,3 +2193,38 @@
 - `internal/delivery/response`
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-15 - Hidden board 신고 경계와 댓글 parent 활성 규칙, suspension UUID 검증을 공개 계약에 맞춘다
+
+상태
+
+- decided
+
+배경
+
+- Round 27 리뷰에서 hidden board 비노출 정책과 댓글 reply 규칙, 일부 admin UUID path validation이 문서 계약과 다르게 동작하는 지점이 확인됐다.
+
+관찰
+
+- `ReportService.CreateReport`는 신고 대상의 존재 여부만 확인하고 hidden board visibility 정책을 재사용하지 않는다.
+- 댓글 reply 생성은 같은 게시글/1-depth만 확인하고 삭제된 부모 댓글(tombstone) 여부는 거르지 않는다.
+- suspension admin API는 `userUUID` path param을 UUID 형식으로 검증하지 않는다.
+
+결론
+
+- hidden board의 post/comment는 신고 경로에서도 non-admin에게 not found로 수렴시킨다.
+- reply parent는 같은 게시글의 활성 댓글만 허용한다.
+- suspension GET/PUT/DELETE도 다른 UUID path endpoint와 동일하게 delivery 경계에서 형식 검증 후 400을 반환한다.
+
+후속 작업
+
+- report service 테스트에 hidden board 대상 신고 차단 케이스 추가
+- comment service 테스트에 deleted parent reply 거절 케이스 추가
+- delivery 테스트에 malformed suspension UUID 거절 케이스 추가
+
+관련 문서/코드
+
+- `internal/application/service/reportService.go`
+- `internal/application/service/commentService.go`
+- `internal/delivery/http.go`
+- `docs/API.md`
