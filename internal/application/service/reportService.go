@@ -21,7 +21,6 @@ var _ port.ReportUseCase = (*ReportService)(nil)
 
 type ReportService struct {
 	userRepository      port.UserRepository
-	boardRepository     port.BoardRepository
 	postRepository      port.PostRepository
 	commentRepository   port.CommentRepository
 	reportRepository    port.ReportRepository
@@ -33,7 +32,6 @@ type ReportService struct {
 
 func NewReportServiceWithActionDispatcher(
 	userRepository port.UserRepository,
-	boardRepository port.BoardRepository,
 	postRepository port.PostRepository,
 	commentRepository port.CommentRepository,
 	reportRepository port.ReportRepository,
@@ -44,7 +42,6 @@ func NewReportServiceWithActionDispatcher(
 ) *ReportService {
 	return &ReportService{
 		userRepository:      userRepository,
-		boardRepository:     boardRepository,
 		postRepository:      postRepository,
 		commentRepository:   commentRepository,
 		reportRepository:    reportRepository,
@@ -114,12 +111,11 @@ func (s *ReportService) resolveVisibleReportTargetIDTx(tx port.TxScope, user *en
 		if post == nil {
 			return 0, customerror.ErrPostNotFound
 		}
-		board, err := tx.BoardRepository().SelectBoardByID(txCtx, post.BoardID)
-		if err != nil {
-			return 0, customerror.WrapRepository("select board by id for report target", err)
-		}
-		if err := policy.EnsureBoardVisible(board, user); err != nil {
-			return 0, customerror.ErrPostNotFound
+		if _, err := ensurePostVisibleForUser(txCtx, tx.PostRepository(), tx.BoardRepository(), user, post.ID, customerror.ErrPostNotFound, "report target"); err != nil {
+			if errors.Is(err, customerror.ErrPostNotFound) {
+				return 0, customerror.ErrPostNotFound
+			}
+			return 0, err
 		}
 		return post.ID, nil
 	case entity.ReportTargetComment:
@@ -130,19 +126,11 @@ func (s *ReportService) resolveVisibleReportTargetIDTx(tx port.TxScope, user *en
 		if comment == nil {
 			return 0, customerror.ErrCommentNotFound
 		}
-		post, err := tx.PostRepository().SelectPostByID(txCtx, comment.PostID)
-		if err != nil {
-			return 0, customerror.WrapRepository("select post by id for report target", err)
-		}
-		if post == nil {
-			return 0, customerror.ErrCommentNotFound
-		}
-		board, err := tx.BoardRepository().SelectBoardByID(txCtx, post.BoardID)
-		if err != nil {
-			return 0, customerror.WrapRepository("select board by id for report target", err)
-		}
-		if err := policy.EnsureBoardVisible(board, user); err != nil {
-			return 0, customerror.ErrCommentNotFound
+		if _, _, err := ensureCommentTargetVisibleForUser(txCtx, tx.CommentRepository(), tx.PostRepository(), tx.BoardRepository(), user, comment.ID, customerror.ErrCommentNotFound, "report target"); err != nil {
+			if errors.Is(err, customerror.ErrCommentNotFound) {
+				return 0, customerror.ErrCommentNotFound
+			}
+			return 0, err
 		}
 		return comment.ID, nil
 	default:
@@ -251,32 +239,6 @@ func (s *ReportService) ResolveReport(ctx context.Context, adminID, reportID int
 		return nil
 	})
 	return err
-}
-
-func (s *ReportService) ensureReportTargetExistsTx(tx port.TxScope, targetType entity.ReportTargetType, targetID int64) error {
-	txCtx := tx.Context()
-	switch targetType {
-	case entity.ReportTargetPost:
-		post, err := tx.PostRepository().SelectPostByID(txCtx, targetID)
-		if err != nil {
-			return customerror.WrapRepository("select post by id for report target", err)
-		}
-		if post == nil {
-			return customerror.ErrPostNotFound
-		}
-		return nil
-	case entity.ReportTargetComment:
-		comment, err := tx.CommentRepository().SelectCommentByID(txCtx, targetID)
-		if err != nil {
-			return customerror.WrapRepository("select comment by id for report target", err)
-		}
-		if comment == nil {
-			return customerror.ErrCommentNotFound
-		}
-		return nil
-	default:
-		return customerror.ErrInvalidInput
-	}
 }
 
 func (s *ReportService) reportsFromEntities(ctx context.Context, reports []*entity.Report) ([]model.Report, error) {

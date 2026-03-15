@@ -134,7 +134,7 @@ func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postUUID s
 		if requester == nil {
 			return customerror.ErrUserNotFound
 		}
-		if err := s.ensureBoardVisibleTx(tx, requester, post.BoardID); err != nil {
+		if err := ensureBoardVisibleForUser(txCtx, tx.BoardRepository(), requester, post.BoardID, customerror.ErrBoardNotFound, "attachment board visibility"); err != nil {
 			return err
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
@@ -187,7 +187,7 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postUUID s
 	if requester == nil {
 		return nil, customerror.ErrUserNotFound
 	}
-	if err := s.ensureBoardVisible(ctx, requester, post.BoardID); err != nil {
+	if err := ensureBoardVisibleForUser(ctx, s.boardRepository, requester, post.BoardID, customerror.ErrBoardNotFound, "attachment board visibility"); err != nil {
 		return nil, err
 	}
 	if err := s.authorizationPolicy.CanWrite(requester); err != nil {
@@ -232,7 +232,7 @@ func (s *AttachmentService) GetPostAttachments(ctx context.Context, postUUID str
 	if post == nil {
 		return nil, customerror.ErrPostNotFound
 	}
-	if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
+	if err := ensureBoardVisibleForUser(ctx, s.boardRepository, nil, post.BoardID, customerror.ErrBoardNotFound, "attachment board visibility"); err != nil {
 		return nil, err
 	}
 	items, err := s.attachmentRepository.SelectByPostID(ctx, post.ID)
@@ -266,7 +266,7 @@ func (s *AttachmentService) GetPostAttachmentFile(ctx context.Context, postUUID,
 	if post == nil {
 		return nil, customerror.ErrPostNotFound
 	}
-	if err := s.ensureBoardVisible(ctx, nil, post.BoardID); err != nil {
+	if err := ensureBoardVisibleForUser(ctx, s.boardRepository, nil, post.BoardID, customerror.ErrBoardNotFound, "attachment board visibility"); err != nil {
 		return nil, err
 	}
 	attachment, err := s.attachmentRepository.SelectByUUID(ctx, attachmentUUID)
@@ -307,7 +307,7 @@ func (s *AttachmentService) GetPostAttachmentPreviewFile(ctx context.Context, po
 	if requester == nil {
 		return nil, customerror.ErrUserNotFound
 	}
-	if err := s.ensureBoardVisible(ctx, requester, post.BoardID); err != nil {
+	if err := ensureBoardVisibleForUser(ctx, s.boardRepository, requester, post.BoardID, customerror.ErrBoardNotFound, "attachment board visibility"); err != nil {
 		return nil, err
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
@@ -353,7 +353,7 @@ func (s *AttachmentService) DeletePostAttachment(ctx context.Context, postUUID, 
 		if requester == nil {
 			return customerror.ErrUserNotFound
 		}
-		if err := s.ensureBoardVisibleTx(tx, requester, post.BoardID); err != nil {
+		if err := ensureBoardVisibleForUser(txCtx, tx.BoardRepository(), requester, post.BoardID, customerror.ErrBoardNotFound, "attachment board visibility"); err != nil {
 			return err
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
@@ -424,22 +424,6 @@ func (s *AttachmentService) CleanupAttachments(ctx context.Context, now time.Tim
 		deletedCount++
 	}
 	return deletedCount, nil
-}
-
-func (s *AttachmentService) ensureBoardVisible(ctx context.Context, user *entity.User, boardID int64) error {
-	board, err := s.boardRepository.SelectBoardByID(ctx, boardID)
-	if err != nil {
-		return customerror.WrapRepository("select board by id for attachment board visibility", err)
-	}
-	return policy.EnsureBoardVisible(board, user)
-}
-
-func (s *AttachmentService) ensureBoardVisibleTx(tx port.TxScope, user *entity.User, boardID int64) error {
-	board, err := tx.BoardRepository().SelectBoardByID(tx.Context(), boardID)
-	if err != nil {
-		return customerror.WrapRepository("select board by id for attachment board visibility", err)
-	}
-	return policy.EnsureBoardVisible(board, user)
 }
 
 func buildAttachmentStorageKey(postID int64, fileName string) string {

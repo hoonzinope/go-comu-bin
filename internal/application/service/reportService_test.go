@@ -15,7 +15,6 @@ func TestReportService_CreateReport_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
-		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -38,7 +37,6 @@ func TestReportService_CreateReport_RejectsDuplicate(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
-		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -63,7 +61,6 @@ func TestReportService_CreateReport_HiddenBoardBlockedForNonAdmin(t *testing.T) 
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
-		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -91,7 +88,6 @@ func TestReportService_GetReports_AdminOnly(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
-		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -110,7 +106,6 @@ func TestReportService_GetReports_PendingFirst(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
-		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -144,7 +139,6 @@ func TestReportService_ResolveReport_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
-		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
@@ -174,7 +168,6 @@ func TestReportService_ResolveReport_RejectsAlreadyResolved(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(
 		repositories.user,
-		repositories.board,
 		repositories.post,
 		repositories.comment,
 		repositories.report,
