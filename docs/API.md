@@ -156,7 +156,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `GET /api/v1/posts/{postUUID}/attachments/{attachmentUUID}/file`
   - published post의 attachment 파일 본문을 반환합니다.
   - `attachments[].file_url`이 이 경로를 가리킵니다.
-  - `Cache-Control: public, max-age=300`과 `ETag`를 반환합니다.
+  - revoke 이후 stale public cache가 남지 않도록 `Cache-Control: no-store`와 `ETag`를 반환합니다.
   - `If-None-Match`가 일치하면 `304 Not Modified`를 반환합니다.
   - orphan attachment와 `pending_delete` attachment는 `404`로 숨깁니다.
 - `GET /api/v1/posts/{postUUID}/attachments/{attachmentUUID}/preview` (인증 필요, 작성자 또는 admin)

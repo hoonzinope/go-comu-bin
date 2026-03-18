@@ -463,6 +463,7 @@ func (s *PostService) UpdatePost(ctx context.Context, postUUID string, authorID 
 func (s *PostService) DeletePost(ctx context.Context, postUUID string, authorID int64) error {
 	var postID, boardID int64
 	var currentTagNames []string
+	var deletedCommentIDs []int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		post, err := tx.PostRepository().SelectPostByUUIDIncludingUnpublished(txCtx, postUUID)
@@ -489,7 +490,8 @@ func (s *PostService) DeletePost(ctx context.Context, postUUID string, authorID 
 		if err != nil {
 			return err
 		}
-		if err := s.deletePostCommentsInBatches(tx, post.ID); err != nil {
+		deletedCommentIDs, err = s.deletePostCommentsInBatches(tx, post.ID)
+		if err != nil {
 			return err
 		}
 		if deleteErr := tx.PostRepository().Delete(txCtx, post.ID); deleteErr != nil {
@@ -506,7 +508,7 @@ func (s *PostService) DeletePost(ctx context.Context, postUUID string, authorID 
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, nil)); err != nil {
+		if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, deletedCommentIDs)); err != nil {
 			return err
 		}
 		return nil
@@ -517,27 +519,29 @@ func (s *PostService) DeletePost(ctx context.Context, postUUID string, authorID 
 	return nil
 }
 
-func (s *PostService) deletePostCommentsInBatches(tx port.TxScope, postID int64) error {
+func (s *PostService) deletePostCommentsInBatches(tx port.TxScope, postID int64) ([]int64, error) {
 	txCtx := tx.Context()
 	lastID := int64(0)
+	deletedCommentIDs := make([]int64, 0)
 	for {
 		comments, err := tx.CommentRepository().SelectComments(txCtx, postID, postDeleteBatchSize, lastID)
 		if err != nil {
-			return customerror.WrapRepository("select comments for delete post", err)
+			return nil, customerror.WrapRepository("select comments for delete post", err)
 		}
 		if len(comments) == 0 {
-			return nil
+			return deletedCommentIDs, nil
 		}
 		for _, comment := range comments {
+			deletedCommentIDs = append(deletedCommentIDs, comment.ID)
 			if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, comment.ID, entity.ReactionTargetComment); reactionErr != nil {
-				return customerror.WrapRepository("delete post comment reactions", reactionErr)
+				return nil, customerror.WrapRepository("delete post comment reactions", reactionErr)
 			}
 			if deleteErr := tx.CommentRepository().Delete(txCtx, comment.ID); deleteErr != nil {
-				return customerror.WrapRepository("soft delete post comments", deleteErr)
+				return nil, customerror.WrapRepository("soft delete post comments", deleteErr)
 			}
 		}
 		if len(comments) < postDeleteBatchSize {
-			return nil
+			return deletedCommentIDs, nil
 		}
 		lastID = comments[len(comments)-1].ID
 	}

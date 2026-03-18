@@ -454,6 +454,26 @@ func TestPostService_DeletePost_RemovesStoredReactionsForPostAndComments(t *test
 	assert.Empty(t, commentReactions)
 }
 
+func TestPostService_DeletePost_InvalidatesCommentReactionCaches(t *testing.T) {
+	repositories := newTestRepositories()
+	cache := testutil.NewSpyCache()
+	svc := newTestPostService(t, repositories, cache)
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	commentID := seedComment(repositories.comment, userID, postID, "comment")
+
+	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), commentID), "stale-comment-reaction"))
+
+	require.NoError(t, svc.DeletePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID))
+
+	require.Eventually(t, func() bool {
+		_, ok, err := cache.Get(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), commentID))
+		require.NoError(t, err)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestPostService_DeletePost_DeletesCommentsInBatches(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")

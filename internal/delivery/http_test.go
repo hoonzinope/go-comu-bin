@@ -1265,7 +1265,7 @@ func TestHandleGetAttachmentFile_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "image/png", rr.Header().Get("Content-Type"))
-	assert.Equal(t, "public, max-age=300", rr.Header().Get("Cache-Control"))
+	assert.Equal(t, "no-store", rr.Header().Get("Cache-Control"))
 	assert.Equal(t, "\"att-8-5-0\"", rr.Header().Get("ETag"))
 	assert.Contains(t, rr.Header().Get("Content-Disposition"), "a.png")
 	assert.Equal(t, "hello", rr.Body.String())

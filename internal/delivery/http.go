@@ -1154,7 +1154,7 @@ func (h *HTTPHandler) handlePostAttachmentFileGet(c *gin.Context) {
 		return
 	}
 	defer file.Content.Close()
-	c.Header("Cache-Control", "public, max-age=300")
+	c.Header("Cache-Control", "no-store")
 	if file.ETag != "" {
 		c.Header("ETag", file.ETag)
 		if c.GetHeader("If-None-Match") == file.ETag {
