@@ -155,6 +155,32 @@ func TestCommentService_GetCommentsByPost_ReturnsPostNotFound_WhenPostDeleted(t 
 	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 }
 
+func TestCommentService_GetCommentsByPost_RechecksPostInsideCacheLoad(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	postUUID := mustPostUUID(t, repositories.post, postID)
+	seedComment(repositories.comment, userID, postID, "c1")
+	svc := NewCommentService(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		repositories.comment,
+		repositories.reaction,
+		repositories.unitOfWork,
+		&hookCache{onLoad: func() {
+			require.NoError(t, repositories.post.Delete(context.Background(), postID))
+		}},
+		newTestCachePolicy(),
+		newTestAuthorizationPolicy(),
+	)
+
+	_, err := svc.GetCommentsByPost(context.Background(), postUUID, 10, "")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
+}
+
 func TestCommentService_CreateComment_InvalidatesRelatedCaches(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()

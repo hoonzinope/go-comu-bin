@@ -769,6 +769,47 @@ func TestHandleReportCreate_Success(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), `"id":77`)
 }
 
+func TestHandleAdminReportsGet_OmitsInternalForeignKeys(t *testing.T) {
+	resolvedByUUID := "550e8400-e29b-41d4-a716-446655440099"
+	handler := newTestHandlerWithAdminUseCases(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		&fakeReportUseCase{
+			getReports: func(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
+				return &model.ReportList{
+					Reports: []model.Report{{
+						ID:             7,
+						TargetType:     "post",
+						TargetUUID:     "550e8400-e29b-41d4-a716-446655440101",
+						ReporterUUID:   "550e8400-e29b-41d4-a716-446655440011",
+						ReasonCode:     "spam",
+						Status:         "pending",
+						ResolvedByUUID: &resolvedByUUID,
+						ResolvedAt:     nil,
+					}},
+					Limit:   limit,
+					LastID:  lastID,
+					HasMore: false,
+				}, nil
+			},
+		},
+		&fakeOutboxAdminUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/admin/reports?limit=10", nil, 1)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"reporter_uuid":"550e8400-e29b-41d4-a716-446655440011"`)
+	assert.Contains(t, rr.Body.String(), `"resolved_by_uuid":"550e8400-e29b-41d4-a716-446655440099"`)
+	assert.NotContains(t, rr.Body.String(), `"target_id"`)
+	assert.NotContains(t, rr.Body.String(), `"reporter_user_id"`)
+	assert.NotContains(t, rr.Body.String(), `"resolved_by":`)
+}
+
 func TestHandleReportCreate_BadRequestForMalformedTargetUUID(t *testing.T) {
 	handler := newTestHandlerWithAdminUseCases(
 		&fakeUserUseCase{},
@@ -1703,6 +1744,37 @@ func TestHTTP_ReadRateLimit_ReturnsTooManyRequests(t *testing.T) {
 	third := doJSONRequest(t, handler, http.MethodGet, "/boards", nil)
 	assert.Equal(t, http.StatusTooManyRequests, third.Code)
 	assert.JSONEq(t, `{"error":"too many requests"}`, third.Body.String())
+}
+
+func TestHTTP_RateLimit_DoesNotTrustForwardedHeaderByDefault(t *testing.T) {
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		true,
+		60,
+		1,
+		10,
+	)
+
+	first := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/boards", nil)
+	first.RemoteAddr = "198.51.100.10:1234"
+	first.Header.Set("X-Forwarded-For", "203.0.113.1")
+	firstRec := httptest.NewRecorder()
+	handler.ServeHTTP(firstRec, first)
+	assert.Equal(t, http.StatusOK, firstRec.Code)
+
+	second := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/boards", nil)
+	second.RemoteAddr = "198.51.100.10:9999"
+	second.Header.Set("X-Forwarded-For", "203.0.113.99")
+	secondRec := httptest.NewRecorder()
+	handler.ServeHTTP(secondRec, second)
+	assert.Equal(t, http.StatusTooManyRequests, secondRec.Code)
+	assert.JSONEq(t, `{"error":"too many requests"}`, secondRec.Body.String())
 }
 
 func TestHTTP_BoardPostsPost_PreservesRawMarkdownInput(t *testing.T) {

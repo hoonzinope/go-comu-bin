@@ -134,11 +134,18 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postUUID string,
 	}
 	cacheKey := key.CommentList(post.ID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		if err := ensureBoardVisibleForUser(ctx, s.boardRepository, nil, post.BoardID, customerror.ErrBoardNotFound, "comment board visibility"); err != nil {
+		currentPost, err := s.postRepository.SelectPostByUUID(ctx, postUUID)
+		if err != nil {
+			return nil, customerror.WrapRepository("select post by uuid for cached comment list", err)
+		}
+		if currentPost == nil {
+			return nil, customerror.ErrPostNotFound
+		}
+		if err := ensureBoardVisibleForUser(ctx, s.boardRepository, nil, currentPost.BoardID, customerror.ErrBoardNotFound, "comment board visibility"); err != nil {
 			return nil, err
 		}
 
-		comments, err := s.commentRepository.SelectVisibleComments(ctx, post.ID, limit+1, lastID)
+		comments, err := s.commentRepository.SelectVisibleComments(ctx, currentPost.ID, limit+1, lastID)
 		if err != nil {
 			return nil, customerror.WrapRepository("select visible comments by post", err)
 		}
@@ -153,7 +160,7 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postUUID string,
 			nextCursor = &next
 		}
 
-		commentModels, err := s.commentsFromEntities(ctx, post.UUID, comments)
+		commentModels, err := s.commentsFromEntities(ctx, currentPost.UUID, comments)
 		if err != nil {
 			return nil, err
 		}

@@ -277,3 +277,36 @@ func assertCacheFailure(t interface {
 		t.Errorf("expected cache failure, got %v", err)
 	}
 }
+
+type hookCache struct {
+	onLoad func()
+}
+
+func (c *hookCache) Get(context.Context, string) (interface{}, bool, error) {
+	return nil, false, nil
+}
+
+func (c *hookCache) Set(context.Context, string, interface{}) error {
+	return nil
+}
+
+func (c *hookCache) SetWithTTL(context.Context, string, interface{}, int) error {
+	return nil
+}
+
+func (c *hookCache) Delete(context.Context, string) error {
+	return nil
+}
+
+func (c *hookCache) DeleteByPrefix(context.Context, string) (int, error) {
+	return 0, nil
+}
+
+func (c *hookCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	_ = key
+	_ = ttlSeconds
+	if c.onLoad != nil {
+		c.onLoad()
+	}
+	return loader(ctx)
+}

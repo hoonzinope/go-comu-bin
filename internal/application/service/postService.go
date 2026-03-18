@@ -169,7 +169,14 @@ func (s *PostService) GetPostsList(ctx context.Context, boardUUID string, limit 
 	}
 	cacheKey := key.PostList(board.ID, limit, lastID)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		if err := policy.EnsureBoardVisible(board, nil); err != nil {
+		currentBoard, err := s.boardRepository.SelectBoardByUUID(ctx, boardUUID)
+		if err != nil {
+			return nil, customerror.WrapRepository("select board by uuid for cached post list", err)
+		}
+		if currentBoard == nil {
+			return nil, customerror.ErrBoardNotFound
+		}
+		if err := policy.EnsureBoardVisible(currentBoard, nil); err != nil {
 			return nil, err
 		}
 
@@ -177,7 +184,7 @@ func (s *PostService) GetPostsList(ctx context.Context, boardUUID string, limit 
 		if limit > 0 {
 			fetchLimit = limit + 1
 		}
-		posts, err := s.postRepository.SelectPosts(ctx, board.ID, fetchLimit, lastID)
+		posts, err := s.postRepository.SelectPosts(ctx, currentBoard.ID, fetchLimit, lastID)
 		if err != nil {
 			return nil, customerror.WrapRepository("select posts by board", err)
 		}

@@ -221,6 +221,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 
 func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
 	r := gin.New()
+	_ = r.SetTrustedProxies(nil)
 	r.Use(gin.Recovery())
 	if deps.AttachmentUploadMaxBytes > 0 {
 		r.MaxMultipartMemory = deps.AttachmentUploadMaxBytes + multipartRequestOverheadBytes
@@ -1668,14 +1669,12 @@ func reportResponsesFromModel(items []model.Report) []reportResponse {
 		out = append(out, reportResponse{
 			ID:             item.ID,
 			TargetType:     item.TargetType,
-			TargetID:       item.TargetID,
-			ReporterUserID: item.ReporterUserID,
+			TargetUUID:     item.TargetUUID,
 			ReporterUUID:   item.ReporterUUID,
 			ReasonCode:     item.ReasonCode,
 			ReasonDetail:   item.ReasonDetail,
 			Status:         item.Status,
 			ResolutionNote: item.ResolutionNote,
-			ResolvedBy:     item.ResolvedBy,
 			ResolvedByUUID: item.ResolvedByUUID,
 			ResolvedAt:     item.ResolvedAt,
 			CreatedAt:      item.CreatedAt,

@@ -128,6 +128,21 @@ func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testi
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
 
+func TestPostService_GetPostsList_RechecksBoardInsideCacheLoad(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "user", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	boardUUID := mustBoardUUID(t, repositories.board, boardID)
+	seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := newTestPostService(t, repositories, &hookCache{onLoad: func() {
+		require.NoError(t, repositories.board.Delete(context.Background(), boardID))
+	}})
+
+	_, err := svc.GetPostsList(context.Background(), boardUUID, 10, "")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
+}
+
 func TestPostService_GetPostDetail_UsesCache(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := testutil.NewSpyCache()

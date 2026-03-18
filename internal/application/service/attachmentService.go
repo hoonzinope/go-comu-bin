@@ -163,16 +163,6 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postUUID s
 	if strings.TrimSpace(fileName) == "" || strings.TrimSpace(contentType) == "" || content == nil {
 		return nil, customerror.ErrInvalidInput
 	}
-	data, err := readUploadContent(content, s.maxUploadSizeBytes)
-	if err != nil {
-		if errors.Is(err, errAttachmentTooLarge) {
-			return nil, customerror.ErrInvalidInput
-		}
-		return nil, customerror.Wrap(customerror.ErrInternalServerError, "read upload content", err)
-	}
-	if err := validateAttachmentUpload(fileName, contentType, data, s.maxUploadSizeBytes); err != nil {
-		return nil, err
-	}
 	post, err := s.postRepository.SelectPostByUUIDIncludingUnpublished(ctx, postUUID)
 	if err != nil {
 		return nil, customerror.WrapRepository("select post by uuid including unpublished for upload attachment", err)
@@ -194,6 +184,16 @@ func (s *AttachmentService) UploadPostAttachment(ctx context.Context, postUUID s
 		return nil, err
 	}
 	if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return nil, err
+	}
+	data, err := readUploadContent(content, s.maxUploadSizeBytes)
+	if err != nil {
+		if errors.Is(err, errAttachmentTooLarge) {
+			return nil, customerror.ErrInvalidInput
+		}
+		return nil, customerror.Wrap(customerror.ErrInternalServerError, "read upload content", err)
+	}
+	if err := validateAttachmentUpload(fileName, contentType, data, s.maxUploadSizeBytes); err != nil {
 		return nil, err
 	}
 	contentType = normalizeAttachmentContentType(contentType)

@@ -40,6 +40,15 @@ func (r *countingReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+type panicOnReadReader struct {
+	readCalled bool
+}
+
+func (r *panicOnReadReader) Read(p []byte) (int, error) {
+	r.readCalled = true
+	return 0, errors.New("read should not be called")
+}
+
 type spyFileStorage struct {
 	savedKey     string
 	savedContent string
@@ -703,6 +712,23 @@ func TestAttachmentService_UploadPostAttachment_StopsReadingAfterConfiguredLimit
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 	assert.Equal(t, 5, reader.readBytes)
+	assert.Empty(t, storage.savedKey)
+}
+
+func TestAttachmentService_UploadPostAttachment_RejectsUnauthorizedBeforeReadingBody(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{}
+	ownerID := seedUser(repositories.user, "owner", "pw", "user")
+	otherID := seedUser(repositories.user, "other", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, ownerID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.unitOfWork, storage, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	reader := &panicOnReadReader{}
+	_, err := svc.UploadPostAttachment(context.Background(), mustPostUUID(t, repositories.post, postID), otherID, "a.png", "image/png", reader)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
+	assert.False(t, reader.readCalled)
 	assert.Empty(t, storage.savedKey)
 }
 

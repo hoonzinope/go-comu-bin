@@ -35,6 +35,11 @@ func (l *InMemoryRateLimiter) Allow(ctx context.Context, key string, limit int, 
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	for existingKey, existingBucket := range l.buckets {
+		if !existingBucket.resetAt.After(now) {
+			delete(l.buckets, existingKey)
+		}
+	}
 
 	bucket, ok := l.buckets[key]
 	if !ok || !bucket.resetAt.After(now) {
