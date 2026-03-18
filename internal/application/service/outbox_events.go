@@ -13,10 +13,6 @@ import (
 
 var defaultEventSerializer port.EventSerializer = appevent.NewJSONEventSerializer()
 
-func appendEventsToOutbox(tx port.TxScope, events ...port.DomainEvent) error {
-	return dispatchDomainActions(tx, nil, events...)
-}
-
 func dispatchDomainActions(tx port.TxScope, dispatcher port.ActionHookDispatcher, events ...port.DomainEvent) error {
 	if len(events) == 0 {
 		return nil

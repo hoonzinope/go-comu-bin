@@ -2419,3 +2419,33 @@
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
 - `docs/CONFIG.md`
+
+## 2026-03-18 - service layer 미사용 helper를 제거해 읽기 비용을 줄인다
+
+상태
+
+- decided
+
+배경
+
+- Round 30 후속 정리에서 service package 안에 실제 호출 경로가 없는 helper가 남아 있었다.
+- 이들은 동작 버그는 아니지만, 탐색 시 "현재도 쓰이는 표준 경로인가?"라는 불필요한 판단 비용을 만든다.
+
+관찰
+
+- `appendEventsToOutbox`는 `dispatchDomainActions`의 단순 wrapper인데 호출처가 없다.
+- `userUUIDByID`는 `userUUIDsByIDs` 단건 wrapper인데 호출처가 없다.
+
+결론
+
+- public-like helper surface는 실제 사용되는 경로만 남기고, 미사용 wrapper는 제거한다.
+- 동작 변경이 없는 cleanup이므로 회귀는 기존 전체 테스트와 vet로 확인한다.
+
+후속 작업
+
+- dead code 정리 시 review backlog와 구현이 다시 어긋나지 않도록 라운드 종료 시점에 함께 청소한다.
+
+관련 문서/코드
+
+- `internal/application/service/outbox_events.go`
+- `internal/application/service/user_reference.go`

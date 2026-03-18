@@ -11,18 +11,6 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-func userUUIDByID(ctx context.Context, userRepository port.UserRepository, userID int64) (string, error) {
-	usersByID, err := userUUIDsByIDs(ctx, userRepository, []int64{userID})
-	if err != nil {
-		return "", err
-	}
-	userUUID, ok := usersByID[userID]
-	if !ok {
-		return "", customerror.WrapRepository("select user by id including deleted", fmt.Errorf("user %d: %w", userID, errors.New("not found")))
-	}
-	return userUUID, nil
-}
-
 func userUUIDsByIDs(ctx context.Context, userRepository port.UserRepository, ids []int64) (map[int64]string, error) {
 	uniqueIDs := uniqueInt64s(ids)
 	usersByID, err := userRepository.SelectUsersByIDsIncludingDeleted(ctx, uniqueIDs)
