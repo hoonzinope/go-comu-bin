@@ -135,6 +135,35 @@ func TestReportService_GetReports_PendingFirst(t *testing.T) {
 	assert.Equal(t, firstID, list.Reports[1].ID)
 }
 
+func TestReportService_GetReports_IncludesDeletedPostTargetUUID(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewReportServiceWithActionDispatcher(
+		repositories.user,
+		repositories.post,
+		repositories.comment,
+		repositories.report,
+		repositories.unitOfWork,
+		newTestActionDispatcher(t, repositories, newTestCache()),
+		newTestAuthorizationPolicy(),
+	)
+
+	adminID := seedUser(repositories.user, "admin", "pw", "admin")
+	reporterID := seedUser(repositories.user, "reporter", "pw", "user")
+	authorID := seedUser(repositories.user, "author", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
+	postUUID := mustPostUUID(t, repositories.post, postID)
+
+	_, err := svc.CreateReport(context.Background(), reporterID, entity.ReportTargetPost, postUUID, entity.ReportReasonSpam, "detail")
+	require.NoError(t, err)
+	require.NoError(t, repositories.post.Delete(context.Background(), postID))
+
+	list, err := svc.GetReports(context.Background(), adminID, nil, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, list.Reports, 1)
+	assert.Equal(t, postUUID, list.Reports[0].TargetUUID)
+}
+
 func TestReportService_ResolveReport_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(

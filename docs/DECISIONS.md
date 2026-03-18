@@ -2449,3 +2449,41 @@
 
 - `internal/application/service/outbox_events.go`
 - `internal/application/service/user_reference.go`
+
+## 2026-03-19 - soft-delete read-model, attachment revoke cache, post delete event 정합성을 맞춘다
+
+상태
+
+- decided
+
+배경
+
+- Round 31 리뷰에서 admin report 조회, attachment 삭제 직후 파일 접근, post 삭제 후 cache invalidation이 각각 다른 경계에서 어긋난 것이 확인됐다.
+- 세 이슈 모두 "삭제/비노출 상태 전이 후 읽기 경계가 이전 상태를 얼마나 오래 보존할 수 있는가"에 대한 계약 불일치다.
+
+관찰
+
+- admin report projection은 post target UUID를 조회할 때 deleted post를 제외한다.
+- attachment file 응답은 public cache를 허용하지만 attachment delete는 즉시 비노출을 의도한다.
+- post delete 이벤트는 댓글 cascade를 수행하면서도 deleted comment ID 목록을 비워 보내 cache invalidation 의미를 충분히 전달하지 못한다.
+
+결론
+
+- report read-model은 soft-deleted target에도 안정적으로 UUID를 복원할 수 있어야 한다.
+- attachment revoke 의미가 "즉시 접근 차단"이라면 file 응답 cache 정책도 그 의미에 맞춰 보수적으로 조정한다.
+- post delete 이벤트는 하위 comment cascade 결과를 함께 전달하거나, 동일 수준의 cache invalidation 효과를 별도로 보장해야 한다.
+
+후속 작업
+
+- deleted post 대상 report 조회 회귀 테스트 추가
+- attachment file cache header 회귀 테스트 갱신
+- post delete가 comment reaction cache까지 무효화하는 테스트 추가
+
+관련 문서/코드
+
+- `internal/application/service/reportService.go`
+- `internal/infrastructure/persistence/inmemory/postRepository.go`
+- `internal/application/service/postService.go`
+- `internal/application/event/cache_invalidation_handler.go`
+- `internal/delivery/http.go`
+- `docs/API.md`

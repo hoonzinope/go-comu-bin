@@ -11,6 +11,7 @@ type PostRepository interface {
 	SelectPostByID(ctx context.Context, id int64) (*entity.Post, error)
 	SelectPostByUUID(ctx context.Context, postUUID string) (*entity.Post, error)
 	SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error)
+	SelectPostUUIDsByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]string, error)
 	SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error)
 	SelectPostByUUIDIncludingUnpublished(ctx context.Context, postUUID string) (*entity.Post, error)
 	SelectPosts(ctx context.Context, boardID int64, limit int, lastID int64) ([]*entity.Post, error)

@@ -264,9 +264,9 @@ func (s *ReportService) reportsFromEntities(ctx context.Context, reports []*enti
 	if err != nil {
 		return nil, err
 	}
-	postUUIDs, err := s.postRepository.SelectPostUUIDsByIDs(ctx, postIDs)
+	postUUIDs, err := s.postRepository.SelectPostUUIDsByIDsIncludingDeleted(ctx, postIDs)
 	if err != nil {
-		return nil, customerror.WrapRepository("select post uuids by ids", err)
+		return nil, customerror.WrapRepository("select post uuids by ids including deleted", err)
 	}
 	commentUUIDs, err := s.commentRepository.SelectCommentUUIDsByIDsIncludingDeleted(ctx, commentIDs)
 	if err != nil {
@@ -309,7 +309,7 @@ func reportTargetUUID(report *entity.Report, postUUIDs, commentUUIDs map[int64]s
 	case entity.ReportTargetPost:
 		targetUUID, ok := postUUIDs[report.TargetID]
 		if !ok {
-			return "", customerror.WrapRepository("select post uuids by ids", errors.New("report target post not found"))
+			return "", customerror.WrapRepository("select post uuids by ids including deleted", errors.New("report target post not found"))
 		}
 		return targetUUID, nil
 	case entity.ReportTargetComment:
