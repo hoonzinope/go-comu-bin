@@ -91,3 +91,29 @@ func TestInMemoryCache_GetOrSetWithTTL_PassesContextToLoader(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "req-1", value)
 }
+
+func TestInMemoryCache_DeleteByPrefix_UsesPrefixIndex(t *testing.T) {
+	cache := NewInMemoryCache()
+	ctx := context.Background()
+	require.NoError(t, cache.Set(ctx, "posts:list:board:1:limit:10:last:0", "a"))
+	require.NoError(t, cache.Set(ctx, "posts:list:board:1:limit:10:last:10", "b"))
+	require.NoError(t, cache.Set(ctx, "posts:list:board:2:limit:10:last:0", "c"))
+
+	cache.mu.RLock()
+	keysForPrefix := len(cache.prefixIndex["posts:list:board:1:"])
+	cache.mu.RUnlock()
+	assert.Equal(t, 2, keysForPrefix)
+
+	deleted, err := cache.DeleteByPrefix(ctx, "posts:list:board:1:")
+	require.NoError(t, err)
+	assert.Equal(t, 2, deleted)
+
+	cache.mu.RLock()
+	_, exists := cache.prefixIndex["posts:list:board:1:"]
+	cache.mu.RUnlock()
+	assert.False(t, exists)
+
+	_, ok, err := cache.Get(ctx, "posts:list:board:2:limit:10:last:0")
+	require.NoError(t, err)
+	assert.True(t, ok)
+}

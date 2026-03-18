@@ -41,6 +41,7 @@ func TestInMemoryRateLimiter_SeparateKeys(t *testing.T) {
 
 func TestInMemoryRateLimiter_EvictsExpiredBuckets(t *testing.T) {
 	limiter := NewInMemoryRateLimiter()
+	limiter.cleanupInterval = time.Millisecond
 	ctx := context.Background()
 
 	allowed, err := limiter.Allow(ctx, "signup:127.0.0.1", 1, time.Millisecond)

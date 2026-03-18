@@ -2487,3 +2487,41 @@
 - `internal/application/event/cache_invalidation_handler.go`
 - `internal/delivery/http.go`
 - `docs/API.md`
+
+## 2026-03-19 - in-memory hot path와 context 규칙 문서를 현재 설계에 맞춘다
+
+상태
+
+- decided
+
+배경
+
+- Round 32 리뷰에서 새 기능 버그보다는 in-memory hot path의 선형 스캔 비용과 문서-구현 경계 규칙 불일치가 남아 있었다.
+- 특히 `UnitOfWork` snapshot 비용은 in-memory 한계로 당장 제외하더라도, rate limiter와 cache invalidation은 요청/이벤트 hot path라 개선 우선순위가 높다.
+
+관찰
+
+- in-memory rate limiter는 `Allow` 호출마다 전체 bucket map을 sweep한다.
+- in-memory cache의 `DeleteByPrefix`는 전체 store scan 기반이다.
+- 아키텍처 문서는 모든 경계 메서드에 `context.Context`가 온다고 설명하지만, pure value/crypto/helper 성격의 port는 예외다.
+- mapper package에는 실제 사용처가 없는 exported helper가 남아 있다.
+
+결론
+
+- rate limiter cleanup은 요청당 full scan 대신 주기적 cleanup으로 바꾼다.
+- in-memory cache는 key prefix index를 유지해 `DeleteByPrefix`가 전체 store scan 없이 동작하도록 바꾼다.
+- context 전달 규칙 문서는 "I/O 또는 취소/추적이 필요한 경계" 기준으로 좁혀 실제 port 집합과 맞춘다.
+- 미사용 exported mapper helper는 제거해 public surface를 실제 사용 계약에 맞춘다.
+
+후속 작업
+
+- rate limiter periodic cleanup 회귀 테스트 추가
+- in-memory cache prefix index 정합성 테스트 추가
+- 아키텍처 문서의 context 규칙 설명 갱신
+
+관련 문서/코드
+
+- `internal/infrastructure/ratelimit/inmemory/in_memory_rate_limiter.go`
+- `internal/infrastructure/cache/inmemory/in_memory_cache.go`
+- `internal/application/mapper/dto_mapper.go`
+- `docs/ARCHITECTURE.md`

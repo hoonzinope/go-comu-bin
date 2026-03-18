@@ -11,8 +11,10 @@ import (
 var _ port.RateLimiter = (*InMemoryRateLimiter)(nil)
 
 type InMemoryRateLimiter struct {
-	mu      sync.Mutex
-	buckets map[string]rateLimitBucket
+	mu              sync.Mutex
+	buckets         map[string]rateLimitBucket
+	cleanupInterval time.Duration
+	lastCleanup     time.Time
 }
 
 type rateLimitBucket struct {
@@ -22,7 +24,8 @@ type rateLimitBucket struct {
 
 func NewInMemoryRateLimiter() *InMemoryRateLimiter {
 	return &InMemoryRateLimiter{
-		buckets: make(map[string]rateLimitBucket),
+		buckets:         make(map[string]rateLimitBucket),
+		cleanupInterval: time.Minute,
 	}
 }
 
@@ -35,10 +38,9 @@ func (l *InMemoryRateLimiter) Allow(ctx context.Context, key string, limit int, 
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for existingKey, existingBucket := range l.buckets {
-		if !existingBucket.resetAt.After(now) {
-			delete(l.buckets, existingKey)
-		}
+	if l.shouldCleanup(now) {
+		l.cleanupExpiredBuckets(now)
+		l.lastCleanup = now
 	}
 
 	bucket, ok := l.buckets[key]
@@ -55,4 +57,22 @@ func (l *InMemoryRateLimiter) Allow(ctx context.Context, key string, limit int, 
 	bucket.count++
 	l.buckets[key] = bucket
 	return true, nil
+}
+
+func (l *InMemoryRateLimiter) shouldCleanup(now time.Time) bool {
+	if l.cleanupInterval <= 0 {
+		return true
+	}
+	if l.lastCleanup.IsZero() {
+		return true
+	}
+	return now.Sub(l.lastCleanup) >= l.cleanupInterval
+}
+
+func (l *InMemoryRateLimiter) cleanupExpiredBuckets(now time.Time) {
+	for existingKey, existingBucket := range l.buckets {
+		if !existingBucket.resetAt.After(now) {
+			delete(l.buckets, existingKey)
+		}
+	}
 }

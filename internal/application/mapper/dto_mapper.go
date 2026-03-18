@@ -33,14 +33,6 @@ func PostFromEntity(post *entity.Post) model.Post {
 	}
 }
 
-func PostPtrFromEntity(post *entity.Post) *model.Post {
-	if post == nil {
-		return nil
-	}
-	out := PostFromEntity(post)
-	return &out
-}
-
 func PostsFromEntities(items []*entity.Post) []model.Post {
 	out := make([]model.Post, 0, len(items))
 	for _, item := range items {
@@ -57,14 +49,6 @@ func CommentFromEntity(comment *entity.Comment) model.Comment {
 		ParentID:  comment.ParentID,
 		CreatedAt: comment.CreatedAt,
 	}
-}
-
-func CommentPtrFromEntity(comment *entity.Comment) *model.Comment {
-	if comment == nil {
-		return nil
-	}
-	out := CommentFromEntity(comment)
-	return &out
 }
 
 func CommentsFromEntities(items []*entity.Comment) []model.Comment {

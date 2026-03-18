@@ -6,7 +6,7 @@
 - Port & Adapter (Hexagonal)
 - Domain 중심 설계
 - interface/implementation 분리
-- 모든 delivery/application/infrastructure 경계 메서드는 `context.Context`를 첫 번째 인자로 받는다.
+- I/O, blocking work, cancellation, trace 전파가 필요한 delivery/application/infrastructure 경계 메서드는 `context.Context`를 첫 번째 인자로 받는다.
 - delivery에서 시작한 `ctx`는 use case, service, repository/adapter, `UnitOfWork` 경계까지 끊지 않고 전달한다.
 - `context.WithValue`는 delivery/middleware 같은 경계에서만 제한적으로 사용한다.
 
@@ -36,7 +36,8 @@ flowchart LR
 - `application`
   - 유스케이스 orchestration, 권한 판정, 캐시 정책, tx 경계, read model 조립을 담당한다.
   - 로깅이 필요하면 composition root에서 주입한 `*slog.Logger`를 사용한다.
-  - `Repository`, `Cache`, `SessionRepository`, `FileStorage` 같은 하위 포트 호출에도 동일한 `ctx`를 그대로 전달한다.
+- `Repository`, `Cache`, `SessionRepository`, `FileStorage` 같은 I/O 성격의 하위 포트 호출에는 동일한 `ctx`를 그대로 전달한다.
+- 순수 값 변환, 해시/토큰 계산, in-process dispatcher 같은 non-I/O 포트는 `ctx`를 생략할 수 있다.
 - `domain`
   - 엔티티 상태와 도메인 규칙을 가진다.
 - `infrastructure`
