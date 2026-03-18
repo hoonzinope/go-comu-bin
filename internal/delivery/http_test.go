@@ -35,7 +35,7 @@ type fakeUserUseCase struct {
 	signUp            func(ctx context.Context, username, password string) (string, error)
 	deleteMe          func(ctx context.Context, userID int64, password string) error
 	getUserSuspension func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error)
-	suspendUser       func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error
+	suspendUser       func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error
 	unsuspendUser     func(ctx context.Context, adminID int64, targetUserUUID string) error
 	verifyCredential  func(ctx context.Context, username, password string) (int64, error)
 	ensureAdmin       func(ctx context.Context, userID int64) error
@@ -62,7 +62,7 @@ func (f *fakeUserUseCase) GetUserSuspension(ctx context.Context, adminID int64, 
 	return &model.UserSuspension{}, nil
 }
 
-func (f *fakeUserUseCase) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+func (f *fakeUserUseCase) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error {
 	if f.suspendUser != nil {
 		return f.suspendUser(ctx, adminID, targetUserUUID, reason, duration)
 	}
@@ -268,26 +268,26 @@ func (f *fakeBoardUseCase) SetBoardVisibility(ctx context.Context, boardUUID str
 }
 
 type fakeReportUseCase struct {
-	createReport  func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUID string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error)
-	getReports    func(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error)
-	resolveReport func(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error
+	createReport  func(ctx context.Context, reporterUserID int64, targetType model.ReportTargetType, targetUUID string, reasonCode model.ReportReasonCode, reasonDetail string) (int64, error)
+	getReports    func(ctx context.Context, adminID int64, status *model.ReportStatus, limit int, lastID int64) (*model.ReportList, error)
+	resolveReport func(ctx context.Context, adminID, reportID int64, status model.ReportStatus, resolutionNote string) error
 }
 
-func (f *fakeReportUseCase) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUID string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+func (f *fakeReportUseCase) CreateReport(ctx context.Context, reporterUserID int64, targetType model.ReportTargetType, targetUUID string, reasonCode model.ReportReasonCode, reasonDetail string) (int64, error) {
 	if f.createReport != nil {
 		return f.createReport(ctx, reporterUserID, targetType, targetUUID, reasonCode, reasonDetail)
 	}
 	return 1, nil
 }
 
-func (f *fakeReportUseCase) GetReports(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
+func (f *fakeReportUseCase) GetReports(ctx context.Context, adminID int64, status *model.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
 	if f.getReports != nil {
 		return f.getReports(ctx, adminID, status, limit, lastID)
 	}
 	return &model.ReportList{}, nil
 }
 
-func (f *fakeReportUseCase) ResolveReport(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error {
+func (f *fakeReportUseCase) ResolveReport(ctx context.Context, adminID, reportID int64, status model.ReportStatus, resolutionNote string) error {
 	if f.resolveReport != nil {
 		return f.resolveReport(ctx, adminID, reportID, status, resolutionNote)
 	}
@@ -424,9 +424,9 @@ func (f *fakeCommentUseCase) DeleteComment(ctx context.Context, commentUUID stri
 }
 
 type fakeReactionUseCase struct {
-	setReaction          func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error)
-	deleteReaction       func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error
-	getReactionsByTarget func(ctx context.Context, targetUUID string, targetType entity.ReactionTargetType) ([]model.Reaction, error)
+	setReaction          func(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error)
+	deleteReaction       func(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType) error
+	getReactionsByTarget func(ctx context.Context, targetUUID string, targetType model.ReactionTargetType) ([]model.Reaction, error)
 }
 
 type fakeAttachmentUseCase struct {
@@ -489,21 +489,21 @@ type authUserPort interface {
 	port.UserRepository
 }
 
-func (f *fakeReactionUseCase) SetReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+func (f *fakeReactionUseCase) SetReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error) {
 	if f.setReaction != nil {
 		return f.setReaction(ctx, userID, targetUUID, targetType, reactionType)
 	}
 	return false, nil
 }
 
-func (f *fakeReactionUseCase) DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error {
+func (f *fakeReactionUseCase) DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType) error {
 	if f.deleteReaction != nil {
 		return f.deleteReaction(ctx, userID, targetUUID, targetType)
 	}
 	return nil
 }
 
-func (f *fakeReactionUseCase) GetReactionsByTarget(ctx context.Context, targetUUID string, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
+func (f *fakeReactionUseCase) GetReactionsByTarget(ctx context.Context, targetUUID string, targetType model.ReactionTargetType) ([]model.Reaction, error) {
 	if f.getReactionsByTarget != nil {
 		return f.getReactionsByTarget(ctx, targetUUID, targetType)
 	}
@@ -711,11 +711,11 @@ func TestHandleUserSuspend_Success(t *testing.T) {
 	expectedTargetUserUUID := "550e8400-e29b-41d4-a716-446655440007"
 	handler := newTestHandler(
 		&fakeUserUseCase{
-			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error {
 				assert.Equal(t, int64(1), adminID)
 				assert.Equal(t, expectedTargetUserUUID, targetUserUUID)
 				assert.Equal(t, "spam", reason)
-				assert.Equal(t, entity.SuspensionDuration7Days, duration)
+				assert.Equal(t, model.SuspensionDuration7Days, duration)
 				return nil
 			},
 		},
@@ -746,11 +746,11 @@ func TestHandleReportCreate_Success(t *testing.T) {
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{},
 		&fakeReportUseCase{
-			createReport: func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUIDArg string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+			createReport: func(ctx context.Context, reporterUserID int64, targetType model.ReportTargetType, targetUUIDArg string, reasonCode model.ReportReasonCode, reasonDetail string) (int64, error) {
 				assert.Equal(t, int64(1), reporterUserID)
-				assert.Equal(t, entity.ReportTargetPost, targetType)
+				assert.Equal(t, model.ReportTargetPost, targetType)
 				assert.Equal(t, targetUUID, targetUUIDArg)
-				assert.Equal(t, entity.ReportReasonSpam, reasonCode)
+				assert.Equal(t, model.ReportReasonSpam, reasonCode)
 				assert.Equal(t, "detail", reasonDetail)
 				return 77, nil
 			},
@@ -780,7 +780,7 @@ func TestHandleAdminReportsGet_OmitsInternalForeignKeys(t *testing.T) {
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{},
 		&fakeReportUseCase{
-			getReports: func(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
+			getReports: func(ctx context.Context, adminID int64, status *model.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
 				return &model.ReportList{
 					Reports: []model.Report{{
 						ID:             7,
@@ -820,7 +820,7 @@ func TestHandleReportCreate_BadRequestForMalformedTargetUUID(t *testing.T) {
 		&fakeReactionUseCase{},
 		&fakeAttachmentUseCase{},
 		&fakeReportUseCase{
-			createReport: func(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUIDArg string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+			createReport: func(ctx context.Context, reporterUserID int64, targetType model.ReportTargetType, targetUUIDArg string, reasonCode model.ReportReasonCode, reasonDetail string) (int64, error) {
 				t.Fatal("service should not be called for malformed target_uuid")
 				return 0, nil
 			},
@@ -1503,7 +1503,7 @@ func TestHandleUserUnsuspend_Success(t *testing.T) {
 func TestHandleUserSuspend_BadRequestForMalformedUserUUID(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{
-			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error {
 				t.Fatal("service should not be called for malformed user uuid")
 				return nil
 			},
@@ -1583,7 +1583,7 @@ func TestHTTP_UserLogout_Success(t *testing.T) {
 func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
 	postUUID := "550e8400-e29b-41d4-a716-446655440001"
 	reaction := &fakeReactionUseCase{
-		setReaction: func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+		setReaction: func(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error) {
 			assert.Equal(t, postUUID, targetUUID)
 			return true, nil
 		},
@@ -1599,7 +1599,7 @@ func TestHTTP_PostReactionMeCreate_Created(t *testing.T) {
 func TestHTTP_CommentReactionMeUpdate_NoContent(t *testing.T) {
 	commentUUID := "550e8400-e29b-41d4-a716-446655440001"
 	reaction := &fakeReactionUseCase{
-		setReaction: func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
+		setReaction: func(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error) {
 			assert.Equal(t, commentUUID, targetUUID)
 			return false, nil
 		},
@@ -1615,7 +1615,7 @@ func TestHTTP_CommentReactionMeUpdate_NoContent(t *testing.T) {
 func TestHTTP_PostReactionMeDelete_NoContent(t *testing.T) {
 	postUUID := "550e8400-e29b-41d4-a716-446655440001"
 	reaction := &fakeReactionUseCase{
-		deleteReaction: func(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error {
+		deleteReaction: func(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType) error {
 			assert.Equal(t, postUUID, targetUUID)
 			return nil
 		},

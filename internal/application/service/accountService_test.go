@@ -37,7 +37,7 @@ func (s *stubUserUseCase) GetUserSuspension(ctx context.Context, adminID int64, 
 	}, nil
 }
 
-func (s *stubUserUseCase) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration entity.SuspensionDuration) error {
+func (s *stubUserUseCase) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error {
 	return nil
 }
 

@@ -62,29 +62,25 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, cursor string) 
 		if err != nil {
 			return nil, err
 		}
-
-		visibleBoards, err := s.boardRepository.SelectBoardList(ctx, fetchLimit, lastID)
+		page, err := loadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Board, error) {
+			visibleBoards, err := s.boardRepository.SelectBoardList(ctx, fetchLimit, lastID)
+			if err != nil {
+				return nil, customerror.WrapRepository("select board list", err)
+			}
+			return visibleBoards, nil
+		}, func(item *entity.Board) int64 {
+			return item.ID
+		})
 		if err != nil {
-			return nil, customerror.WrapRepository("select board list", err)
-		}
-
-		hasMore := false
-		var nextCursor *string
-		if len(visibleBoards) > limit {
-			hasMore = true
-			visibleBoards = visibleBoards[:limit]
-		}
-		if hasMore && len(visibleBoards) > 0 {
-			next := encodeOpaqueCursor(visibleBoards[len(visibleBoards)-1].ID)
-			nextCursor = &next
+			return nil, err
 		}
 
 		return &model.BoardList{
-			Boards:     mapper.BoardsFromEntities(visibleBoards),
+			Boards:     mapper.BoardsFromEntities(page.items),
 			Limit:      limit,
-			Cursor:     cursor,
-			HasMore:    hasMore,
-			NextCursor: nextCursor,
+			Cursor:     page.cursor,
+			HasMore:    page.hasMore,
+			NextCursor: page.nextCursor,
 		}, nil
 	})
 	if err != nil {

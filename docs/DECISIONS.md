@@ -2525,3 +2525,42 @@
 - `internal/infrastructure/cache/inmemory/in_memory_cache.go`
 - `internal/application/mapper/dto_mapper.go`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-19 - delivery 입력 enum을 application 모델로 올리고 cursor list orchestration을 공통 helper로 수렴한다
+
+상태
+
+- decided
+
+배경
+
+- Round 32의 남은 구조 항목은 delivery가 domain enum/parser를 직접 사용한다는 점과, board/post/comment 목록 read path가 동일한 cursor pagination orchestration을 반복한다는 점이었다.
+- 이 두 항목은 기능 오류보다 경계 명확성과 유지보수 비용 문제에 가깝지만, 현재 설계 철학과 직접 맞닿아 있어 정리 가치가 높다.
+
+관찰
+
+- delivery request parser는 `reaction/report/suspension` 입력을 `internal/domain/entity` parser에 직접 의존한다.
+- `ReactionUseCase`, `ReportUseCase`, `UserUseCase.SuspendUser` 포트도 domain enum 타입을 외부 계약으로 노출한다.
+- `BoardService.GetBoards`, `PostService.GetPostsList`, `CommentService.GetCommentsByPost`는 `fetch limit+1 -> hasMore -> nextCursor` 흐름을 거의 동일하게 반복한다.
+
+결론
+
+- 공개 입력 enum은 application 모델 타입으로 승격하고, delivery는 protocol string을 application 모델로만 파싱한다.
+- service 내부에서만 application 모델 enum을 domain enum으로 변환해 domain dependency를 안쪽 레이어로 밀어 넣는다.
+- cursor 기반 목록 조회는 공통 helper로 `limit+1`, `hasMore`, `nextCursor` 계산을 수렴시켜 board/post/comment read path의 중복을 줄인다.
+
+후속 작업
+
+- delivery fake/usecase 회귀 테스트를 application 모델 입력 타입 기준으로 갱신
+- cursor helper 단위 테스트 추가
+- 아키텍처 문서의 reaction/input parsing 규칙 갱신
+
+관련 문서/코드
+
+- `internal/application/model/input_types.go`
+- `internal/application/port/reaction_usecase.go`
+- `internal/application/port/report_usecase.go`
+- `internal/application/port/user_usecase.go`
+- `internal/application/service/cursor_list.go`
+- `internal/delivery/http_requests.go`
+- `docs/ARCHITECTURE.md`

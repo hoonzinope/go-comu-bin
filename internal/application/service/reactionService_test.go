@@ -8,6 +8,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,7 @@ func TestReactionService_SetReaction_InvalidTargetType(t *testing.T) {
 	userID := seedUser(repositories.user, "user", "pw", "user")
 	svc := NewReactionService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy())
 
-	_, err := svc.SetReaction(context.Background(), userID, "target-uuid", entity.ReactionTargetType("invalid"), entity.ReactionTypeLike)
+	_, err := svc.SetReaction(context.Background(), userID, "target-uuid", model.ReactionTargetType("invalid"), model.ReactionTypeLike)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -32,17 +33,17 @@ func TestReactionService_GetReactionsByTarget_AndDeleteByOwner(t *testing.T) {
 	commentID := seedComment(repositories.comment, userID, postID, "comment")
 	svc := NewReactionService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy())
 
-	created, err := svc.SetReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), entity.ReactionTargetComment, entity.ReactionTypeLike)
+	created, err := svc.SetReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), model.ReactionTargetComment, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	reactions, err := svc.GetReactionsByTarget(context.Background(), mustCommentUUID(t, repositories.comment, commentID), entity.ReactionTargetComment)
+	reactions, err := svc.GetReactionsByTarget(context.Background(), mustCommentUUID(t, repositories.comment, commentID), model.ReactionTargetComment)
 	require.NoError(t, err)
 	require.Len(t, reactions, 1)
 
-	require.NoError(t, svc.DeleteReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), entity.ReactionTargetComment))
+	require.NoError(t, svc.DeleteReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), model.ReactionTargetComment))
 
-	reactions, err = svc.GetReactionsByTarget(context.Background(), mustCommentUUID(t, repositories.comment, commentID), entity.ReactionTargetComment)
+	reactions, err = svc.GetReactionsByTarget(context.Background(), mustCommentUUID(t, repositories.comment, commentID), model.ReactionTargetComment)
 	require.NoError(t, err)
 	assert.Empty(t, reactions)
 }
@@ -56,13 +57,13 @@ func TestReactionService_SetReaction_CreatesWhenMissing(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	_, err := reactionSvc.GetReactionsByTarget(context.Background(), mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost)
+	_, err := reactionSvc.GetReactionsByTarget(context.Background(), mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost)
 	require.NoError(t, err)
 	_, ok, err := cache.Get(context.Background(), key.ReactionList("post", postID))
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
@@ -87,7 +88,7 @@ func TestReactionService_SetReaction_SucceedsWhenCacheInvalidationFails(t *testi
 		deleteErr: newCacheFailure(nil),
 	}, newTestCachePolicy())
 
-	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
@@ -106,11 +107,11 @@ func TestReactionService_SetReaction_UpdatesExistingType(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	created, err = reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeDislike)
+	created, err = reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeDislike)
 	require.NoError(t, err)
 	assert.False(t, created)
 
@@ -129,11 +130,11 @@ func TestReactionService_SetReaction_NoOpWhenSameType(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	created, err = reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	created, err = reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.False(t, created)
 
@@ -151,7 +152,7 @@ func TestReactionService_DeleteReaction_NoOpWhenMissing(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost))
+	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost))
 }
 
 func TestReactionService_DeleteReaction_RemovesOwnedReaction(t *testing.T) {
@@ -162,11 +163,11 @@ func TestReactionService_DeleteReaction_RemovesOwnedReaction(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost))
+	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost))
 
 	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
@@ -182,11 +183,11 @@ func TestReactionService_DeleteReaction_DoesNotRemoveOtherUsersReaction(t *testi
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 
-	created, err := reactionSvc.SetReaction(context.Background(), ownerID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	created, err := reactionSvc.SetReaction(context.Background(), ownerID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), otherID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost))
+	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), otherID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost))
 
 	reactions, repoErr := repositories.reaction.GetByTarget(context.Background(), postID, entity.ReactionTargetPost)
 	require.NoError(t, repoErr)
@@ -204,15 +205,15 @@ func TestReactionService_DeleteReaction_InvalidatesCommentAndPostCaches(t *testi
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 	commentID := seedComment(repositories.comment, userID, postID, "comment")
 
-	created, err := reactionSvc.SetReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), entity.ReactionTargetComment, entity.ReactionTypeLike)
+	created, err := reactionSvc.SetReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), model.ReactionTargetComment, model.ReactionTypeLike)
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	_, err = reactionSvc.GetReactionsByTarget(context.Background(), mustCommentUUID(t, repositories.comment, commentID), entity.ReactionTargetComment)
+	_, err = reactionSvc.GetReactionsByTarget(context.Background(), mustCommentUUID(t, repositories.comment, commentID), model.ReactionTargetComment)
 	require.NoError(t, err)
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(postID), "cached-post-detail"))
 
-	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), entity.ReactionTargetComment))
+	require.NoError(t, reactionSvc.DeleteReaction(context.Background(), userID, mustCommentUUID(t, repositories.comment, commentID), model.ReactionTargetComment))
 
 	require.Eventually(t, func() bool {
 		_, ok, err := cache.Get(context.Background(), key.ReactionList("comment", commentID))
@@ -235,7 +236,7 @@ func TestReactionService_GetReactionsByTarget_ReturnsCacheFailure_WhenCacheLoadF
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
 
-	_, err := svc.GetReactionsByTarget(context.Background(), mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost)
+	_, err := svc.GetReactionsByTarget(context.Background(), mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrCacheFailure))
 }
@@ -250,7 +251,7 @@ func TestReactionService_GetReactionsByTarget_ReturnsPostNotFound_WhenPostDelete
 
 	require.NoError(t, repositories.post.Delete(context.Background(), postID))
 
-	_, err := svc.GetReactionsByTarget(context.Background(), postUUID, entity.ReactionTargetPost)
+	_, err := svc.GetReactionsByTarget(context.Background(), postUUID, model.ReactionTargetPost)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 }
@@ -268,11 +269,11 @@ func TestReactionService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
 	require.NoError(t, repositories.board.Update(context.Background(), board))
 	svc := NewReactionService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy())
 
-	_, err = svc.GetReactionsByTarget(context.Background(), mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost)
+	_, err = svc.GetReactionsByTarget(context.Background(), mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 
-	_, err = svc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), entity.ReactionTargetPost, entity.ReactionTypeLike)
+	_, err = svc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }

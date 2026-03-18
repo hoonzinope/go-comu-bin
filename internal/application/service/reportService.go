@@ -52,15 +52,17 @@ func NewReportServiceWithActionDispatcher(
 	}
 }
 
-func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetUUID string, reasonCode entity.ReportReasonCode, reasonDetail string) (int64, error) {
+func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, targetType model.ReportTargetType, targetUUID string, reasonCode model.ReportReasonCode, reasonDetail string) (int64, error) {
 	targetUUID = strings.TrimSpace(targetUUID)
 	if targetUUID == "" {
 		return 0, customerror.ErrInvalidInput
 	}
-	if _, ok := entity.ParseReportTargetType(string(targetType)); !ok {
+	entityTargetType, ok := targetType.ToEntity()
+	if !ok {
 		return 0, customerror.ErrInvalidInput
 	}
-	if _, ok := entity.ParseReportReasonCode(string(reasonCode)); !ok {
+	entityReasonCode, ok := reasonCode.ToEntity()
+	if !ok {
 		return 0, customerror.ErrInvalidInput
 	}
 	reasonDetail = strings.TrimSpace(reasonDetail)
@@ -77,11 +79,11 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 		if user == nil {
 			return customerror.ErrUserNotFound
 		}
-		targetID, err := s.resolveVisibleReportTargetIDTx(tx, user, targetType, targetUUID)
+		targetID, err := s.resolveVisibleReportTargetIDTx(tx, user, entityTargetType, targetUUID)
 		if err != nil {
 			return err
 		}
-		report := entity.NewReport(targetType, targetID, reporterUserID, reasonCode, reasonDetail)
+		report := entity.NewReport(entityTargetType, targetID, reporterUserID, entityReasonCode, reasonDetail)
 		reportID, err = tx.ReportRepository().Save(txCtx, report)
 		if err != nil {
 			if errors.Is(err, customerror.ErrReportAlreadyExists) {
@@ -138,14 +140,17 @@ func (s *ReportService) resolveVisibleReportTargetIDTx(tx port.TxScope, user *en
 	}
 }
 
-func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *entity.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
+func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *model.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
 	if err := requirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
+	var entityStatus *entity.ReportStatus
 	if status != nil {
-		if _, ok := entity.ParseReportStatus(string(*status)); !ok {
+		parsed, ok := status.ToEntity()
+		if !ok {
 			return nil, customerror.ErrInvalidInput
 		}
+		entityStatus = &parsed
 	}
 
 	var out *model.ReportList
@@ -162,7 +167,7 @@ func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *e
 			return err
 		}
 
-		items, err := tx.ReportRepository().SelectList(txCtx, status, limit+1, lastID)
+		items, err := tx.ReportRepository().SelectList(txCtx, entityStatus, limit+1, lastID)
 		if err != nil {
 			return customerror.WrapRepository("select report list", err)
 		}
@@ -195,11 +200,15 @@ func (s *ReportService) GetReports(ctx context.Context, adminID int64, status *e
 	return out, nil
 }
 
-func (s *ReportService) ResolveReport(ctx context.Context, adminID, reportID int64, status entity.ReportStatus, resolutionNote string) error {
+func (s *ReportService) ResolveReport(ctx context.Context, adminID, reportID int64, status model.ReportStatus, resolutionNote string) error {
 	if reportID <= 0 {
 		return customerror.ErrInvalidInput
 	}
-	if status != entity.ReportStatusAccepted && status != entity.ReportStatusRejected {
+	entityStatus, ok := status.ToEntity()
+	if !ok {
+		return customerror.ErrInvalidInput
+	}
+	if entityStatus != entity.ReportStatusAccepted && entityStatus != entity.ReportStatusRejected {
 		return customerror.ErrInvalidInput
 	}
 	resolutionNote = strings.TrimSpace(resolutionNote)
@@ -226,7 +235,7 @@ func (s *ReportService) ResolveReport(ctx context.Context, adminID, reportID int
 		if report == nil {
 			return customerror.ErrReportNotFound
 		}
-		if !report.Resolve(status, resolutionNote, adminID) {
+		if !report.Resolve(entityStatus, resolutionNote, adminID) {
 			return customerror.ErrInvalidInput
 		}
 		if err := tx.ReportRepository().Update(txCtx, report); err != nil {

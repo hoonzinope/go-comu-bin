@@ -179,37 +179,33 @@ func (s *PostService) GetPostsList(ctx context.Context, boardUUID string, limit 
 		if err := policy.EnsureBoardVisible(currentBoard, nil); err != nil {
 			return nil, err
 		}
-
-		fetchLimit := limit
-		if limit > 0 {
-			fetchLimit = limit + 1
-		}
-		posts, err := s.postRepository.SelectPosts(ctx, currentBoard.ID, fetchLimit, lastID)
+		fetchLimit, err := cursorFetchLimit(limit)
 		if err != nil {
-			return nil, customerror.WrapRepository("select posts by board", err)
+			return nil, err
+		}
+		page, err := loadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Post, error) {
+			posts, err := s.postRepository.SelectPosts(ctx, currentBoard.ID, fetchLimit, lastID)
+			if err != nil {
+				return nil, customerror.WrapRepository("select posts by board", err)
+			}
+			return posts, nil
+		}, func(item *entity.Post) int64 {
+			return item.ID
+		})
+		if err != nil {
+			return nil, err
 		}
 
-		hasMore := false
-		var nextCursor *string
-		if len(posts) > limit {
-			hasMore = true
-			posts = posts[:limit]
-		}
-		if hasMore && len(posts) > 0 {
-			next := encodeOpaqueCursor(posts[len(posts)-1].ID)
-			nextCursor = &next
-		}
-
-		postModels, err := s.postsFromEntities(ctx, posts)
+		postModels, err := s.postsFromEntities(ctx, page.items)
 		if err != nil {
 			return nil, err
 		}
 		return &model.PostList{
 			Posts:      postModels,
 			Limit:      limit,
-			Cursor:     cursor,
-			HasMore:    hasMore,
-			NextCursor: nextCursor,
+			Cursor:     page.cursor,
+			HasMore:    page.hasMore,
+			NextCursor: page.nextCursor,
 		}, nil
 	})
 	if err != nil {

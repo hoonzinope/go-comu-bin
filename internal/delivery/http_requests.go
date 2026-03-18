@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 )
 
 type userCredentialRequest struct {
@@ -98,33 +98,33 @@ func (r commentRequest) validate() error {
 	return nil
 }
 
-func (r reactionRequest) parseType() (entity.ReactionType, error) {
+func (r reactionRequest) parseType() (model.ReactionType, error) {
 	if r.ReactionType == "" {
 		return "", errors.New("reaction_type is required")
 	}
-	reactionType, ok := entity.ParseReactionType(r.ReactionType)
+	reactionType, ok := model.ParseReactionType(r.ReactionType)
 	if !ok {
 		return "", errors.New("invalid reaction_type")
 	}
 	return reactionType, nil
 }
 
-func (r userSuspensionRequest) parse() (string, entity.SuspensionDuration, error) {
+func (r userSuspensionRequest) parse() (string, model.SuspensionDuration, error) {
 	if r.Reason == "" {
 		return "", "", errors.New("reason is required")
 	}
 	if r.Duration == "" {
 		return "", "", errors.New("duration is required")
 	}
-	duration, ok := entity.ParseSuspensionDuration(r.Duration)
+	duration, ok := model.ParseSuspensionDuration(r.Duration)
 	if !ok {
 		return "", "", errors.New("invalid duration")
 	}
 	return r.Reason, duration, nil
 }
 
-func (r reportCreateRequest) parse() (entity.ReportTargetType, string, entity.ReportReasonCode, string, error) {
-	targetType, ok := entity.ParseReportTargetType(r.TargetType)
+func (r reportCreateRequest) parse() (model.ReportTargetType, string, model.ReportReasonCode, string, error) {
+	targetType, ok := model.ParseReportTargetType(r.TargetType)
 	if !ok {
 		return "", "", "", "", errors.New("invalid target_type")
 	}
@@ -134,19 +134,19 @@ func (r reportCreateRequest) parse() (entity.ReportTargetType, string, entity.Re
 	if _, err := uuid.Parse(strings.TrimSpace(r.TargetUUID)); err != nil {
 		return "", "", "", "", errors.New("invalid target_uuid")
 	}
-	reasonCode, ok := entity.ParseReportReasonCode(r.ReasonCode)
+	reasonCode, ok := model.ParseReportReasonCode(r.ReasonCode)
 	if !ok {
 		return "", "", "", "", errors.New("invalid reason_code")
 	}
 	return targetType, strings.TrimSpace(r.TargetUUID), reasonCode, r.ReasonDetail, nil
 }
 
-func (r reportResolveRequest) parseStatus() (entity.ReportStatus, string, error) {
-	status, ok := entity.ParseReportStatus(r.Status)
+func (r reportResolveRequest) parseStatus() (model.ReportStatus, string, error) {
+	status, ok := model.ParseReportStatus(r.Status)
 	if !ok {
 		return "", "", errors.New("invalid status")
 	}
-	if status != entity.ReportStatusAccepted && status != entity.ReportStatusRejected {
+	if status != model.ReportStatusAccepted && status != model.ReportStatusRejected {
 		return "", "", errors.New("status must be accepted or rejected")
 	}
 	return status, r.ResolutionNote, nil

@@ -49,18 +49,22 @@ func NewReactionServiceWithActionDispatcher(userRepository port.UserRepository, 
 	}
 }
 
-func (s *ReactionService) SetReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType, reactionType entity.ReactionType) (bool, error) {
-	targetID, err := s.resolveTargetID(ctx, targetUUID, targetType)
+func (s *ReactionService) SetReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error) {
+	entityTargetType, entityReactionType, err := reactionInputTypes(targetType, reactionType)
 	if err != nil {
 		return false, err
 	}
-	created, changed, err := s.withReactionTransaction(ctx, userID, targetID, targetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
-		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(tx.Context(), userID, targetID, targetType, reactionType)
+	targetID, err := s.resolveTargetID(ctx, targetUUID, entityTargetType)
+	if err != nil {
+		return false, err
+	}
+	created, changed, err := s.withReactionTransaction(ctx, userID, targetID, entityTargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
+		_, created, changed, err := tx.ReactionRepository().SetUserTargetReaction(tx.Context(), userID, targetID, entityTargetType, entityReactionType)
 		if err != nil {
 			return false, false, customerror.WrapRepository("set user target reaction", err)
 		}
 		if (created || changed) && detailPostID != nil {
-			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("set", targetType, targetID, *detailPostID)); err != nil {
+			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("set", entityTargetType, targetID, *detailPostID)); err != nil {
 				return false, false, err
 			}
 		}
@@ -75,18 +79,22 @@ func (s *ReactionService) SetReaction(ctx context.Context, userID int64, targetU
 	return created, nil
 }
 
-func (s *ReactionService) DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType entity.ReactionTargetType) error {
-	targetID, err := s.resolveTargetID(ctx, targetUUID, targetType)
+func (s *ReactionService) DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType) error {
+	entityTargetType, ok := targetType.ToEntity()
+	if !ok {
+		return customerror.ErrInvalidInput
+	}
+	targetID, err := s.resolveTargetID(ctx, targetUUID, entityTargetType)
 	if err != nil {
 		return err
 	}
-	deleted, _, err := s.withReactionTransaction(ctx, userID, targetID, targetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
-		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(tx.Context(), userID, targetID, targetType)
+	deleted, _, err := s.withReactionTransaction(ctx, userID, targetID, entityTargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
+		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(tx.Context(), userID, targetID, entityTargetType)
 		if err != nil {
 			return false, false, customerror.WrapRepository("delete user target reaction", err)
 		}
 		if deleted && detailPostID != nil {
-			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("unset", targetType, targetID, *detailPostID)); err != nil {
+			if err := dispatchDomainActions(tx, s.actionDispatcher, appevent.NewReactionChanged("unset", entityTargetType, targetID, *detailPostID)); err != nil {
 				return false, false, err
 			}
 		}
@@ -101,17 +109,21 @@ func (s *ReactionService) DeleteReaction(ctx context.Context, userID int64, targ
 	return nil
 }
 
-func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetUUID string, targetType entity.ReactionTargetType) ([]model.Reaction, error) {
-	targetID, err := s.resolveTargetID(ctx, targetUUID, targetType)
+func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetUUID string, targetType model.ReactionTargetType) ([]model.Reaction, error) {
+	entityTargetType, ok := targetType.ToEntity()
+	if !ok {
+		return nil, customerror.ErrInvalidInput
+	}
+	targetID, err := s.resolveTargetID(ctx, targetUUID, entityTargetType)
 	if err != nil {
 		return nil, err
 	}
-	cacheKey := key.ReactionList(string(targetType), targetID)
+	cacheKey := key.ReactionList(string(entityTargetType), targetID)
 	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		if err := s.ensureTargetExists(ctx, nil, targetID, targetType); err != nil {
+		if err := s.ensureTargetExists(ctx, nil, targetID, entityTargetType); err != nil {
 			return nil, err
 		}
-		reactions, err := s.reactionRepository.GetByTarget(ctx, targetID, targetType)
+		reactions, err := s.reactionRepository.GetByTarget(ctx, targetID, entityTargetType)
 		if err != nil {
 			return nil, customerror.WrapRepository("select reactions by target", err)
 		}
@@ -129,6 +141,18 @@ func (s *ReactionService) GetReactionsByTarget(ctx context.Context, targetUUID s
 		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode reaction list cache payload")
 	}
 	return reactions, nil
+}
+
+func reactionInputTypes(targetType model.ReactionTargetType, reactionType model.ReactionType) (entity.ReactionTargetType, entity.ReactionType, error) {
+	entityTargetType, ok := targetType.ToEntity()
+	if !ok {
+		return "", "", customerror.ErrInvalidInput
+	}
+	entityReactionType, ok := reactionType.ToEntity()
+	if !ok {
+		return "", "", customerror.ErrInvalidInput
+	}
+	return entityTargetType, entityReactionType, nil
 }
 
 func (s *ReactionService) withReactionTransaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType, mutate func(tx port.TxScope, detailPostID *int64) (bool, bool, error)) (bool, bool, error) {

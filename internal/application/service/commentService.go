@@ -144,23 +144,24 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postUUID string,
 		if err := ensureBoardVisibleForUser(ctx, s.boardRepository, nil, currentPost.BoardID, customerror.ErrBoardNotFound, "comment board visibility"); err != nil {
 			return nil, err
 		}
-
-		comments, err := s.commentRepository.SelectVisibleComments(ctx, currentPost.ID, limit+1, lastID)
+		fetchLimit, err := cursorFetchLimit(limit)
 		if err != nil {
-			return nil, customerror.WrapRepository("select visible comments by post", err)
+			return nil, err
 		}
-		hasMore := false
-		var nextCursor *string
-		if len(comments) > limit {
-			hasMore = true
-			comments = comments[:limit]
-		}
-		if hasMore && len(comments) > 0 {
-			next := encodeOpaqueCursor(comments[len(comments)-1].ID)
-			nextCursor = &next
+		page, err := loadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Comment, error) {
+			comments, err := s.commentRepository.SelectVisibleComments(ctx, currentPost.ID, fetchLimit, lastID)
+			if err != nil {
+				return nil, customerror.WrapRepository("select visible comments by post", err)
+			}
+			return comments, nil
+		}, func(item *entity.Comment) int64 {
+			return item.ID
+		})
+		if err != nil {
+			return nil, err
 		}
 
-		commentModels, err := s.commentsFromEntities(ctx, currentPost.UUID, comments)
+		commentModels, err := s.commentsFromEntities(ctx, currentPost.UUID, page.items)
 		if err != nil {
 			return nil, err
 		}
@@ -168,9 +169,9 @@ func (s *CommentService) GetCommentsByPost(ctx context.Context, postUUID string,
 		return &model.CommentList{
 			Comments:   commentModels,
 			Limit:      limit,
-			Cursor:     cursor,
-			HasMore:    hasMore,
-			NextCursor: nextCursor,
+			Cursor:     page.cursor,
+			HasMore:    page.hasMore,
+			NextCursor: page.nextCursor,
 		}, nil
 	})
 	if err != nil {

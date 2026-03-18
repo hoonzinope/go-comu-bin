@@ -20,7 +20,6 @@ import (
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
-	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -532,9 +531,9 @@ func (h *HTTPHandler) handleAdminReportsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var status *entity.ReportStatus
+	var status *model.ReportStatus
 	if raw := strings.TrimSpace(c.Query("status")); raw != "" {
-		parsed, parseOK := entity.ParseReportStatus(raw)
+		parsed, parseOK := model.ParseReportStatus(raw)
 		if !parseOK {
 			badRequest(c, errors.New("invalid status"))
 			return
@@ -1499,7 +1498,7 @@ func (h *HTTPHandler) handlePostReactions(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.handleReactionsByTarget(c, postUUID, entity.ReactionTargetPost)
+	h.handleReactionsByTarget(c, postUUID, model.ReactionTargetPost)
 }
 
 // handleCommentReactions godoc
@@ -1518,7 +1517,7 @@ func (h *HTTPHandler) handleCommentReactions(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.handleReactionsByTarget(c, commentUUID, entity.ReactionTargetComment)
+	h.handleReactionsByTarget(c, commentUUID, model.ReactionTargetComment)
 }
 
 // handleMyPostReactionPut godoc
@@ -1543,7 +1542,7 @@ func (h *HTTPHandler) handleMyPostReactionPut(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.handleMyReactionPut(c, postUUID, entity.ReactionTargetPost)
+	h.handleMyReactionPut(c, postUUID, model.ReactionTargetPost)
 }
 
 // handleMyPostReactionDelete godoc
@@ -1565,7 +1564,7 @@ func (h *HTTPHandler) handleMyPostReactionDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.handleMyReactionDelete(c, postUUID, entity.ReactionTargetPost)
+	h.handleMyReactionDelete(c, postUUID, model.ReactionTargetPost)
 }
 
 // handleMyCommentReactionPut godoc
@@ -1590,7 +1589,7 @@ func (h *HTTPHandler) handleMyCommentReactionPut(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.handleMyReactionPut(c, commentUUID, entity.ReactionTargetComment)
+	h.handleMyReactionPut(c, commentUUID, model.ReactionTargetComment)
 }
 
 // handleMyCommentReactionDelete godoc
@@ -1612,10 +1611,10 @@ func (h *HTTPHandler) handleMyCommentReactionDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.handleMyReactionDelete(c, commentUUID, entity.ReactionTargetComment)
+	h.handleMyReactionDelete(c, commentUUID, model.ReactionTargetComment)
 }
 
-func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetUUID string, targetType entity.ReactionTargetType) {
+func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetUUID string, targetType model.ReactionTargetType) {
 	reactions, err := h.reactionUseCase.GetReactionsByTarget(c.Request.Context(), targetUUID, targetType)
 	if err != nil {
 		writeUseCaseError(c, err)
@@ -1624,7 +1623,7 @@ func (h *HTTPHandler) handleReactionsByTarget(c *gin.Context, targetUUID string,
 	c.JSON(http.StatusOK, response.ReactionsFromDTO(reactions))
 }
 
-func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetUUID string, targetType entity.ReactionTargetType) {
+func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetUUID string, targetType model.ReactionTargetType) {
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
@@ -1651,7 +1650,7 @@ func (h *HTTPHandler) handleMyReactionPut(c *gin.Context, targetUUID string, tar
 	c.Status(http.StatusNoContent)
 }
 
-func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetUUID string, targetType entity.ReactionTargetType) {
+func (h *HTTPHandler) handleMyReactionDelete(c *gin.Context, targetUUID string, targetType model.ReactionTargetType) {
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
 		return
