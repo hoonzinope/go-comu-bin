@@ -64,7 +64,9 @@ func main() {
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
 	reportRepository := inmemory.NewReportRepository()
-	outboxRepository := inmemory.NewOutboxRepository()
+	outboxRepository := inmemory.NewOutboxRepository(
+		inmemory.WithProcessingTimeout(time.Duration(cfg.Event.Outbox.ProcessingLeaseMillis) * time.Millisecond),
+	)
 	fileStorage, err := newFileStorage(cfg)
 	if err != nil {
 		slog.Error("failed to initialize file storage", "error", err)
@@ -87,11 +89,13 @@ func main() {
 		eventSerializer,
 		appLogger,
 		eventOutbox.RelayConfig{
-			WorkerCount:  cfg.Event.Outbox.WorkerCount,
-			BatchSize:    cfg.Event.Outbox.BatchSize,
-			PollInterval: time.Duration(cfg.Event.Outbox.PollIntervalMillis) * time.Millisecond,
-			MaxAttempts:  cfg.Event.Outbox.MaxAttempts,
-			BaseBackoff:  time.Duration(cfg.Event.Outbox.BaseBackoffMillis) * time.Millisecond,
+			WorkerCount:     cfg.Event.Outbox.WorkerCount,
+			BatchSize:       cfg.Event.Outbox.BatchSize,
+			PollInterval:    time.Duration(cfg.Event.Outbox.PollIntervalMillis) * time.Millisecond,
+			MaxAttempts:     cfg.Event.Outbox.MaxAttempts,
+			BaseBackoff:     time.Duration(cfg.Event.Outbox.BaseBackoffMillis) * time.Millisecond,
+			ProcessingLease: time.Duration(cfg.Event.Outbox.ProcessingLeaseMillis) * time.Millisecond,
+			LeaseRefresh:    time.Duration(cfg.Event.Outbox.LeaseRefreshMillis) * time.Millisecond,
 		},
 	)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)

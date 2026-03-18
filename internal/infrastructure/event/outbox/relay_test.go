@@ -11,6 +11,7 @@ import (
 
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	inmemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -62,6 +63,17 @@ func (s *fakeOutboxStore) SelectByID(id string) (*port.OutboxMessage, error) {
 func (s *fakeOutboxStore) SelectDead(limit int, _ string) ([]port.OutboxMessage, error) {
 	_ = limit
 	return nil, nil
+}
+
+func (s *fakeOutboxStore) RenewProcessing(id string, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for idx := range s.ready {
+		if s.ready[idx].ID == id {
+			s.ready[idx].Status = port.OutboxStatusProcessing
+		}
+	}
+	return nil
 }
 
 func (s *fakeOutboxStore) MarkSucceeded(ids ...string) error {
@@ -206,4 +218,61 @@ func TestRelay_Start_PropagatesContextToHandler(t *testing.T) {
 	}
 	cancel()
 	relay.Wait()
+}
+
+func TestRelay_Start_DoesNotRedispatchWhileHandlerStillRunning(t *testing.T) {
+	serializer := appevent.NewJSONEventSerializer()
+	store := inmemory.NewOutboxRepository(inmemory.WithProcessingTimeout(20 * time.Millisecond))
+	name, payload, at, err := serializer.Serialize(appevent.NewBoardChanged("created", 1))
+	require.NoError(t, err)
+	require.NoError(t, store.Append(port.OutboxMessage{
+		ID:            "m1",
+		EventName:     name,
+		Payload:       payload,
+		OccurredAt:    at,
+		NextAttemptAt: at,
+		Status:        port.OutboxStatusPending,
+	}))
+
+	relay := NewRelay(store, serializer, slog.New(slog.NewTextHandler(io.Discard, nil)), RelayConfig{
+		WorkerCount:     2,
+		BatchSize:       1,
+		PollInterval:    time.Millisecond,
+		MaxAttempts:     3,
+		BaseBackoff:     time.Millisecond,
+		ProcessingLease: 20 * time.Millisecond,
+		LeaseRefresh:    5 * time.Millisecond,
+	})
+
+	var mu sync.Mutex
+	callCount := 0
+	firstCallStarted := make(chan struct{}, 1)
+	relay.Subscribe(appevent.EventNameBoardChanged, testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
+		_ = event
+		mu.Lock()
+		callCount++
+		current := callCount
+		mu.Unlock()
+		if current == 1 {
+			firstCallStarted <- struct{}{}
+		}
+		time.Sleep(70 * time.Millisecond)
+		return nil
+	}})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	relay.Start(ctx)
+	select {
+	case <-firstCallStarted:
+	case <-time.After(time.Second):
+		t.Fatal("handler was not called")
+	}
+	time.Sleep(120 * time.Millisecond)
+	cancel()
+	relay.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, 1, callCount)
 }

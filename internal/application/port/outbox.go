@@ -30,6 +30,7 @@ type OutboxStore interface {
 	FetchReady(limit int, now time.Time) ([]OutboxMessage, error)
 	SelectByID(id string) (*OutboxMessage, error)
 	SelectDead(limit int, lastID string) ([]OutboxMessage, error)
+	RenewProcessing(id string, nextAttemptAt time.Time) error
 	MarkSucceeded(ids ...string) error
 	MarkRetry(id string, nextAttemptAt time.Time, err string) error
 	MarkDead(id string, err string) error

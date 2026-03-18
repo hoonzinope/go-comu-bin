@@ -2796,9 +2796,6 @@ const docTemplate = `{
                 "reason_detail": {
                     "type": "string"
                 },
-                "reporter_user_id": {
-                    "type": "integer"
-                },
                 "reporter_uuid": {
                     "type": "string"
                 },
@@ -2808,19 +2805,16 @@ const docTemplate = `{
                 "resolved_at": {
                     "type": "string"
                 },
-                "resolved_by": {
-                    "type": "integer"
-                },
                 "resolved_by_uuid": {
                     "type": "string"
                 },
                 "status": {
                     "type": "string"
                 },
-                "target_id": {
-                    "type": "integer"
-                },
                 "target_type": {
+                    "type": "string"
+                },
+                "target_uuid": {
                     "type": "string"
                 },
                 "updated_at": {

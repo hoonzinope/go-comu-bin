@@ -83,6 +83,25 @@ func (r *PostRepository) SelectPostByUUID(ctx context.Context, postUUID string) 
 	return r.selectPostByUUID(postUUID)
 }
 
+func (r *PostRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[int64]string, len(ids))
+	for _, id := range ids {
+		post, exists := r.postDB.Data[id]
+		if !exists || post.Status == entity.PostStatusDeleted {
+			continue
+		}
+		out[id] = post.UUID
+	}
+	return out, nil
+}
+
 func (r *PostRepository) selectPostByID(id int64) (*entity.Post, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

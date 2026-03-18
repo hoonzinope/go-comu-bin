@@ -5,6 +5,7 @@
 `Bearer` 스킴이 아니면 인증 실패(`401`)로 처리합니다.
 JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad Request`로 거부합니다.
 `delivery.http.rateLimit.enabled=true`이면 `/api/v1` 하위 read/write 요청에 IP 기준 rate limit이 적용되며, 초과 시 `429 Too Many Requests`를 반환합니다.
+기본 서버는 trusted proxy를 신뢰하지 않으므로, 별도 reverse proxy trust 설정이 없으면 forwarded header는 client IP 판별에 사용하지 않습니다.
 텍스트 입력은 markdown 원문을 보존하기 위해 저장 전에 변형하지 않습니다. XSS 방어는 렌더링 경계의 escaping/sanitizing 책임으로 둡니다.
 
 ## OpenAPI / Swagger
@@ -59,6 +60,8 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 기본 정렬은 `pending` 우선 + 최신순입니다.
   - `status` 필터는 선택값이며, 허용값은 `pending`, `accepted`, `rejected`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
+  - 응답 참조 필드는 UUID 중심입니다: `target_uuid`, `reporter_uuid`, `resolved_by_uuid`
+  - 내부 FK인 `target_id`, `reporter_user_id`, `resolved_by`는 외부 응답에 노출하지 않습니다.
 - `PUT /api/v1/admin/reports/{reportID}/resolve` (인증 필요, admin)
   - 신고를 수동 처리합니다.
   - 요청 본문: `status`, 선택적 `resolution_note`

@@ -2369,3 +2369,53 @@
 - `internal/delivery/http_test.go`
 - `docs/API.md`
 - `docs/CONFIG.md`
+
+## 2026-03-18 - Rate limit trust boundary, outbox lease, upload authz 순서, UUID 응답 계약을 함께 정리한다
+
+상태
+
+- decided
+
+배경
+
+- Round 30 리뷰에서 reverse proxy 경계, outbox 재전달, 업로드 자원 사용 순서, admin report 응답 식별자 정책, cache read stale window가 실제 리스크로 확인됐다.
+- 이 이슈들은 각각 레이어가 다르지만, 모두 "외부 경계 계약을 먼저 고정하고 내부 구현이 그 계약을 지키도록 정리한다"는 같은 성격의 수정이다.
+
+관찰
+
+- 현재 HTTP rate limit은 `ClientIP()` 결과를 key로 쓰지만 trusted proxy 설정을 코드에서 명시하지 않는다.
+- in-memory outbox는 processing lease를 30초 고정 timeout으로 reclaim해 장시간 handler에서 중복 dispatch 가능성이 있다.
+- attachment upload는 권한 확인 전에 본문 전체를 읽고 MIME 검증/이미지 최적화를 수행한다.
+- admin report 응답은 여전히 내부 숫자 FK(`target_id`, `reporter_user_id`, `resolved_by`)를 노출한다.
+- comment/post 목록 cache loader는 바깥에서 읽은 parent snapshot을 재사용해, 삭제/visibility 변경과 경합하면 stale payload를 만들 수 있다.
+
+결론
+
+- HTTP 서버는 기본값으로 forwarded header를 신뢰하지 않도록 trusted proxies를 명시적으로 비활성화한다. 추후 reverse proxy 신뢰가 필요하면 설정 기반으로 열되, 기본은 보수적으로 둔다.
+- outbox processing lease는 relay가 처리 중 heartbeat로 갱신하고, 저장소 reclaim은 "최근 heartbeat가 끊긴 processing만 stale"로 판단한다.
+- attachment upload는 post/user/visibility/ownership 검사를 먼저 수행한 뒤에만 파일 본문을 읽고 최적화한다.
+- admin report 응답은 운영 리소스 자체의 `report.id`는 유지하되, 연관 리소스와 사용자 참조는 UUID 중심(`target_uuid`, `reporter_uuid`, `resolved_by_uuid`)으로 정리한다.
+- cache miss loader 내부에서 parent existence/visibility를 다시 확인해 stale non-empty 목록을 만들지 않게 한다.
+
+후속 작업
+
+- HTTP 테스트에 spoofed `X-Forwarded-For` rate-limit 우회 방지 케이스 추가
+- outbox multi-worker + long-running handler 중복 dispatch 방지 테스트 추가
+- attachment service 테스트에 unauthorized upload가 body를 읽지 않는 케이스 추가
+- admin report response/swagger/API 문서를 UUID 응답 기준으로 정렬
+- post/comment list read path가 delete/hide race에 stale payload를 만들지 않는 서비스 테스트 추가
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `internal/delivery/http.go`
+- `internal/infrastructure/event/outbox/relay.go`
+- `internal/infrastructure/persistence/inmemory/outboxRepository.go`
+- `internal/application/service/attachmentService.go`
+- `internal/application/service/commentService.go`
+- `internal/application/service/postService.go`
+- `internal/application/model/report.go`
+- `internal/delivery/http_responses.go`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+- `docs/CONFIG.md`

@@ -16,6 +16,8 @@ type RelayConfig struct {
 	MaxAttempts      int
 	BaseBackoff      time.Duration
 	MaxBackoffFactor int
+	ProcessingLease  time.Duration
+	LeaseRefresh     time.Duration
 }
 
 type Relay struct {
@@ -47,6 +49,15 @@ func NewRelay(store port.OutboxStore, serializer port.EventSerializer, logger *s
 	}
 	if cfg.MaxBackoffFactor <= 0 {
 		cfg.MaxBackoffFactor = 64
+	}
+	if cfg.ProcessingLease <= 0 {
+		cfg.ProcessingLease = 30 * time.Second
+	}
+	if cfg.LeaseRefresh <= 0 {
+		cfg.LeaseRefresh = cfg.ProcessingLease / 3
+	}
+	if cfg.LeaseRefresh <= 0 {
+		cfg.LeaseRefresh = time.Second
 	}
 	return &Relay{
 		store:      store,
@@ -127,12 +138,41 @@ func (r *Relay) handleMessage(ctx context.Context, message port.OutboxMessage, n
 		r.markFailure(message, now, "deserialize outbox event failed", err)
 		return
 	}
+	stopRenew := r.startLeaseRenewal(ctx, message.ID)
+	defer stopRenew()
 	if err := r.dispatch(ctx, event); err != nil {
 		r.markFailure(message, now, "dispatch outbox event failed", err)
 		return
 	}
 	if err := r.store.MarkSucceeded(message.ID); err != nil {
 		r.warn("mark outbox message succeeded failed", "id", message.ID, "error", err)
+	}
+}
+
+func (r *Relay) startLeaseRenewal(ctx context.Context, messageID string) func() {
+	if r.cfg.LeaseRefresh <= 0 || r.cfg.ProcessingLease <= 0 || messageID == "" {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(r.cfg.LeaseRefresh)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				nextAttemptAt := time.Now().Add(r.cfg.ProcessingLease)
+				if err := r.store.RenewProcessing(messageID, nextAttemptAt); err != nil {
+					r.warn("renew outbox message lease failed", "id", messageID, "error", err)
+				}
+			}
+		}
+	}()
+	return func() {
+		close(done)
 	}
 }
 

@@ -38,6 +38,8 @@ event:
     pollIntervalMillis: 100
     maxAttempts: 5
     baseBackoffMillis: 200
+    processingLeaseMillis: 30000
+    leaseRefreshMillis: 10000
 
 admin:
   bootstrap:

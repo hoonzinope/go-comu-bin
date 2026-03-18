@@ -57,6 +57,8 @@ event:
     pollIntervalMillis: 100
     maxAttempts: 5
     baseBackoffMillis: 200
+    processingLeaseMillis: 30000
+    leaseRefreshMillis: 10000
 
 admin:
   bootstrap:
@@ -89,6 +91,9 @@ jobs:
 - `event.outbox.pollIntervalMillis`: `> 0`
 - `event.outbox.maxAttempts`: `> 0`
 - `event.outbox.baseBackoffMillis`: `> 0`
+- `event.outbox.processingLeaseMillis`: `> 0`
+- `event.outbox.leaseRefreshMillis`: `> 0`
+- `event.outbox.leaseRefreshMillis`: `processingLeaseMillis`보다 작아야 함
 - `admin.bootstrap.enabled`: 기본 `false`
 - `admin.bootstrap.username`: bootstrap enabled일 때 필수
 - `admin.bootstrap.password`: bootstrap enabled일 때 필수
@@ -117,12 +122,16 @@ jobs:
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
 - HTTP read/write 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
   - `enabled=true`일 때 `/api/v1` 하위 `GET/HEAD/OPTIONS` 요청은 `readRequests`, `POST/PUT/DELETE/PATCH` 요청은 `writeRequests`를 `method+route+client_ip` 기준으로 적용합니다.
+  - 기본 HTTP 서버는 trusted proxy를 비활성화하므로, 별도 reverse proxy trust 구성이 없으면 `X-Forwarded-For` 같은 전달 헤더를 rate limit key에 사용하지 않습니다.
 - outbox relay 워커 수: `cmd/main.go` -> `cfg.Event.Outbox.WorkerCount`
 - outbox relay 배치 크기: `cmd/main.go` -> `cfg.Event.Outbox.BatchSize`
 - outbox relay polling 주기(ms): `cmd/main.go` -> `cfg.Event.Outbox.PollIntervalMillis`
 - outbox retry 최대 횟수: `cmd/main.go` -> `cfg.Event.Outbox.MaxAttempts`
 - outbox retry base backoff(ms): `cmd/main.go` -> `cfg.Event.Outbox.BaseBackoffMillis`
+- outbox processing lease(ms): `cmd/main.go` -> `cfg.Event.Outbox.ProcessingLeaseMillis`
+- outbox lease refresh(ms): `cmd/main.go` -> `cfg.Event.Outbox.LeaseRefreshMillis`
   - 전달은 at-least-once이며, 실패 이벤트는 backoff 재시도 후 `dead` 상태로 남깁니다.
+  - relay는 handler 처리 중 lease를 heartbeat로 갱신해 장시간 처리 중 stale reclaim으로 인한 중복 dispatch를 줄입니다.
 - bootstrap admin: `cmd/main.go` -> `cfg.Admin.Bootstrap.*`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`

@@ -197,6 +197,26 @@ func (r *OutboxRepository) SelectDead(limit int, lastID string) ([]port.OutboxMe
 	return dead[start:end], nil
 }
 
+func (r *OutboxRepository) RenewProcessing(id string, nextAttemptAt time.Time) error {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	if id == "" {
+		return nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	message, exists := r.data[id]
+	if !exists || message.Status != port.OutboxStatusProcessing {
+		return nil
+	}
+	message.NextAttemptAt = nextAttemptAt
+	r.data[id] = message
+	return nil
+}
+
 func (r *OutboxRepository) MarkSucceeded(ids ...string) error {
 	r.coordinator.enter()
 	defer r.coordinator.exit()

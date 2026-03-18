@@ -67,11 +67,13 @@ type Config struct {
 	} `yaml:"delivery"`
 	Event struct {
 		Outbox struct {
-			WorkerCount        int `yaml:"workerCount"`
-			BatchSize          int `yaml:"batchSize"`
-			PollIntervalMillis int `yaml:"pollIntervalMillis"`
-			MaxAttempts        int `yaml:"maxAttempts"`
-			BaseBackoffMillis  int `yaml:"baseBackoffMillis"`
+			WorkerCount           int `yaml:"workerCount"`
+			BatchSize             int `yaml:"batchSize"`
+			PollIntervalMillis    int `yaml:"pollIntervalMillis"`
+			MaxAttempts           int `yaml:"maxAttempts"`
+			BaseBackoffMillis     int `yaml:"baseBackoffMillis"`
+			ProcessingLeaseMillis int `yaml:"processingLeaseMillis"`
+			LeaseRefreshMillis    int `yaml:"leaseRefreshMillis"`
 		} `yaml:"outbox"`
 	} `yaml:"event"`
 	Jobs struct {
@@ -121,6 +123,8 @@ func Load() (*Config, error) {
 		"event.outbox.pollIntervalMillis",
 		"event.outbox.maxAttempts",
 		"event.outbox.baseBackoffMillis",
+		"event.outbox.processingLeaseMillis",
+		"event.outbox.leaseRefreshMillis",
 		"jobs.enabled",
 		"jobs.attachmentCleanup.enabled",
 		"jobs.attachmentCleanup.intervalSeconds",
@@ -164,6 +168,8 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("event.outbox.pollIntervalMillis", 100)
 	v.SetDefault("event.outbox.maxAttempts", 5)
 	v.SetDefault("event.outbox.baseBackoffMillis", 200)
+	v.SetDefault("event.outbox.processingLeaseMillis", 30000)
+	v.SetDefault("event.outbox.leaseRefreshMillis", 10000)
 	v.SetDefault("jobs.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.enabled", true)
 	v.SetDefault("jobs.attachmentCleanup.intervalSeconds", 600)
@@ -276,6 +282,19 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Event.Outbox.BaseBackoffMillis <= 0 {
 		return fmt.Errorf("invalid event.outbox.baseBackoffMillis: %d (must be > 0)", cfg.Event.Outbox.BaseBackoffMillis)
+	}
+	if cfg.Event.Outbox.ProcessingLeaseMillis <= 0 {
+		return fmt.Errorf("invalid event.outbox.processingLeaseMillis: %d (must be > 0)", cfg.Event.Outbox.ProcessingLeaseMillis)
+	}
+	if cfg.Event.Outbox.LeaseRefreshMillis <= 0 {
+		return fmt.Errorf("invalid event.outbox.leaseRefreshMillis: %d (must be > 0)", cfg.Event.Outbox.LeaseRefreshMillis)
+	}
+	if cfg.Event.Outbox.LeaseRefreshMillis >= cfg.Event.Outbox.ProcessingLeaseMillis {
+		return fmt.Errorf(
+			"invalid event.outbox.leaseRefreshMillis: %d (must be < processingLeaseMillis %d)",
+			cfg.Event.Outbox.LeaseRefreshMillis,
+			cfg.Event.Outbox.ProcessingLeaseMillis,
+		)
 	}
 	if cfg.Jobs.Enabled && cfg.Jobs.AttachmentCleanup.Enabled {
 		if cfg.Jobs.AttachmentCleanup.IntervalSeconds <= 0 {

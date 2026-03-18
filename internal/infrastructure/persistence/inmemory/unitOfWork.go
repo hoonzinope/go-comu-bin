@@ -447,6 +447,10 @@ func (r postTxRepository) SelectPostByUUID(ctx context.Context, postUUID string)
 	_ = ctx
 	return r.repo.selectPostByUUID(postUUID)
 }
+func (r postTxRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
+	_ = ctx
+	return r.repo.SelectPostUUIDsByIDs(ctx, ids)
+}
 func (r postTxRepository) SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error) {
 	_ = ctx
 	return r.repo.selectPostByIDIncludingUnpublished(id)

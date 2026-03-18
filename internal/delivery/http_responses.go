@@ -50,14 +50,12 @@ type attachmentUploadResponse struct {
 type reportResponse struct {
 	ID             int64      `json:"id"`
 	TargetType     string     `json:"target_type"`
-	TargetID       int64      `json:"target_id"`
-	ReporterUserID int64      `json:"reporter_user_id"`
+	TargetUUID     string     `json:"target_uuid"`
 	ReporterUUID   string     `json:"reporter_uuid"`
 	ReasonCode     string     `json:"reason_code"`
 	ReasonDetail   string     `json:"reason_detail,omitempty"`
 	Status         string     `json:"status"`
 	ResolutionNote string     `json:"resolution_note,omitempty"`
-	ResolvedBy     *int64     `json:"resolved_by,omitempty"`
 	ResolvedByUUID *string    `json:"resolved_by_uuid,omitempty"`
 	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`

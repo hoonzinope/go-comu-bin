@@ -246,15 +246,31 @@ func (s *ReportService) reportsFromEntities(ctx context.Context, reports []*enti
 		return []model.Report{}, nil
 	}
 	userIDs := make([]int64, 0, len(reports)*2)
+	postIDs := make([]int64, 0, len(reports))
+	commentIDs := make([]int64, 0, len(reports))
 	for _, report := range reports {
 		userIDs = append(userIDs, report.ReporterUserID)
 		if report.ResolvedBy != nil {
 			userIDs = append(userIDs, *report.ResolvedBy)
 		}
+		switch report.TargetType {
+		case entity.ReportTargetPost:
+			postIDs = append(postIDs, report.TargetID)
+		case entity.ReportTargetComment:
+			commentIDs = append(commentIDs, report.TargetID)
+		}
 	}
 	userUUIDs, err := userUUIDsByIDs(ctx, s.userRepository, userIDs)
 	if err != nil {
 		return nil, err
+	}
+	postUUIDs, err := s.postRepository.SelectPostUUIDsByIDs(ctx, postIDs)
+	if err != nil {
+		return nil, customerror.WrapRepository("select post uuids by ids", err)
+	}
+	commentUUIDs, err := s.commentRepository.SelectCommentUUIDsByIDsIncludingDeleted(ctx, commentIDs)
+	if err != nil {
+		return nil, customerror.WrapRepository("select comment uuids by ids including deleted", err)
 	}
 	out := make([]model.Report, 0, len(reports))
 	for _, report := range reports {
@@ -262,17 +278,19 @@ func (s *ReportService) reportsFromEntities(ctx context.Context, reports []*enti
 		if !ok {
 			return nil, customerror.WrapRepository("select users by ids including deleted", errors.New("reporter not found"))
 		}
+		targetUUID, err := reportTargetUUID(report, postUUIDs, commentUUIDs)
+		if err != nil {
+			return nil, err
+		}
 		view := model.Report{
 			ID:             report.ID,
 			TargetType:     string(report.TargetType),
-			TargetID:       report.TargetID,
-			ReporterUserID: report.ReporterUserID,
+			TargetUUID:     targetUUID,
 			ReporterUUID:   reporterUUID,
 			ReasonCode:     string(report.ReasonCode),
 			ReasonDetail:   report.ReasonDetail,
 			Status:         string(report.Status),
 			ResolutionNote: report.ResolutionNote,
-			ResolvedBy:     report.ResolvedBy,
 			ResolvedAt:     report.ResolvedAt,
 			CreatedAt:      report.CreatedAt,
 			UpdatedAt:      report.UpdatedAt,
@@ -284,4 +302,23 @@ func (s *ReportService) reportsFromEntities(ctx context.Context, reports []*enti
 		out = append(out, view)
 	}
 	return out, nil
+}
+
+func reportTargetUUID(report *entity.Report, postUUIDs, commentUUIDs map[int64]string) (string, error) {
+	switch report.TargetType {
+	case entity.ReportTargetPost:
+		targetUUID, ok := postUUIDs[report.TargetID]
+		if !ok {
+			return "", customerror.WrapRepository("select post uuids by ids", errors.New("report target post not found"))
+		}
+		return targetUUID, nil
+	case entity.ReportTargetComment:
+		targetUUID, ok := commentUUIDs[report.TargetID]
+		if !ok {
+			return "", customerror.WrapRepository("select comment uuids by ids including deleted", errors.New("report target comment not found"))
+		}
+		return targetUUID, nil
+	default:
+		return "", customerror.ErrInvalidInput
+	}
 }
