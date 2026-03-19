@@ -69,6 +69,35 @@ func TestSessionService_IssueGuestToken_Success(t *testing.T) {
 	assert.True(t, user.IsGuest())
 }
 
+func TestSessionService_RotateToken_ReplacesCurrentSession(t *testing.T) {
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	require.NoError(t, err)
+
+	cache := cacheInMemory.NewInMemoryCache()
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	svc := NewSessionService(userService, userService, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+
+	oldToken, err := svc.Login(context.Background(), "alice", "pw")
+	require.NoError(t, err)
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "pw")
+	require.NoError(t, err)
+
+	newToken, err := svc.RotateToken(context.Background(), userID, oldToken)
+	require.NoError(t, err)
+	assert.NotEmpty(t, newToken)
+	assert.NotEqual(t, oldToken, newToken)
+
+	_, err = svc.ValidateTokenToId(context.Background(), oldToken)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidToken))
+
+	gotUserID, err := svc.ValidateTokenToId(context.Background(), newToken)
+	require.NoError(t, err)
+	assert.Equal(t, userID, gotUserID)
+}
+
 func TestSessionService_Login_PropagatesContextToCredentialVerifier(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := cacheInMemory.NewInMemoryCache()

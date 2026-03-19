@@ -124,7 +124,7 @@ func TestUserService_DeleteMe_Success(t *testing.T) {
 	require.NoError(t, svc.DeleteMe(context.Background(), user.ID, "pw"))
 }
 
-func TestUserService_DeleteMe_GuestSkipsPasswordVerification(t *testing.T) {
+func TestUserService_DeleteMe_RejectsGuestUser(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
@@ -132,11 +132,8 @@ func TestUserService_DeleteMe_GuestSkipsPasswordVerification(t *testing.T) {
 	require.NoError(t, err)
 
 	err = svc.DeleteMe(context.Background(), guestID, "")
-	require.NoError(t, err)
-
-	deleted, err := repositories.user.SelectUserByID(context.Background(), guestID)
-	require.NoError(t, err)
-	assert.Nil(t, deleted)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestUserService_DeleteMe_UserNotFound(t *testing.T) {

@@ -150,14 +150,15 @@ func (s *UserService) DeleteMe(ctx context.Context, userID int64, password strin
 		if existingUser == nil {
 			return customerror.ErrUserNotFound
 		}
-		if !existingUser.IsGuest() {
-			matched, err := s.passwordHasher.Matches(existingUser.Password, password)
-			if err != nil {
-				return customerror.Wrap(customerror.ErrInternalServerError, "compare password for delete me", err)
-			}
-			if !matched {
-				return customerror.ErrInvalidCredential
-			}
+		if existingUser.IsGuest() {
+			return customerror.ErrForbidden
+		}
+		matched, err := s.passwordHasher.Matches(existingUser.Password, password)
+		if err != nil {
+			return customerror.Wrap(customerror.ErrInternalServerError, "compare password for delete me", err)
+		}
+		if !matched {
+			return customerror.ErrInvalidCredential
 		}
 		existingUser.SoftDelete()
 		if err := tx.UserRepository().Update(txCtx, existingUser); err != nil {

@@ -42,14 +42,15 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `POST /api/v1/auth/guest/upgrade` (인증 필요)
   - 현재 bearer token 소유자가 guest 계정일 때만 정식 계정으로 승격합니다.
   - 요청 본문: `username`, `email`, `password`
-  - 승격 시 기존 `id`, `uuid`, 작성물 소유권, 활성 세션은 유지됩니다.
+  - 승격 시 기존 `id`, `uuid`, 작성물 소유권은 유지됩니다.
+  - 성공 시 응답 헤더 `Authorization`에 새 `Bearer <token>`을 반환하고, 기존 guest token은 즉시 폐기합니다.
   - guest가 아닌 사용자가 호출하면 `400 Bad Request`
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)
   - 계정은 soft delete 처리되고, 식별 정보는 익명화됩니다.
   - 탈퇴 성공 시 해당 사용자의 활성 세션 무효화를 시도합니다.
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
-  - guest 계정은 내부 랜덤 비밀번호를 사용자에게 노출하지 않으므로, 현재 token 소유자라면 비밀번호 검증 없이 탈퇴할 수 있습니다.
+  - guest 계정은 self-delete를 허용하지 않으며 `403 Forbidden`을 반환합니다.
 - `GET /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자의 현재 제재 상태를 조회합니다.
   - `userUUID`는 유효한 UUID 형식이어야 하며, 형식 오류는 `400 Bad Request`

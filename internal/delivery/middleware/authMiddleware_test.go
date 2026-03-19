@@ -19,6 +19,9 @@ type stubSessionUseCase struct {
 
 func (s stubSessionUseCase) Login(context.Context, string, string) (string, error) { return "", nil }
 func (s stubSessionUseCase) IssueGuestToken(context.Context) (string, error)        { return "", nil }
+func (s stubSessionUseCase) RotateToken(context.Context, int64, string) (string, error) {
+	return "", nil
+}
 func (s stubSessionUseCase) Logout(context.Context, string) error                  { return nil }
 func (s stubSessionUseCase) InvalidateUserSessions(context.Context, int64) error   { return nil }
 func (s stubSessionUseCase) ValidateTokenToId(_ context.Context, token string) (int64, error) {

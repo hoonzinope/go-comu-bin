@@ -711,6 +711,10 @@ paths:
       responses:
         "200":
           description: OK
+          headers:
+            Authorization:
+              description: Bearer <token>
+              type: string
           schema:
             $ref: '#/definitions/delivery.signUpResponse'
         "400":

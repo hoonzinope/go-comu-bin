@@ -478,6 +478,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/delivery.signUpResponse"
+                        },
+                        "headers": {
+                            "Authorization": {
+                                "type": "string",
+                                "description": "Bearer \u003ctoken\u003e"
+                            }
                         }
                     },
                     "400": {

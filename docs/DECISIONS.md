@@ -2634,9 +2634,9 @@
 - guest는 1차에서 post/comment create/update/delete까지만 허용한다.
 - guest는 1차에서 draft/publish, attachment, reaction, report를 사용할 수 없다.
 - guest는 일반 username/password login 대상이 아니다. 발급된 bearer token으로만 사용한다.
-- guest -> 정식 회원 전환은 현재 guest 세션을 유지한 채 `POST /api/v1/auth/guest/upgrade`에서 수행한다.
-- upgrade는 기존 guest user row를 재사용하고, `uuid`, 작성물 소유권, 활성 세션을 유지한다.
-- account delete는 guest에도 동일 endpoint를 허용하되, guest는 비밀값을 모르는 전제를 감안해 현재 token 소유자 인증만으로 삭제 가능하게 둔다.
+- guest -> 정식 회원 전환은 `POST /api/v1/auth/guest/upgrade`에서 수행하고, 성공 시 현재 guest token은 폐기한 뒤 새 bearer token을 재발급한다.
+- upgrade는 기존 guest user row를 재사용하고, `uuid`, 작성물 소유권을 유지한다. 세션은 rotation한다.
+- account delete는 guest에 열지 않는다. guest self-delete는 `403 Forbidden`으로 거절한다.
 - guest 발급은 현재 `user row 생성 -> token 발급 -> session 저장` 순서로 동작하므로, durable session 저장소 단계에서는 발급/세션 기록의 원자성 또는 orphan guest 정리 전략을 별도 설계해야 한다.
 
 후속 작업

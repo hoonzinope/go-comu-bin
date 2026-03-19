@@ -123,6 +123,20 @@ func TestIntegration_ForbiddenScenarios(t *testing.T) {
 	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/comments/%s/reactions/me", commentUUID), nil, http.StatusNoContent)
 }
 
+func TestIntegration_GuestUpgrade_RotatesBearerToken(t *testing.T) {
+	server := newIntegrationServer(t)
+	defer server.Close()
+
+	guestToken := mustIssueGuest(t, server.URL)
+	newToken := mustUpgradeGuest(t, server.URL, guestToken, "guest-upgraded", "guest-upgraded@example.com", "pw")
+
+	require.NotEmpty(t, newToken)
+	assert.NotEqual(t, guestToken, newToken)
+
+	assertStatus(t, server.URL, guestToken, http.MethodPost, "/auth/logout", map[string]any{}, http.StatusUnauthorized)
+	assertStatus(t, server.URL, newToken, http.MethodPost, "/auth/logout", map[string]any{}, http.StatusOK)
+}
+
 
 func newIntegrationServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -226,6 +240,28 @@ func mustSignUp(t *testing.T, baseURL, username, password string) {
 		"password": password,
 	})
 	assert.Equal(t, http.StatusCreated, status, "signup failed: body=%s", string(body))
+}
+
+func mustIssueGuest(t *testing.T, baseURL string) string {
+	t.Helper()
+	body, status, headers := requestJSON(t, baseURL, "", http.MethodPost, "/auth/guest", map[string]any{})
+	assert.Equal(t, http.StatusCreated, status, "issue guest failed: body=%s", string(body))
+	token := headers.Get("Authorization")
+	require.NotEmpty(t, token)
+	return token
+}
+
+func mustUpgradeGuest(t *testing.T, baseURL, token, username, email, password string) string {
+	t.Helper()
+	body, status, headers := requestJSON(t, baseURL, token, http.MethodPost, "/auth/guest/upgrade", map[string]any{
+		"username": username,
+		"email":    email,
+		"password": password,
+	})
+	assert.Equal(t, http.StatusOK, status, "upgrade guest failed: body=%s", string(body))
+	newToken := headers.Get("Authorization")
+	require.NotEmpty(t, newToken)
+	return newToken
 }
 
 

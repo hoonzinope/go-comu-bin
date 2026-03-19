@@ -64,6 +64,21 @@ func (s *SessionService) IssueGuestToken(ctx context.Context) (string, error) {
 	return token, nil
 }
 
+func (s *SessionService) RotateToken(ctx context.Context, userID int64, currentToken string) (string, error) {
+	if err := s.sessionRepository.Delete(ctx, userID, currentToken); err != nil {
+		return "", customerror.WrapRepository("delete current session for rotate token", err)
+	}
+
+	token, err := s.tokenPort.IdToToken(userID)
+	if err != nil {
+		return "", customerror.WrapToken("issue rotated token", err)
+	}
+	if err := s.sessionRepository.Save(ctx, userID, token, s.tokenPort.TTLSeconds()); err != nil {
+		return "", customerror.WrapRepository("save rotated session", err)
+	}
+	return token, nil
+}
+
 func (s *SessionService) Logout(ctx context.Context, token string) error {
 	userID, err := s.tokenPort.ValidateTokenToId(token)
 	if err != nil {

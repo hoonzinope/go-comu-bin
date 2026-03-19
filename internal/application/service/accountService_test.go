@@ -65,6 +65,10 @@ func (s *stubSessionUseCase) IssueGuestToken(ctx context.Context) (string, error
 	return "", nil
 }
 
+func (s *stubSessionUseCase) RotateToken(ctx context.Context, userID int64, currentToken string) (string, error) {
+	return "", nil
+}
+
 func (s *stubSessionUseCase) Logout(ctx context.Context, token string) error {
 	return nil
 }

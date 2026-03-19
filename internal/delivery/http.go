@@ -331,6 +331,7 @@ func (h *HTTPHandler) handleGuestIssue(c *gin.Context) {
 // @Produce json
 // @Param request body guestUpgradeRequest true "Guest upgrade payload"
 // @Success 200 {object} signUpResponse
+// @Header 200 {string} Authorization "Bearer <token>"
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 409 {object} errorResponse
@@ -339,6 +340,11 @@ func (h *HTTPHandler) handleGuestIssue(c *gin.Context) {
 func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
 	userID, ok := h.requireAuthUserID(c)
 	if !ok {
+		return
+	}
+	currentToken, ok := middleware.Token(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: customerror.ErrUnauthorized.Error()})
 		return
 	}
 	var req guestUpgradeRequest
@@ -354,6 +360,12 @@ func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
 		writeUseCaseError(c, err)
 		return
 	}
+	token, err := h.sessionUseCase.RotateToken(c.Request.Context(), userID, currentToken)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Header("Authorization", "Bearer "+token)
 	c.JSON(http.StatusOK, signUpResponse{Result: "ok"})
 }
 

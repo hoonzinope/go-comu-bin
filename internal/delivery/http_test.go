@@ -702,7 +702,15 @@ func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body
 	return rr
 }
 
-func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path string, body any, userID int64) *httptest.ResponseRecorder {
+type authRequestOption func(*http.Request)
+
+func withAuthToken(token string) authRequestOption {
+	return func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
+func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path string, body any, userID int64, opts ...authRequestOption) *httptest.ResponseRecorder {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -711,12 +719,18 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 
 	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
 	req.Header.Set("Content-Type", "application/json")
-	tokenProvider := auth.NewJwtTokenProvider("test-secret")
-	token, err := tokenProvider.IdToToken(userID)
-	require.NoError(t, err)
-	require.NotNil(t, testSessionRepository)
-	require.NoError(t, testSessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
-	req.Header.Set("Authorization", "Bearer "+token)
+	if len(opts) == 0 {
+		tokenProvider := auth.NewJwtTokenProvider("test-secret")
+		token, err := tokenProvider.IdToToken(userID)
+		require.NoError(t, err)
+		require.NotNil(t, testSessionRepository)
+		require.NoError(t, testSessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
+		req.Header.Set("Authorization", "Bearer "+token)
+	} else {
+		for _, opt := range opts {
+			opt(req)
+		}
+	}
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -1600,14 +1614,20 @@ func TestHTTP_GuestUpgrade_Success(t *testing.T) {
 			return nil
 		},
 	}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	oldToken, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NotNil(t, testSessionRepository)
+	require.NoError(t, testSessionRepository.Save(context.Background(), 1, oldToken, tokenProvider.TTLSeconds()))
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/guest/upgrade", map[string]any{
 		"username": "alice",
 		"email":    "alice@example.com",
 		"password": "pw",
-	}, 1)
+	}, 1, withAuthToken(oldToken))
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Header().Get("Authorization"), "Bearer ")
 	assert.JSONEq(t, `{"result":"ok"}`, rr.Body.String())
 }
 
