@@ -5,12 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 type recordingCredentialVerifier struct {
@@ -67,6 +69,8 @@ func TestSessionService_IssueGuestToken_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.True(t, user.IsGuest())
+	assert.Equal(t, entity.GuestStatusActive, user.GuestStatus)
+	assert.NotNil(t, user.GuestActivatedAt)
 }
 
 func TestSessionService_RotateToken_ReplacesCurrentSession(t *testing.T) {
@@ -111,6 +115,41 @@ func TestSessionService_Login_PropagatesContextToCredentialVerifier(t *testing.T
 	assert.Same(t, ctx, verifier.calledCtx)
 }
 
+type recordingGuestIssuer struct {
+	userRepo port.UserRepository
+	userID   int64
+}
+
+func (g *recordingGuestIssuer) IssueGuestAccount(ctx context.Context) (int64, error) {
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
+	userID, err := g.userRepo.Save(ctx, guest)
+	if err != nil {
+		return 0, err
+	}
+	g.userID = userID
+	return userID, nil
+}
+
+func TestSessionService_IssueGuestToken_ExpiresGuestWhenSessionStoreSaveFails(t *testing.T) {
+	repositories := newTestRepositories()
+	guestIssuer := &recordingGuestIssuer{userRepo: repositories.user}
+	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
+		setWithTTLErr: newCacheFailure(nil),
+	})
+	svc := NewSessionService(&recordingCredentialVerifier{}, guestIssuer, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+
+	_, err := svc.IssueGuestToken(context.Background())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrRepositoryFailure))
+
+	user, err := repositories.user.SelectUserByID(context.Background(), guestIssuer.userID)
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.True(t, user.IsGuest())
+	assert.Equal(t, entity.GuestStatusExpired, user.GuestStatus)
+	assert.NotNil(t, user.GuestExpiredAt)
+}
+
 func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
@@ -147,6 +186,47 @@ func TestSessionService_ValidateTokenToId_Success(t *testing.T) {
 	gotUserID, err := svc.ValidateTokenToId(context.Background(), token)
 	require.NoError(t, err)
 	assert.Equal(t, userID, gotUserID)
+}
+
+func TestSessionService_ValidateTokenToId_RejectsPendingGuest(t *testing.T) {
+	repositories := newTestRepositories()
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	userID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	cache := cacheInMemory.NewInMemoryCache()
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(userID)
+	require.NoError(t, err)
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	require.NoError(t, sessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
+
+	svc := NewSessionService(&recordingCredentialVerifier{}, nil, repositories.user, tokenProvider, sessionRepository)
+
+	_, err = svc.ValidateTokenToId(context.Background(), token)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidToken))
+}
+
+func TestSessionService_ValidateTokenToId_RejectsExpiredGuest(t *testing.T) {
+	repositories := newTestRepositories()
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guest.MarkGuestExpired()
+	userID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	cache := cacheInMemory.NewInMemoryCache()
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	token, err := tokenProvider.IdToToken(userID)
+	require.NoError(t, err)
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	require.NoError(t, sessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
+
+	svc := NewSessionService(&recordingCredentialVerifier{}, nil, repositories.user, tokenProvider, sessionRepository)
+
+	_, err = svc.ValidateTokenToId(context.Background(), token)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidToken))
 }
 
 func TestSessionService_ValidateTokenToId_DeletedUser(t *testing.T) {

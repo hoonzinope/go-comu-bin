@@ -98,6 +98,19 @@ func TestPostService_CreateDraftPost_BlockedForGuestUser(t *testing.T) {
 	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
+func TestPostService_CreatePost_BlockedForPendingGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := newTestPostService(t, repositories, newTestCache())
+
+	_, err = svc.CreatePost(context.Background(), "title", "content", nil, guestID, mustBoardUUID(t, repositories.board, boardID))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
+}
+
 func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")

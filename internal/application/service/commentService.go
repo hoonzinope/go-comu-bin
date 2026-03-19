@@ -75,6 +75,9 @@ func (s *CommentService) CreateComment(ctx context.Context, content string, auth
 		if user == nil {
 			return customerror.ErrUserNotFound
 		}
+		if err := ensureGuestLifecycleAllowsWrite(user); err != nil {
+			return err
+		}
 		if err := s.authorizationPolicy.CanWrite(user); err != nil {
 			return err
 		}
@@ -225,6 +228,9 @@ func (s *CommentService) UpdateComment(ctx context.Context, commentUUID string, 
 		if requester == nil {
 			return customerror.ErrUserNotFound
 		}
+		if err := ensureGuestLifecycleAllowsWrite(requester); err != nil {
+			return err
+		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
 		}
@@ -268,6 +274,9 @@ func (s *CommentService) DeleteComment(ctx context.Context, commentUUID string, 
 		}
 		if requester == nil {
 			return customerror.ErrUserNotFound
+		}
+		if err := ensureGuestLifecycleAllowsWrite(requester); err != nil {
+			return err
 		}
 		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
 			return err

@@ -11,3 +11,13 @@ func forbidGuest(user *entity.User) error {
 	}
 	return nil
 }
+
+func ensureGuestLifecycleAllowsWrite(user *entity.User) error {
+	if user == nil {
+		return customerror.ErrUnauthorized
+	}
+	if user.IsGuest() && !user.IsActiveGuest() {
+		return customerror.ErrForbidden
+	}
+	return nil
+}

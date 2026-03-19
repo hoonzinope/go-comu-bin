@@ -8,11 +8,16 @@ import (
 )
 
 type UserStatus string
+type GuestStatus string
 
 const (
 	UserStatusActive    UserStatus = "active"
 	UserStatusSuspended UserStatus = "suspended"
 	UserStatusDeleted   UserStatus = "deleted"
+
+	GuestStatusPending GuestStatus = "pending"
+	GuestStatusActive  GuestStatus = "active"
+	GuestStatusExpired GuestStatus = "expired"
 )
 
 type User struct {
@@ -22,6 +27,10 @@ type User struct {
 	Email            string
 	Password         string
 	Guest            bool
+	GuestStatus      GuestStatus
+	GuestIssuedAt    *time.Time
+	GuestActivatedAt *time.Time
+	GuestExpiredAt   *time.Time
 	Role             string
 	Status           UserStatus
 	SuspensionReason string
@@ -37,6 +46,10 @@ func (u *User) IsAdmin() bool {
 
 func (u *User) IsGuest() bool {
 	return u.Guest
+}
+
+func (u *User) IsActiveGuest() bool {
+	return u.Guest && u.GuestStatus == GuestStatusActive
 }
 
 func (u *User) IsDeleted() bool {
@@ -73,6 +86,10 @@ func (u *User) SoftDelete() {
 	u.Email = ""
 	u.Password = ""
 	u.Guest = false
+	u.GuestStatus = ""
+	u.GuestIssuedAt = nil
+	u.GuestActivatedAt = nil
+	u.GuestExpiredAt = nil
 	u.Status = UserStatusDeleted
 	u.SuspensionReason = ""
 	u.SuspendedUntil = nil
@@ -98,15 +115,17 @@ func NewUser(name, password string) *User {
 func NewGuest(name, email, password string) *User {
 	now := time.Now()
 	return &User{
-		UUID:      uuid.NewString(),
-		Name:      name,
-		Email:     email,
-		Password:  password,
-		Guest:     true,
-		Role:      "user",
-		Status:    UserStatusActive,
-		CreatedAt: now,
-		UpdatedAt: now,
+		UUID:          uuid.NewString(),
+		Name:          name,
+		Email:         email,
+		Password:      password,
+		Guest:         true,
+		GuestStatus:   GuestStatusPending,
+		GuestIssuedAt: &now,
+		Role:          "user",
+		Status:        UserStatusActive,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 }
 
@@ -130,5 +149,24 @@ func (u *User) UpgradeGuest(name, email, password string) {
 	u.Email = email
 	u.Password = password
 	u.Guest = false
+	u.GuestStatus = ""
+	u.GuestIssuedAt = nil
+	u.GuestActivatedAt = nil
+	u.GuestExpiredAt = nil
 	u.UpdatedAt = time.Now()
+}
+
+func (u *User) MarkGuestActive() {
+	now := time.Now()
+	u.GuestStatus = GuestStatusActive
+	u.GuestActivatedAt = &now
+	u.GuestExpiredAt = nil
+	u.UpdatedAt = now
+}
+
+func (u *User) MarkGuestExpired() {
+	now := time.Now()
+	u.GuestStatus = GuestStatusExpired
+	u.GuestExpiredAt = &now
+	u.UpdatedAt = now
 }

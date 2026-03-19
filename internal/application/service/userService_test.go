@@ -33,6 +33,10 @@ func TestUserService_IssueGuestAccount_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.True(t, user.IsGuest())
+	assert.Equal(t, entity.GuestStatusPending, user.GuestStatus)
+	assert.NotNil(t, user.GuestIssuedAt)
+	assert.Nil(t, user.GuestActivatedAt)
+	assert.Nil(t, user.GuestExpiredAt)
 	assert.NotEmpty(t, user.Email)
 	assert.NotEmpty(t, user.Password)
 }
@@ -229,6 +233,10 @@ func TestUserService_UpgradeGuest_Success(t *testing.T) {
 	assert.Equal(t, "alice", after.Name)
 	assert.Equal(t, "alice@example.com", after.Email)
 	assert.False(t, after.IsGuest())
+	assert.Equal(t, entity.GuestStatus(""), after.GuestStatus)
+	assert.Nil(t, after.GuestIssuedAt)
+	assert.Nil(t, after.GuestActivatedAt)
+	assert.Nil(t, after.GuestExpiredAt)
 	assert.NotEqual(t, "newpw", after.Password)
 }
 

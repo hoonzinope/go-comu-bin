@@ -87,6 +87,21 @@ func TestCommentService_CreateComment_BlockedForSuspendedUser(t *testing.T) {
 	assert.True(t, errors.Is(err, customerror.ErrUserSuspended))
 }
 
+func TestCommentService_CreateComment_BlockedForPendingGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	authorID := seedUser(repositories.user, "author", "pw", "user")
+	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
+	svc := NewCommentService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy(), newTestAuthorizationPolicy())
+
+	_, err = svc.CreateComment(context.Background(), "comment", guestID, mustPostUUID(t, repositories.post, postID), nil)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
+}
+
 func TestCommentService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")

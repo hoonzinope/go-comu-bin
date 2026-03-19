@@ -59,7 +59,11 @@ func (s *SessionService) IssueGuestToken(ctx context.Context) (string, error) {
 	}
 
 	if err := s.sessionRepository.Save(ctx, userID, token, s.tokenPort.TTLSeconds()); err != nil {
+		s.expireGuestBestEffort(ctx, userID)
 		return "", customerror.WrapRepository("save guest session", err)
+	}
+	if err := s.markGuestActive(ctx, userID); err != nil {
+		return "", err
 	}
 	return token, nil
 }
@@ -117,6 +121,33 @@ func (s *SessionService) ValidateTokenToId(ctx context.Context, token string) (i
 	if user == nil {
 		return 0, customerror.ErrInvalidToken
 	}
+	if user.IsGuest() && !user.IsActiveGuest() {
+		return 0, customerror.ErrInvalidToken
+	}
 
 	return userID, nil
+}
+
+func (s *SessionService) markGuestActive(ctx context.Context, userID int64) error {
+	user, err := s.userRepository.SelectUserByID(ctx, userID)
+	if err != nil {
+		return customerror.WrapRepository("select user by id for activate guest", err)
+	}
+	if user == nil || !user.IsGuest() {
+		return nil
+	}
+	user.MarkGuestActive()
+	if err := s.userRepository.Update(ctx, user); err != nil {
+		return customerror.WrapRepository("update guest active state", err)
+	}
+	return nil
+}
+
+func (s *SessionService) expireGuestBestEffort(ctx context.Context, userID int64) {
+	user, err := s.userRepository.SelectUserByID(ctx, userID)
+	if err != nil || user == nil || !user.IsGuest() {
+		return
+	}
+	user.MarkGuestExpired()
+	_ = s.userRepository.Update(ctx, user)
 }

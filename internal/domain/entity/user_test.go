@@ -34,6 +34,29 @@ func TestUser_NewAdminAndIsAdmin(t *testing.T) {
 	assert.False(t, u.CreatedAt.IsZero())
 }
 
+func TestUser_NewGuest_TracksGuestLifecycle(t *testing.T) {
+	u := NewGuest("guest-1", "guest-1@example.invalid", "pw")
+
+	assert.True(t, u.IsGuest())
+	assert.Equal(t, GuestStatusPending, u.GuestStatus)
+	assert.NotNil(t, u.GuestIssuedAt)
+	assert.Nil(t, u.GuestActivatedAt)
+	assert.Nil(t, u.GuestExpiredAt)
+}
+
+func TestUser_GuestLifecycleTransitions(t *testing.T) {
+	u := NewGuest("guest-1", "guest-1@example.invalid", "pw")
+
+	u.MarkGuestActive()
+	assert.Equal(t, GuestStatusActive, u.GuestStatus)
+	assert.NotNil(t, u.GuestActivatedAt)
+	assert.Nil(t, u.GuestExpiredAt)
+
+	u.MarkGuestExpired()
+	assert.Equal(t, GuestStatusExpired, u.GuestStatus)
+	assert.NotNil(t, u.GuestExpiredAt)
+}
+
 func TestUser_SoftDelete(t *testing.T) {
 	u := NewUser("alice", "pw")
 	u.ID = 7
@@ -49,6 +72,10 @@ func TestUser_SoftDelete(t *testing.T) {
 	assert.True(t, u.IsDeleted())
 	assert.NotNil(t, u.DeletedAt)
 	assert.False(t, u.UpdatedAt.IsZero())
+	assert.Equal(t, GuestStatus(""), u.GuestStatus)
+	assert.Nil(t, u.GuestIssuedAt)
+	assert.Nil(t, u.GuestActivatedAt)
+	assert.Nil(t, u.GuestExpiredAt)
 }
 
 func TestUser_SuspendUnlimited(t *testing.T) {
@@ -82,4 +109,17 @@ func TestUser_Unsuspend(t *testing.T) {
 	assert.False(t, u.IsSuspended())
 	assert.Equal(t, "", u.SuspensionReason)
 	assert.Nil(t, u.SuspendedUntil)
+}
+
+func TestUser_UpgradeGuest_ClearsGuestLifecycle(t *testing.T) {
+	u := NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	u.MarkGuestActive()
+
+	u.UpgradeGuest("alice", "alice@example.com", "hashed")
+
+	assert.False(t, u.IsGuest())
+	assert.Equal(t, GuestStatus(""), u.GuestStatus)
+	assert.Nil(t, u.GuestIssuedAt)
+	assert.Nil(t, u.GuestActivatedAt)
+	assert.Nil(t, u.GuestExpiredAt)
 }
