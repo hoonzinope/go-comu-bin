@@ -163,10 +163,13 @@ func (s *ReactionService) withReactionTransaction(ctx context.Context, userID, t
 		if err != nil {
 			return customerror.WrapRepository("select user by id for reaction", err)
 		}
-		if user == nil {
-			return customerror.ErrUserNotFound
-		}
-		postID, err := s.ensureTargetExistsTx(tx, user, targetID, targetType)
+			if user == nil {
+				return customerror.ErrUserNotFound
+			}
+			if err := forbidGuest(user); err != nil {
+				return err
+			}
+			postID, err := s.ensureTargetExistsTx(tx, user, targetID, targetType)
 		if err != nil {
 			return err
 		}

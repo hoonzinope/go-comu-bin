@@ -21,6 +21,7 @@ type User struct {
 	Name             string
 	Email            string
 	Password         string
+	Guest            bool
 	Role             string
 	Status           UserStatus
 	SuspensionReason string
@@ -32,6 +33,10 @@ type User struct {
 
 func (u *User) IsAdmin() bool {
 	return u.Role == "admin"
+}
+
+func (u *User) IsGuest() bool {
+	return u.Guest
 }
 
 func (u *User) IsDeleted() bool {
@@ -67,6 +72,7 @@ func (u *User) SoftDelete() {
 	u.Name = fmt.Sprintf("deleted-user-%d", u.ID)
 	u.Email = ""
 	u.Password = ""
+	u.Guest = false
 	u.Status = UserStatusDeleted
 	u.SuspensionReason = ""
 	u.SuspendedUntil = nil
@@ -81,6 +87,22 @@ func NewUser(name, password string) *User {
 		Name:      name,
 		Email:     "",
 		Password:  password,
+		Guest:     false,
+		Role:      "user",
+		Status:    UserStatusActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func NewGuest(name, email, password string) *User {
+	now := time.Now()
+	return &User{
+		UUID:      uuid.NewString(),
+		Name:      name,
+		Email:     email,
+		Password:  password,
+		Guest:     true,
 		Role:      "user",
 		Status:    UserStatusActive,
 		CreatedAt: now,
@@ -95,9 +117,18 @@ func NewAdmin(name, password string) *User {
 		Name:      name,
 		Email:     "",
 		Password:  password,
+		Guest:     false,
 		Role:      "admin",
 		Status:    UserStatusActive,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+}
+
+func (u *User) UpgradeGuest(name, email, password string) {
+	u.Name = name
+	u.Email = email
+	u.Password = password
+	u.Guest = false
+	u.UpdatedAt = time.Now()
 }

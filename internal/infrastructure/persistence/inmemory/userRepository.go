@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -54,7 +55,7 @@ func (r *UserRepository) save(user *entity.User) (int64, error) {
 	defer r.mu.Unlock()
 
 	for _, existingUser := range r.userDB.Data {
-		if existingUser.UUID == user.UUID || existingUser.Name == user.Name {
+		if existingUser.UUID == user.UUID || existingUser.Name == user.Name || emailsConflict(existingUser.Email, user.Email) {
 			return 0, customerror.ErrUserAlreadyExists
 		}
 	}
@@ -177,7 +178,7 @@ func (r *UserRepository) update(user *entity.User) error {
 			if id == user.ID {
 				continue
 			}
-			if existingUser.UUID == user.UUID || existingUser.Name == user.Name {
+			if existingUser.UUID == user.UUID || existingUser.Name == user.Name || emailsConflict(existingUser.Email, user.Email) {
 				return customerror.ErrUserAlreadyExists
 			}
 		}
@@ -240,4 +241,10 @@ func cloneUser(user *entity.User) *entity.User {
 		out.DeletedAt = &deletedAt
 	}
 	return &out
+}
+
+func emailsConflict(left, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	return left != "" && right != "" && left == right
 }

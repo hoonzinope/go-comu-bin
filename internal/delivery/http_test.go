@@ -33,6 +33,8 @@ const apiV1Prefix = "/api/v1"
 
 type fakeUserUseCase struct {
 	signUp            func(ctx context.Context, username, password string) (string, error)
+	issueGuestAccount func(ctx context.Context) (int64, error)
+	upgradeGuest      func(ctx context.Context, userID int64, username, email, password string) error
 	deleteMe          func(ctx context.Context, userID int64, password string) error
 	getUserSuspension func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error)
 	suspendUser       func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error
@@ -46,6 +48,20 @@ func (f *fakeUserUseCase) SignUp(ctx context.Context, username, password string)
 		return f.signUp(ctx, username, password)
 	}
 	return "ok", nil
+}
+
+func (f *fakeUserUseCase) IssueGuestAccount(ctx context.Context) (int64, error) {
+	if f.issueGuestAccount != nil {
+		return f.issueGuestAccount(ctx)
+	}
+	return 42, nil
+}
+
+func (f *fakeUserUseCase) UpgradeGuest(ctx context.Context, userID int64, username, email, password string) error {
+	if f.upgradeGuest != nil {
+		return f.upgradeGuest(ctx, userID, username, email, password)
+	}
+	return nil
 }
 
 func (f *fakeUserUseCase) DeleteMe(ctx context.Context, userID int64, password string) error {
@@ -521,7 +537,7 @@ func newTestHandler(
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
@@ -552,7 +568,7 @@ func newTestHandlerWithJSONLimit(
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
@@ -583,7 +599,7 @@ func newTestHandlerWithDefaultPageLimit(
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
@@ -618,7 +634,7 @@ func newTestHandlerWithRateLimit(
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
@@ -656,7 +672,7 @@ func newTestHandlerWithAdminUseCases(
 ) http.Handler {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		AdminAuthorizer:    user,
@@ -692,14 +708,14 @@ func doJSONRequestWithAuth(t *testing.T, handler http.Handler, method, path stri
 	if body != nil {
 		require.NoError(t, json.NewEncoder(&buf).Encode(body))
 	}
+
+	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
+	req.Header.Set("Content-Type", "application/json")
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	token, err := tokenProvider.IdToToken(userID)
 	require.NoError(t, err)
 	require.NotNil(t, testSessionRepository)
 	require.NoError(t, testSessionRepository.Save(context.Background(), userID, token, tokenProvider.TTLSeconds()))
-
-	req := httptest.NewRequest(method, apiV1Prefix+path, &buf)
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	rr := httptest.NewRecorder()
@@ -1193,7 +1209,7 @@ func TestHandleUploadAttachment_RejectsOversizedMultipartBeforeUseCase(t *testin
 	user := &fakeUserUseCase{}
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	handler := NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:  sessionUseCase,
 		AdminAuthorizer: user,
@@ -1558,6 +1574,53 @@ func TestHTTP_UserLogin_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Header().Get("Authorization"), "Bearer ")
+}
+
+func TestHTTP_GuestIssue_Success(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{
+		issueGuestAccount: func(ctx context.Context) (int64, error) {
+			return 77, nil
+		},
+	}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/guest", nil)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.Contains(t, rr.Header().Get("Authorization"), "Bearer ")
+	assert.JSONEq(t, `{"login":"ok"}`, rr.Body.String())
+}
+
+func TestHTTP_GuestUpgrade_Success(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{
+		upgradeGuest: func(ctx context.Context, userID int64, username, email, password string) error {
+			assert.Equal(t, int64(1), userID)
+			assert.Equal(t, "alice", username)
+			assert.Equal(t, "alice@example.com", email)
+			assert.Equal(t, "pw", password)
+			return nil
+		},
+	}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/guest/upgrade", map[string]any{
+		"username": "alice",
+		"email":    "alice@example.com",
+		"password": "pw",
+	}, 1)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.JSONEq(t, `{"result":"ok"}`, rr.Body.String())
+}
+
+func TestHTTP_GuestUpgrade_BadRequest_WhenEmailMissing(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/guest/upgrade", map[string]any{
+		"username": "alice",
+		"password": "pw",
+	}, 1)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"username, email and password are required"}`, rr.Body.String())
 }
 
 func TestHTTP_UserLogin_BadRequest_WhenUsernameMissing(t *testing.T) {
@@ -2194,7 +2257,7 @@ func TestHTTP_NotFound_UsesInjectedLogger(t *testing.T) {
 	user := &fakeUserUseCase{}
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
-	sessionUseCase := service.NewSessionService(user, user, tokenProvider, testSessionRepository)
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	logger := &spyLogger{}
 	handler := NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:    sessionUseCase,

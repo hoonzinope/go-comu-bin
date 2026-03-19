@@ -138,7 +138,7 @@ func main() {
 
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	sessionUseCase := service.NewSessionService(userUseCase, userRepository, tokenProvider, sessionRepository)
+	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository)
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase, appLogger)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
 		SessionUseCase:           sessionUseCase,

@@ -277,3 +277,17 @@ func TestReactionService_HiddenBoard_BlockedForNonAdmin(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
+
+func TestReactionService_SetReaction_BlockedForGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	reactionSvc := NewReactionService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy())
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, guestID, boardID, "title", "content")
+
+	_, err = reactionSvc.SetReaction(context.Background(), guestID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
+}

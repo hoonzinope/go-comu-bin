@@ -22,6 +22,14 @@ func (s *stubUserUseCase) SignUp(ctx context.Context, username, password string)
 	return "ok", nil
 }
 
+func (s *stubUserUseCase) IssueGuestAccount(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
+func (s *stubUserUseCase) UpgradeGuest(ctx context.Context, userID int64, username, email, password string) error {
+	return nil
+}
+
 func (s *stubUserUseCase) DeleteMe(ctx context.Context, userID int64, password string) error {
 	if s.deleteMe != nil {
 		return s.deleteMe(ctx, userID, password)
@@ -50,6 +58,10 @@ type stubSessionUseCase struct {
 }
 
 func (s *stubSessionUseCase) Login(ctx context.Context, username, password string) (string, error) {
+	return "", nil
+}
+
+func (s *stubSessionUseCase) IssueGuestToken(ctx context.Context) (string, error) {
 	return "", nil
 }
 

@@ -11,14 +11,16 @@ var _ port.SessionUseCase = (*SessionService)(nil)
 
 type SessionService struct {
 	credentialVerifier port.CredentialVerifier
+	guestIssuer        port.GuestAccountIssuer
 	userRepository     port.UserRepository
 	tokenPort          port.TokenProvider
 	sessionRepository  port.SessionRepository
 }
 
-func NewSessionService(credentialVerifier port.CredentialVerifier, userRepository port.UserRepository, tokenPort port.TokenProvider, sessionRepository port.SessionRepository) *SessionService {
+func NewSessionService(credentialVerifier port.CredentialVerifier, guestIssuer port.GuestAccountIssuer, userRepository port.UserRepository, tokenPort port.TokenProvider, sessionRepository port.SessionRepository) *SessionService {
 	return &SessionService{
 		credentialVerifier: credentialVerifier,
+		guestIssuer:        guestIssuer,
 		userRepository:     userRepository,
 		tokenPort:          tokenPort,
 		sessionRepository:  sessionRepository,
@@ -38,6 +40,26 @@ func (s *SessionService) Login(ctx context.Context, username, password string) (
 
 	if err := s.sessionRepository.Save(ctx, userID, token, s.tokenPort.TTLSeconds()); err != nil {
 		return "", customerror.WrapRepository("save session", err)
+	}
+	return token, nil
+}
+
+func (s *SessionService) IssueGuestToken(ctx context.Context) (string, error) {
+	if s.guestIssuer == nil {
+		return "", customerror.ErrInternalServerError
+	}
+	userID, err := s.guestIssuer.IssueGuestAccount(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	token, err := s.tokenPort.IdToToken(userID)
+	if err != nil {
+		return "", customerror.WrapToken("issue guest token", err)
+	}
+
+	if err := s.sessionRepository.Save(ctx, userID, token, s.tokenPort.TTLSeconds()); err != nil {
+		return "", customerror.WrapRepository("save guest session", err)
 	}
 	return token, nil
 }

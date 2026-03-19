@@ -21,6 +21,42 @@ func TestUserService_SignUp_Success(t *testing.T) {
 	assert.Equal(t, "ok", result)
 }
 
+func TestUserService_IssueGuestAccount_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+
+	userID, err := svc.IssueGuestAccount(context.Background())
+	require.NoError(t, err)
+	assert.NotZero(t, userID)
+
+	user, err := repositories.user.SelectUserByID(context.Background(), userID)
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.True(t, user.IsGuest())
+	assert.NotEmpty(t, user.Email)
+	assert.NotEmpty(t, user.Password)
+}
+
+func TestUserService_IssueGuestAccount_GeneratesUniqueIdentity(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+
+	firstID, err := svc.IssueGuestAccount(context.Background())
+	require.NoError(t, err)
+	secondID, err := svc.IssueGuestAccount(context.Background())
+	require.NoError(t, err)
+	require.NotEqual(t, firstID, secondID)
+
+	first, err := repositories.user.SelectUserByID(context.Background(), firstID)
+	require.NoError(t, err)
+	second, err := repositories.user.SelectUserByID(context.Background(), secondID)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	require.NotNil(t, second)
+	assert.NotEqual(t, first.Name, second.Name)
+	assert.NotEqual(t, first.Email, second.Email)
+}
+
 func TestUserService_SignUp_Duplicate(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
@@ -88,6 +124,21 @@ func TestUserService_DeleteMe_Success(t *testing.T) {
 	require.NoError(t, svc.DeleteMe(context.Background(), user.ID, "pw"))
 }
 
+func TestUserService_DeleteMe_GuestSkipsPasswordVerification(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	err = svc.DeleteMe(context.Background(), guestID, "")
+	require.NoError(t, err)
+
+	deleted, err := repositories.user.SelectUserByID(context.Background(), guestID)
+	require.NoError(t, err)
+	assert.Nil(t, deleted)
+}
+
 func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
@@ -146,6 +197,66 @@ func TestUserService_DeleteMe_InvalidatesCredentialsAfterSoftDelete(t *testing.T
 	_, err = svc.VerifyCredentials(context.Background(), "alice", "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidCredential))
+}
+
+func TestUserService_VerifyCredentials_RejectsGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	_, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	_, err = svc.VerifyCredentials(context.Background(), guest.Name, "pw")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidCredential))
+}
+
+func TestUserService_UpgradeGuest_Success(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	before, err := repositories.user.SelectUserByID(context.Background(), guestID)
+	require.NoError(t, err)
+	require.NotNil(t, before)
+
+	err = svc.UpgradeGuest(context.Background(), guestID, "alice", "alice@example.com", "newpw")
+	require.NoError(t, err)
+
+	after, err := repositories.user.SelectUserByID(context.Background(), guestID)
+	require.NoError(t, err)
+	require.NotNil(t, after)
+	assert.Equal(t, before.UUID, after.UUID)
+	assert.Equal(t, guestID, after.ID)
+	assert.Equal(t, "alice", after.Name)
+	assert.Equal(t, "alice@example.com", after.Email)
+	assert.False(t, after.IsGuest())
+	assert.NotEqual(t, "newpw", after.Password)
+}
+
+func TestUserService_UpgradeGuest_RejectsNonGuest(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+
+	err := svc.UpgradeGuest(context.Background(), userID, "alice2", "alice2@example.com", "newpw")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
+}
+
+func TestUserService_UpgradeGuest_RejectsDuplicateIdentity(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	_, err := svc.SignUp(context.Background(), "alice", "pw")
+	require.NoError(t, err)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	err = svc.UpgradeGuest(context.Background(), guestID, "alice", "alice@example.com", "newpw")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrUserAlreadyExists))
 }
 
 func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {

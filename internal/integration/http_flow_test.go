@@ -123,6 +123,7 @@ func TestIntegration_ForbiddenScenarios(t *testing.T) {
 	assertStatus(t, server.URL, bobToken, http.MethodDelete, fmt.Sprintf("/comments/%s/reactions/me", commentUUID), nil, http.StatusNoContent)
 }
 
+
 func newIntegrationServer(t *testing.T) *httptest.Server {
 	t.Helper()
 
@@ -181,7 +182,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)
-	sessionUseCase := service.NewSessionService(userUseCase, userRepository, tokenProvider, sessionRepository)
+	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository)
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
@@ -226,6 +227,7 @@ func mustSignUp(t *testing.T, baseURL, username, password string) {
 	})
 	assert.Equal(t, http.StatusCreated, status, "signup failed: body=%s", string(body))
 }
+
 
 func mustLogout(t *testing.T, baseURL, token string) {
 	t.Helper()

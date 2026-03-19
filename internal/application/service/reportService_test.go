@@ -7,6 +7,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -82,6 +83,30 @@ func TestReportService_CreateReport_HiddenBoardBlockedForNonAdmin(t *testing.T) 
 	_, err = svc.CreateReport(context.Background(), reporterID, model.ReportTargetPost, mustPostUUID(t, repositories.post, postID), model.ReportReasonSpam, "spam")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
+}
+
+func TestReportService_CreateReport_BlockedForGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewReportServiceWithActionDispatcher(
+		repositories.user,
+		repositories.post,
+		repositories.comment,
+		repositories.report,
+		repositories.unitOfWork,
+		newTestActionDispatcher(t, repositories, newTestCache()),
+		newTestAuthorizationPolicy(),
+	)
+
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	reporterID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	authorID := seedUser(repositories.user, "author", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
+
+	_, err = svc.CreateReport(context.Background(), reporterID, model.ReportTargetPost, mustPostUUID(t, repositories.post, postID), model.ReportReasonSpam, "spam")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestReportService_GetReports_AdminOnly(t *testing.T) {

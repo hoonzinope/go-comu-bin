@@ -85,6 +85,19 @@ func TestPostService_CreatePost_BlockedForSuspendedUser(t *testing.T) {
 	assert.True(t, errors.Is(err, customerror.ErrUserSuspended))
 }
 
+func TestPostService_CreateDraftPost_BlockedForGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	svc := newTestPostService(t, repositories, newTestCache())
+
+	_, err = svc.CreateDraftPost(context.Background(), "title", "content", nil, guestID, mustBoardUUID(t, repositories.board, boardID))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
+}
+
 func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "user", "pw", "user")
@@ -522,6 +535,20 @@ func TestPostService_PublishPost_MakesDraftVisible(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
 	assert.Equal(t, postID, list.Posts[0].UUID)
+}
+
+func TestPostService_PublishPost_BlockedForGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, guestID, boardID, "draft-title", "draft-content")
+	svc := newTestPostService(t, repositories, newTestCache())
+
+	err = svc.PublishPost(context.Background(), mustPostUUID(t, repositories.post, postID), guestID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
 func TestPostService_UpdatePost_RejectsForeignAttachmentReference(t *testing.T) {

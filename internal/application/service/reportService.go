@@ -76,10 +76,13 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterUserID int64, 
 		if err != nil {
 			return customerror.WrapRepository("select user by id for create report", err)
 		}
-		if user == nil {
-			return customerror.ErrUserNotFound
-		}
-		targetID, err := s.resolveVisibleReportTargetIDTx(tx, user, entityTargetType, targetUUID)
+			if user == nil {
+				return customerror.ErrUserNotFound
+			}
+			if err := forbidGuest(user); err != nil {
+				return err
+			}
+			targetID, err := s.resolveVisibleReportTargetIDTx(tx, user, entityTargetType, targetUUID)
 		if err != nil {
 			return err
 		}

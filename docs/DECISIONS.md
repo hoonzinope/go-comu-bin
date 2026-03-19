@@ -2606,3 +2606,54 @@
 - `docs/ARCHITECTURE.md`
 - `internal/delivery/http.go`
 - `internal/delivery/response/types.go`
+
+## 2026-03-19 - anonymous 대신 서버 발급 guest user를 first-class user로 도입한다
+
+상태
+
+- decided
+
+배경
+
+- 비로그인 사용자도 post/comment 쓰기 흐름을 사용할 수 있게 하려면, 현재의 `userID + OwnerOrAdmin` 중심 구조를 완전히 버리거나 우회할 방법이 필요했다.
+- 현재 코드베이스는 `Post`, `Comment`, `Attachment`, `Reaction`, `Report` 전반이 실제 user row와 세션을 전제로 설계돼 있다.
+- 완전 anonymous actor를 새로 도입하면 소유권 증명, 응답 projection, attachment preview 권한 모델까지 넓게 재설계해야 한다.
+
+관찰
+
+- 현재 쓰기 권한 경계는 bearer token -> `user_id` -> `SelectUserByID` -> `CanWrite`/`OwnerOrAdmin` 흐름으로 일관돼 있다.
+- `author_uuid`, `user_uuid` 같은 외부 응답 계약도 실제 user row가 존재한다는 가정 위에 서 있다.
+- 브라우저 최초 방문 시 guest token을 발급받는 흐름이면, 사용자는 가입 여부를 의식하지 않아도 되면서 backend는 기존 소유권 모델을 유지할 수 있다.
+
+결론
+
+- anonymous actor를 별도로 만들지 않고, 서버가 내부 규칙으로 생성하는 `guest user`를 first-class user로 도입한다.
+- guest user도 일반 user와 동일하게 `id`, `uuid`, 세션을 가진다.
+- guest 발급은 전용 API `POST /api/v1/auth/guest`로만 수행한다.
+- guest 식별자(username/email/password)는 서버가 내부적으로 생성하며, 외부에는 노출하지 않는다.
+- guest는 1차에서 post/comment create/update/delete까지만 허용한다.
+- guest는 1차에서 draft/publish, attachment, reaction, report를 사용할 수 없다.
+- guest는 일반 username/password login 대상이 아니다. 발급된 bearer token으로만 사용한다.
+- guest -> 정식 회원 전환은 현재 guest 세션을 유지한 채 `POST /api/v1/auth/guest/upgrade`에서 수행한다.
+- upgrade는 기존 guest user row를 재사용하고, `uuid`, 작성물 소유권, 활성 세션을 유지한다.
+- account delete는 guest에도 동일 endpoint를 허용하되, guest는 비밀값을 모르는 전제를 감안해 현재 token 소유자 인증만으로 삭제 가능하게 둔다.
+- guest 발급은 현재 `user row 생성 -> token 발급 -> session 저장` 순서로 동작하므로, durable session 저장소 단계에서는 발급/세션 기록의 원자성 또는 orphan guest 정리 전략을 별도 설계해야 한다.
+
+후속 작업
+
+- user 모델에 guest 여부 플래그 추가
+- user/session service에 guest 발급 및 upgrade 유스케이스 추가
+- delivery에 guest 발급/upgrade endpoint 추가
+- guest 제한 대상 서비스(post draft/publish, attachment, reaction, report) 테스트와 구현 반영
+- API/ROADMAP/ARCHITECTURE/Swagger 문서 정합성 반영
+
+관련 문서/코드
+
+- `internal/domain/entity/user.go`
+- `internal/application/service/userService.go`
+- `internal/application/service/sessionService.go`
+- `internal/application/service/postService.go`
+- `internal/application/service/attachmentService.go`
+- `internal/application/service/reactionService.go`
+- `internal/application/service/reportService.go`
+- `internal/delivery/http.go`

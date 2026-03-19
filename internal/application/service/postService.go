@@ -114,12 +114,17 @@ func (s *PostService) createPost(ctx context.Context, title, content string, tag
 		if err != nil {
 			return customerror.WrapRepository("select user by id for create post", err)
 		}
-		if user == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.CanWrite(user); err != nil {
-			return err
-		}
+			if user == nil {
+				return customerror.ErrUserNotFound
+			}
+			if draft {
+				if err := forbidGuest(user); err != nil {
+					return err
+				}
+			}
+			if err := s.authorizationPolicy.CanWrite(user); err != nil {
+				return err
+			}
 		board, err := tx.BoardRepository().SelectBoardByUUID(txCtx, boardUUID)
 		if err != nil {
 			return customerror.WrapRepository("select board by uuid for create post", err)
@@ -295,12 +300,15 @@ func (s *PostService) PublishPost(ctx context.Context, postUUID string, authorID
 		if err != nil {
 			return customerror.WrapRepository("select user by id for publish post", err)
 		}
-		if requester == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.CanWrite(requester); err != nil {
-			return err
-		}
+			if requester == nil {
+				return customerror.ErrUserNotFound
+			}
+			if err := forbidGuest(requester); err != nil {
+				return err
+			}
+			if err := s.authorizationPolicy.CanWrite(requester); err != nil {
+				return err
+			}
 		if err := s.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 			return err
 		}

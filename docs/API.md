@@ -32,13 +32,24 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 - `POST /api/v1/signup`
   - `username`은 유니크해야 하며, 중복 시 `409 Conflict`
+- `POST /api/v1/auth/guest`
+  - 서버가 내부 규칙으로 guest 계정을 생성하고 즉시 bearer token을 발급합니다.
+  - guest는 일반 사용자와 동일하게 `id`, `uuid`, 세션을 가지지만, 외부에는 guest용 내부 식별자를 노출하지 않습니다.
+  - guest는 일반 signup 대상이 아니며, 브라우저 최초 방문 시 토큰 발급 용도로만 사용합니다.
 - `POST /api/v1/auth/login`
   - 사용자 미존재 또는 비밀번호 불일치 시 동일하게 `401 Unauthorized`
+  - guest 계정은 username/password 로그인 대상이 아닙니다.
+- `POST /api/v1/auth/guest/upgrade` (인증 필요)
+  - 현재 bearer token 소유자가 guest 계정일 때만 정식 계정으로 승격합니다.
+  - 요청 본문: `username`, `email`, `password`
+  - 승격 시 기존 `id`, `uuid`, 작성물 소유권, 활성 세션은 유지됩니다.
+  - guest가 아닌 사용자가 호출하면 `400 Bad Request`
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)
   - 계정은 soft delete 처리되고, 식별 정보는 익명화됩니다.
   - 탈퇴 성공 시 해당 사용자의 활성 세션 무효화를 시도합니다.
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
+  - guest 계정은 내부 랜덤 비밀번호를 사용자에게 노출하지 않으므로, 현재 token 소유자라면 비밀번호 검증 없이 탈퇴할 수 있습니다.
 - `GET /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자의 현재 제재 상태를 조회합니다.
   - `userUUID`는 유효한 UUID 형식이어야 하며, 형식 오류는 `400 Bad Request`
@@ -56,6 +67,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 - `POST /api/v1/reports` (인증 필요)
   - 신고를 생성합니다.
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - 생성 응답은 운영 리소스 식별자인 숫자 `id`를 반환합니다.
   - 요청 본문: `target_type`, `target_uuid`, `reason_code`, 선택적 `reason_detail`
   - `target_type` 허용값: `post`, `comment`
@@ -120,6 +132,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 게시판이 없으면 `404 Not Found`
 - `POST /api/v1/boards/{boardUUID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - guest 계정도 작성할 수 있습니다.
   - 생성 시점 본문에는 `attachment://{attachmentUUID}` 참조를 포함할 수 없습니다.
   - 첨부가 필요한 글은 먼저 draft를 만든 뒤 첨부 업로드와 본문 수정을 거쳐 publish 해야 합니다.
   - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
@@ -128,6 +141,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 임시저장 글을 생성합니다.
   - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - 생성 시점 본문에는 `attachment://{attachmentUUID}` 참조를 포함할 수 없습니다.
   - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
 - `GET /api/v1/posts/{postUUID}`
@@ -142,13 +156,16 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - `reactions[]`는 `target_uuid`, `user_uuid`, `type`을 기준으로 해석합니다.
 - `POST /api/v1/posts/{postUUID}/publish` (인증 필요, 작성자 또는 admin)
   - `draft -> published` 상태 전이를 수행합니다.
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - 본문에 포함된 `attachment://{attachmentUUID}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
 - `PUT /api/v1/posts/{postUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - guest 계정도 수정할 수 있습니다.
   - 본문에 포함된 `attachment://{attachmentUUID}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
   - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
 - `DELETE /api/v1/posts/{postUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - guest 계정도 삭제할 수 있습니다.
   - 하위 댓글은 soft delete 처리됩니다.
   - 첨부는 orphan 처리되어 cleanup job 대상이 됩니다.
 
@@ -185,6 +202,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - orphan attachment는 owner/admin preview에서는 접근할 수 있습니다.
   - `pending_delete` attachment는 owner/admin preview에서도 접근할 수 없습니다.
 - `POST /api/v1/posts/{postUUID}/attachments/upload` (인증 필요, 작성자 또는 admin)
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - multipart form의 `file`을 업로드하고 attachment 메타데이터를 함께 생성합니다.
   - 현재는 기존 `draft/published post`에 바로 연결하는 방식입니다.
   - 응답에는 본문에 바로 넣을 수 있는 `embed_markdown`이 포함됩니다.
@@ -196,6 +214,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 서버 내부 저장본은 `storage.attachment.imageOptimization` 설정에 따라 `jpeg/jpg`, `png`를 최적화할 수 있습니다.
   - 저장 키는 같은 파일명 충돌을 피하기 위해 내부적으로 랜덤 suffix를 붙여 생성합니다.
 - `DELETE /api/v1/posts/{postUUID}/attachments/{attachmentUUID}` (인증 필요, 작성자 또는 admin)
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - attachment는 즉시 `pending_delete` 상태로 숨겨지고, 실제 파일/메타데이터 hard delete는 cleanup job이 비동기로 수행합니다.
   - 게시글 본문에서 `attachment://{attachmentUUID}` 로 참조 중인 첨부는 삭제할 수 없습니다.
 
@@ -218,10 +237,13 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `POST /api/v1/posts/{postUUID}/comments` (인증 필요)
   - 요청 본문은 `content`, 선택적 `parent_uuid`
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - guest 계정도 작성할 수 있습니다.
 - `PUT /api/v1/comments/{commentUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - guest 계정도 수정할 수 있습니다.
 - `DELETE /api/v1/comments/{commentUUID}` (인증 필요, 작성자 또는 admin)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
+  - guest 계정도 삭제할 수 있습니다.
   - 부모 댓글을 삭제하면 해당 댓글은 `삭제된 댓글` tombstone으로 남습니다.
   - 하위 reply는 그대로 유지되어 계속 조회할 수 있습니다.
 
@@ -230,20 +252,24 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `GET /api/v1/posts/{postUUID}/reactions`
   - 삭제된 게시글이면 `404 Not Found`
 - `PUT /api/v1/posts/{postUUID}/reactions/me` (인증 필요)
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
   - 대상 게시글이 없으면 `404`
 - `DELETE /api/v1/posts/{postUUID}/reactions/me` (인증 필요)
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - 내 리액션 삭제
   - 리액션이 없어도 `204`
   - 대상 게시글이 없으면 `404`
 - `GET /api/v1/comments/{commentUUID}/reactions`
   - 삭제된 댓글이면 `404 Not Found`
 - `PUT /api/v1/comments/{commentUUID}/reactions/me` (인증 필요)
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - 내 리액션 생성 또는 변경
   - 없으면 생성(`201`), 있으면 변경 또는 no-op(`204`)
   - 대상 댓글이 없으면 `404`
 - `DELETE /api/v1/comments/{commentUUID}/reactions/me` (인증 필요)
+  - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
   - 내 리액션 삭제
   - 리액션이 없어도 `204`
   - 대상 댓글이 없으면 `404`

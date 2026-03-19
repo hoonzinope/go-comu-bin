@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -72,6 +74,72 @@ func (s *UserService) SignUp(ctx context.Context, username, password string) (st
 	return "ok", nil
 }
 
+func (s *UserService) IssueGuestAccount(ctx context.Context) (int64, error) {
+	rawSecret := uuid.NewString()
+	hashedPassword, err := s.passwordHasher.Hash(rawSecret)
+	if err != nil {
+		return 0, customerror.Wrap(customerror.ErrInternalServerError, "hash password for guest issue", err)
+	}
+	guestToken := uuid.NewString()
+	newGuest := entity.NewGuest(
+		fmt.Sprintf("guest-%s", guestToken),
+		fmt.Sprintf("guest-%s@example.invalid", guestToken),
+		hashedPassword,
+	)
+
+	var guestID int64
+	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		var repoErr error
+		guestID, repoErr = tx.UserRepository().Save(txCtx, newGuest)
+		if repoErr != nil {
+			if errors.Is(repoErr, customerror.ErrUserAlreadyExists) {
+				return customerror.ErrUserAlreadyExists
+			}
+			return customerror.WrapRepository("save user for guest issue", repoErr)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return guestID, nil
+}
+
+func (s *UserService) UpgradeGuest(ctx context.Context, userID int64, username, email, password string) error {
+	username = normalizeUsername(username)
+	email = strings.TrimSpace(email)
+	if username == "" || email == "" || strings.TrimSpace(password) == "" {
+		return customerror.ErrInvalidInput
+	}
+	hashedPassword, err := s.passwordHasher.Hash(password)
+	if err != nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "hash password for guest upgrade", err)
+	}
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		existingUser, err := tx.UserRepository().SelectUserByID(txCtx, userID)
+		if err != nil {
+			return customerror.WrapRepository("select user by id for guest upgrade", err)
+		}
+		if existingUser == nil {
+			return customerror.ErrUserNotFound
+		}
+		if !existingUser.IsGuest() {
+			return customerror.ErrInvalidInput
+		}
+		upgradedUser := *existingUser
+		upgradedUser.UpgradeGuest(username, email, hashedPassword)
+		if err := tx.UserRepository().Update(txCtx, &upgradedUser); err != nil {
+			if errors.Is(err, customerror.ErrUserAlreadyExists) {
+				return customerror.ErrUserAlreadyExists
+			}
+			return customerror.WrapRepository("update user for guest upgrade", err)
+		}
+		return nil
+	})
+}
+
 func (s *UserService) DeleteMe(ctx context.Context, userID int64, password string) error {
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
@@ -82,12 +150,14 @@ func (s *UserService) DeleteMe(ctx context.Context, userID int64, password strin
 		if existingUser == nil {
 			return customerror.ErrUserNotFound
 		}
-		matched, err := s.passwordHasher.Matches(existingUser.Password, password)
-		if err != nil {
-			return customerror.Wrap(customerror.ErrInternalServerError, "compare password for delete me", err)
-		}
-		if !matched {
-			return customerror.ErrInvalidCredential
+		if !existingUser.IsGuest() {
+			matched, err := s.passwordHasher.Matches(existingUser.Password, password)
+			if err != nil {
+				return customerror.Wrap(customerror.ErrInternalServerError, "compare password for delete me", err)
+			}
+			if !matched {
+				return customerror.ErrInvalidCredential
+			}
 		}
 		existingUser.SoftDelete()
 		if err := tx.UserRepository().Update(txCtx, existingUser); err != nil {
@@ -107,6 +177,9 @@ func (s *UserService) VerifyCredentials(ctx context.Context, username, password 
 		return 0, customerror.WrapRepository("select user by username for verify credentials", err)
 	}
 	if existingUser == nil {
+		return 0, customerror.ErrInvalidCredential
+	}
+	if existingUser.IsGuest() {
 		return 0, customerror.ErrInvalidCredential
 	}
 

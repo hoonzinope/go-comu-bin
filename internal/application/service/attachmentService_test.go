@@ -326,6 +326,20 @@ func TestAttachmentService_DeletePostAttachment_ForbiddenForNonOwner(t *testing.
 	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
+func TestAttachmentService_UploadPostAttachment_BlockedForGuestUser(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewAttachmentService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.unitOfWork, &spyFileStorage{}, newTestCache(), attachmentDefaultMaxSizeBytes, newTestAuthorizationPolicy())
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, guestID, boardID, "title", "content")
+
+	_, err = svc.UploadPostAttachment(context.Background(), mustPostUUID(t, repositories.post, postID), guestID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrForbidden))
+}
+
 func TestAttachmentService_DeletePostAttachment_InvalidatesPostDetailCache(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{}

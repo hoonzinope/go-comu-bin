@@ -48,6 +48,18 @@ definitions:
         example: invalid credential
         type: string
     type: object
+  delivery.guestUpgradeRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+      password:
+        example: pw
+        type: string
+      username:
+        example: alice
+        type: string
+    type: object
   delivery.idResponse:
     properties:
       id:
@@ -658,6 +670,70 @@ paths:
       summary: Resolve Report
       tags:
       - Admin
+  /auth/guest:
+    post:
+      consumes:
+      - application/json
+      description: Create a server-generated guest account and return bearer token
+        in Authorization response header.
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          headers:
+            Authorization:
+              description: Bearer <token>
+              type: string
+          schema:
+            $ref: '#/definitions/delivery.loginResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Issue Guest Token
+      tags:
+      - Auth
+  /auth/guest/upgrade:
+    post:
+      consumes:
+      - application/json
+      description: Upgrade current guest account into a regular account.
+      parameters:
+      - description: Guest upgrade payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.guestUpgradeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.signUpResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upgrade Guest Account
+      tags:
+      - Auth
   /auth/login:
     post:
       consumes:

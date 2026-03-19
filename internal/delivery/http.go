@@ -170,6 +170,8 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.Use(h.rateLimitGinMiddleware())
 	v1.POST("/signup", h.handleUserSignUp)
 	v1.POST("/auth/login", h.handleUserLogin)
+	v1.POST("/auth/guest", h.handleGuestIssue)
+	v1.POST("/auth/guest/upgrade", h.authGinMiddleware, h.handleGuestUpgrade)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
 	v1.POST("/reports", h.authGinMiddleware, h.handleReportCreate)
@@ -298,6 +300,61 @@ func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 	}
 	c.Header("Authorization", "Bearer "+token)
 	c.JSON(http.StatusOK, loginResponse{Login: "ok"})
+}
+
+// handleGuestIssue godoc
+// @Summary Issue Guest Token
+// @Description Create a server-generated guest account and return bearer token in Authorization response header.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Success 201 {object} loginResponse
+// @Header 201 {string} Authorization "Bearer <token>"
+// @Failure 500 {object} errorResponse
+// @Router /auth/guest [post]
+func (h *HTTPHandler) handleGuestIssue(c *gin.Context) {
+	token, err := h.sessionUseCase.IssueGuestToken(c.Request.Context())
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Header("Authorization", "Bearer "+token)
+	c.JSON(http.StatusCreated, loginResponse{Login: "ok"})
+}
+
+// handleGuestUpgrade godoc
+// @Summary Upgrade Guest Account
+// @Description Upgrade current guest account into a regular account.
+// @Tags Auth
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body guestUpgradeRequest true "Guest upgrade payload"
+// @Success 200 {object} signUpResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 409 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /auth/guest/upgrade [post]
+func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	var req guestUpgradeRequest
+	if err := h.decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := h.userUseCase.UpgradeGuest(c.Request.Context(), userID, req.Username, req.Email, req.Password); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, signUpResponse{Result: "ok"})
 }
 
 // handleUserLogout godoc

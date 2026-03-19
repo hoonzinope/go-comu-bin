@@ -13,6 +13,12 @@ type userCredentialRequest struct {
 	Password string `json:"password" example:"pw"`
 }
 
+type guestUpgradeRequest struct {
+	Username string `json:"username" example:"alice"`
+	Email    string `json:"email" example:"alice@example.com"`
+	Password string `json:"password" example:"pw"`
+}
+
 type passwordOnlyRequest struct {
 	Password string `json:"password" example:"pw"`
 }
@@ -68,6 +74,13 @@ func (r userCredentialRequest) validate() error {
 func (r passwordOnlyRequest) validate() error {
 	if r.Password == "" {
 		return errors.New("password is required")
+	}
+	return nil
+}
+
+func (r guestUpgradeRequest) validate() error {
+	if strings.TrimSpace(r.Username) == "" || strings.TrimSpace(r.Email) == "" || strings.TrimSpace(r.Password) == "" {
+		return errors.New("username, email and password are required")
 	}
 	return nil
 }
