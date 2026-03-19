@@ -62,6 +62,18 @@ func (c *SpyCache) DeleteByPrefix(ctx context.Context, prefix string) (int, erro
 	return deleted, nil
 }
 
+func (c *SpyCache) ExistsByPrefix(ctx context.Context, prefix string) (bool, error) {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.store {
+		if strings.HasPrefix(k, prefix) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (c *SpyCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
 	if v, ok, err := c.Get(ctx, key); err != nil {
 		return nil, err

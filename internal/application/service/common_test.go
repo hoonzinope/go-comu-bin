@@ -248,6 +248,12 @@ func (c *errorCache) DeleteByPrefix(ctx context.Context, prefix string) (int, er
 	return 0, c.deleteByPrefixErr
 }
 
+func (c *errorCache) ExistsByPrefix(ctx context.Context, prefix string) (bool, error) {
+	_ = ctx
+	_ = prefix
+	return false, c.getErr
+}
+
 func (c *errorCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
 	_ = ctx
 	_ = key
@@ -300,6 +306,10 @@ func (c *hookCache) Delete(context.Context, string) error {
 
 func (c *hookCache) DeleteByPrefix(context.Context, string) (int, error) {
 	return 0, nil
+}
+
+func (c *hookCache) ExistsByPrefix(context.Context, string) (bool, error) {
+	return false, nil
 }
 
 func (c *hookCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {

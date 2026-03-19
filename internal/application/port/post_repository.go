@@ -17,6 +17,7 @@ type PostRepository interface {
 	SelectPosts(ctx context.Context, boardID int64, limit int, lastID int64) ([]*entity.Post, error)
 	SelectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error)
 	ExistsByBoardID(ctx context.Context, boardID int64) (bool, error)
+	ExistsByAuthorIDIncludingDeleted(ctx context.Context, authorID int64) (bool, error)
 	Update(ctx context.Context, post *entity.Post) error
 	Delete(ctx context.Context, id int64) error
 }

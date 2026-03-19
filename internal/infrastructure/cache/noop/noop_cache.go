@@ -47,6 +47,12 @@ func (n *NoopCache) DeleteByPrefix(ctx context.Context, prefix string) (int, err
 	return 0, nil
 }
 
+func (n *NoopCache) ExistsByPrefix(ctx context.Context, prefix string) (bool, error) {
+	_ = ctx
+	_ = prefix
+	return false, nil
+}
+
 func (n *NoopCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
 	_ = key
 	_ = ttlSeconds

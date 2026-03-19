@@ -11,5 +11,6 @@ type ReportRepository interface {
 	SelectByID(ctx context.Context, id int64) (*entity.Report, error)
 	SelectByReporterAndTarget(ctx context.Context, reporterUserID int64, targetType entity.ReportTargetType, targetID int64) (*entity.Report, error)
 	SelectList(ctx context.Context, status *entity.ReportStatus, limit int, lastID int64) ([]*entity.Report, error)
+	ExistsByReporterUserID(ctx context.Context, reporterUserID int64) (bool, error)
 	Update(ctx context.Context, report *entity.Report) error
 }

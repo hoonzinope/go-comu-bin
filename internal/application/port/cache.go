@@ -8,5 +8,6 @@ type Cache interface {
 	SetWithTTL(ctx context.Context, key string, value interface{}, ttlSeconds int) error
 	Delete(ctx context.Context, key string) error
 	DeleteByPrefix(ctx context.Context, prefix string) (int, error)
+	ExistsByPrefix(ctx context.Context, prefix string) (bool, error)
 	GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error)
 }

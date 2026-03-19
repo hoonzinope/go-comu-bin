@@ -13,4 +13,5 @@ type ReactionRepository interface {
 	GetUserTargetReaction(ctx context.Context, userID, targetID int64, targetType entity.ReactionTargetType) (*entity.Reaction, error)
 	GetByTarget(ctx context.Context, targetID int64, targetType entity.ReactionTargetType) ([]*entity.Reaction, error)
 	GetByTargets(ctx context.Context, targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error)
+	ExistsByUserID(ctx context.Context, userID int64) (bool, error)
 }

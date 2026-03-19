@@ -374,6 +374,10 @@ func (r userTxRepository) SelectUsersByIDsIncludingDeleted(ctx context.Context, 
 	_ = ctx
 	return r.repo.selectUsersByIDsIncludingDeleted(ids)
 }
+func (r userTxRepository) SelectGuestCleanupCandidates(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) ([]*entity.User, error) {
+	_ = ctx
+	return r.repo.selectGuestCleanupCandidates(now, pendingGrace, activeUnusedGrace, limit)
+}
 func (r userTxRepository) Update(ctx context.Context, user *entity.User) error {
 	_ = ctx
 	if r.beforeWrite != nil {
@@ -473,6 +477,10 @@ func (r postTxRepository) SelectPublishedPostsByTagName(ctx context.Context, tag
 func (r postTxRepository) ExistsByBoardID(ctx context.Context, boardID int64) (bool, error) {
 	_ = ctx
 	return r.repo.existsByBoardID(boardID)
+}
+func (r postTxRepository) ExistsByAuthorIDIncludingDeleted(ctx context.Context, authorID int64) (bool, error) {
+	_ = ctx
+	return r.repo.ExistsByAuthorIDIncludingDeleted(ctx, authorID)
 }
 func (r postTxRepository) Update(ctx context.Context, post *entity.Post) error {
 	_ = ctx
@@ -581,6 +589,10 @@ func (r commentTxRepository) SelectVisibleComments(ctx context.Context, postID i
 	_ = ctx
 	return r.repo.selectVisibleComments(postID, limit, lastID)
 }
+func (r commentTxRepository) ExistsByAuthorIDIncludingDeleted(ctx context.Context, authorID int64) (bool, error) {
+	_ = ctx
+	return r.repo.ExistsByAuthorIDIncludingDeleted(ctx, authorID)
+}
 func (r commentTxRepository) Update(ctx context.Context, comment *entity.Comment) error {
 	_ = ctx
 	if r.beforeWrite != nil {
@@ -633,6 +645,10 @@ func (r reactionTxRepository) GetByTarget(ctx context.Context, targetID int64, t
 func (r reactionTxRepository) GetByTargets(ctx context.Context, targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
 	_ = ctx
 	return r.repo.getByTargets(targetIDs, targetType)
+}
+func (r reactionTxRepository) ExistsByUserID(ctx context.Context, userID int64) (bool, error) {
+	_ = ctx
+	return r.repo.ExistsByUserID(ctx, userID)
 }
 
 type attachmentTxRepository struct {
@@ -709,6 +725,10 @@ func (r reportTxRepository) SelectByReporterAndTarget(ctx context.Context, repor
 func (r reportTxRepository) SelectList(ctx context.Context, status *entity.ReportStatus, limit int, lastID int64) ([]*entity.Report, error) {
 	_ = ctx
 	return r.repo.selectList(status, limit, lastID)
+}
+func (r reportTxRepository) ExistsByReporterUserID(ctx context.Context, reporterUserID int64) (bool, error) {
+	_ = ctx
+	return r.repo.ExistsByReporterUserID(ctx, reporterUserID)
 }
 
 func (r reportTxRepository) Update(ctx context.Context, report *entity.Report) error {

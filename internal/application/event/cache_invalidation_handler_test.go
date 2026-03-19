@@ -137,6 +137,9 @@ func (c *recordingCache) DeleteByPrefix(ctx context.Context, prefix string) (int
 	_ = prefix
 	return 0, nil
 }
+func (c *recordingCache) ExistsByPrefix(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (c *recordingCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
 	return loader(ctx)
 }

@@ -131,13 +131,13 @@ func main() {
 		authorizationPolicy,
 		appLogger,
 	)
-	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase); err != nil {
+	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	guestCleanupUseCase := service.NewGuestCleanupService(userRepository, postRepository, commentRepository, reactionRepository, reportRepository, sessionRepository, unitOfWork)
+	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase, guestCleanupUseCase); err != nil {
 		slog.Error("failed to start background jobs", "error", err)
 		os.Exit(1)
 	}
-
-	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
-	sessionRepository := auth.NewCacheSessionRepository(cache)
 	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository)
 	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase, appLogger)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
@@ -338,7 +338,7 @@ func newFileStorage(cfg *config.Config) (port.FileStorage, error) {
 	}
 }
 
-func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase) error {
+func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase, guestCleanupUseCase port.GuestCleanupUseCase) error {
 	if !cfg.Jobs.Enabled {
 		return nil
 	}
@@ -352,6 +352,25 @@ func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.C
 			Interval: interval,
 			Run: func(ctx context.Context) error {
 				_, err := attachmentCleanupUseCase.CleanupAttachments(ctx, time.Now(), gracePeriod, batchSize)
+				return err
+			},
+		}); err != nil {
+			return err
+		}
+	}
+	if cfg.Jobs.GuestCleanup.Enabled {
+		interval := time.Duration(cfg.Jobs.GuestCleanup.IntervalSeconds) * time.Second
+		pendingGrace := time.Duration(cfg.Jobs.GuestCleanup.PendingGracePeriodSeconds) * time.Second
+		activeUnusedGrace := time.Duration(cfg.Jobs.GuestCleanup.ActiveUnusedGracePeriodSeconds) * time.Second
+		batchSize := cfg.Jobs.GuestCleanup.BatchSize
+		if err := runner.Register(jobrunner.Job{
+			Name:     "guest-cleanup",
+			Interval: interval,
+			Run: func(ctx context.Context) error {
+				if guestCleanupUseCase == nil {
+					return nil
+				}
+				_, err := guestCleanupUseCase.CleanupGuests(ctx, time.Now(), pendingGrace, activeUnusedGrace, batchSize)
 				return err
 			},
 		}); err != nil {

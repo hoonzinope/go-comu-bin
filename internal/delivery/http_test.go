@@ -147,6 +147,10 @@ func (f *fakeUserUseCase) SelectUsersByIDsIncludingDeleted(_ context.Context, id
 	return out, nil
 }
 
+func (f *fakeUserUseCase) SelectGuestCleanupCandidates(_ context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) ([]*entity.User, error) {
+	return []*entity.User{}, nil
+}
+
 func (f *fakeUserUseCase) Update(context.Context, *entity.User) error {
 	return nil
 }

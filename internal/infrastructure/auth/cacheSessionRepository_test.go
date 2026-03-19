@@ -37,6 +37,11 @@ func (c *recordingCache) DeleteByPrefix(ctx context.Context, prefix string) (int
 	return 0, nil
 }
 
+func (c *recordingCache) ExistsByPrefix(ctx context.Context, prefix string) (bool, error) {
+	c.lastCtx = ctx
+	return true, nil
+}
+
 func (c *recordingCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
 	c.lastCtx = ctx
 	return loader(ctx)
@@ -56,5 +61,9 @@ func TestCacheSessionRepository_ForwardsContextToCache(t *testing.T) {
 	assert.Same(t, ctx, cache.lastCtx)
 
 	require.NoError(t, repo.DeleteByUser(ctx, 1))
+	assert.Same(t, ctx, cache.lastCtx)
+
+	_, err = repo.ExistsByUser(ctx, 1)
+	require.NoError(t, err)
 	assert.Same(t, ctx, cache.lastCtx)
 }

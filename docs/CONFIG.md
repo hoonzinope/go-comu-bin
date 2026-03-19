@@ -73,6 +73,12 @@ jobs:
     intervalSeconds: 600
     gracePeriodSeconds: 600
     batchSize: 50
+  guestCleanup:
+    enabled: true
+    intervalSeconds: 600
+    pendingGracePeriodSeconds: 600
+    activeUnusedGracePeriodSeconds: 86400
+    batchSize: 50
 ```
 
 ## 검증 규칙
@@ -111,6 +117,10 @@ jobs:
 - `jobs.attachmentCleanup.intervalSeconds`: `jobs.enabled=true` 이고 `jobs.attachmentCleanup.enabled=true`일 때 `> 0`
 - `jobs.attachmentCleanup.gracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.attachmentCleanup.enabled=true`일 때 `> 0`
 - `jobs.attachmentCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.attachmentCleanup.enabled=true`일 때 `> 0`
+- `jobs.guestCleanup.intervalSeconds`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
+- `jobs.guestCleanup.pendingGracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
+- `jobs.guestCleanup.activeUnusedGracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
+- `jobs.guestCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
 
@@ -143,6 +153,9 @@ jobs:
 - background jobs on/off: `cfg.Jobs.Enabled`
 - attachment cleanup 주기/유예/배치 크기: `cfg.Jobs.AttachmentCleanup.*`
   - 기본 유예는 `600`초이며, orphan와 `pending_delete` attachment 모두 같은 cleanup 주기를 사용합니다.
+- guest cleanup 주기/유예/배치 크기: `cfg.Jobs.GuestCleanup.*`
+  - `pending`/`expired` guest는 `pendingGracePeriodSeconds` 기준으로 정리합니다.
+  - 세션 없음 + 작성물 없음 상태의 `active guest`는 `activeUnusedGracePeriodSeconds` 기준으로 정리합니다.
 
 ## 운영 메모
 

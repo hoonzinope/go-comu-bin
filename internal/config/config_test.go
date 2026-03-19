@@ -38,6 +38,11 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
 	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
 	v.Set("jobs.attachmentCleanup.batchSize", 50)
+	v.Set("jobs.guestCleanup.enabled", true)
+	v.Set("jobs.guestCleanup.intervalSeconds", 600)
+	v.Set("jobs.guestCleanup.pendingGracePeriodSeconds", 600)
+	v.Set("jobs.guestCleanup.activeUnusedGracePeriodSeconds", 86400)
+	v.Set("jobs.guestCleanup.batchSize", 50)
 
 	cfg, err := loadFromViper(v)
 	require.NoError(t, err)
@@ -68,6 +73,10 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.True(t, cfg.Jobs.AttachmentCleanup.Enabled)
 	assert.Equal(t, 600, cfg.Jobs.AttachmentCleanup.IntervalSeconds)
 	assert.Equal(t, 600, cfg.Jobs.AttachmentCleanup.GracePeriodSeconds)
+	assert.True(t, cfg.Jobs.GuestCleanup.Enabled)
+	assert.Equal(t, 600, cfg.Jobs.GuestCleanup.IntervalSeconds)
+	assert.Equal(t, 600, cfg.Jobs.GuestCleanup.PendingGracePeriodSeconds)
+	assert.Equal(t, 86400, cfg.Jobs.GuestCleanup.ActiveUnusedGracePeriodSeconds)
 }
 
 func TestLoad_LoadsConfigFileFromWorkingDirectory(t *testing.T) {
@@ -488,11 +497,40 @@ func TestLoadFromViper_AllowsZeroCleanupConfigWhenJobsDisabled(t *testing.T) {
 	v.Set("jobs.attachmentCleanup.intervalSeconds", 0)
 	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 0)
 	v.Set("jobs.attachmentCleanup.batchSize", 0)
+	v.Set("jobs.guestCleanup.enabled", false)
+	v.Set("jobs.guestCleanup.intervalSeconds", 0)
+	v.Set("jobs.guestCleanup.pendingGracePeriodSeconds", 0)
+	v.Set("jobs.guestCleanup.activeUnusedGracePeriodSeconds", 0)
+	v.Set("jobs.guestCleanup.batchSize", 0)
 
 	cfg, err := loadFromViper(v)
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 	assert.False(t, cfg.Jobs.Enabled)
+}
+
+func TestLoadFromViper_InvalidGuestCleanupInterval(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.Set("jobs.attachmentCleanup.batchSize", 50)
+	v.Set("jobs.guestCleanup.enabled", true)
+	v.Set("jobs.guestCleanup.intervalSeconds", 0)
+	v.Set("jobs.guestCleanup.pendingGracePeriodSeconds", 600)
+	v.Set("jobs.guestCleanup.activeUnusedGracePeriodSeconds", 3600)
+	v.Set("jobs.guestCleanup.batchSize", 50)
+
+	cfg, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
 }
 
 func TestLoadFromViper_RequiresBootstrapCredentialsWhenEnabled(t *testing.T) {

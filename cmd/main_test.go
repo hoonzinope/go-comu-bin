@@ -51,6 +51,10 @@ func (r *stubUserRepository) SelectUsersByIDsIncludingDeleted(context.Context, [
 	return map[int64]*entity.User{}, nil
 }
 
+func (r *stubUserRepository) SelectGuestCleanupCandidates(context.Context, time.Time, time.Duration, time.Duration, int) ([]*entity.User, error) {
+	return []*entity.User{}, nil
+}
+
 func (r *stubUserRepository) Update(context.Context, *entity.User) error {
 	return nil
 }
@@ -137,6 +141,28 @@ func (s *recordingAttachmentCleanupUseCase) CleanupAttachments(ctx context.Conte
 	return 0, nil
 }
 
+type stubGuestCleanupUseCase struct{}
+
+func (s stubGuestCleanupUseCase) CleanupGuests(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) (int, error) {
+	return 0, nil
+}
+
+type recordingGuestCleanupUseCase struct {
+	lastCtx context.Context
+	called  chan struct{}
+}
+
+func (s *recordingGuestCleanupUseCase) CleanupGuests(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) (int, error) {
+	s.lastCtx = ctx
+	if s.called != nil {
+		select {
+		case s.called <- struct{}{}:
+		default:
+		}
+	}
+	return 0, nil
+}
+
 func TestMainHelpers(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Delivery.HTTP.Port = 18577
@@ -178,7 +204,7 @@ func TestStartBackgroundJobs_ReturnsNilWhenDisabled(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Jobs.Enabled = false
 
-	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{})
+	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{})
 	require.NoError(t, err)
 }
 
@@ -187,7 +213,7 @@ func TestStartBackgroundJobs_ReturnsNilWhenCleanupJobDisabled(t *testing.T) {
 	cfg.Jobs.Enabled = true
 	cfg.Jobs.AttachmentCleanup.Enabled = false
 
-	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{})
+	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{})
 	require.NoError(t, err)
 }
 
@@ -203,13 +229,40 @@ func TestStartBackgroundJobs_PassesParentContextToCleanupUseCase(t *testing.T) {
 	defer cancel()
 	recorder := &recordingAttachmentCleanupUseCase{called: make(chan struct{}, 1)}
 
-	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, recorder)
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, recorder, stubGuestCleanupUseCase{})
 	require.NoError(t, err)
 
 	select {
 	case <-recorder.called:
 	case <-time.After(1500 * time.Millisecond):
 		t.Fatal("cleanup job was not triggered")
+	}
+
+	require.NotNil(t, recorder.lastCtx)
+	assert.Same(t, parentCtx, recorder.lastCtx)
+}
+
+func TestStartBackgroundJobs_PassesParentContextToGuestCleanupUseCase(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Jobs.Enabled = true
+	cfg.Jobs.AttachmentCleanup.Enabled = false
+	cfg.Jobs.GuestCleanup.Enabled = true
+	cfg.Jobs.GuestCleanup.IntervalSeconds = 1
+	cfg.Jobs.GuestCleanup.PendingGracePeriodSeconds = 10
+	cfg.Jobs.GuestCleanup.ActiveUnusedGracePeriodSeconds = 60
+	cfg.Jobs.GuestCleanup.BatchSize = 5
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	recorder := &recordingGuestCleanupUseCase{called: make(chan struct{}, 1)}
+
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, recorder)
+	require.NoError(t, err)
+
+	select {
+	case <-recorder.called:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("guest cleanup job was not triggered")
 	}
 
 	require.NotNil(t, recorder.lastCtx)

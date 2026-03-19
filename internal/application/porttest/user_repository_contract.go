@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
@@ -163,5 +164,41 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.Len(t, users, 2)
 		assert.Equal(t, "alice", users[aliceID].Name)
 		assert.Equal(t, bob.UUID, users[bobID].UUID)
+	})
+
+	t.Run("select guest cleanup candidates includes stale pending expired and unused active guests", func(t *testing.T) {
+		repo := newRepository()
+		now := time.Now()
+
+		pendingGuest := entity.NewGuest("guest-pending", "guest-pending@example.invalid", "pw")
+		pendingTime := now.Add(-2 * time.Hour)
+		pendingGuest.GuestIssuedAt = &pendingTime
+		pendingID, err := repo.Save(context.Background(), pendingGuest)
+		require.NoError(t, err)
+
+		expiredGuest := entity.NewGuest("guest-expired", "guest-expired@example.invalid", "pw")
+		expiredGuest.MarkGuestExpired()
+		expiredTime := now.Add(-3 * time.Hour)
+		expiredGuest.GuestExpiredAt = &expiredTime
+		expiredID, err := repo.Save(context.Background(), expiredGuest)
+		require.NoError(t, err)
+
+		activeGuest := entity.NewGuest("guest-active", "guest-active@example.invalid", "pw")
+		activeGuest.MarkGuestActive()
+		activeTime := now.Add(-4 * time.Hour)
+		activeGuest.GuestActivatedAt = &activeTime
+		activeID, err := repo.Save(context.Background(), activeGuest)
+		require.NoError(t, err)
+
+		recentGuest := entity.NewGuest("guest-recent", "guest-recent@example.invalid", "pw")
+		recentGuest.MarkGuestActive()
+		recentID, err := repo.Save(context.Background(), recentGuest)
+		require.NoError(t, err)
+
+		items, err := repo.SelectGuestCleanupCandidates(context.Background(), now, time.Hour, 90*time.Minute, 10)
+		require.NoError(t, err)
+		require.Len(t, items, 3)
+		assert.Equal(t, []int64{activeID, expiredID, pendingID}, []int64{items[0].ID, items[1].ID, items[2].ID})
+		assert.NotContains(t, []int64{items[0].ID, items[1].ID, items[2].ID}, recentID)
 	})
 }

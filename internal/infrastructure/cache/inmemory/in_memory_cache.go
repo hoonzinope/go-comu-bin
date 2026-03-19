@@ -104,6 +104,24 @@ func (c *InMemoryCache) DeleteByPrefix(ctx context.Context, prefix string) (int,
 	return deleted, nil
 }
 
+func (c *InMemoryCache) ExistsByPrefix(ctx context.Context, prefix string) (bool, error) {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for key, entry := range c.store {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		if entry.hasExpiry && time.Now().After(entry.expiresAt) {
+			c.deleteLocked(key)
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 func (c *InMemoryCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
 	if value, ok, err := c.Get(ctx, key); err != nil {
 		return nil, err

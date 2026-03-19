@@ -84,6 +84,13 @@ type Config struct {
 			GracePeriodSeconds int  `yaml:"gracePeriodSeconds"`
 			BatchSize          int  `yaml:"batchSize"`
 		} `yaml:"attachmentCleanup"`
+		GuestCleanup struct {
+			Enabled                        bool `yaml:"enabled"`
+			IntervalSeconds                int  `yaml:"intervalSeconds"`
+			PendingGracePeriodSeconds      int  `yaml:"pendingGracePeriodSeconds"`
+			ActiveUnusedGracePeriodSeconds int  `yaml:"activeUnusedGracePeriodSeconds"`
+			BatchSize                      int  `yaml:"batchSize"`
+		} `yaml:"guestCleanup"`
 	} `yaml:"jobs"`
 }
 
@@ -130,6 +137,11 @@ func Load() (*Config, error) {
 		"jobs.attachmentCleanup.intervalSeconds",
 		"jobs.attachmentCleanup.gracePeriodSeconds",
 		"jobs.attachmentCleanup.batchSize",
+		"jobs.guestCleanup.enabled",
+		"jobs.guestCleanup.intervalSeconds",
+		"jobs.guestCleanup.pendingGracePeriodSeconds",
+		"jobs.guestCleanup.activeUnusedGracePeriodSeconds",
+		"jobs.guestCleanup.batchSize",
 	)
 
 	if err := v.ReadInConfig(); err != nil {
@@ -175,6 +187,11 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("jobs.attachmentCleanup.intervalSeconds", 600)
 	v.SetDefault("jobs.attachmentCleanup.gracePeriodSeconds", 600)
 	v.SetDefault("jobs.attachmentCleanup.batchSize", 50)
+	v.SetDefault("jobs.guestCleanup.enabled", true)
+	v.SetDefault("jobs.guestCleanup.intervalSeconds", 600)
+	v.SetDefault("jobs.guestCleanup.pendingGracePeriodSeconds", 600)
+	v.SetDefault("jobs.guestCleanup.activeUnusedGracePeriodSeconds", 86400)
+	v.SetDefault("jobs.guestCleanup.batchSize", 50)
 
 	cfg := &Config{}
 	if err := v.UnmarshalExact(cfg); err != nil {
@@ -305,6 +322,20 @@ func validate(cfg *Config) error {
 		}
 		if cfg.Jobs.AttachmentCleanup.BatchSize <= 0 {
 			return fmt.Errorf("invalid jobs.attachmentCleanup.batchSize: %d (must be > 0)", cfg.Jobs.AttachmentCleanup.BatchSize)
+		}
+	}
+	if cfg.Jobs.Enabled && cfg.Jobs.GuestCleanup.Enabled {
+		if cfg.Jobs.GuestCleanup.IntervalSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.guestCleanup.intervalSeconds: %d (must be > 0)", cfg.Jobs.GuestCleanup.IntervalSeconds)
+		}
+		if cfg.Jobs.GuestCleanup.PendingGracePeriodSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.guestCleanup.pendingGracePeriodSeconds: %d (must be > 0)", cfg.Jobs.GuestCleanup.PendingGracePeriodSeconds)
+		}
+		if cfg.Jobs.GuestCleanup.ActiveUnusedGracePeriodSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.guestCleanup.activeUnusedGracePeriodSeconds: %d (must be > 0)", cfg.Jobs.GuestCleanup.ActiveUnusedGracePeriodSeconds)
+		}
+		if cfg.Jobs.GuestCleanup.BatchSize <= 0 {
+			return fmt.Errorf("invalid jobs.guestCleanup.batchSize: %d (must be > 0)", cfg.Jobs.GuestCleanup.BatchSize)
 		}
 	}
 	if cfg.Admin.Bootstrap.Enabled {

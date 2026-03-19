@@ -166,6 +166,21 @@ func (r *ReactionRepository) GetByTargets(ctx context.Context, targetIDs []int64
 	return r.getByTargets(targetIDs, targetType)
 }
 
+func (r *ReactionRepository) ExistsByUserID(ctx context.Context, userID int64) (bool, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, reaction := range r.reactionDB.Data {
+		if reaction.UserID == userID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *ReactionRepository) getByTargets(targetIDs []int64, targetType entity.ReactionTargetType) (map[int64][]*entity.Reaction, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

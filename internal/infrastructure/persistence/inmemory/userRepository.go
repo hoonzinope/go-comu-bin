@@ -2,8 +2,10 @@ package inmemory
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
@@ -162,6 +164,39 @@ func (r *UserRepository) selectUsersByIDsIncludingDeleted(ids []int64) (map[int6
 	return out, nil
 }
 
+func (r *UserRepository) SelectGuestCleanupCandidates(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) ([]*entity.User, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectGuestCleanupCandidates(now, pendingGrace, activeUnusedGrace, limit)
+}
+
+func (r *UserRepository) selectGuestCleanupCandidates(now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) ([]*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if limit <= 0 {
+		return []*entity.User{}, nil
+	}
+	items := make([]*entity.User, 0, limit)
+	for _, user := range r.userDB.Data {
+		if user == nil || !user.IsGuest() || user.IsDeleted() {
+			continue
+		}
+		if !guestEligibleForCleanup(user, now, pendingGrace, activeUnusedGrace) {
+			continue
+		}
+		items = append(items, cloneUser(user))
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return guestCleanupEligibleAt(items[i]).Before(guestCleanupEligibleAt(items[j]))
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
 func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
 	_ = ctx
 	r.coordinator.enter()
@@ -236,6 +271,18 @@ func cloneUser(user *entity.User) *entity.User {
 		suspendedUntil := *user.SuspendedUntil
 		out.SuspendedUntil = &suspendedUntil
 	}
+	if user.GuestIssuedAt != nil {
+		guestIssuedAt := *user.GuestIssuedAt
+		out.GuestIssuedAt = &guestIssuedAt
+	}
+	if user.GuestActivatedAt != nil {
+		guestActivatedAt := *user.GuestActivatedAt
+		out.GuestActivatedAt = &guestActivatedAt
+	}
+	if user.GuestExpiredAt != nil {
+		guestExpiredAt := *user.GuestExpiredAt
+		out.GuestExpiredAt = &guestExpiredAt
+	}
 	if user.DeletedAt != nil {
 		deletedAt := *user.DeletedAt
 		out.DeletedAt = &deletedAt
@@ -247,4 +294,51 @@ func emailsConflict(left, right string) bool {
 	left = strings.TrimSpace(left)
 	right = strings.TrimSpace(right)
 	return left != "" && right != "" && left == right
+}
+
+func guestEligibleForCleanup(user *entity.User, now time.Time, pendingGrace, activeUnusedGrace time.Duration) bool {
+	switch user.GuestStatus {
+	case entity.GuestStatusPending:
+		if user.GuestIssuedAt == nil {
+			return false
+		}
+		return !user.GuestIssuedAt.Add(pendingGrace).After(now)
+	case entity.GuestStatusExpired:
+		if user.GuestExpiredAt == nil {
+			return false
+		}
+		return !user.GuestExpiredAt.Add(pendingGrace).After(now)
+	case entity.GuestStatusActive:
+		basis := user.GuestActivatedAt
+		if basis == nil {
+			basis = user.GuestIssuedAt
+		}
+		if basis == nil {
+			return false
+		}
+		return !basis.Add(activeUnusedGrace).After(now)
+	default:
+		return false
+	}
+}
+
+func guestCleanupEligibleAt(user *entity.User) time.Time {
+	switch user.GuestStatus {
+	case entity.GuestStatusPending:
+		if user.GuestIssuedAt != nil {
+			return *user.GuestIssuedAt
+		}
+	case entity.GuestStatusExpired:
+		if user.GuestExpiredAt != nil {
+			return *user.GuestExpiredAt
+		}
+	case entity.GuestStatusActive:
+		if user.GuestActivatedAt != nil {
+			return *user.GuestActivatedAt
+		}
+		if user.GuestIssuedAt != nil {
+			return *user.GuestIssuedAt
+		}
+	}
+	return user.CreatedAt
 }

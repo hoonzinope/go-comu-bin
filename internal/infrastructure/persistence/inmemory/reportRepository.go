@@ -104,6 +104,21 @@ func (r *ReportRepository) SelectList(ctx context.Context, status *entity.Report
 	return r.selectList(status, limit, lastID)
 }
 
+func (r *ReportRepository) ExistsByReporterUserID(ctx context.Context, reporterUserID int64) (bool, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, report := range r.reportDB.Data {
+		if report.ReporterUserID == reporterUserID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *ReportRepository) selectList(status *entity.ReportStatus, limit int, lastID int64) ([]*entity.Report, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

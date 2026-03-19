@@ -2637,15 +2637,24 @@
 - guest -> 정식 회원 전환은 `POST /api/v1/auth/guest/upgrade`에서 수행하고, 성공 시 현재 guest token은 폐기한 뒤 새 bearer token을 재발급한다.
 - upgrade는 기존 guest user row를 재사용하고, `uuid`, 작성물 소유권을 유지한다. 세션은 rotation한다.
 - account delete는 guest에 열지 않는다. guest self-delete는 `403 Forbidden`으로 거절한다.
-- guest 발급은 현재 `user row 생성 -> token 발급 -> session 저장` 순서로 동작하므로, durable session 저장소 단계에서는 발급/세션 기록의 원자성 또는 orphan guest 정리 전략을 별도 설계해야 한다.
+- guest lifecycle은 `pending`, `active`, `expired` 3상태로 둔다.
+- guest 발급은 `pending guest 생성 -> token 발급 -> session 저장 -> active 전환` 순서로 처리한다.
+- session 저장 실패 시 guest는 `expired`로 즉시 전환하고 에러를 반환한다.
+- `pending`/`expired` guest는 인증과 write 권한에서 유효 사용자로 보지 않는다.
+- durable session 저장소 전환 전에도 같은 상태 모델을 유지하고, session 저장소가 별도 시스템이더라도 동일한 보상 흐름으로 맞춘다.
+- guest cleanup은 background job으로 처리한다.
+- cleanup 대상은 오래된 `pending`/`expired` guest와, 세션 없음 + 작성물 없음 상태로 유예 시간이 지난 `active` guest다.
+- 작성물이 있는 guest는 자동 삭제하지 않는다.
+- guest cleanup 삭제 방식은 hard delete가 아니라 기존 user soft delete 정책을 재사용한다.
 
 후속 작업
 
-- user 모델에 guest 여부 플래그 추가
-- user/session service에 guest 발급 및 upgrade 유스케이스 추가
-- delivery에 guest 발급/upgrade endpoint 추가
-- guest 제한 대상 서비스(post draft/publish, attachment, reaction, report) 테스트와 구현 반영
-- API/ROADMAP/ARCHITECTURE/Swagger 문서 정합성 반영
+- user 모델에 guest lifecycle 상태/시점 필드 추가
+- user/session service에 guest lifecycle 전이와 cleanup 유스케이스 추가
+- user repository에 guest cleanup 후보 조회 규약 추가
+- background job runner에 guest cleanup job 등록
+- guest 허용/차단 서비스에서 `active guest`만 통과하도록 테스트와 구현 반영
+- API/ROADMAP/ARCHITECTURE/CONFIG 문서 정합성 반영
 
 관련 문서/코드
 

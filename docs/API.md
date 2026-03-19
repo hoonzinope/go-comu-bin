@@ -36,6 +36,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 서버가 내부 규칙으로 guest 계정을 생성하고 즉시 bearer token을 발급합니다.
   - guest는 일반 사용자와 동일하게 `id`, `uuid`, 세션을 가지지만, 외부에는 guest용 내부 식별자를 노출하지 않습니다.
   - guest는 일반 signup 대상이 아니며, 브라우저 최초 방문 시 토큰 발급 용도로만 사용합니다.
+  - 내부 lifecycle은 `pending -> active -> expired`를 사용하며, session 저장이 완료된 `active guest`만 인증/쓰기 대상이 됩니다.
 - `POST /api/v1/auth/login`
   - 사용자 미존재 또는 비밀번호 불일치 시 동일하게 `401 Unauthorized`
   - guest 계정은 username/password 로그인 대상이 아닙니다.
@@ -51,6 +52,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 탈퇴 성공 시 해당 사용자의 활성 세션 무효화를 시도합니다.
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
   - guest 계정은 self-delete를 허용하지 않으며 `403 Forbidden`을 반환합니다.
+  - 내부 정리 대상 guest는 background cleanup job이 soft delete 처리합니다.
 - `GET /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자의 현재 제재 상태를 조회합니다.
   - `userUUID`는 유효한 UUID 형식이어야 하며, 형식 오류는 `400 Bad Request`

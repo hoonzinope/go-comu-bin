@@ -35,6 +35,10 @@ func (r *CacheSessionRepository) Exists(ctx context.Context, userID int64, token
 	return exists, err
 }
 
+func (r *CacheSessionRepository) ExistsByUser(ctx context.Context, userID int64) (bool, error) {
+	return r.cache.ExistsByPrefix(ctx, sessionCachePrefix(userID))
+}
+
 func sessionCachePrefix(userID int64) string {
 	return fmt.Sprintf("session:user:%d:", userID)
 }

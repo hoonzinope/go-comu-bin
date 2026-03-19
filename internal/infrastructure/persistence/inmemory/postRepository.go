@@ -269,6 +269,21 @@ func (r *PostRepository) ExistsByBoardID(ctx context.Context, boardID int64) (bo
 	return r.existsByBoardID(boardID)
 }
 
+func (r *PostRepository) ExistsByAuthorIDIncludingDeleted(ctx context.Context, authorID int64) (bool, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, post := range r.postDB.Data {
+		if post.AuthorID == authorID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *PostRepository) existsByBoardID(boardID int64) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
