@@ -2564,3 +2564,45 @@
 - `internal/application/service/cursor_list.go`
 - `internal/delivery/http_requests.go`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-19 - 공개 식별자 UUID 정책은 운영 리소스 예외만 남기고 문서 기준을 닫는다
+
+상태
+
+- decided
+
+배경
+
+- `docs/ROADMAP.md`의 Step 2에는 `공개 UUID 전환 이후 문서/운영 규칙 잔여 정리`가 아직 남아 있다.
+- 공개 path/body 계약은 대부분 UUID로 전환됐지만, 문서에는 운영 리소스의 숫자 ID 예외와 일부 응답 필드 규칙이 충분히 정리돼 있지 않았다.
+- 이 상태로 두면 `Report`, `Reaction`, `Tag` 같은 식별자 노출이 UUID 정책의 미완성인지 의도된 예외인지 다시 해석해야 한다.
+
+관찰
+
+- 공개 도메인 리소스(`User`, `Board`, `Post`, `Comment`, `Attachment`)는 path/body/response 참조가 이미 UUID 중심으로 정리돼 있다.
+- 운영 리소스인 `reportID`, `messageID`는 추적성과 수동 운영 편의 때문에 숫자/opaque ID 유지가 실제 사용성에 유리하다.
+- `Reaction.id`, `Tag.id`는 외부에서 후속 호출의 대상이 되는 식별자가 아니며, 공개 계약상 필수성이 낮다.
+- admin 목록 API는 운영 추적 목적이라 `last_id` 기반을 유지하고, 공개 목록 API만 opaque `cursor`를 사용한다.
+
+결론
+
+- 공개 도메인 리소스 식별자는 UUID로 통일한다.
+- 운영 리소스 식별자인 `reportID`, `messageID`는 UUID 정책의 예외로 유지한다.
+- 운영 목록 API(`admin/reports`, `admin/outbox/dead`)는 `last_id` 기반 pagination을 유지하고, 공개 목록 API만 opaque `cursor`를 사용한다.
+- 공개 응답에서 후속 참조에 쓰이지 않는 내부 숫자 식별자(`Reaction.id`, `Tag.id`)는 문서상 기본 식별자 정책의 예외로 취급하지 않는다.
+- 문서는 "공개 도메인 리소스는 UUID, 운영 리소스만 추적용 ID 예외" 기준으로 정렬한다.
+- 위 정리가 반영되면 ROADMAP의 `공개 UUID 전환 이후 문서/운영 규칙 잔여 정리` 항목은 완료로 본다.
+
+후속 작업
+
+- `docs/API.md`에 공개/운영 식별자 규칙과 pagination 예외를 명시
+- `docs/ARCHITECTURE.md`에 식별자 정책 예외를 반영
+- `docs/ROADMAP.md` 상태 메모를 완료 기준으로 갱신
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+- `internal/delivery/http.go`
+- `internal/delivery/response/types.go`

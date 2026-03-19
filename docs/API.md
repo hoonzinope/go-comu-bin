@@ -16,8 +16,17 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 모든 엔드포인트는 `/api/v1` prefix를 사용합니다.
 
-공개 응답의 사용자 식별자는 내부 `id` 대신 `uuid`를 사용합니다.
-예: `author_uuid`, `user_uuid`
+공개 도메인 리소스의 외부 식별자는 UUID를 사용합니다.
+- 대상: `User`, `Board`, `Post`, `Comment`, `Attachment`
+- 예: `author_uuid`, `user_uuid`, `board_uuid`, `post_uuid`, `target_uuid`
+
+운영 리소스는 예외적으로 추적용 식별자를 유지합니다.
+- `reportID`: admin 신고 처리 대상
+- `messageID`: dead outbox 메시지 대상
+
+페이지네이션도 같은 원칙을 따릅니다.
+- 공개 목록 API: opaque `cursor`
+- 운영 목록 API(`admin/reports`, `admin/outbox/dead`): 추적용 `last_id`
 
 ## User
 
@@ -47,6 +56,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 - `POST /api/v1/reports` (인증 필요)
   - 신고를 생성합니다.
+  - 생성 응답은 운영 리소스 식별자인 숫자 `id`를 반환합니다.
   - 요청 본문: `target_type`, `target_uuid`, `reason_code`, 선택적 `reason_detail`
   - `target_type` 허용값: `post`, `comment`
   - `reason_code` 허용값: `spam`, `abuse`, `sexual`, `violence`, `illegal`, `other`
@@ -57,24 +67,30 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 - `GET /api/v1/admin/reports?status=&limit=10&last_id=0` (인증 필요, admin)
   - 신고 목록을 조회합니다.
+  - 운영 목록 API이므로 `last_id` 기반 pagination을 유지합니다.
   - 기본 정렬은 `pending` 우선 + 최신순입니다.
   - `status` 필터는 선택값이며, 허용값은 `pending`, `accepted`, `rejected`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
+  - 신고 리소스 자체의 식별자는 숫자 `id`를 유지합니다.
   - 응답 참조 필드는 UUID 중심입니다: `target_uuid`, `reporter_uuid`, `resolved_by_uuid`
   - 내부 FK인 `target_id`, `reporter_user_id`, `resolved_by`는 외부 응답에 노출하지 않습니다.
 - `PUT /api/v1/admin/reports/{reportID}/resolve` (인증 필요, admin)
   - 신고를 수동 처리합니다.
+  - `reportID`는 운영 리소스 식별자이며 숫자 ID를 유지합니다.
   - 요청 본문: `status`, 선택적 `resolution_note`
   - `status` 허용값: `accepted`, `rejected`
   - 신고 처리만 수행하며, 콘텐츠 숨김/유저 제재는 자동 적용하지 않습니다.
 - `GET /api/v1/admin/outbox/dead?limit=10&last_id=` (인증 필요, admin)
   - dead outbox 메시지 목록을 조회합니다.
+  - 운영 목록 API이므로 `last_id` 기반 pagination을 유지합니다.
   - 응답 최소 필드: `id`, `event_name`, `attempt_count`, `last_error`, `occurred_at`, `next_attempt_at`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
 - `POST /api/v1/admin/outbox/dead/{messageID}/requeue` (인증 필요, admin)
   - dead 메시지를 재처리 큐로 되돌립니다.
+  - `messageID`는 운영 추적용 식별자입니다.
 - `DELETE /api/v1/admin/outbox/dead/{messageID}` (인증 필요, admin)
   - dead 메시지를 폐기(discard)합니다.
+  - `messageID`는 운영 추적용 식별자입니다.
 - `PUT /api/v1/admin/boards/{boardUUID}/visibility` (인증 필요, admin)
   - 게시판 `hidden` 상태를 변경합니다.
   - 요청 본문: `hidden` (`true|false`)
@@ -116,12 +132,14 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
 - `GET /api/v1/posts/{postUUID}`
   - 응답 본문에는 `tags` 목록이 포함됩니다.
+  - `tags[]`는 공개 조회용 메타데이터이며 현재 `name`, `created_at` 중심으로 사용합니다.
   - 응답 본문에는 `attachments` 목록이 포함됩니다.
   - 응답의 `comments` 는 최신 공개 댓글 최대 10개만 포함합니다.
   - `comments_has_more=true` 면 상세에 포함되지 않은 추가 댓글이 더 있다는 뜻입니다.
   - 댓글 전체 목록이 필요하면 `GET /api/v1/posts/{postUUID}/comments` 를 사용합니다.
   - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentUUID})` 형식을 사용합니다.
   - 각 attachment는 실제 파일 조회용 `file_url`과 draft 미리보기용 `preview_url`을 포함합니다.
+  - `reactions[]`는 `target_uuid`, `user_uuid`, `type`을 기준으로 해석합니다.
 - `POST /api/v1/posts/{postUUID}/publish` (인증 필요, 작성자 또는 admin)
   - `draft -> published` 상태 전이를 수행합니다.
   - 본문에 포함된 `attachment://{attachmentUUID}` 참조는 실제로 해당 post에 속한 attachment여야 합니다.
@@ -142,6 +160,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - `tagName`은 내부적으로 앞뒤 공백 제거 후 영문 소문자로 정규화합니다.
   - tag가 없으면 `404 Not Found`
   - post 목록 응답에는 태그 정보가 포함되지 않습니다.
+  - 공개 식별자는 `tagName`을 사용하며, 운영용 숫자 tag ID를 외부 계약의 기본 식별자로 취급하지 않습니다.
 
 ## Attachment
 
