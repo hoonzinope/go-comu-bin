@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestDispatchDomainActions_UsesOutboxWithinTransaction(t *testing.T) {
 	dispatcher := &spyActionDispatcher{}
 	tx := testTxScopeForOutboxEvents{outbox: outbox}
 
-	err := dispatchDomainActions(tx, dispatcher, appevent.NewBoardChanged("created", 10))
+	err := svccommon.DispatchDomainActions(tx, dispatcher, appevent.NewBoardChanged("created", 10))
 	require.NoError(t, err)
 	require.Len(t, outbox.messages, 1)
 	assert.Empty(t, dispatcher.events)
@@ -61,7 +62,7 @@ func TestDispatchDomainActions_FallsBackToDispatcherWithoutOutbox(t *testing.T) 
 	dispatcher := &spyActionDispatcher{}
 	tx := testTxScopeForOutboxEvents{outbox: nil}
 
-	err := dispatchDomainActions(tx, dispatcher, appevent.NewBoardChanged("created", 10))
+	err := svccommon.DispatchDomainActions(tx, dispatcher, appevent.NewBoardChanged("created", 10))
 	require.NoError(t, err)
 	require.Len(t, dispatcher.events, 1)
 }

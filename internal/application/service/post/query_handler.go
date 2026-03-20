@@ -1,8 +1,9 @@
-package service
+package post
 
 import (
 	"context"
 	"errors"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
@@ -27,6 +28,8 @@ type postQueryHandler struct {
 	postDetailQuery      *postDetailQuery
 }
 
+type QueryHandler = postQueryHandler
+
 func newPostQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *postQueryHandler {
 	return &postQueryHandler{
 		userRepository:       userRepository,
@@ -43,11 +46,15 @@ func newPostQueryHandler(userRepository port.UserRepository, boardRepository por
 	}
 }
 
+func NewQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *QueryHandler {
+	return newPostQueryHandler(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy)
+}
+
 func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error) {
-	if err := requirePositiveLimit(limit); err != nil {
+	if err := svccommon.RequirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
-	lastID, err := decodeOpaqueCursor(cursor)
+	lastID, err := svccommon.DecodeOpaqueCursor(cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -70,11 +77,11 @@ func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, l
 		if err := policy.EnsureBoardVisible(currentBoard, nil); err != nil {
 			return nil, err
 		}
-		fetchLimit, err := cursorFetchLimit(limit)
+		fetchLimit, err := svccommon.CursorFetchLimit(limit)
 		if err != nil {
 			return nil, err
 		}
-		page, err := loadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Post, error) {
+		page, err := svccommon.LoadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Post, error) {
 			posts, err := h.postRepository.SelectPosts(ctx, currentBoard.ID, fetchLimit, lastID)
 			if err != nil {
 				return nil, customerror.WrapRepository("select posts by board", err)
@@ -86,14 +93,14 @@ func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, l
 		if err != nil {
 			return nil, err
 		}
-		postModels, err := h.postsFromEntities(ctx, page.items)
+		postModels, err := h.postsFromEntities(ctx, page.Items)
 		if err != nil {
 			return nil, err
 		}
-		return &model.PostList{Posts: postModels, Limit: limit, Cursor: page.cursor, HasMore: page.hasMore, NextCursor: page.nextCursor}, nil
+		return &model.PostList{Posts: postModels, Limit: limit, Cursor: page.Cursor, HasMore: page.HasMore, NextCursor: page.NextCursor}, nil
 	})
 	if err != nil {
-		return nil, normalizeCacheLoadError("load post list cache", err)
+		return nil, svccommon.NormalizeCacheLoadError("load post list cache", err)
 	}
 	list, ok := value.(*model.PostList)
 	if !ok {
@@ -103,10 +110,10 @@ func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, l
 }
 
 func (h *postQueryHandler) GetPostsByTag(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error) {
-	if err := requirePositiveLimit(limit); err != nil {
+	if err := svccommon.RequirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
-	lastID, err := decodeOpaqueCursor(cursor)
+	lastID, err := svccommon.DecodeOpaqueCursor(cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +126,7 @@ func (h *postQueryHandler) GetPostsByTag(ctx context.Context, tagName string, li
 		return h.loadPublishedPostsByTag(ctx, normalizedName, limit, lastID, cursor)
 	})
 	if err != nil {
-		return nil, normalizeCacheLoadError("load tag post list cache", err)
+		return nil, svccommon.NormalizeCacheLoadError("load tag post list cache", err)
 	}
 	list, ok := value.(*model.PostList)
 	if !ok {
@@ -152,7 +159,7 @@ func (h *postQueryHandler) GetPostDetail(ctx context.Context, postUUID string) (
 		return detail, nil
 	})
 	if err != nil {
-		return nil, normalizeCacheLoadError("load post detail cache", err)
+		return nil, svccommon.NormalizeCacheLoadError("load post detail cache", err)
 	}
 	detail, ok := value.(*model.PostDetail)
 	if !ok {
@@ -162,7 +169,7 @@ func (h *postQueryHandler) GetPostDetail(ctx context.Context, postUUID string) (
 }
 
 func (h *postQueryHandler) postsFromEntities(ctx context.Context, posts []*entity.Post) ([]model.Post, error) {
-	authorUUIDs, err := userUUIDsForPosts(ctx, h.userRepository, posts)
+	authorUUIDs, err := svccommon.UserUUIDsForPosts(ctx, h.userRepository, posts)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +209,7 @@ func (h *postQueryHandler) loadPublishedPostsByTag(ctx context.Context, normaliz
 	if tag == nil {
 		return nil, customerror.ErrTagNotFound
 	}
-	fetchLimit, err := cursorFetchLimit(limit)
+	fetchLimit, err := svccommon.CursorFetchLimit(limit)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +247,7 @@ func (h *postQueryHandler) loadPublishedPostsByTag(ctx context.Context, normaliz
 		visiblePosts = visiblePosts[:limit]
 	}
 	if hasMore && len(visiblePosts) > 0 {
-		next := encodeOpaqueCursor(visiblePosts[len(visiblePosts)-1].ID)
+		next := svccommon.EncodeOpaqueCursor(visiblePosts[len(visiblePosts)-1].ID)
 		nextCursor = &next
 	}
 	postModels, err := h.postsFromEntities(ctx, visiblePosts)

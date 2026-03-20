@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	commentsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/comment"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ func TestCommentParentUUIDsByID_LoadsOnlyReferencedParents(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, reply)
 
-	parentUUIDs, err := commentParentUUIDsByID(context.Background(), repositories.comment, []*entity.Comment{reply})
+	parentUUIDs, err := commentsvc.ParentUUIDsByID(context.Background(), repositories.comment, []*entity.Comment{reply})
 	require.NoError(t, err)
 	assert.Len(t, parentUUIDs, 1)
 

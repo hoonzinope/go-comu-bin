@@ -1,4 +1,4 @@
-package service
+package comment
 
 import (
 	"context"
@@ -34,6 +34,10 @@ func commentParentUUIDsByID(ctx context.Context, commentRepository port.CommentR
 	return parentUUIDs, nil
 }
 
+func ParentUUIDsByID(ctx context.Context, commentRepository port.CommentRepository, comments []*entity.Comment) (map[int64]string, error) {
+	return commentParentUUIDsByID(ctx, commentRepository, comments)
+}
+
 func commentModelFromEntity(comment *entity.Comment, postUUID string, authorUUIDs map[int64]string, parentUUIDs map[int64]string) (*model.Comment, error) {
 	authorUUID, ok := authorUUIDs[comment.AuthorID]
 	if !ok {
@@ -48,4 +52,8 @@ func commentModelFromEntity(comment *entity.Comment, postUUID string, authorUUID
 		}
 	}
 	return &out, nil
+}
+
+func CommentModelFromEntity(comment *entity.Comment, postUUID string, authorUUIDs map[int64]string, parentUUIDs map[int64]string) (*model.Comment, error) {
+	return commentModelFromEntity(comment, postUUID, authorUUIDs, parentUUIDs)
 }

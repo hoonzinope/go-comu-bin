@@ -1,13 +1,15 @@
-package service
+package post
 
 import (
 	"context"
 	"errors"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	"sort"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	commentsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/comment"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -23,6 +25,8 @@ type postDetailQuery struct {
 	reactionRepository   port.ReactionRepository
 }
 
+type DetailQuery = postDetailQuery
+
 func newPostDetailQuery(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository) *postDetailQuery {
 	return &postDetailQuery{
 		userRepository:       userRepository,
@@ -34,6 +38,10 @@ func newPostDetailQuery(userRepository port.UserRepository, boardRepository port
 		commentRepository:    commentRepository,
 		reactionRepository:   reactionRepository,
 	}
+}
+
+func NewDetailQuery(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository) *DetailQuery {
+	return newPostDetailQuery(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository)
 }
 
 func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail, error) {
@@ -74,12 +82,12 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}
 
 	commentDetails := make([]*model.CommentDetail, len(comments))
-	parentUUIDs, err := commentParentUUIDsByID(ctx, q.commentRepository, comments)
+	parentUUIDs, err := commentsvc.ParentUUIDsByID(ctx, q.commentRepository, comments)
 	if err != nil {
 		return nil, err
 	}
 	for i, comment := range comments {
-		commentModel, err := commentModelFromEntity(comment, post.UUID, userUUIDs, parentUUIDs)
+		commentModel, err := commentsvc.CommentModelFromEntity(comment, post.UUID, userUUIDs, parentUUIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -146,7 +154,7 @@ func userUUIDsForPostDetail(ctx context.Context, userRepository port.UserReposit
 			userIDs = append(userIDs, reaction.UserID)
 		}
 	}
-	return userUUIDsByIDs(ctx, userRepository, userIDs)
+	return svccommon.UserUUIDsByIDs(ctx, userRepository, userIDs)
 }
 
 func postModelFromEntity(post *entity.Post, boardUUID string, authorUUIDs map[int64]string) (model.Post, error) {

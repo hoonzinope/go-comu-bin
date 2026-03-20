@@ -1,4 +1,4 @@
-package service
+package post
 
 import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -12,12 +12,18 @@ type postDeletionWorkflow struct {
 	attachmentCoordinator *postAttachmentCoordinator
 }
 
+type DeletionWorkflow = postDeletionWorkflow
+
 func newPostDeletionWorkflow(commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, attachmentCoordinator *postAttachmentCoordinator) *postDeletionWorkflow {
 	return &postDeletionWorkflow{
 		commentRepository:     commentRepository,
 		reactionRepository:    reactionRepository,
 		attachmentCoordinator: attachmentCoordinator,
 	}
+}
+
+func NewDeletionWorkflow(commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, attachmentCoordinator *AttachmentCoordinator) *DeletionWorkflow {
+	return newPostDeletionWorkflow(commentRepository, reactionRepository, attachmentCoordinator)
 }
 
 func (w *postDeletionWorkflow) deletePostArtifacts(tx port.TxScope, postID int64) ([]int64, error) {
@@ -32,6 +38,10 @@ func (w *postDeletionWorkflow) deletePostArtifacts(tx port.TxScope, postID int64
 		return nil, customerror.WrapRepository("delete post reactions", reactionErr)
 	}
 	return deletedCommentIDs, nil
+}
+
+func (w *postDeletionWorkflow) DeletePostArtifacts(tx port.TxScope, postID int64) ([]int64, error) {
+	return w.deletePostArtifacts(tx, postID)
 }
 
 func (w *postDeletionWorkflow) deletePostCommentsInBatches(tx port.TxScope, postID int64) ([]int64, error) {

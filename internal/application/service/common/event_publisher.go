@@ -1,4 +1,4 @@
-package service
+package common
 
 import "github.com/hoonzinope/go-comu-bin/internal/application/port"
 
@@ -17,14 +17,14 @@ func (d eventPublisherActionHookDispatcher) Dispatch(events ...port.DomainEvent)
 	d.publisher.Publish(events...)
 }
 
-func wrapEventPublisherAsActionDispatcher(publisher port.EventPublisher) port.ActionHookDispatcher {
+func WrapEventPublisherAsActionDispatcher(publisher port.EventPublisher) port.ActionHookDispatcher {
 	if publisher == nil {
 		return nil
 	}
 	return eventPublisherActionHookDispatcher{publisher: publisher}
 }
 
-func resolveActionDispatcher(dispatcher port.ActionHookDispatcher) port.ActionHookDispatcher {
+func ResolveActionDispatcher(dispatcher port.ActionHookDispatcher) port.ActionHookDispatcher {
 	if dispatcher != nil {
 		return dispatcher
 	}

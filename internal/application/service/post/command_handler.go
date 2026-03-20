@@ -1,7 +1,8 @@
-package service
+package post
 
 import (
 	"context"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	"log/slog"
 	"strings"
 
@@ -24,6 +25,8 @@ type postCommandHandler struct {
 	deletionWorkflow      *postDeletionWorkflow
 }
 
+type CommandHandler = postCommandHandler
+
 func newPostCommandHandler(boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, actionDispatcher port.ActionHookDispatcher, authorizationPolicy policy.AuthorizationPolicy, logger *slog.Logger, tagCoordinator *postTagCoordinator, attachmentCoordinator *postAttachmentCoordinator, deletionWorkflow *postDeletionWorkflow) *postCommandHandler {
 	return &postCommandHandler{
 		boardRepository:       boardRepository,
@@ -36,6 +39,10 @@ func newPostCommandHandler(boardRepository port.BoardRepository, postRepository 
 		attachmentCoordinator: attachmentCoordinator,
 		deletionWorkflow:      deletionWorkflow,
 	}
+}
+
+func NewCommandHandler(boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, actionDispatcher port.ActionHookDispatcher, authorizationPolicy policy.AuthorizationPolicy, logger *slog.Logger, tagCoordinator *TagCoordinator, attachmentCoordinator *AttachmentCoordinator, deletionWorkflow *DeletionWorkflow) *CommandHandler {
+	return newPostCommandHandler(boardRepository, postRepository, unitOfWork, actionDispatcher, authorizationPolicy, logger, tagCoordinator, attachmentCoordinator, deletionWorkflow)
 }
 
 func (h *postCommandHandler) CreatePost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
@@ -110,7 +117,7 @@ func (h *postCommandHandler) createPost(ctx context.Context, title, content stri
 			return err
 		}
 		if !draft {
-			if err := dispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("created", postID, board.ID, normalizedTags, nil)); err != nil {
+			if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("created", postID, board.ID, normalizedTags, nil)); err != nil {
 				return err
 			}
 		}
@@ -168,7 +175,7 @@ func (h *postCommandHandler) PublishPost(ctx context.Context, postUUID string, a
 		}
 		boardID = post.BoardID
 		postID = post.ID
-		if err := dispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("published", postID, boardID, currentTags, nil)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("published", postID, boardID, currentTags, nil)); err != nil {
 			return err
 		}
 		return nil
@@ -231,7 +238,7 @@ func (h *postCommandHandler) UpdatePost(ctx context.Context, postUUID string, au
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := dispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("updated", postID, boardID, unionTagNames(currentTagNames, normalizedTags), nil)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("updated", postID, boardID, unionTagNames(currentTagNames, normalizedTags), nil)); err != nil {
 			return err
 		}
 		return nil
@@ -284,7 +291,7 @@ func (h *postCommandHandler) DeletePost(ctx context.Context, postUUID string, au
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := dispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, deletedCommentIDs)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, deletedCommentIDs)); err != nil {
 			return err
 		}
 		return nil

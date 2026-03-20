@@ -1,4 +1,4 @@
-package service
+package common
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
-func normalizeCacheLoadError(op string, err error) error {
+func NormalizeCacheLoadError(op string, err error) error {
 	if err == nil {
 		return nil
 	}

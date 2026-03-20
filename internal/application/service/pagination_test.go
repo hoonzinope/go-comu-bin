@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	"math"
 	"testing"
 
@@ -11,28 +12,28 @@ import (
 )
 
 func TestRequirePositiveLimit(t *testing.T) {
-	require.NoError(t, requirePositiveLimit(1))
-	require.NoError(t, requirePositiveLimit(maxPageLimit))
+	require.NoError(t, svccommon.RequirePositiveLimit(1))
+	require.NoError(t, svccommon.RequirePositiveLimit(svccommon.MaxPageLimit))
 
-	err := requirePositiveLimit(0)
+	err := svccommon.RequirePositiveLimit(0)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
-	err = requirePositiveLimit(maxPageLimit + 1)
+	err = svccommon.RequirePositiveLimit(svccommon.MaxPageLimit + 1)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestCursorFetchLimit(t *testing.T) {
-	fetch, err := cursorFetchLimit(10)
+	fetch, err := svccommon.CursorFetchLimit(10)
 	require.NoError(t, err)
 	assert.Equal(t, 11, fetch)
 
-	_, err = cursorFetchLimit(maxPageLimit + 1)
+	_, err = svccommon.CursorFetchLimit(svccommon.MaxPageLimit + 1)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
-	_, err = cursorFetchLimit(math.MaxInt)
+	_, err = svccommon.CursorFetchLimit(math.MaxInt)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }

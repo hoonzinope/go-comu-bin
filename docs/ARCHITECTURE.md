@@ -36,7 +36,8 @@ flowchart LR
 - `application`
   - 유스케이스 orchestration, 권한 판정, 캐시 정책, tx 경계, read model 조립을 담당한다.
   - 단, 하나의 service가 read assembly, policy, workflow, event dispatch를 모두 직접 품지 않는다. 복잡해지는 경로는 내부 handler/coordinator/workflow로 분해하고 service는 facade로 유지한다.
-  - 물리 디렉터리 분리 전까지는 도메인별 파일 prefix(`post_*`, `comment_*`, `attachment_*`, `reaction_*`, `report_*`)로 관련 구현을 묶는다.
+  - 도메인 패키지 재배치 전에 여러 서비스가 공유하는 helper는 `service/common` 패키지로 먼저 분리한다.
+  - 현재 도메인별 구현은 `service/<domain>` 하위 패키지에 두고, 루트 `service`는 외부 wiring을 위한 공개 facade만 유지한다.
   - 로깅이 필요하면 composition root에서 주입한 `*slog.Logger`를 사용한다.
   - `Repository`, `Cache`, `SessionRepository`, `FileStorage` 같은 I/O 성격의 하위 포트 호출에는 동일한 `ctx`를 그대로 전달한다.
   - 순수 값 변환, 해시/토큰 계산, in-process dispatcher 같은 non-I/O 포트는 `ctx`를 생략할 수 있다.
@@ -51,7 +52,7 @@ flowchart LR
 - Application은 필요한 read assembly를 수행하되, repository를 반복 호출하는 N+1 패턴은 가능한 포트 확장이나 query helper로 흡수한다.
 - read path가 커지는 경우 service 안에 계속 누적하지 않고, `postDetailQuery` 같은 read-side query component로 분리한다.
 - write path도 동일하게 service 메서드에 workflow가 누적되지 않도록 `postCommandHandler`, `postTagCoordinator`, `postAttachmentCoordinator`, `postDeletionWorkflow` 같은 내부 협력 객체로 분해한다.
-- 댓글 read path에서 `parent_uuid` 같은 projection 규칙은 service 내부 공통 helper로 수렴시켜 comment list/detail이 동일 규칙을 재사용한다.
+- 댓글 read path에서 `parent_uuid` 같은 projection 규칙은 comment 하위 패키지 helper로 수렴시켜 comment list/detail과 post detail query가 동일 규칙을 재사용한다.
 - Infrastructure는 batched read 같은 조회 최적화를 구현 세부로 숨긴다.
 
 ## 요청 흐름

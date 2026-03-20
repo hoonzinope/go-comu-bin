@@ -1,4 +1,4 @@
-package service
+package common
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-func userUUIDsByIDs(ctx context.Context, userRepository port.UserRepository, ids []int64) (map[int64]string, error) {
+func UserUUIDsByIDs(ctx context.Context, userRepository port.UserRepository, ids []int64) (map[int64]string, error) {
 	uniqueIDs := uniqueInt64s(ids)
 	usersByID, err := userRepository.SelectUsersByIDsIncludingDeleted(ctx, uniqueIDs)
 	if err != nil {
@@ -28,6 +28,30 @@ func userUUIDsByIDs(ctx context.Context, userRepository port.UserRepository, ids
 	return out, nil
 }
 
+func UserUUIDsForPosts(ctx context.Context, userRepository port.UserRepository, posts []*entity.Post) (map[int64]string, error) {
+	ids := make([]int64, 0, len(posts))
+	for _, post := range posts {
+		ids = append(ids, post.AuthorID)
+	}
+	return UserUUIDsByIDs(ctx, userRepository, ids)
+}
+
+func UserUUIDsForComments(ctx context.Context, userRepository port.UserRepository, comments []*entity.Comment) (map[int64]string, error) {
+	ids := make([]int64, 0, len(comments))
+	for _, comment := range comments {
+		ids = append(ids, comment.AuthorID)
+	}
+	return UserUUIDsByIDs(ctx, userRepository, ids)
+}
+
+func UserUUIDsForReactions(ctx context.Context, userRepository port.UserRepository, reactions []*entity.Reaction) (map[int64]string, error) {
+	ids := make([]int64, 0, len(reactions))
+	for _, reaction := range reactions {
+		ids = append(ids, reaction.UserID)
+	}
+	return UserUUIDsByIDs(ctx, userRepository, ids)
+}
+
 func uniqueInt64s(ids []int64) []int64 {
 	seen := make(map[int64]struct{}, len(ids))
 	out := make([]int64, 0, len(ids))
@@ -38,32 +62,6 @@ func uniqueInt64s(ids []int64) []int64 {
 		seen[id] = struct{}{}
 		out = append(out, id)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i] < out[j]
-	})
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
-}
-
-func userUUIDsForPosts(ctx context.Context, userRepository port.UserRepository, posts []*entity.Post) (map[int64]string, error) {
-	ids := make([]int64, 0, len(posts))
-	for _, post := range posts {
-		ids = append(ids, post.AuthorID)
-	}
-	return userUUIDsByIDs(ctx, userRepository, ids)
-}
-
-func userUUIDsForComments(ctx context.Context, userRepository port.UserRepository, comments []*entity.Comment) (map[int64]string, error) {
-	ids := make([]int64, 0, len(comments))
-	for _, comment := range comments {
-		ids = append(ids, comment.AuthorID)
-	}
-	return userUUIDsByIDs(ctx, userRepository, ids)
-}
-
-func userUUIDsForReactions(ctx context.Context, userRepository port.UserRepository, reactions []*entity.Reaction) (map[int64]string, error) {
-	ids := make([]int64, 0, len(reactions))
-	for _, reaction := range reactions {
-		ids = append(ids, reaction.UserID)
-	}
-	return userUUIDsByIDs(ctx, userRepository, ids)
 }

@@ -1,4 +1,4 @@
-package service
+package post
 
 import (
 	"context"
@@ -17,12 +17,22 @@ type postAttachmentCoordinator struct {
 	attachmentRepository port.AttachmentRepository
 }
 
+type AttachmentCoordinator = postAttachmentCoordinator
+
 func newPostAttachmentCoordinator(attachmentRepository port.AttachmentRepository) *postAttachmentCoordinator {
 	return &postAttachmentCoordinator{attachmentRepository: attachmentRepository}
 }
 
+func NewAttachmentCoordinator(attachmentRepository port.AttachmentRepository) *AttachmentCoordinator {
+	return newPostAttachmentCoordinator(attachmentRepository)
+}
+
 func (c *postAttachmentCoordinator) validateAttachmentRefs(ctx context.Context, postID int64, content string) error {
 	return c.validateAttachmentRefsWithRepo(ctx, c.attachmentRepository, postID, content)
+}
+
+func (c *postAttachmentCoordinator) ValidateAttachmentRefs(ctx context.Context, postID int64, content string) error {
+	return c.validateAttachmentRefs(ctx, postID, content)
 }
 
 func (c *postAttachmentCoordinator) validateAttachmentRefsWithRepo(ctx context.Context, repo port.AttachmentRepository, postID int64, content string) error {
@@ -36,6 +46,10 @@ func (c *postAttachmentCoordinator) validateAttachmentRefsWithRepo(ctx context.C
 		}
 	}
 	return nil
+}
+
+func (c *postAttachmentCoordinator) ValidateAttachmentRefsWithRepo(ctx context.Context, repo port.AttachmentRepository, postID int64, content string) error {
+	return c.validateAttachmentRefsWithRepo(ctx, repo, postID, content)
 }
 
 func (c *postAttachmentCoordinator) syncPostAttachmentOrphans(ctx context.Context, repo port.AttachmentRepository, postID int64, content string) error {
@@ -60,6 +74,10 @@ func (c *postAttachmentCoordinator) syncPostAttachmentOrphans(ctx context.Contex
 	return nil
 }
 
+func (c *postAttachmentCoordinator) SyncPostAttachmentOrphans(ctx context.Context, repo port.AttachmentRepository, postID int64, content string) error {
+	return c.syncPostAttachmentOrphans(ctx, repo, postID, content)
+}
+
 func (c *postAttachmentCoordinator) orphanPostAttachments(ctx context.Context, repo port.AttachmentRepository, postID int64) error {
 	items, err := repo.SelectByPostID(ctx, postID)
 	if err != nil {
@@ -72,6 +90,10 @@ func (c *postAttachmentCoordinator) orphanPostAttachments(ctx context.Context, r
 		}
 	}
 	return nil
+}
+
+func (c *postAttachmentCoordinator) OrphanPostAttachments(ctx context.Context, repo port.AttachmentRepository, postID int64) error {
+	return c.orphanPostAttachments(ctx, repo, postID)
 }
 
 func extractAttachmentRefIDs(content string) []string {
@@ -98,6 +120,10 @@ func extractAttachmentRefIDs(content string) []string {
 	return out
 }
 
+func ExtractAttachmentRefIDs(content string) []string {
+	return extractAttachmentRefIDs(content)
+}
+
 func attachmentsFromEntities(postUUID string, items []*entity.Attachment) []model.Attachment {
 	out := make([]model.Attachment, 0, len(items))
 	for _, item := range items {
@@ -115,4 +141,8 @@ func attachmentsFromEntities(postUUID string, items []*entity.Attachment) []mode
 		})
 	}
 	return out
+}
+
+func AttachmentsFromEntities(postUUID string, items []*entity.Attachment) []model.Attachment {
+	return attachmentsFromEntities(postUUID, items)
 }

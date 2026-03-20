@@ -1,4 +1,4 @@
-package service
+package common
 
 import (
 	"encoding/base64"
@@ -11,7 +11,7 @@ import (
 
 const cursorPrefix = "v1:"
 
-func decodeOpaqueCursor(cursor string) (int64, error) {
+func DecodeOpaqueCursor(cursor string) (int64, error) {
 	cursor = strings.TrimSpace(cursor)
 	if cursor == "" {
 		return 0, nil
@@ -31,6 +31,6 @@ func decodeOpaqueCursor(cursor string) (int64, error) {
 	return lastID, nil
 }
 
-func encodeOpaqueCursor(lastID int64) string {
+func EncodeOpaqueCursor(lastID int64) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s%d", cursorPrefix, lastID)))
 }

@@ -137,6 +137,126 @@
 - `cmd/main.go`
 - `internal/integration/http_flow_test.go`
 
+## 2026-03-20 - 도메인별 패키지 재배치 전 공통 service helper를 별도 패키지로 먼저 분리한다
+
+상태
+
+- decided
+
+배경
+
+- 도메인별 하위 패키지(`service/post`, `service/comment` 등)로 이동하려면 현재 `service` 루트에 섞여 있는 공통 helper를 먼저 걷어내야 한다.
+- 공통 helper가 루트에 남아 있으면 하위 패키지 이동 시 순환 의존이나 광범위한 상대 import가 생길 가능성이 높다.
+
+관찰
+
+- 현재 `cache_errors`, `cursor_list`, `pagination`, `public_cursor`, `user_reference`, `event_publisher`, `outbox_events`, `logger`는 특정 도메인보다 여러 서비스가 함께 사용한다.
+- 이 파일들은 도메인 행동이라기보다 application service 공통 도구에 가깝다.
+
+결론
+
+- 도메인별 물리 재배치 전에 `internal/application/service/common` 패키지를 도입한다.
+- 공통 helper는 먼저 `common` 패키지로 옮기고, 기존 서비스는 이 패키지를 import 하게 바꾼다.
+- 이후 도메인 서비스 하위 패키지로 내릴 때는 각 도메인이 `common`만 의존하도록 정리한다.
+
+후속 작업
+
+- `service/common` 패키지 도입 및 공용 helper 이동
+- 기존 서비스/테스트 import 정리
+- 이후 단계에서 `service/<domain>` 패키지 재배치
+
+관련 문서/코드
+
+- `internal/application/service/cache_errors.go`
+- `internal/application/service/cursor_list.go`
+- `internal/application/service/pagination.go`
+- `internal/application/service/public_cursor.go`
+- `internal/application/service/user_reference.go`
+- `internal/application/service/event_publisher.go`
+- `internal/application/service/outbox_events.go`
+
+## 2026-03-20 - reaction/report는 실제 하위 패키지로 먼저 이동하고 루트 service는 호환 wrapper로 유지한다
+
+상태
+
+- decided
+
+배경
+
+- `service/common` 분리 이후에는 실제 하위 패키지 이동을 작은 범위로 시작할 수 있게 되었다.
+- `reaction`, `report`는 다른 도메인보다 의존 폭이 상대적으로 좁고, `post/comment/attachment`보다 조합 복잡도도 낮아 패키지 이동의 첫 타깃으로 적합했다.
+
+관찰
+
+- 외부 wiring은 여전히 `internal/application/service` 경로의 생성자에 의존한다.
+- `cmd/main.go`, delivery/integration test는 `service.NewReactionServiceWithActionDispatcher`, `service.NewReportServiceWithActionDispatcher`를 직접 사용한다.
+- 따라서 패키지 이동과 동시에 외부 import 경로를 바꾸는 대신, 루트 package는 wrapper만 남기고 실제 구현을 하위 패키지로 내리는 방식이 회귀 위험을 낮춘다.
+
+결론
+
+- `internal/application/service/reaction`, `internal/application/service/report` 하위 패키지에 실제 구현을 둔다.
+- 루트 `internal/application/service`에는 기존 생성자와 타입 경로 호환을 위한 thin wrapper만 유지한다.
+- component characterization test는 하위 패키지의 exported handler constructor를 직접 사용하게 바꾼다.
+- 이 패턴을 기준으로 이후 다른 도메인도 순차 이동하되, 의존 폭이 큰 `post/comment/attachment`는 별도 단계로 다룬다.
+
+후속 작업
+
+- `reaction/report` 하위 패키지 이동 반영
+- 루트 service wrapper 유지
+- architecture 문서에 partial package split 상태 반영
+- 이후 `post/comment/attachment` 재배치 범위 검토
+
+관련 문서/코드
+
+- `internal/application/service/reactionService.go`
+- `internal/application/service/reportService.go`
+- `internal/application/service/reaction/service.go`
+- `internal/application/service/report/service.go`
+
+## 2026-03-20 - 남은 application service도 모두 하위 패키지로 이동하고 루트 service는 facade만 유지한다
+
+상태
+
+- decided
+
+배경
+
+- `reaction/report` 이동 이후에도 `post/comment/attachment/board/user/session/account/guestCleanup/outboxAdmin` 구현이 루트 `service`에 남아 있어 탐색 기준이 혼재되어 있었다.
+- 공용 helper는 이미 `service/common`으로 분리됐기 때문에, 남은 서비스도 같은 패턴으로 하위 패키지로 내릴 준비가 되어 있었다.
+
+관찰
+
+- 외부 wiring과 대부분의 테스트는 여전히 `internal/application/service`의 생성자와 타입 이름에 의존한다.
+- `post`, `comment`, `attachment`는 handler/coordinator/workflow/component test가 존재해, 하위 패키지 이동과 동시에 테스트 호환 경계도 정리해야 했다.
+
+결론
+
+- `post`, `comment`, `attachment`, `board`, `user`, `session`, `account`, `guestcleanup`, `outboxadmin` 구현을 각각 `service/<domain>` 하위 패키지로 이동한다.
+- 루트 `internal/application/service`는 공개 생성자와 타입 alias만 유지한다.
+- `post/comment/attachment` 하위 패키지는 exported constructor/helper를 제공하고, 테스트도 하위 패키지를 직접 import해 사용한다.
+- 최종 구조 기준은 다음과 같다.
+  - 다도메인 공용 helper: `service/common`
+  - 도메인 구현: `service/<domain>`
+  - 외부 wiring 진입점: 루트 `service`
+
+후속 작업
+
+- 남은 도메인 하위 패키지 이동 반영
+- architecture 문서를 최종 패키지 구조 기준으로 갱신
+- 루트 테스트 호환 wrapper 제거
+
+관련 문서/코드
+
+- `internal/application/service/post/service.go`
+- `internal/application/service/comment/service.go`
+- `internal/application/service/attachment/service.go`
+- `internal/application/service/board/service.go`
+- `internal/application/service/user/service.go`
+- `internal/application/service/session/service.go`
+- `internal/application/service/account/service.go`
+- `internal/application/service/guestcleanup/service.go`
+- `internal/application/service/outboxadmin/service.go`
+
 ## 2026-03-13 - 로컬 터미널 툴체인과 AGENTS 기본 CLI 규칙을 표준화한다
 
 상태

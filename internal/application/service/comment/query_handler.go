@@ -1,7 +1,8 @@
-package service
+package comment
 
 import (
 	"context"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
@@ -21,15 +22,21 @@ type commentQueryHandler struct {
 	cachePolicy       appcache.Policy
 }
 
+type QueryHandler = commentQueryHandler
+
 func newCommentQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, cache port.Cache, cachePolicy appcache.Policy) *commentQueryHandler {
 	return &commentQueryHandler{userRepository: userRepository, boardRepository: boardRepository, postRepository: postRepository, commentRepository: commentRepository, cache: cache, cachePolicy: cachePolicy}
 }
 
+func NewQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, cache port.Cache, cachePolicy appcache.Policy) *QueryHandler {
+	return newCommentQueryHandler(userRepository, boardRepository, postRepository, commentRepository, cache, cachePolicy)
+}
+
 func (h *commentQueryHandler) GetCommentsByPost(ctx context.Context, postUUID string, limit int, cursor string) (*model.CommentList, error) {
-	if err := requirePositiveLimit(limit); err != nil {
+	if err := svccommon.RequirePositiveLimit(limit); err != nil {
 		return nil, err
 	}
-	lastID, err := decodeOpaqueCursor(cursor)
+	lastID, err := svccommon.DecodeOpaqueCursor(cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +59,11 @@ func (h *commentQueryHandler) GetCommentsByPost(ctx context.Context, postUUID st
 		if err := policy.EnsureBoardVisibleForUser(ctx, h.boardRepository, nil, currentPost.BoardID, customerror.ErrBoardNotFound, "comment board visibility"); err != nil {
 			return nil, err
 		}
-		fetchLimit, err := cursorFetchLimit(limit)
+		fetchLimit, err := svccommon.CursorFetchLimit(limit)
 		if err != nil {
 			return nil, err
 		}
-		page, err := loadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Comment, error) {
+		page, err := svccommon.LoadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Comment, error) {
 			comments, err := h.commentRepository.SelectVisibleComments(ctx, currentPost.ID, fetchLimit, lastID)
 			if err != nil {
 				return nil, customerror.WrapRepository("select visible comments by post", err)
@@ -68,14 +75,14 @@ func (h *commentQueryHandler) GetCommentsByPost(ctx context.Context, postUUID st
 		if err != nil {
 			return nil, err
 		}
-		commentModels, err := h.commentsFromEntities(ctx, currentPost.UUID, page.items)
+		commentModels, err := h.commentsFromEntities(ctx, currentPost.UUID, page.Items)
 		if err != nil {
 			return nil, err
 		}
-		return &model.CommentList{Comments: commentModels, Limit: limit, Cursor: page.cursor, HasMore: page.hasMore, NextCursor: page.nextCursor}, nil
+		return &model.CommentList{Comments: commentModels, Limit: limit, Cursor: page.Cursor, HasMore: page.HasMore, NextCursor: page.NextCursor}, nil
 	})
 	if err != nil {
-		return nil, normalizeCacheLoadError("load comment list cache", err)
+		return nil, svccommon.NormalizeCacheLoadError("load comment list cache", err)
 	}
 	list, ok := value.(*model.CommentList)
 	if !ok {
@@ -85,7 +92,7 @@ func (h *commentQueryHandler) GetCommentsByPost(ctx context.Context, postUUID st
 }
 
 func (h *commentQueryHandler) commentsFromEntities(ctx context.Context, postUUID string, comments []*entity.Comment) ([]model.Comment, error) {
-	authorUUIDs, err := userUUIDsForComments(ctx, h.userRepository, comments)
+	authorUUIDs, err := svccommon.UserUUIDsForComments(ctx, h.userRepository, comments)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package service
+package attachment
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -28,6 +29,8 @@ import (
 
 const attachmentDefaultMaxSizeBytes int64 = 10 << 20
 
+const DefaultMaxSizeBytes int64 = attachmentDefaultMaxSizeBytes
+
 type ImageOptimizationConfig struct {
 	Enabled     bool
 	JPEGQuality int
@@ -41,6 +44,7 @@ var allowedAttachmentContentTypes = map[string]struct{}{
 }
 
 var attachmentFileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
+var attachmentEmbedPattern = regexp.MustCompile(`!\[[^\]]*]\(attachment://([0-9a-fA-F-]+)\)`)
 
 type attachmentQueryHandler struct {
 	userRepository       port.UserRepository
@@ -51,8 +55,14 @@ type attachmentQueryHandler struct {
 	authorizationPolicy  policy.AuthorizationPolicy
 }
 
+type QueryHandler = attachmentQueryHandler
+
 func newAttachmentQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, authorizationPolicy policy.AuthorizationPolicy) *attachmentQueryHandler {
 	return &attachmentQueryHandler{userRepository: userRepository, boardRepository: boardRepository, postRepository: postRepository, attachmentRepository: attachmentRepository, fileStorage: fileStorage, authorizationPolicy: authorizationPolicy}
+}
+
+func NewQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage, authorizationPolicy policy.AuthorizationPolicy) *QueryHandler {
+	return newAttachmentQueryHandler(userRepository, boardRepository, postRepository, attachmentRepository, fileStorage, authorizationPolicy)
 }
 
 func (h *attachmentQueryHandler) GetPostAttachments(ctx context.Context, postUUID string) ([]model.Attachment, error) {
@@ -171,6 +181,8 @@ type attachmentCommandHandler struct {
 	logger              *slog.Logger
 }
 
+type CommandHandler = attachmentCommandHandler
+
 func newAttachmentCommandHandler(boardRepository port.BoardRepository, postRepository port.PostRepository, userRepository port.UserRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger *slog.Logger) *attachmentCommandHandler {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = attachmentDefaultMaxSizeBytes
@@ -179,6 +191,10 @@ func newAttachmentCommandHandler(boardRepository port.BoardRepository, postRepos
 		imageOptimization.JPEGQuality = 82
 	}
 	return &attachmentCommandHandler{boardRepository: boardRepository, postRepository: postRepository, userRepository: userRepository, unitOfWork: unitOfWork, fileStorage: fileStorage, actionDispatcher: actionDispatcher, maxUploadSizeBytes: maxUploadSizeBytes, imageOptimization: imageOptimization, authorizationPolicy: authorizationPolicy, logger: logger}
+}
+
+func NewCommandHandler(boardRepository port.BoardRepository, postRepository port.PostRepository, userRepository port.UserRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger *slog.Logger) *CommandHandler {
+	return newAttachmentCommandHandler(boardRepository, postRepository, userRepository, unitOfWork, fileStorage, actionDispatcher, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger)
 }
 
 func (h *attachmentCommandHandler) CreatePostAttachment(ctx context.Context, postUUID string, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (string, error) {
@@ -227,7 +243,7 @@ func (h *attachmentCommandHandler) CreatePostAttachment(ctx context.Context, pos
 			return customerror.WrapRepository("save attachment", err)
 		}
 		attachmentUUID = attachment.UUID
-		if err := dispatchDomainActions(tx, h.actionDispatcher, appevent.NewAttachmentChanged("created", attachmentID, post.ID)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewAttachmentChanged("created", attachmentID, post.ID)); err != nil {
 			return err
 		}
 		return nil
@@ -341,7 +357,7 @@ func (h *attachmentCommandHandler) DeletePostAttachment(ctx context.Context, pos
 		if err := tx.AttachmentRepository().Update(txCtx, &updatedAttachment); err != nil {
 			return customerror.WrapRepository("mark attachment pending delete", err)
 		}
-		return dispatchDomainActions(tx, h.actionDispatcher, appevent.NewAttachmentChanged("deleted", attachment.ID, post.ID))
+		return svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewAttachmentChanged("deleted", attachment.ID, post.ID))
 	})
 }
 
@@ -350,8 +366,14 @@ type attachmentCleanupWorkflow struct {
 	fileStorage          port.FileStorage
 }
 
+type CleanupWorkflow = attachmentCleanupWorkflow
+
 func newAttachmentCleanupWorkflow(attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage) *attachmentCleanupWorkflow {
 	return &attachmentCleanupWorkflow{attachmentRepository: attachmentRepository, fileStorage: fileStorage}
+}
+
+func NewCleanupWorkflow(attachmentRepository port.AttachmentRepository, fileStorage port.FileStorage) *CleanupWorkflow {
+	return newAttachmentCleanupWorkflow(attachmentRepository, fileStorage)
 }
 
 func (w *attachmentCleanupWorkflow) CleanupAttachments(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
@@ -456,6 +478,10 @@ func optimizeAttachmentImage(contentType string, data []byte, cfg ImageOptimizat
 	}
 }
 
+func OptimizeAttachmentImage(contentType string, data []byte, cfg ImageOptimizationConfig) []byte {
+	return optimizeAttachmentImage(contentType, data, cfg)
+}
+
 func optimizeJPEG(data []byte, quality int) []byte {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -537,4 +563,28 @@ func readUploadContent(content io.Reader, maxUploadSizeBytes int64) ([]byte, err
 		return nil, errAttachmentTooLarge
 	}
 	return data, nil
+}
+
+func extractAttachmentRefIDs(content string) []string {
+	matches := attachmentEmbedPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(matches))
+	out := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		attachmentUUID := strings.TrimSpace(match[1])
+		if attachmentUUID == "" {
+			continue
+		}
+		if _, exists := seen[attachmentUUID]; exists {
+			continue
+		}
+		seen[attachmentUUID] = struct{}{}
+		out = append(out, attachmentUUID)
+	}
+	return out
 }

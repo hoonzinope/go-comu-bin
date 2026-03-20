@@ -1,4 +1,4 @@
-package service
+package post
 
 import (
 	"sort"
@@ -16,8 +16,14 @@ type postTagCoordinator struct {
 	postTagRepository port.PostTagRepository
 }
 
+type TagCoordinator = postTagCoordinator
+
 func newPostTagCoordinator(tagRepository port.TagRepository, postTagRepository port.PostTagRepository) *postTagCoordinator {
 	return &postTagCoordinator{tagRepository: tagRepository, postTagRepository: postTagRepository}
+}
+
+func NewTagCoordinator(tagRepository port.TagRepository, postTagRepository port.PostTagRepository) *TagCoordinator {
+	return newPostTagCoordinator(tagRepository, postTagRepository)
 }
 
 func (c *postTagCoordinator) activeTagNamesByPostIDTx(tx port.TxScope, postID int64) ([]string, error) {
@@ -30,6 +36,10 @@ func (c *postTagCoordinator) activeTagNamesByPostIDTx(tx port.TxScope, postID in
 		names = append(names, tag.Name)
 	}
 	return names, nil
+}
+
+func (c *postTagCoordinator) ActiveTagNamesByPostIDTx(tx port.TxScope, postID int64) ([]string, error) {
+	return c.activeTagNamesByPostIDTx(tx, postID)
 }
 
 func (c *postTagCoordinator) tagsForPostTx(tx port.TxScope, postID int64) ([]model.Tag, error) {
@@ -53,6 +63,10 @@ func (c *postTagCoordinator) tagsForPostTx(tx port.TxScope, postID int64) ([]mod
 		return tags[i].Name < tags[j].Name
 	})
 	return mapper.TagsFromEntities(tags), nil
+}
+
+func (c *postTagCoordinator) TagsForPostTx(tx port.TxScope, postID int64) ([]model.Tag, error) {
+	return c.tagsForPostTx(tx, postID)
 }
 
 func (c *postTagCoordinator) syncPostTags(tx port.TxScope, postID int64, normalizedTags []string) error {
@@ -84,6 +98,10 @@ func (c *postTagCoordinator) syncPostTags(tx port.TxScope, postID int64, normali
 	return nil
 }
 
+func (c *postTagCoordinator) SyncPostTags(tx port.TxScope, postID int64, normalizedTags []string) error {
+	return c.syncPostTags(tx, postID, normalizedTags)
+}
+
 func (c *postTagCoordinator) upsertPostTags(tx port.TxScope, postID int64, normalizedTags []string) error {
 	for _, tagName := range normalizedTags {
 		tagID, err := c.getOrCreateTagID(tx, tagName)
@@ -95,6 +113,10 @@ func (c *postTagCoordinator) upsertPostTags(tx port.TxScope, postID int64, norma
 		}
 	}
 	return nil
+}
+
+func (c *postTagCoordinator) UpsertPostTags(tx port.TxScope, postID int64, normalizedTags []string) error {
+	return c.upsertPostTags(tx, postID, normalizedTags)
 }
 
 func (c *postTagCoordinator) getOrCreateTagID(tx port.TxScope, tagName string) (int64, error) {

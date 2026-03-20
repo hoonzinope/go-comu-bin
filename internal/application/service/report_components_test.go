@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
+	reportsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/report"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,11 +18,11 @@ func TestReportQueryHandler_GetReports(t *testing.T) {
 	authorID := seedUser(repositories.user, "author", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
-	svc := NewReportServiceWithActionDispatcher(repositories.user, repositories.post, repositories.comment, repositories.report, repositories.unitOfWork, resolveActionDispatcher(nil), newTestAuthorizationPolicy())
+	svc := NewReportServiceWithActionDispatcher(repositories.user, repositories.post, repositories.comment, repositories.report, repositories.unitOfWork, svccommon.ResolveActionDispatcher(nil), newTestAuthorizationPolicy())
 	_, err := svc.CreateReport(context.Background(), reporterID, model.ReportTargetPost, mustPostUUID(t, repositories.post, postID), model.ReportReasonSpam, "spam")
 	require.NoError(t, err)
 
-	handler := newReportQueryHandler(repositories.user, repositories.post, repositories.comment, repositories.report, repositories.unitOfWork, newTestAuthorizationPolicy())
+	handler := reportsvc.NewQueryHandler(repositories.user, repositories.post, repositories.comment, repositories.report, repositories.unitOfWork, newTestAuthorizationPolicy())
 	list, err := handler.GetReports(context.Background(), adminID, nil, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, list.Reports, 1)
@@ -35,7 +37,7 @@ func TestReportCommandHandler_ResolveReport(t *testing.T) {
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
 
-	handler := newReportCommandHandler(repositories.user, repositories.post, repositories.comment, repositories.report, repositories.unitOfWork, resolveActionDispatcher(nil), newTestAuthorizationPolicy(), resolveLogger(nil))
+	handler := reportsvc.NewCommandHandler(repositories.user, repositories.post, repositories.comment, repositories.report, repositories.unitOfWork, svccommon.ResolveActionDispatcher(nil), newTestAuthorizationPolicy(), svccommon.ResolveLogger(nil))
 	reportID, err := handler.CreateReport(context.Background(), reporterID, model.ReportTargetPost, mustPostUUID(t, repositories.post, postID), model.ReportReasonSpam, "detail")
 	require.NoError(t, err)
 	require.NoError(t, handler.ResolveReport(context.Background(), adminID, reportID, model.ReportStatusAccepted, "ok"))

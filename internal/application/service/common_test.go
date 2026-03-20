@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	"io"
 	"log/slog"
 	"testing"
@@ -120,7 +121,7 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 		relayCancel()
 		relay.Wait()
 	})
-	return wrapEventPublisherAsActionDispatcher(eventOutbox.NewPublisher(repositories.outbox, serializer, logger))
+	return svccommon.WrapEventPublisherAsActionDispatcher(eventOutbox.NewPublisher(repositories.outbox, serializer, logger))
 }
 
 func newTestPasswordHasher() port.PasswordHasher {

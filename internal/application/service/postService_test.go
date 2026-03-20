@@ -8,6 +8,8 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
+	postsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/post"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
@@ -415,7 +417,7 @@ func TestPostService_GetPostsByTag_RejectsTooLargeLimit(t *testing.T) {
 	_, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 
-	_, err = svc.GetPostsByTag(context.Background(), "go", maxPageLimit+1, "")
+	_, err = svc.GetPostsByTag(context.Background(), "go", svccommon.MaxPageLimit+1, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -505,7 +507,7 @@ func TestPostService_DeletePost_DeletesCommentsInBatches(t *testing.T) {
 	userID := seedUser(repositories.user, "alice", "pw", "user")
 	boardID := seedBoard(repositories.board, "free", "desc")
 	postID := seedPost(repositories.post, userID, boardID, "title", "content")
-	for i := 0; i < postDeleteBatchSize+1; i++ {
+	for i := 0; i < postsvc.DeleteBatchSize+1; i++ {
 		seedComment(repositories.comment, userID, postID, "comment")
 	}
 	svc := newTestPostService(t, repositories, newTestCache())
@@ -631,7 +633,7 @@ func TestPostDetailQuery_Load_Success(t *testing.T) {
 	postID := seedPost(repositories.post, userID, boardID, "title", "body")
 	seedComment(repositories.comment, userID, postID, "comment")
 
-	query := newPostDetailQuery(
+	query := postsvc.NewDetailQuery(
 		repositories.user,
 		repositories.board,
 		repositories.post,

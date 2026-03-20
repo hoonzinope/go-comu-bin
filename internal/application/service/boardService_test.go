@@ -8,6 +8,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,7 +78,7 @@ func TestBoardService_GetBoards_InvalidLimit(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 
-	_, err = svc.GetBoards(context.Background(), maxPageLimit+1, "")
+	_, err = svc.GetBoards(context.Background(), svccommon.MaxPageLimit+1, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }

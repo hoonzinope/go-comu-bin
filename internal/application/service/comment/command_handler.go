@@ -1,7 +1,8 @@
-package service
+package comment
 
 import (
 	"context"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	"strings"
 
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
@@ -17,8 +18,14 @@ type commentCommandHandler struct {
 	authorizationPolicy policy.AuthorizationPolicy
 }
 
+type CommandHandler = commentCommandHandler
+
 func newCommentCommandHandler(unitOfWork port.UnitOfWork, actionDispatcher port.ActionHookDispatcher, authorizationPolicy policy.AuthorizationPolicy) *commentCommandHandler {
 	return &commentCommandHandler{unitOfWork: unitOfWork, actionDispatcher: actionDispatcher, authorizationPolicy: authorizationPolicy}
+}
+
+func NewCommandHandler(unitOfWork port.UnitOfWork, actionDispatcher port.ActionHookDispatcher, authorizationPolicy policy.AuthorizationPolicy) *CommandHandler {
+	return newCommentCommandHandler(unitOfWork, actionDispatcher, authorizationPolicy)
 }
 
 func (h *commentCommandHandler) CreateComment(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error) {
@@ -70,7 +77,7 @@ func (h *commentCommandHandler) CreateComment(ctx context.Context, content strin
 			return customerror.WrapRepository("save comment", err)
 		}
 		commentUUID = newComment.UUID
-		if err := dispatchDomainActions(tx, h.actionDispatcher, appevent.NewCommentChanged("created", commentID, post.ID)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewCommentChanged("created", commentID, post.ID)); err != nil {
 			return err
 		}
 		return nil
@@ -118,7 +125,7 @@ func (h *commentCommandHandler) UpdateComment(ctx context.Context, commentUUID s
 		if err := tx.CommentRepository().Update(txCtx, &updatedComment); err != nil {
 			return customerror.WrapRepository("update comment", err)
 		}
-		return dispatchDomainActions(tx, h.actionDispatcher, appevent.NewCommentChanged("updated", comment.ID, updatedComment.PostID))
+		return svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewCommentChanged("updated", comment.ID, updatedComment.PostID))
 	})
 }
 
@@ -157,7 +164,7 @@ func (h *commentCommandHandler) DeleteComment(ctx context.Context, commentUUID s
 		if _, reactionErr := tx.ReactionRepository().DeleteByTarget(txCtx, comment.ID, entity.ReactionTargetComment); reactionErr != nil {
 			return customerror.WrapRepository("delete comment reactions", reactionErr)
 		}
-		return dispatchDomainActions(tx, h.actionDispatcher, appevent.NewCommentChanged("deleted", comment.ID, comment.PostID))
+		return svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewCommentChanged("deleted", comment.ID, comment.PostID))
 	})
 }
 
