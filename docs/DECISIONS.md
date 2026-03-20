@@ -46,6 +46,97 @@
 - internal/...
 ```
 
+## 2026-03-20 - application service 비대화를 내부 협력 객체로 분해한다
+
+상태
+
+- decided
+
+배경
+
+- `PostService`는 조회 조립, 태그 동기화, attachment 참조 검증, 삭제 workflow, 이벤트 append까지 함께 들고 있어 application 레이어의 책임 분리가 약해지고 있었다.
+- `CommentService`, `AttachmentService`도 같은 방향으로 command/query/policy가 한 타입 안에 누적되는 경향이 보였다.
+- 공개 API와 use case port는 안정화되어 있으므로, 이번 작업은 외부 계약을 바꾸지 않고 내부 구조만 재정렬하는 방식이 적절했다.
+
+관찰
+
+- 현재 구조는 helper 일부(`postDetailQuery`, `comment_projection`, `visibility_helper`)를 이미 추출했지만, 서비스 메서드가 여전히 read assembly/policy/workflow를 직접 조합한다.
+- `application` 레이어는 이 프로젝트에서 orchestration, tx boundary, cache policy를 유지해야 하므로, 레이어 자체를 줄이기보다 서비스 내부 책임을 더 작은 협력 객체로 나누는 편이 맞다.
+
+결론
+
+- `PostService`는 facade로 유지하고, 실제 로직은 `postCommandHandler`, `postQueryHandler`, `postTagCoordinator`, `postAttachmentCoordinator`, `postDeletionWorkflow`로 분해한다.
+- `CommentService`, `AttachmentService`는 같은 패턴으로 command/query를 우선 분리한다.
+- guest write guard, board visibility concealment 같은 재사용 규칙은 서비스 전용 helper가 아니라 `application/policy`에 둔다.
+- 공개 계약은 유지한다.
+  - `port.PostUseCase`, `port.CommentUseCase`, `port.AttachmentUseCase`
+  - HTTP path/body/response
+  - UUID/int64 정책
+  - outbox/cache 의미론
+- 비목표는 다음과 같다.
+  - CQRS 도입
+  - delivery/API 변경
+  - SQLite 전환
+  - 이벤트 의미 변경
+
+후속 작업
+
+- `PostService` characterization test 보강
+- `PostService` 내부 handler/coordinator/workflow 타입 도입
+- `CommentService`, `AttachmentService` command/query 분리
+- `docs/ARCHITECTURE.md`에 service 비대화 방지 원칙 반영
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/postService.go`
+- `internal/application/service/commentService.go`
+- `internal/application/service/attachmentService.go`
+- `internal/application/policy/board_visibility_policy.go`
+
+## 2026-03-20 - reaction/report 분해는 진행하고 service 폴더 분리는 별도 단계로 분리한다
+
+상태
+
+- decided
+
+배경
+
+- `Post`, `Comment`, `Attachment` 분해 이후에도 `ReactionService`, `ReportService`는 command/query/workflow가 한 타입에 남아 있었다.
+- 동시에 `internal/application/service` 디렉터리에는 도메인별 파일이 섞여 있어, 서비스가 늘수록 탐색 비용이 커질 가능성이 보였다.
+- 하지만 Go에서는 폴더 분리가 곧 패키지 경로 분리로 이어지므로, 이번 리팩토링과 물리 디렉터리 재배치를 한 번에 섞으면 영향 범위가 커진다.
+
+관찰
+
+- `ReactionService`, `ReportService`는 현재 공개 생성자와 use case port가 이미 여러 진입점에서 사용된다.
+- 디렉터리 재배치는 `cmd/main.go`, integration test, delivery wiring의 import 경로까지 함께 바뀌게 만든다.
+- 반면 내부 handler 분해는 공개 계약 유지 상태에서도 바로 진행할 수 있다.
+
+결론
+
+- 이번 단계에서는 `ReactionService`, `ReportService`를 facade + 내부 handler/query 구조로 분해한다.
+- 물리 디렉터리 분리는 이번 작업 범위에서 제외한다.
+- 당장은 파일명 prefix(`reaction_*`, `report_*`, `post_*`, `comment_*`, `attachment_*`)로 도메인 경계를 유지한다.
+- 이후 별도 작업에서 `internal/application/service/<domain>` 형태의 패키지 재배치를 검토한다.
+  - 그 단계에서는 facade import 경로 변경
+  - composition root/wiring 수정
+  - 순환 의존 여부 점검
+  - 패키지 public surface 재정의
+  를 함께 처리한다.
+
+후속 작업
+
+- `ReactionService`, `ReportService` command/query 분해
+- 파일명 prefix 규칙을 아키텍처 문서에 반영
+- 별도 backlog 또는 결정 문서에서 도메인별 패키지 분리 기준 정리
+
+관련 문서/코드
+
+- `internal/application/service/reactionService.go`
+- `internal/application/service/reportService.go`
+- `cmd/main.go`
+- `internal/integration/http_flow_test.go`
+
 ## 2026-03-13 - 로컬 터미널 툴체인과 AGENTS 기본 CLI 규칙을 표준화한다
 
 상태
