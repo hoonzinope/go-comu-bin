@@ -39,6 +39,7 @@ func (h *CacheInvalidationHandler) Handle(ctx context.Context, event port.Domain
 func (h *CacheInvalidationHandler) handleBoardChanged(ctx context.Context, e BoardChanged) {
 	h.bestEffortDeleteByPrefix(ctx, key.BoardListPrefix(), "invalidate board list by event")
 	h.bestEffortDeleteByPrefix(ctx, key.PostListPrefix(e.BoardID), "invalidate post list by board event")
+	h.bestEffortDeleteByPrefix(ctx, key.PostSearchListPrefix(), "invalidate post search list by board event")
 	if e.Operation != "visibility" {
 		return
 	}
@@ -51,6 +52,7 @@ func (h *CacheInvalidationHandler) handleBoardChanged(ctx context.Context, e Boa
 
 func (h *CacheInvalidationHandler) handlePostChanged(ctx context.Context, e PostChanged) {
 	h.bestEffortDeleteByPrefix(ctx, key.PostListPrefix(e.BoardID), "invalidate post list by event")
+	h.bestEffortDeleteByPrefix(ctx, key.PostSearchListPrefix(), "invalidate post search list by event")
 	h.bestEffortDelete(ctx, key.PostDetail(e.PostID), "invalidate post detail by event")
 	for _, tagName := range e.TagNames {
 		h.bestEffortDeleteByPrefix(ctx, key.TagPostListPrefix(tagName), "invalidate tag post list by event")

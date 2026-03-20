@@ -345,6 +345,7 @@ type fakePostUseCase struct {
 	createPost      func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
 	createDraftPost func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
 	getPostsList    func(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error)
+	searchPosts     func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error)
 	getPostsByTag   func(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error)
 	getPostDetail   func(ctx context.Context, postUUID string) (*model.PostDetail, error)
 	publishPost     func(ctx context.Context, postUUID string, authorID int64) error
@@ -369,6 +370,13 @@ func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content st
 func (f *fakePostUseCase) GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error) {
 	if f.getPostsList != nil {
 		return f.getPostsList(ctx, boardUUID, limit, cursor)
+	}
+	return &model.PostList{}, nil
+}
+
+func (f *fakePostUseCase) SearchPosts(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+	if f.searchPosts != nil {
+		return f.searchPosts(ctx, query, limit, cursor)
 	}
 	return &model.PostList{}, nil
 }
@@ -2267,6 +2275,49 @@ func TestHTTP_TagPosts_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"posts":[{"uuid":"550e8400-e29b-41d4-a716-446655440003"`)
+}
+
+func TestHTTP_PostSearch_Success(t *testing.T) {
+	post := &fakePostUseCase{
+		searchPosts: func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+			assert.Equal(t, "go search", query)
+			assert.Equal(t, 2, limit)
+			assert.Equal(t, "opaque-search-cursor", cursor)
+			return &model.PostList{
+				Posts:  []model.Post{{UUID: "550e8400-e29b-41d4-a716-446655440009", Title: "go search"}},
+				Limit:  limit,
+				Cursor: cursor,
+			}, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/search?q=go%20search&limit=2&cursor=opaque-search-cursor", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"posts":[{"uuid":"550e8400-e29b-41d4-a716-446655440009"`)
+}
+
+func TestHTTP_PostSearch_InvalidQuery(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/search?q=%20%20%20", nil)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"query is required"}`, rr.Body.String())
+}
+
+func TestHTTP_PostSearch_InvalidCursor(t *testing.T) {
+	post := &fakePostUseCase{
+		searchPosts: func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+			return nil, customerror.ErrInvalidInput
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/search?q=go&cursor=bad", nil)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHTTP_NotFound(t *testing.T) {

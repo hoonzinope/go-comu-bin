@@ -133,6 +133,15 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 응답 메타: `has_more`, `next_cursor`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 게시판이 없으면 `404 Not Found`
+- `GET /api/v1/posts/search?q=go+search&limit=10&cursor=`
+  - 응답 메타: `has_more`, `next_cursor`
+  - `q`는 필수이며, 앞뒤 공백 제거 후 비어 있으면 `400 Bad Request`
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
+  - 검색 대상은 `published` post의 `title`, `content`, `tags` 입니다.
+  - 검색 토큰화는 한국어/영어 구분 없이 공백 기준이며, 현재는 모든 토큰이 매치되어야 결과에 포함됩니다.
+  - 검색 인덱스는 `post.changed` 이벤트를 소비해 비동기로 갱신되므로, write 직후 짧은 eventual consistency 구간이 있을 수 있습니다.
+  - hidden 게시판의 post는 비admin 공개 검색 결과에서 제외됩니다.
+  - 응답 본문은 기존 post 목록과 동일한 `PostList` shape를 사용하며, relevance score/snippet은 외부에 노출하지 않습니다.
 - `POST /api/v1/boards/{boardUUID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - guest 계정도 작성할 수 있습니다.

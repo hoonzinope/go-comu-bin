@@ -38,6 +38,14 @@ func TagPostListGlobalPrefix() string {
 	return "tags:posts:name:"
 }
 
+func PostSearchList(query string, limit int, cursor string) string {
+	return fmt.Sprintf("posts:search:q:%s:limit:%d:cursor:%s", query, limit, cursor)
+}
+
+func PostSearchListPrefix() string {
+	return "posts:search:"
+}
+
 func CommentList(postID int64, limit int, lastID int64) string {
 	return fmt.Sprintf("comments:list:post:%d:limit:%d:last:%d", postID, limit, lastID)
 }

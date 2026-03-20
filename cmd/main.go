@@ -60,6 +60,7 @@ func main() {
 	tagRepository := inmemory.NewTagRepository()
 	postTagRepository := inmemory.NewPostTagRepository()
 	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
+	postSearchStore := inmemory.NewPostSearchStore(postRepository, tagRepository, postTagRepository)
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
@@ -99,17 +100,23 @@ func main() {
 		},
 	)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
+	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
 	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
+	if err := postSearchStore.RebuildAll(appCtx); err != nil {
+		slog.Error("failed to build post search index", "error", err)
+		os.Exit(1)
+	}
 	outboxRelay.Start(appCtx)
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
-	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), appLogger)
 	reportUseCase := service.NewReportServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reportRepository, unitOfWork, nil, authorizationPolicy, appLogger)

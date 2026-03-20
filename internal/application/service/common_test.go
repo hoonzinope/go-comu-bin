@@ -26,6 +26,8 @@ type testRepositories struct {
 	user       port.UserRepository
 	board      port.BoardRepository
 	post       port.PostRepository
+	postSearch port.PostSearchRepository
+	indexer    port.PostSearchIndexer
 	tag        port.TagRepository
 	postTag    port.PostTagRepository
 	comment    port.CommentRepository
@@ -42,6 +44,7 @@ func newTestRepositories() testRepositories {
 	tagRepository := inmemory.NewTagRepository()
 	postTagRepository := inmemory.NewPostTagRepository()
 	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
+	postSearchStore := inmemory.NewPostSearchStore(postRepository, tagRepository, postTagRepository)
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
@@ -51,6 +54,8 @@ func newTestRepositories() testRepositories {
 		user:       userRepository,
 		board:      boardRepository,
 		post:       postRepository,
+		postSearch: postSearchStore,
+		indexer:    postSearchStore,
 		tag:        tagRepository,
 		postTag:    postTagRepository,
 		comment:    commentRepository,
@@ -84,11 +89,27 @@ func newTestPostService(t testing.TB, repositories testRepositories, cache port.
 		repositories.user,
 		repositories.board,
 		repositories.post,
+		repositories.postSearch,
 		repositories.tag,
 		repositories.postTag,
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		repositories.unitOfWork,
+		cache,
+		actionDispatcher,
+		newTestCachePolicy(),
+		newTestAuthorizationPolicy(),
+	)
+}
+
+func newTestBoardService(t testing.TB, repositories testRepositories, cache port.Cache) *BoardService {
+	t.Helper()
+	actionDispatcher := newTestActionDispatcher(t, repositories, cache)
+	return NewBoardServiceWithActionDispatcher(
+		repositories.user,
+		repositories.board,
+		repositories.post,
 		repositories.unitOfWork,
 		cache,
 		actionDispatcher,
@@ -109,8 +130,10 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 		BaseBackoff:  time.Millisecond,
 	})
 	handler := appevent.NewCacheInvalidationHandler(cache, logger)
+	searchIndexHandler := appevent.NewPostSearchIndexHandler(repositories.indexer)
 	relay.Subscribe(appevent.EventNameBoardChanged, handler)
 	relay.Subscribe(appevent.EventNamePostChanged, handler)
+	relay.Subscribe(appevent.EventNamePostChanged, searchIndexHandler)
 	relay.Subscribe(appevent.EventNameCommentChanged, handler)
 	relay.Subscribe(appevent.EventNameReactionChanged, handler)
 	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
@@ -122,6 +145,12 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 		relay.Wait()
 	})
 	return svccommon.WrapEventPublisherAsActionDispatcher(eventOutbox.NewPublisher(repositories.outbox, serializer, logger))
+}
+
+func rebuildSearchIndex(t testing.TB, repositories testRepositories) {
+	t.Helper()
+	require.NotNil(t, repositories.indexer)
+	require.NoError(t, repositories.indexer.RebuildAll(context.Background()))
 }
 
 func newTestPasswordHasher() port.PasswordHasher {

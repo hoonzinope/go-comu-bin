@@ -189,6 +189,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/boards/:boardUUID/posts/drafts", h.authGinMiddleware, h.handleBoardDraftPostsPost)
 	v1.GET("/tags/:tagName/posts", h.handleTagPostsGet)
 
+	v1.GET("/posts/search", h.handlePostSearchGet)
 	v1.GET("/posts/:postUUID", h.handlePostDetailGet)
 	v1.POST("/posts/:postUUID/publish", h.authGinMiddleware, h.handlePostPublish)
 	v1.GET("/posts/:postUUID/attachments", h.handlePostAttachmentsGet)
@@ -1067,6 +1068,36 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 		return
 	}
 	posts, err := h.postUseCase.GetPostsByTag(c.Request.Context(), tagName, limit, cursor)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.PostListFromDTO(posts))
+}
+
+// handlePostSearchGet godoc
+// @Summary Search Posts
+// @Description Returns published posts matching title, content, and tag tokens with cursor pagination.
+// @Tags Post
+// @Produce json
+// @Param q query string true "Search query"
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
+// @Param cursor query string false "Opaque cursor returned by previous search response"
+// @Success 200 {object} response.PostList
+// @Failure 400 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/search [get]
+func (h *HTTPHandler) handlePostSearchGet(c *gin.Context) {
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		badRequest(c, errors.New("query is required"))
+		return
+	}
+	limit, cursor, ok := h.parseLimitCursor(c)
+	if !ok {
+		return
+	}
+	posts, err := h.postUseCase.SearchPosts(c.Request.Context(), query, limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return

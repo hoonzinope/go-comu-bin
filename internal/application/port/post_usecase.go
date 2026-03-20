@@ -8,6 +8,7 @@ type PostUseCase interface {
 	CreatePost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
 	CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
 	GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error)
+	SearchPosts(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error)
 	GetPostsByTag(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error)
 	GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error)
 	PublishPost(ctx context.Context, postUUID string, authorID int64) error

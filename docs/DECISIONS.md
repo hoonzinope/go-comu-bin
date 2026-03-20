@@ -52,6 +52,59 @@
 
 - decided
 
+## 2026-03-20 - post 검색 v1은 별도 search port와 in-memory reference adapter로 시작한다
+
+상태
+
+- decided
+
+배경
+
+- post 검색은 현재 in-memory 단계에서도 API 계약을 먼저 고정할 필요가 있었고, 이후 Phase 2에서 SQLite FTS5로 전환할 예정이라 저장소 구현을 바로 고정하지 않는 편이 유리했다.
+- tag 조회와 달리 검색은 랭킹, phrase boost, tokenizer, cursor 정렬 규칙까지 함께 커질 가능성이 높아 `PostRepository`에 계속 질의를 누적하면 read-side 계약이 비대해질 우려가 있었다.
+- 한국어/영어를 모두 다뤄야 하지만, 현재 단계에서 형태소 분석까지 넣는 것은 과한 범위였다.
+
+관찰
+
+- 현재 공개 목록 API는 opaque `cursor`를 사용하고, `PostService`의 read path는 `query handler`에서 visibility/pagination 조립 책임을 가진다.
+- 로드맵에는 SQLite FTS5 기반 전문 검색이 예정돼 있다.
+- 공개 post 목록 응답은 이미 `PostList`로 안정화돼 있어, v1 검색도 같은 응답 shape를 재사용하는 편이 변경 비용이 작다.
+
+결론
+
+- 검색 경계는 `PostRepository` 확장이 아니라 별도 `PostSearchRepository`로 분리한다.
+- 검색 조회 경계와 인덱스 갱신 경계를 분리하기 위해 `PostSearchIndexer`를 함께 둔다.
+- v1 검색 대상은 `published` post의 `title + content + tag names`로 한정한다.
+- 토큰화는 한국어/영어 구분 없이 whitespace split + lowercase로 시작한다.
+- 기본 매칭 규칙은 `all terms match`로 한다.
+- 랭킹은 BM25 기반으로 하고, field weight는 `title > tag > content`를 적용한다.
+- exact phrase는 필수 조건이 아니라 optional boost로만 취급한다.
+- 공개 API는 `GET /api/v1/posts/search?q=&limit=&cursor=`로 추가하고, 응답은 기존 `PostList`를 재사용한다.
+- 검색 pagination 정렬은 `score desc, post_id desc`로 고정하고, 공개 cursor는 opaque 형태를 유지하되 내부 payload는 composite cursor를 사용한다.
+- v1 구현은 in-memory reference adapter로 먼저 제공하되, 조회 시 매번 원본 저장소를 스캔하지 않고 search document 인덱스를 유지한다.
+- post 인덱스 갱신은 `post.changed` outbox 이벤트를 relay가 소비하는 비동기 흐름으로 처리한다.
+- board visibility는 검색 저장소 구현이 아니라 application read path에서 계속 필터링한다.
+- 이후 SQLite FTS5, Elasticsearch, Meilisearch adapter는 동일한 `PostSearchRepository + PostSearchIndexer` 계약을 구현한다.
+- wiring에서는 `query`와 `index`가 서로 다른 구현체로 분리되지 않도록, 하나의 concrete search store 인스턴스를 두 포트로 함께 주입한다.
+
+후속 작업
+
+- `PostUseCase`/delivery/search port 계약 추가
+- `PostSearchIndexer` 포트와 outbox event consumer 추가
+- in-memory `PostSearchRepository`/`PostSearchIndexer` 구현
+- service/query handler 검색 orchestration 및 visibility filtering 추가
+- HTTP/서비스/저장소 테스트 추가
+- API/Swagger/로드맵 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `internal/application/port/post_usecase.go`
+- `internal/application/port/post_search_repository.go`
+- `internal/application/service/post/query_handler.go`
+- `internal/infrastructure/persistence/inmemory/`
+
 배경
 
 - `PostService`는 조회 조립, 태그 동기화, attachment 참조 검증, 삭제 workflow, 이벤트 append까지 함께 들고 있어 application 레이어의 책임 분리가 약해지고 있었다.

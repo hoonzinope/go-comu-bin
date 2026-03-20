@@ -137,7 +137,6 @@ func TestIntegration_GuestUpgrade_RotatesBearerToken(t *testing.T) {
 	assertStatus(t, server.URL, newToken, http.MethodPost, "/auth/logout", map[string]any{}, http.StatusOK)
 }
 
-
 func newIntegrationServer(t *testing.T) *httptest.Server {
 	t.Helper()
 
@@ -146,6 +145,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	tagRepository := inmemory.NewTagRepository()
 	postTagRepository := inmemory.NewPostTagRepository()
 	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
+	postSearchStore := inmemory.NewPostSearchStore(postRepository, tagRepository, postTagRepository)
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
@@ -166,12 +166,15 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		BaseBackoff:  10 * time.Millisecond,
 	})
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
+	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
 	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
+	require.NoError(t, postSearchStore.RebuildAll(context.Background()))
 	relayCtx, relayCancel := context.WithCancel(context.Background())
 	outboxRelay.Start(relayCtx)
 	t.Cleanup(func() {
@@ -187,7 +190,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 
 	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
-	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy())
 	reportUseCase := service.NewReportServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reportRepository, unitOfWork, nil, authorizationPolicy)
@@ -263,7 +266,6 @@ func mustUpgradeGuest(t *testing.T, baseURL, token, username, email, password st
 	require.NotEmpty(t, newToken)
 	return newToken
 }
-
 
 func mustLogout(t *testing.T, baseURL, token string) {
 	t.Helper()

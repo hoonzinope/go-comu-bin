@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
+	"strings"
 
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
@@ -18,6 +19,7 @@ type postQueryHandler struct {
 	userRepository       port.UserRepository
 	boardRepository      port.BoardRepository
 	postRepository       port.PostRepository
+	postSearchRepository port.PostSearchRepository
 	tagRepository        port.TagRepository
 	postTagRepository    port.PostTagRepository
 	attachmentRepository port.AttachmentRepository
@@ -30,11 +32,12 @@ type postQueryHandler struct {
 
 type QueryHandler = postQueryHandler
 
-func newPostQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *postQueryHandler {
+func newPostQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *postQueryHandler {
 	return &postQueryHandler{
 		userRepository:       userRepository,
 		boardRepository:      boardRepository,
 		postRepository:       postRepository,
+		postSearchRepository: postSearchRepository,
 		tagRepository:        tagRepository,
 		postTagRepository:    postTagRepository,
 		attachmentRepository: attachmentRepository,
@@ -46,8 +49,8 @@ func newPostQueryHandler(userRepository port.UserRepository, boardRepository por
 	}
 }
 
-func NewQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *QueryHandler {
-	return newPostQueryHandler(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy)
+func NewQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *QueryHandler {
+	return newPostQueryHandler(userRepository, boardRepository, postRepository, postSearchRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy)
 }
 
 func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error) {
@@ -131,6 +134,32 @@ func (h *postQueryHandler) GetPostsByTag(ctx context.Context, tagName string, li
 	list, ok := value.(*model.PostList)
 	if !ok {
 		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode tag post list cache payload")
+	}
+	return list, nil
+}
+
+func (h *postQueryHandler) SearchPosts(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+	if err := svccommon.RequirePositiveLimit(limit); err != nil {
+		return nil, err
+	}
+	normalizedQuery := normalizeSearchQuery(query)
+	if normalizedQuery == "" {
+		return nil, customerror.ErrInvalidInput
+	}
+	searchCursor, err := decodeSearchCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	cacheKey := key.PostSearchList(normalizedQuery, limit, cursor)
+	value, err := h.cache.GetOrSetWithTTL(ctx, cacheKey, h.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
+		return h.loadPublishedPostsBySearch(ctx, normalizedQuery, limit, searchCursor, cursor)
+	})
+	if err != nil {
+		return nil, svccommon.NormalizeCacheLoadError("load post search cache", err)
+	}
+	list, ok := value.(*model.PostList)
+	if !ok {
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post search cache payload")
 	}
 	return list, nil
 }
@@ -280,4 +309,74 @@ func (h *postQueryHandler) resolveBoardVisibility(ctx context.Context, posts []*
 		boardVisibility[boardID] = policy.EnsureBoardVisible(boardsByID[boardID], nil) == nil
 	}
 	return nil
+}
+
+func (h *postQueryHandler) loadPublishedPostsBySearch(ctx context.Context, normalizedQuery string, limit int, cursor *port.PostSearchCursor, cursorValue string) (*model.PostList, error) {
+	if h.postSearchRepository == nil {
+		return nil, customerror.WrapRepository("search posts", errors.New("post search repository is not configured"))
+	}
+	fetchLimit, err := svccommon.CursorFetchLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+	currentCursor := cursor
+	visibleResults := make([]port.PostSearchResult, 0, fetchLimit)
+	boardVisibility := make(map[int64]bool)
+	for len(visibleResults) < fetchLimit {
+		results, err := h.postSearchRepository.SearchPublishedPosts(ctx, normalizedQuery, fetchLimit, currentCursor)
+		if err != nil {
+			return nil, customerror.WrapRepository("search published posts", err)
+		}
+		if len(results) == 0 {
+			break
+		}
+		posts := make([]*entity.Post, 0, len(results))
+		for _, result := range results {
+			posts = append(posts, result.Post)
+		}
+		if err := h.resolveBoardVisibility(ctx, posts, boardVisibility); err != nil {
+			return nil, err
+		}
+		for _, result := range results {
+			if result.Post == nil {
+				continue
+			}
+			if boardVisibility[result.Post.BoardID] {
+				visibleResults = append(visibleResults, result)
+				if len(visibleResults) >= fetchLimit {
+					break
+				}
+			}
+		}
+		if len(visibleResults) >= fetchLimit || len(results) < fetchLimit {
+			break
+		}
+		last := results[len(results)-1]
+		currentCursor = &port.PostSearchCursor{Score: last.Score, PostID: last.Post.ID}
+	}
+	hasMore := false
+	var nextCursor *string
+	if len(visibleResults) > limit {
+		hasMore = true
+		visibleResults = visibleResults[:limit]
+	}
+	if hasMore && len(visibleResults) > 0 {
+		last := visibleResults[len(visibleResults)-1]
+		next := encodeSearchCursor(last.Score, last.Post.ID)
+		nextCursor = &next
+	}
+	posts := make([]*entity.Post, 0, len(visibleResults))
+	for _, result := range visibleResults {
+		posts = append(posts, result.Post)
+	}
+	postModels, err := h.postsFromEntities(ctx, posts)
+	if err != nil {
+		return nil, err
+	}
+	return &model.PostList{Posts: postModels, Limit: limit, Cursor: cursorValue, HasMore: hasMore, NextCursor: nextCursor}, nil
+}
+
+func normalizeSearchQuery(query string) string {
+	parts := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	return strings.Join(parts, " ")
 }

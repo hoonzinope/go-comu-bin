@@ -1,0 +1,105 @@
+package inmemory
+
+import (
+	"context"
+	"testing"
+
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestPostSearchRepository_SearchPublishedPosts_RanksByFieldWeightAndPhraseBoost(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	contentOnly := testPost("title", "go search tokens appear in content", 1, 1)
+	_, err := postRepo.Save(context.Background(), contentOnly)
+	require.NoError(t, err)
+
+	tagOnly := testPost("title", "body", 1, 1)
+	_, err = postRepo.Save(context.Background(), tagOnly)
+	require.NoError(t, err)
+
+	titlePhrase := testPost("go search", "body", 1, 1)
+	_, err = postRepo.Save(context.Background(), titlePhrase)
+	require.NoError(t, err)
+
+	tagID, err := tagRepo.Save(context.Background(), entity.NewTag("go"))
+	require.NoError(t, err)
+	searchTagID, err := tagRepo.Save(context.Background(), entity.NewTag("search"))
+	require.NoError(t, err)
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), tagOnly.ID, tagID))
+	require.NoError(t, postTagRepo.UpsertActive(context.Background(), tagOnly.ID, searchTagID))
+	require.NoError(t, searchStore.RebuildAll(context.Background()))
+
+	results, err := searchStore.SearchPublishedPosts(context.Background(), "go search", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 3)
+	assert.Equal(t, titlePhrase.ID, results[0].Post.ID)
+	assert.Equal(t, tagOnly.ID, results[1].Post.ID)
+	assert.Equal(t, contentOnly.ID, results[2].Post.ID)
+	assert.Greater(t, results[0].Score, results[1].Score)
+	assert.Greater(t, results[1].Score, results[2].Score)
+}
+
+func TestPostSearchRepository_SearchPublishedPosts_ExcludesDraftDeletedAndHonorsCursor(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	first := testPost("alpha beta", "alpha beta", 1, 1)
+	_, err := postRepo.Save(context.Background(), first)
+	require.NoError(t, err)
+	second := testPost("alpha beta", "alpha beta", 1, 1)
+	_, err = postRepo.Save(context.Background(), second)
+	require.NoError(t, err)
+	draft := entity.NewDraftPost("alpha beta", "alpha beta", 1, 1)
+	_, err = postRepo.Save(context.Background(), draft)
+	require.NoError(t, err)
+	deleted := testPost("alpha beta", "alpha beta", 1, 1)
+	deletedID, err := postRepo.Save(context.Background(), deleted)
+	require.NoError(t, err)
+	require.NoError(t, postRepo.Delete(context.Background(), deletedID))
+	require.NoError(t, searchStore.RebuildAll(context.Background()))
+
+	results, err := searchStore.SearchPublishedPosts(context.Background(), "alpha beta", 2, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Equal(t, second.ID, results[0].Post.ID)
+	assert.Equal(t, first.ID, results[1].Post.ID)
+
+	cursor := &port.PostSearchCursor{Score: results[0].Score, PostID: results[0].Post.ID}
+	next, err := searchStore.SearchPublishedPosts(context.Background(), "alpha beta", 2, cursor)
+	require.NoError(t, err)
+	require.Len(t, next, 1)
+	assert.Equal(t, first.ID, next[0].Post.ID)
+}
+
+func TestPostSearchRepository_UpsertAndDeletePost_UpdatesIndex(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	post := testPost("go search", "body", 1, 1)
+	_, err := postRepo.Save(context.Background(), post)
+	require.NoError(t, err)
+	require.NoError(t, searchStore.UpsertPost(context.Background(), post.ID))
+
+	results, err := searchStore.SearchPublishedPosts(context.Background(), "go search", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, post.ID, results[0].Post.ID)
+
+	require.NoError(t, postRepo.Delete(context.Background(), post.ID))
+	require.NoError(t, searchStore.DeletePost(context.Background(), post.ID))
+
+	results, err = searchStore.SearchPublishedPosts(context.Background(), "go search", 10, nil)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
