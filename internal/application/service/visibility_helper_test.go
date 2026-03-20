@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func TestEnsurePostVisibleForUser_HiddenBoardReturnsConfiguredNotFound(t *testin
 	board.SetHidden(true)
 	require.NoError(t, repositories.board.Update(context.Background(), board))
 
-	post, err := ensurePostVisibleForUser(context.Background(), repositories.post, repositories.board, nil, postID, customerror.ErrPostNotFound, "test")
+	post, err := policy.EnsurePostVisibleForUser(context.Background(), repositories.post, repositories.board, nil, postID, customerror.ErrPostNotFound, "test")
 	require.Error(t, err)
 	assert.Nil(t, post)
 	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
@@ -39,7 +40,7 @@ func TestEnsureCommentTargetVisibleForUser_HiddenBoardReturnsConfiguredNotFound(
 	board.SetHidden(true)
 	require.NoError(t, repositories.board.Update(context.Background(), board))
 
-	comment, post, err := ensureCommentTargetVisibleForUser(context.Background(), repositories.comment, repositories.post, repositories.board, nil, commentID, customerror.ErrCommentNotFound, "test")
+	comment, post, err := policy.EnsureCommentTargetVisibleForUser(context.Background(), repositories.comment, repositories.post, repositories.board, nil, commentID, customerror.ErrCommentNotFound, "test")
 	require.Error(t, err)
 	assert.Nil(t, comment)
 	assert.Nil(t, post)

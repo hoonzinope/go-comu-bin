@@ -1,32 +1,31 @@
-package service
+package policy
 
 import (
 	"context"
 	"errors"
 
-	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
-type boardByIDReader interface {
+type BoardByIDReader interface {
 	SelectBoardByID(ctx context.Context, id int64) (*entity.Board, error)
 }
 
-type postByIDReader interface {
+type PostByIDReader interface {
 	SelectPostByID(ctx context.Context, id int64) (*entity.Post, error)
 }
 
-type commentByIDReader interface {
+type CommentByIDReader interface {
 	SelectCommentByID(ctx context.Context, id int64) (*entity.Comment, error)
 }
 
-func ensureBoardVisibleForUser(ctx context.Context, boardRepository boardByIDReader, user *entity.User, boardID int64, concealedErr error, action string) error {
+func EnsureBoardVisibleForUser(ctx context.Context, boardRepository BoardByIDReader, user *entity.User, boardID int64, concealedErr error, action string) error {
 	board, err := boardRepository.SelectBoardByID(ctx, boardID)
 	if err != nil {
 		return customerror.WrapRepository("select board by id for "+action, err)
 	}
-	if err := policy.EnsureBoardVisible(board, user); err != nil {
+	if err := EnsureBoardVisible(board, user); err != nil {
 		if concealedErr != nil && errors.Is(err, customerror.ErrBoardNotFound) {
 			return concealedErr
 		}
@@ -35,7 +34,7 @@ func ensureBoardVisibleForUser(ctx context.Context, boardRepository boardByIDRea
 	return nil
 }
 
-func ensurePostVisibleForUser(ctx context.Context, postRepository postByIDReader, boardRepository boardByIDReader, user *entity.User, postID int64, concealedErr error, action string) (*entity.Post, error) {
+func EnsurePostVisibleForUser(ctx context.Context, postRepository PostByIDReader, boardRepository BoardByIDReader, user *entity.User, postID int64, concealedErr error, action string) (*entity.Post, error) {
 	post, err := postRepository.SelectPostByID(ctx, postID)
 	if err != nil {
 		return nil, customerror.WrapRepository("select post by id for "+action, err)
@@ -46,13 +45,13 @@ func ensurePostVisibleForUser(ctx context.Context, postRepository postByIDReader
 		}
 		return nil, customerror.ErrPostNotFound
 	}
-	if err := ensureBoardVisibleForUser(ctx, boardRepository, user, post.BoardID, concealedErr, action); err != nil {
+	if err := EnsureBoardVisibleForUser(ctx, boardRepository, user, post.BoardID, concealedErr, action); err != nil {
 		return nil, err
 	}
 	return post, nil
 }
 
-func ensureCommentTargetVisibleForUser(ctx context.Context, commentRepository commentByIDReader, postRepository postByIDReader, boardRepository boardByIDReader, user *entity.User, commentID int64, concealedErr error, action string) (*entity.Comment, *entity.Post, error) {
+func EnsureCommentTargetVisibleForUser(ctx context.Context, commentRepository CommentByIDReader, postRepository PostByIDReader, boardRepository BoardByIDReader, user *entity.User, commentID int64, concealedErr error, action string) (*entity.Comment, *entity.Post, error) {
 	comment, err := commentRepository.SelectCommentByID(ctx, commentID)
 	if err != nil {
 		return nil, nil, customerror.WrapRepository("select comment by id for "+action, err)
@@ -63,7 +62,7 @@ func ensureCommentTargetVisibleForUser(ctx context.Context, commentRepository co
 		}
 		return nil, nil, customerror.ErrCommentNotFound
 	}
-	post, err := ensurePostVisibleForUser(ctx, postRepository, boardRepository, user, comment.PostID, concealedErr, action)
+	post, err := EnsurePostVisibleForUser(ctx, postRepository, boardRepository, user, comment.PostID, concealedErr, action)
 	if err != nil {
 		return nil, nil, err
 	}
