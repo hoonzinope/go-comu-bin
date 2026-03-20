@@ -15,7 +15,7 @@ GOCACHE=/tmp/go-comu-bin-gocache go test ./...
 패키지별 실행:
 
 ```bash
-go test ./internal/application/service -v
+go test ./internal/application/service/... -v
 go test ./internal/delivery -v
 go test ./internal/infrastructure/persistence/inmemory -v
 go test ./internal/infrastructure/cache/inmemory -v
@@ -54,20 +54,24 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 	repositories := newTestRepositories()
 	ownerID := seedUser(repositories.user, "owner", "pw", "user")
 	otherID := seedUser(repositories.user, "other", "pw", "user")
-	postID := seedPost(repositories.post, ownerID, 1, "title", "content")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, ownerID, boardID, "title", "content")
 	svc := NewPostService(
 		repositories.user,
 		repositories.board,
 		repositories.post,
+		repositories.tag,
+		repositories.postTag,
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		repositories.unitOfWork,
 		newTestCache(),
 		newTestCachePolicy(),
 		newTestAuthorizationPolicy(),
 	)
 
-	err := svc.UpdatePost(postID, otherID, "new-title", "new-content")
+	err := svc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), otherID, "new-title", "new-content", nil)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrForbidden))
@@ -82,7 +86,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
   - `internal/infrastructure/auth`
   - `internal/infrastructure/persistence/inmemory`
   - `internal/application/porttest`
-  - `internal/application/service`
+  - `internal/application/service/...`
   - `internal/delivery`
 - Integration
   - `internal/integration`

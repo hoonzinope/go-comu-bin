@@ -354,9 +354,48 @@ internal/
       authorization_policy.go
       role_authorization_policy.go
     service/
-      cache_errors.go
-      user_reference.go
-      *.go
+      account/
+        service.go
+      attachment/
+        handlers.go
+        service.go
+      board/
+        service.go
+      comment/
+        command_handler.go
+        projection.go
+        query_handler.go
+        service.go
+      common/
+        cache_errors.go
+        cursor_list.go
+        event_publisher.go
+        logger.go
+        outbox_events.go
+        pagination.go
+        public_cursor.go
+        user_reference.go
+      guestcleanup/
+        service.go
+      outboxadmin/
+        service.go
+      post/
+        attachment_coordinator.go
+        command_handler.go
+        deletion_workflow.go
+        detail_query.go
+        query_handler.go
+        service.go
+        tag_coordinator.go
+      reaction/
+        service.go
+      report/
+        service.go
+      session/
+        service.go
+      user/
+        service.go
+      *Service.go
 
   domain/
     entity/
@@ -392,7 +431,7 @@ internal/
 
 - 리액션 대상과 종류는 raw string 대신 typed value로 관리한다.
   - delivery/application 경계: `model.ReactionTargetType`, `model.ReactionType`
-  - service/domain 내부: `entity.ReactionTargetType`, `entity.ReactionType`
+  - application service 내부와 domain 경계: `entity.ReactionTargetType`, `entity.ReactionType`
 - delivery는 HTTP 문자열 입력을 domain parser가 아니라 application 모델 parser로 변환한 뒤 service에 전달한다.
 - report status/reason, suspension duration 같은 다른 공개 enum 입력도 동일 원칙으로 application 모델에서 먼저 파싱한다.
 - 이로 인해 `"post"`, `"comment"`, `"like"` 같은 프로토콜 문자열이 서비스/저장소 경계 전반에 흩어지는 것을 줄이고, delivery의 domain 직접 의존을 낮춘다.
