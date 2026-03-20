@@ -63,56 +63,58 @@ func (s *GuestCleanupService) CleanupGuests(ctx context.Context, now time.Time, 
 
 func (s *GuestCleanupService) cleanupGuest(ctx context.Context, userID int64) (bool, error) {
 	deleted := false
-	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		txCtx := tx.Context()
-		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("select user by id for guest cleanup", err)
-		}
-		if user == nil || !user.IsGuest() {
+	err := s.sessionRepository.WithUserLock(ctx, userID, func(sessionScope port.SessionRepositoryScope) error {
+		return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+			txCtx := tx.Context()
+			user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
+			if err != nil {
+				return customerror.WrapRepository("select user by id for guest cleanup", err)
+			}
+			if user == nil || !user.IsGuest() {
+				return nil
+			}
+			hasSessions, err := sessionScope.ExistsByUser(txCtx, userID)
+			if err != nil {
+				return customerror.WrapRepository("check guest sessions for cleanup", err)
+			}
+			if hasSessions {
+				return nil
+			}
+			hasPosts, err := tx.PostRepository().ExistsByAuthorID(txCtx, userID)
+			if err != nil {
+				return customerror.WrapRepository("check guest posts for cleanup", err)
+			}
+			if hasPosts {
+				return nil
+			}
+			hasComments, err := tx.CommentRepository().ExistsByAuthorID(txCtx, userID)
+			if err != nil {
+				return customerror.WrapRepository("check guest comments for cleanup", err)
+			}
+			if hasComments {
+				return nil
+			}
+			hasReactions, err := tx.ReactionRepository().ExistsByUserID(txCtx, userID)
+			if err != nil {
+				return customerror.WrapRepository("check guest reactions for cleanup", err)
+			}
+			if hasReactions {
+				return nil
+			}
+			hasReports, err := tx.ReportRepository().ExistsByReporterUserID(txCtx, userID)
+			if err != nil {
+				return customerror.WrapRepository("check guest reports for cleanup", err)
+			}
+			if hasReports {
+				return nil
+			}
+			user.SoftDelete()
+			if err := tx.UserRepository().Update(txCtx, user); err != nil {
+				return customerror.WrapRepository("soft delete guest for cleanup", err)
+			}
+			deleted = true
 			return nil
-		}
-		hasSessions, err := s.sessionRepository.ExistsByUser(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("check guest sessions for cleanup", err)
-		}
-		if hasSessions {
-			return nil
-		}
-		hasPosts, err := tx.PostRepository().ExistsByAuthorIDIncludingDeleted(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("check guest posts for cleanup", err)
-		}
-		if hasPosts {
-			return nil
-		}
-		hasComments, err := tx.CommentRepository().ExistsByAuthorIDIncludingDeleted(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("check guest comments for cleanup", err)
-		}
-		if hasComments {
-			return nil
-		}
-		hasReactions, err := tx.ReactionRepository().ExistsByUserID(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("check guest reactions for cleanup", err)
-		}
-		if hasReactions {
-			return nil
-		}
-		hasReports, err := tx.ReportRepository().ExistsByReporterUserID(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("check guest reports for cleanup", err)
-		}
-		if hasReports {
-			return nil
-		}
-		user.SoftDelete()
-		if err := tx.UserRepository().Update(txCtx, user); err != nil {
-			return customerror.WrapRepository("soft delete guest for cleanup", err)
-		}
-		deleted = true
-		return nil
+		})
 	})
 	if err != nil {
 		return false, err

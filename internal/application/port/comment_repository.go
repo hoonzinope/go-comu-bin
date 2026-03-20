@@ -14,6 +14,7 @@ type CommentRepository interface {
 	SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error)
 	SelectCommentsIncludingDeleted(ctx context.Context, postID int64) ([]*entity.Comment, error)
 	SelectVisibleComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error)
+	ExistsByAuthorID(ctx context.Context, authorID int64) (bool, error)
 	ExistsByAuthorIDIncludingDeleted(ctx context.Context, authorID int64) (bool, error)
 	Update(ctx context.Context, comment *entity.Comment) error
 	Delete(ctx context.Context, id int64) error

@@ -478,6 +478,10 @@ func (r postTxRepository) ExistsByBoardID(ctx context.Context, boardID int64) (b
 	_ = ctx
 	return r.repo.existsByBoardID(boardID)
 }
+func (r postTxRepository) ExistsByAuthorID(ctx context.Context, authorID int64) (bool, error) {
+	_ = ctx
+	return r.repo.ExistsByAuthorID(ctx, authorID)
+}
 func (r postTxRepository) ExistsByAuthorIDIncludingDeleted(ctx context.Context, authorID int64) (bool, error) {
 	_ = ctx
 	return r.repo.ExistsByAuthorIDIncludingDeleted(ctx, authorID)
@@ -588,6 +592,10 @@ func (r commentTxRepository) SelectCommentsIncludingDeleted(ctx context.Context,
 func (r commentTxRepository) SelectVisibleComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
 	_ = ctx
 	return r.repo.selectVisibleComments(postID, limit, lastID)
+}
+func (r commentTxRepository) ExistsByAuthorID(ctx context.Context, authorID int64) (bool, error) {
+	_ = ctx
+	return r.repo.ExistsByAuthorID(ctx, authorID)
 }
 func (r commentTxRepository) ExistsByAuthorIDIncludingDeleted(ctx context.Context, authorID int64) (bool, error) {
 	_ = ctx
