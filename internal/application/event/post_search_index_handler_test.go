@@ -55,6 +55,14 @@ func TestPostSearchIndexHandler_IgnoresOtherEvents(t *testing.T) {
 	assert.Empty(t, indexer.deleted)
 }
 
+func TestPostSearchIndexHandler_HandlesNilInputs(t *testing.T) {
+	var nilHandler *PostSearchIndexHandler
+	require.NoError(t, nilHandler.Handle(context.Background(), nil))
+
+	handler := NewPostSearchIndexHandler(nil)
+	require.NoError(t, handler.Handle(context.Background(), nil))
+}
+
 type capturingPostSearchIndexer struct {
 	upserted []int64
 	deleted  []int64

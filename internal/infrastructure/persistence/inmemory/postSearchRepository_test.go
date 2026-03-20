@@ -46,6 +46,21 @@ func TestPostSearchRepository_SearchPublishedPosts_RanksByFieldWeightAndPhraseBo
 	assert.Greater(t, results[1].Score, results[2].Score)
 }
 
+func TestPostSearchStore_ConstructorsAndAttachBoardRepository(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	boardRepo := NewBoardRepository()
+
+	store := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+	compat := NewPostSearchRepository(postRepo, tagRepo, postTagRepo)
+
+	require.NotNil(t, store)
+	require.NotNil(t, compat)
+	store.AttachBoardRepository(boardRepo)
+	assert.Equal(t, boardRepo, store.boardRepository)
+}
+
 func TestPostSearchRepository_SearchPublishedPosts_ExcludesDraftDeletedAndHonorsCursor(t *testing.T) {
 	tagRepo := NewTagRepository()
 	postTagRepo := NewPostTagRepository()
@@ -102,4 +117,86 @@ func TestPostSearchRepository_UpsertAndDeletePost_UpdatesIndex(t *testing.T) {
 	results, err = searchStore.SearchPublishedPosts(context.Background(), "go search", 10, nil)
 	require.NoError(t, err)
 	assert.Empty(t, results)
+}
+
+func TestPostSearchStore_HandlesNilAndMissingInputs(t *testing.T) {
+	var nilStore *PostSearchStore
+
+	results, err := nilStore.SearchPublishedPosts(context.Background(), "go", 10, nil)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+	require.NoError(t, nilStore.RebuildAll(context.Background()))
+	require.NoError(t, nilStore.UpsertPost(context.Background(), 1))
+	require.NoError(t, nilStore.DeletePost(context.Background(), 1))
+}
+
+func TestPostSearchStore_UpsertPost_RemovesMissingAndDraftDocuments(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	post := testPost("go search", "body", 1, 1)
+	_, err := postRepo.Save(context.Background(), post)
+	require.NoError(t, err)
+	require.NoError(t, searchStore.UpsertPost(context.Background(), post.ID))
+
+	results, err := searchStore.SearchPublishedPosts(context.Background(), "go", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	require.NoError(t, postRepo.Delete(context.Background(), post.ID))
+	require.NoError(t, searchStore.UpsertPost(context.Background(), post.ID))
+
+	results, err = searchStore.SearchPublishedPosts(context.Background(), "go", 10, nil)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+
+	draft := entity.NewDraftPost("go draft", "body", 1, 1)
+	_, err = postRepo.Save(context.Background(), draft)
+	require.NoError(t, err)
+	require.NoError(t, searchStore.UpsertPost(context.Background(), draft.ID))
+
+	results, err = searchStore.SearchPublishedPosts(context.Background(), "go", 10, nil)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestPostSearchStore_SearchPublishedPosts_EmptyQueryAndCursorBoundaries(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	first := testPost("go", "go", 1, 1)
+	_, err := postRepo.Save(context.Background(), first)
+	require.NoError(t, err)
+	second := testPost("go", "go", 1, 1)
+	_, err = postRepo.Save(context.Background(), second)
+	require.NoError(t, err)
+	require.NoError(t, searchStore.RebuildAll(context.Background()))
+
+	emptyResults, err := searchStore.SearchPublishedPosts(context.Background(), "   ", 10, nil)
+	require.NoError(t, err)
+	assert.Empty(t, emptyResults)
+
+	results, err := searchStore.SearchPublishedPosts(context.Background(), "go", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	tooHighCursor := &port.PostSearchCursor{Score: results[0].Score + 1, PostID: results[0].Post.ID}
+	afterHigh, err := searchStore.SearchPublishedPosts(context.Background(), "go", 10, tooHighCursor)
+	require.NoError(t, err)
+	assert.Len(t, afterHigh, 2)
+
+	equalTopCursor := &port.PostSearchCursor{Score: results[0].Score, PostID: results[0].Post.ID}
+	afterEqualTop, err := searchStore.SearchPublishedPosts(context.Background(), "go", 10, equalTopCursor)
+	require.NoError(t, err)
+	require.Len(t, afterEqualTop, 1)
+	assert.Equal(t, first.ID, afterEqualTop[0].Post.ID)
+
+	lowestCursor := &port.PostSearchCursor{Score: results[1].Score, PostID: results[1].Post.ID}
+	afterLowest, err := searchStore.SearchPublishedPosts(context.Background(), "go", 10, lowestCursor)
+	require.NoError(t, err)
+	assert.Empty(t, afterLowest)
 }

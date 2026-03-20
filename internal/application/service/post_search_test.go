@@ -122,3 +122,44 @@ func TestPostQueryHandler_SearchPosts_UsesCompositeCursorPagination(t *testing.T
 	assert.False(t, page2.HasMore)
 	assert.Nil(t, page2.NextCursor)
 }
+
+func TestPostQueryHandler_SearchPosts_InvalidCursor(t *testing.T) {
+	repositories := newTestRepositories()
+	query := postsvc.NewQueryHandler(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		repositories.postSearch,
+		repositories.tag,
+		repositories.postTag,
+		repositories.attachment,
+		repositories.comment,
+		repositories.reaction,
+		newTestCache(),
+		newTestCachePolicy(),
+	)
+
+	_, err := query.SearchPosts(context.Background(), "go", 10, "bad-cursor")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
+}
+
+func TestPostQueryHandler_SearchPosts_WithoutRepositoryFails(t *testing.T) {
+	repositories := newTestRepositories()
+	query := postsvc.NewQueryHandler(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		nil,
+		repositories.tag,
+		repositories.postTag,
+		repositories.attachment,
+		repositories.comment,
+		repositories.reaction,
+		newTestCache(),
+		newTestCachePolicy(),
+	)
+
+	_, err := query.SearchPosts(context.Background(), "go", 10, "")
+	require.Error(t, err)
+}

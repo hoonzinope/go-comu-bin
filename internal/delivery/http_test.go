@@ -2320,6 +2320,27 @@ func TestHTTP_PostSearch_InvalidCursor(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
+func TestHTTP_PostSearch_InvalidLimit(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/search?q=go&limit=0", nil)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHTTP_PostSearch_InternalServerErrorFallback(t *testing.T) {
+	post := &fakePostUseCase{
+		searchPosts: func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+			return nil, errors.New("unexpected")
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/search?q=go", nil)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
 func TestHTTP_NotFound(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
