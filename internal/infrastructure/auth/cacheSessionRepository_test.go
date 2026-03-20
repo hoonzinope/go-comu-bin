@@ -3,7 +3,10 @@ package auth
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,4 +69,43 @@ func TestCacheSessionRepository_ForwardsContextToCache(t *testing.T) {
 	_, err = repo.ExistsByUser(ctx, 1)
 	require.NoError(t, err)
 	assert.Same(t, ctx, cache.lastCtx)
+}
+
+func TestCacheSessionRepository_WithUserLockSerializesWrites(t *testing.T) {
+	cache := cacheInMemory.NewInMemoryCache()
+	repo := NewCacheSessionRepository(cache)
+	ctx := context.Background()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	lockDone := make(chan error, 1)
+	go func() {
+		lockDone <- repo.WithUserLock(ctx, 7, func(port.SessionRepositoryScope) error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+
+	select {
+	case err := <-lockDone:
+		require.NoError(t, err)
+		t.Fatal("lock scope returned before release")
+	case <-entered:
+	}
+
+	saveDone := make(chan error, 1)
+	go func() {
+		saveDone <- repo.Save(ctx, 7, "token", 60)
+	}()
+
+	select {
+	case err := <-saveDone:
+		t.Fatalf("save completed while user lock was held: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release)
+	require.NoError(t, <-lockDone)
+	require.NoError(t, <-saveDone)
 }
