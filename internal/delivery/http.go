@@ -357,11 +357,7 @@ func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if err := h.userUseCase.UpgradeGuest(c.Request.Context(), userID, req.Username, req.Email, req.Password); err != nil {
-		writeUseCaseError(c, err)
-		return
-	}
-	token, err := h.sessionUseCase.RotateToken(c.Request.Context(), userID, currentToken)
+	token, err := h.accountUseCase.UpgradeGuestAccount(c.Request.Context(), userID, currentToken, req.Username, req.Email, req.Password)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return

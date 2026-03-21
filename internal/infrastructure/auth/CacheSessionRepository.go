@@ -122,3 +122,11 @@ func (s sessionRepositoryScope) Exists(ctx context.Context, userID int64, token 
 func (s sessionRepositoryScope) ExistsByUser(ctx context.Context, userID int64) (bool, error) {
 	return s.repo.existsByUserLocked(ctx, userID)
 }
+
+func (s sessionRepositoryScope) Save(ctx context.Context, userID int64, token string, ttlSeconds int) error {
+	return s.repo.cache.SetWithTTL(ctx, sessionCacheKey(userID, token), userID, ttlSeconds)
+}
+
+func (s sessionRepositoryScope) Delete(ctx context.Context, userID int64, token string) error {
+	return s.repo.cache.Delete(ctx, sessionCacheKey(userID, token))
+}

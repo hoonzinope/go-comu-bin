@@ -146,7 +146,16 @@ func main() {
 		os.Exit(1)
 	}
 	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository)
-	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase, appLogger)
+	accountUseCase := service.NewAccountServiceWithGuestUpgrade(
+		userUseCase,
+		sessionUseCase,
+		userRepository,
+		unitOfWork,
+		passwordHasher,
+		tokenProvider,
+		sessionRepository,
+		appLogger,
+	)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
 		SessionUseCase:           sessionUseCase,
 		AdminAuthorizer:          userUseCase,

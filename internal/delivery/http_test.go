@@ -160,7 +160,8 @@ func (f *fakeUserUseCase) Delete(context.Context, int64) error {
 }
 
 type fakeAccountUseCase struct {
-	deleteMyAccount func(ctx context.Context, userID int64, password string) error
+	deleteMyAccount     func(ctx context.Context, userID int64, password string) error
+	upgradeGuestAccount func(ctx context.Context, userID int64, currentToken, username, email, password string) (string, error)
 }
 
 func (f *fakeAccountUseCase) DeleteMyAccount(ctx context.Context, userID int64, password string) error {
@@ -168,6 +169,13 @@ func (f *fakeAccountUseCase) DeleteMyAccount(ctx context.Context, userID int64, 
 		return f.deleteMyAccount(ctx, userID, password)
 	}
 	return nil
+}
+
+func (f *fakeAccountUseCase) UpgradeGuestAccount(ctx context.Context, userID int64, currentToken, username, email, password string) (string, error) {
+	if f.upgradeGuestAccount != nil {
+		return f.upgradeGuestAccount(ctx, userID, currentToken, username, email, password)
+	}
+	return "new-token", nil
 }
 
 func TestSwaggerContracts_ResponseSchemasMatchHandlers(t *testing.T) {
@@ -1617,15 +1625,16 @@ func TestHTTP_GuestIssue_Success(t *testing.T) {
 }
 
 func TestHTTP_GuestUpgrade_Success(t *testing.T) {
-	handler := newTestHandler(&fakeUserUseCase{
-		upgradeGuest: func(ctx context.Context, userID int64, username, email, password string) error {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{
+		upgradeGuestAccount: func(ctx context.Context, userID int64, currentToken, username, email, password string) (string, error) {
 			assert.Equal(t, int64(1), userID)
+			assert.NotEmpty(t, currentToken)
 			assert.Equal(t, "alice", username)
 			assert.Equal(t, "alice@example.com", email)
 			assert.Equal(t, "pw", password)
-			return nil
+			return "new-token", nil
 		},
-	}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+	}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	oldToken, err := tokenProvider.IdToToken(1)
 	require.NoError(t, err)
@@ -1639,7 +1648,7 @@ func TestHTTP_GuestUpgrade_Success(t *testing.T) {
 	}, 1, withAuthToken(oldToken))
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Header().Get("Authorization"), "Bearer ")
+	assert.Equal(t, "Bearer new-token", rr.Header().Get("Authorization"))
 	assert.JSONEq(t, `{"result":"ok"}`, rr.Body.String())
 }
 

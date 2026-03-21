@@ -200,7 +200,15 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository)
-	accountUseCase := service.NewAccountService(userUseCase, sessionUseCase)
+	accountUseCase := service.NewAccountServiceWithGuestUpgrade(
+		userUseCase,
+		sessionUseCase,
+		userRepository,
+		unitOfWork,
+		passwordHasher,
+		tokenProvider,
+		sessionRepository,
+	)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
 		SessionUseCase:     sessionUseCase,
 		UserUseCase:        userUseCase,
