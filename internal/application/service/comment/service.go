@@ -39,8 +39,8 @@ func NewServiceWithActionDispatcher(userRepository port.UserRepository, boardRep
 	return NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, actionDispatcher, cachePolicy, authorizationPolicy, logger...)
 }
 
-func (s *CommentService) CreateComment(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error) {
-	return s.commandHandler.CreateComment(ctx, content, authorID, postUUID, parentUUID)
+func (s *CommentService) CreateComment(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUID string, parentUUID *string) (string, error) {
+	return s.commandHandler.CreateComment(ctx, content, mentionedUsernames, authorID, postUUID, parentUUID)
 }
 
 func (s *CommentService) GetCommentsByPost(ctx context.Context, postUUID string, limit int, cursor string) (*model.CommentList, error) {

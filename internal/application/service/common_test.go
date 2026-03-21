@@ -23,19 +23,20 @@ import (
 )
 
 type testRepositories struct {
-	user       port.UserRepository
-	board      port.BoardRepository
-	post       port.PostRepository
-	postSearch port.PostSearchRepository
-	indexer    port.PostSearchIndexer
-	tag        port.TagRepository
-	postTag    port.PostTagRepository
-	comment    port.CommentRepository
-	reaction   port.ReactionRepository
-	attachment port.AttachmentRepository
-	report     port.ReportRepository
-	outbox     port.OutboxStore
-	unitOfWork port.UnitOfWork
+	user         port.UserRepository
+	board        port.BoardRepository
+	post         port.PostRepository
+	postSearch   port.PostSearchRepository
+	indexer      port.PostSearchIndexer
+	tag          port.TagRepository
+	postTag      port.PostTagRepository
+	comment      port.CommentRepository
+	reaction     port.ReactionRepository
+	attachment   port.AttachmentRepository
+	report       port.ReportRepository
+	notification port.NotificationRepository
+	outbox       port.OutboxStore
+	unitOfWork   port.UnitOfWork
 }
 
 func newTestRepositories() testRepositories {
@@ -49,21 +50,23 @@ func newTestRepositories() testRepositories {
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
 	reportRepository := inmemory.NewReportRepository()
+	notificationRepository := inmemory.NewNotificationRepository()
 	outboxRepository := inmemory.NewOutboxRepository()
 	return testRepositories{
-		user:       userRepository,
-		board:      boardRepository,
-		post:       postRepository,
-		postSearch: postSearchStore,
-		indexer:    postSearchStore,
-		tag:        tagRepository,
-		postTag:    postTagRepository,
-		comment:    commentRepository,
-		reaction:   reactionRepository,
-		attachment: attachmentRepository,
-		report:     reportRepository,
-		outbox:     outboxRepository,
-		unitOfWork: inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, outboxRepository),
+		user:         userRepository,
+		board:        boardRepository,
+		post:         postRepository,
+		postSearch:   postSearchStore,
+		indexer:      postSearchStore,
+		tag:          tagRepository,
+		postTag:      postTagRepository,
+		comment:      commentRepository,
+		reaction:     reactionRepository,
+		attachment:   attachmentRepository,
+		report:       reportRepository,
+		notification: notificationRepository,
+		outbox:       outboxRepository,
+		unitOfWork:   inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, outboxRepository),
 	}
 }
 
@@ -131,6 +134,7 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 	})
 	handler := appevent.NewCacheInvalidationHandler(cache, logger)
 	searchIndexHandler := appevent.NewPostSearchIndexHandler(repositories.indexer)
+	notificationHandler := appevent.NewNotificationHandler(repositories.notification)
 	relay.Subscribe(appevent.EventNameBoardChanged, handler)
 	relay.Subscribe(appevent.EventNamePostChanged, handler)
 	relay.Subscribe(appevent.EventNamePostChanged, searchIndexHandler)
@@ -138,6 +142,7 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 	relay.Subscribe(appevent.EventNameReactionChanged, handler)
 	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
 	relay.Subscribe(appevent.EventNameReportChanged, handler)
+	relay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
 	relayCtx, relayCancel := context.WithCancel(context.Background())
 	relay.Start(relayCtx)
 	t.Cleanup(func() {

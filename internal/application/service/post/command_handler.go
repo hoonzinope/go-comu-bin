@@ -45,15 +45,15 @@ func NewCommandHandler(boardRepository port.BoardRepository, postRepository port
 	return newPostCommandHandler(boardRepository, postRepository, unitOfWork, actionDispatcher, authorizationPolicy, logger, tagCoordinator, attachmentCoordinator, deletionWorkflow)
 }
 
-func (h *postCommandHandler) CreatePost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
-	return h.createPost(ctx, title, content, tags, authorID, boardUUID, false)
+func (h *postCommandHandler) CreatePost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
+	return h.createPost(ctx, title, content, tags, mentionedUsernames, authorID, boardUUID, false)
 }
 
-func (h *postCommandHandler) CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
-	return h.createPost(ctx, title, content, tags, authorID, boardUUID, true)
+func (h *postCommandHandler) CreateDraftPost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
+	return h.createPost(ctx, title, content, tags, mentionedUsernames, authorID, boardUUID, true)
 }
 
-func (h *postCommandHandler) createPost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string, draft bool) (string, error) {
+func (h *postCommandHandler) createPost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string, draft bool) (string, error) {
 	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
 		return "", customerror.ErrInvalidInput
 	}
@@ -117,7 +117,13 @@ func (h *postCommandHandler) createPost(ctx context.Context, title, content stri
 			return err
 		}
 		if !draft {
-			if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("created", postID, board.ID, normalizedTags, nil)); err != nil {
+			events := []port.DomainEvent{appevent.NewPostChanged("created", postID, board.ID, normalizedTags, nil)}
+			mentionEvents, err := svccommon.BuildMentionNotificationEvents(txCtx, tx.UserRepository(), user, mentionedUsernames, postID, 0, title, content)
+			if err != nil {
+				return err
+			}
+			events = append(events, mentionEvents...)
+			if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, events...); err != nil {
 				return err
 			}
 		}

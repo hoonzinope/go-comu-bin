@@ -30,6 +30,10 @@ type uuidResponse struct {
 	UUID string `json:"uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
+type countResponse struct {
+	Count int `json:"count" example:"3"`
+}
+
 type userSuspensionResponse struct {
 	UserUUID       string     `json:"user_uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Status         string     `json:"status" example:"suspended"`

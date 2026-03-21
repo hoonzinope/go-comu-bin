@@ -28,10 +28,10 @@ type Post struct {
 }
 
 type PostList struct {
-	Posts      []Post `json:"posts"`
-	Limit      int    `json:"limit"`
-	Cursor     string `json:"cursor"`
-	HasMore    bool   `json:"has_more"`
+	Posts      []Post  `json:"posts"`
+	Limit      int     `json:"limit"`
+	Cursor     string  `json:"cursor"`
+	HasMore    bool    `json:"has_more"`
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
@@ -70,6 +70,27 @@ type CommentList struct {
 type CommentDetail struct {
 	Comment   *Comment   `json:"comment"`
 	Reactions []Reaction `json:"reactions"`
+}
+
+type Notification struct {
+	UUID           string     `json:"uuid"`
+	Type           string     `json:"type"`
+	ActorUUID      string     `json:"actor_uuid"`
+	PostUUID       string     `json:"post_uuid"`
+	CommentUUID    *string    `json:"comment_uuid,omitempty"`
+	ActorName      string     `json:"actor_name"`
+	PostTitle      string     `json:"post_title"`
+	CommentPreview string     `json:"comment_preview"`
+	ReadAt         *time.Time `json:"read_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+type NotificationList struct {
+	Notifications []Notification `json:"notifications"`
+	Limit         int            `json:"limit"`
+	Cursor        string         `json:"cursor"`
+	HasMore       bool           `json:"has_more"`
+	NextCursor    *string        `json:"next_cursor,omitempty"`
 }
 
 type Reaction struct {

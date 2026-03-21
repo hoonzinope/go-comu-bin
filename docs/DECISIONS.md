@@ -52,6 +52,109 @@
 
 - decided
 
+## 2026-03-21 - notification은 독립 도메인으로 도입하고 inbox는 사용자 조회 경험으로 둔다
+
+상태
+
+- decided
+
+배경
+
+- 현재 outbox relay 기반 이벤트 경계가 정리돼 있어, post/comment 활동을 비동기 후속 처리로 연결할 수 있는 기반은 마련돼 있다.
+- 다음 사용자 경험으로는 "내 post에 comment", "내 comment에 reply", "본문에서 멘션됨" 같은 재방문 유도 흐름이 가장 직접적이다.
+- 하지만 현재 단계의 outbox 구현은 in-memory relay라 외부 푸시/메일 delivery까지 바로 얹기보다 내부 확인용 inbox를 먼저 닫는 편이 운영상 안전하다.
+
+관찰
+
+- 기존 도메인/서비스 구조는 `board`, `post`, `comment`, `report`처럼 명시적 도메인 경계를 중심으로 정리돼 있고, HTTP는 그 결과를 사용자 경험 용어로 노출한다.
+- `Inbox`는 사용자가 알림을 확인하는 read-side 개념에 가깝고, 알림 생성/읽음 처리/채널 확장 같은 lifecycle 전체를 담기에는 이름이 좁다.
+- 현재 `comment.changed`, `post.changed` 이벤트에는 recipient, actor, snapshot 같은 알림 생성에 필요한 정보가 부족하다.
+- 로드맵에는 Mention 이벤트와 Notification 연결이 예정돼 있으나, 실제 mention 파싱/이벤트/저장소는 아직 없다.
+
+결론
+
+- 새 도메인 이름은 `Notification`으로 둔다.
+- `Inbox`는 별도 도메인이 아니라 사용자 자신의 notification 목록/미읽음 수를 보여주는 조회 경험 명칭으로만 사용한다.
+- v1 범위는 다음 세 가지다.
+  - 내 post에 comment가 달릴 때 `post_commented`
+  - 내 comment에 reply가 달릴 때 `comment_replied`
+  - post/comment 생성 요청에서 명시된 mention 대상이 있을 때 `mentioned`
+- notification 생성은 쓰기 경로가 직접 저장하지 않고 `notification.triggered` outbox 이벤트를 relay가 소비해 비동기 적재한다.
+- 외부 푸시/메일/webhook delivery는 v1 범위에서 제외하고, 내부 inbox 적재와 조회 API만 제공한다.
+- 공개 API 용어는 `/users/me/notifications`로 고정하고, 응답은 UUID 기반 목록/미읽음 수/개별 읽음 처리만 연다.
+- mention은 생성 시에만 처리하고 update 경로에서는 발행하지 않는다.
+- self notification은 생성하지 않되, guest recipient는 허용한다.
+- notification row에는 참조 ID만 두지 않고 actor 이름, post title, comment preview 최소 snapshot을 함께 저장해 원본 변경/삭제 이후에도 inbox 표시 안정성을 유지한다.
+
+## 2026-03-21 - notification dedup은 이벤트 단위로 고정하고 mention 입력은 FE 명시 목록으로 받는다
+
+상태
+
+- decided
+
+배경
+
+- notification v1 구현은 outbox relay 재시도 시 동일 이벤트가 중복 적재되지 않아야 한다.
+- 초안의 본문 파싱 기반 mention은 `@he`, `@the`처럼 일반명사형 username을 사용자가 텍스트로만 입력해도 의도치 않게 알림이 갈 수 있다.
+- mention은 UX적으로 "문자열 파싱"보다 "사용자가 명시적으로 선택한 대상"이라는 의미가 더 강하다.
+
+관찰
+
+- relay 재시도는 동일 outbox payload를 반복 소비할 수 있으므로, notification 저장소는 재시도 중복을 막는 안정된 키가 필요하다.
+- 본문 파싱은 FE mention UI 없이도 동작하지만, 오탐을 근본적으로 막기 어렵다.
+- 현재 notification snapshot은 inbox 표시 안정성을 위해 최소 스냅샷을 저장한다.
+
+결론
+
+- notification dedup 기준은 "이벤트 단위 중복 방지"로 고정한다.
+- `notification.triggered` 이벤트 payload에는 고유 `event_id`를 포함한다.
+- notification 저장소는 `event_id`를 `dedup_key`로 저장하고, 동일 `event_id` 재처리는 no-op으로 취급한다.
+- 별개의 사용자 액션은 내용이 동일해도 새 `event_id`를 가지므로 별도 notification으로 저장한다.
+- mention 알림은 더 이상 본문 raw text를 파싱해 생성하지 않는다.
+- post/comment create 요청은 FE가 명시적으로 구성한 `mentioned_usernames` 배열을 선택적으로 받는다.
+- backend는 `mentioned_usernames`에 포함된 username만 대상으로 notification을 생성한다.
+- 입력 목록은 trim 후 dedup하며, 존재하지 않는 username은 무시한다.
+- self mention은 notification을 만들지 않는다.
+- notification snapshot 길이는 v1에서 다음으로 고정한다.
+  - `post_title`: 50자
+  - `comment_preview`: 50자
+  - 공백 trim 후 잘라 저장
+
+후속 작업
+
+- `notification.triggered` 이벤트에 `event_id` 추가
+- notification 저장소 dedup을 `event_id` 기준으로 정렬
+- post/comment create request에 `mentioned_usernames` 추가
+- mention 생성 로직을 FE 명시 목록 기반으로 전환
+- API/Swagger 문서에 mention 입력 규칙과 snapshot 길이 반영
+
+관련 문서/코드
+
+- `docs/API.md`
+- `internal/application/event/types.go`
+- `internal/application/event/notification_handler.go`
+- `internal/application/service/common/notification_events.go`
+- `internal/delivery/http_requests.go`
+
+후속 작업
+
+- notification entity/model/port/repository/use case 추가
+- notification 전용 outbox event + serializer/relay handler 추가
+- post/comment 생성 경로에서 notification trigger event 발행
+- mention parser/helper와 dedup 규칙 추가
+- `/users/me/notifications` 목록/미읽음 수/개별 읽음 API 추가
+- 테스트, Swagger, API/ARCHITECTURE/ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+- `internal/application/event/types.go`
+- `internal/application/service/post/command_handler.go`
+- `internal/application/service/comment/command_handler.go`
+- `internal/delivery/http.go`
+
 ## 2026-03-20 - post 검색 v1은 별도 search port와 in-memory reference adapter로 시작한다
 
 상태

@@ -33,17 +33,18 @@ type testTxScopeForOutboxEvents struct {
 	outbox port.OutboxAppender
 }
 
-func (s testTxScopeForOutboxEvents) Context() context.Context                        { return context.Background() }
-func (s testTxScopeForOutboxEvents) UserRepository() port.UserRepository             { return nil }
-func (s testTxScopeForOutboxEvents) BoardRepository() port.BoardRepository           { return nil }
-func (s testTxScopeForOutboxEvents) PostRepository() port.PostRepository             { return nil }
-func (s testTxScopeForOutboxEvents) TagRepository() port.TagRepository               { return nil }
-func (s testTxScopeForOutboxEvents) PostTagRepository() port.PostTagRepository       { return nil }
-func (s testTxScopeForOutboxEvents) CommentRepository() port.CommentRepository       { return nil }
-func (s testTxScopeForOutboxEvents) ReactionRepository() port.ReactionRepository     { return nil }
-func (s testTxScopeForOutboxEvents) AttachmentRepository() port.AttachmentRepository { return nil }
-func (s testTxScopeForOutboxEvents) ReportRepository() port.ReportRepository         { return nil }
-func (s testTxScopeForOutboxEvents) Outbox() port.OutboxAppender                     { return s.outbox }
+func (s testTxScopeForOutboxEvents) Context() context.Context                            { return context.Background() }
+func (s testTxScopeForOutboxEvents) UserRepository() port.UserRepository                 { return nil }
+func (s testTxScopeForOutboxEvents) BoardRepository() port.BoardRepository               { return nil }
+func (s testTxScopeForOutboxEvents) PostRepository() port.PostRepository                 { return nil }
+func (s testTxScopeForOutboxEvents) TagRepository() port.TagRepository                   { return nil }
+func (s testTxScopeForOutboxEvents) PostTagRepository() port.PostTagRepository           { return nil }
+func (s testTxScopeForOutboxEvents) CommentRepository() port.CommentRepository           { return nil }
+func (s testTxScopeForOutboxEvents) ReactionRepository() port.ReactionRepository         { return nil }
+func (s testTxScopeForOutboxEvents) AttachmentRepository() port.AttachmentRepository     { return nil }
+func (s testTxScopeForOutboxEvents) ReportRepository() port.ReportRepository             { return nil }
+func (s testTxScopeForOutboxEvents) NotificationRepository() port.NotificationRepository { return nil }
+func (s testTxScopeForOutboxEvents) Outbox() port.OutboxAppender                         { return s.outbox }
 
 func TestDispatchDomainActions_UsesOutboxWithinTransaction(t *testing.T) {
 	outbox := &spyOutboxAppender{}

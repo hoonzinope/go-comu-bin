@@ -38,9 +38,22 @@ definitions:
       content:
         example: nice post
         type: string
+      mentioned_usernames:
+        example:
+        - alice
+        - bob
+        items:
+          type: string
+        type: array
       parent_uuid:
         example: 550e8400-e29b-41d4-a716-446655440000
         type: string
+    type: object
+  delivery.countResponse:
+    properties:
+      count:
+        example: 3
+        type: integer
     type: object
   delivery.errorResponse:
     properties:
@@ -119,6 +132,13 @@ definitions:
       content:
         example: first post
         type: string
+      mentioned_usernames:
+        example:
+        - alice
+        - bob
+        items:
+          type: string
+        type: array
       tags:
         example:
         - go
@@ -330,6 +350,44 @@ definitions:
         type: integer
       next_cursor:
         type: string
+    type: object
+  response.Notification:
+    properties:
+      actor_name:
+        type: string
+      actor_uuid:
+        type: string
+      comment_preview:
+        type: string
+      comment_uuid:
+        type: string
+      created_at:
+        type: string
+      post_title:
+        type: string
+      post_uuid:
+        type: string
+      read_at:
+        type: string
+      type:
+        type: string
+      uuid:
+        type: string
+    type: object
+  response.NotificationList:
+    properties:
+      cursor:
+        type: string
+      has_more:
+        type: boolean
+      limit:
+        type: integer
+      next_cursor:
+        type: string
+      notifications:
+        items:
+          $ref: '#/definitions/response.Notification'
+        type: array
     type: object
   response.Post:
     properties:
@@ -2169,6 +2227,101 @@ paths:
       summary: Delete My Account
       tags:
       - User
+  /users/me/notifications:
+    get:
+      description: Returns notifications for the authenticated user with cursor pagination.
+      parameters:
+      - description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.NotificationList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: List My Notifications
+      tags:
+      - Notification
+  /users/me/notifications/{notificationUUID}/read:
+    patch:
+      description: Marks one notification as read for the authenticated user.
+      parameters:
+      - description: Notification UUID
+        format: uuid
+        in: path
+        name: notificationUUID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark My Notification Read
+      tags:
+      - Notification
+  /users/me/notifications/unread-count:
+    get:
+      description: Returns unread notification count for the authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.countResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get My Notification Unread Count
+      tags:
+      - Notification
 schemes:
 - http
 securityDefinitions:

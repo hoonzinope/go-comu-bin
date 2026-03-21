@@ -65,6 +65,7 @@ func main() {
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
 	reportRepository := inmemory.NewReportRepository()
+	notificationRepository := inmemory.NewNotificationRepository()
 	outboxRepository := inmemory.NewOutboxRepository(
 		inmemory.WithProcessingTimeout(time.Duration(cfg.Event.Outbox.ProcessingLeaseMillis) * time.Millisecond),
 	)
@@ -83,7 +84,7 @@ func main() {
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logger
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, outboxRepository)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, outboxRepository)
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(
 		outboxRepository,
@@ -101,6 +102,7 @@ func main() {
 	)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
+	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
@@ -108,6 +110,7 @@ func main() {
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
 	if err := postSearchStore.RebuildAll(appCtx); err != nil {
 		slog.Error("failed to build post search index", "error", err)
 		os.Exit(1)
@@ -118,6 +121,7 @@ func main() {
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
+	notificationUseCase := service.NewNotificationService(userRepository, postRepository, commentRepository, notificationRepository)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), appLogger)
 	reportUseCase := service.NewReportServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reportRepository, unitOfWork, nil, authorizationPolicy, appLogger)
 	outboxAdminUseCase := service.NewOutboxAdminService(userRepository, outboxRepository, authorizationPolicy, appLogger)
@@ -164,6 +168,7 @@ func main() {
 		BoardUseCase:             boardUseCase,
 		PostUseCase:              postUseCase,
 		CommentUseCase:           commentUseCase,
+		NotificationUseCase:      notificationUseCase,
 		ReactionUseCase:          reactionUseCase,
 		AttachmentUseCase:        attachmentUseCase,
 		ReportUseCase:            reportUseCase,

@@ -82,6 +82,7 @@ go run ./cmd
 주요 엔드포인트 그룹:
 
 - Auth/User
+- Notification
 - Board/Post/Comment/Reaction
 - Attachment
 - Report/Admin Operations

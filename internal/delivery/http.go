@@ -41,6 +41,7 @@ type HTTPHandler struct {
 	boardUseCase             port.BoardUseCase
 	postUseCase              port.PostUseCase
 	commentUseCase           port.CommentUseCase
+	notificationUseCase      port.NotificationUseCase
 	reactionUseCase          port.ReactionUseCase
 	attachmentUseCase        port.AttachmentUseCase
 	reportUseCase            port.ReportUseCase
@@ -66,6 +67,7 @@ type HTTPDependencies struct {
 	BoardUseCase             port.BoardUseCase
 	PostUseCase              port.PostUseCase
 	CommentUseCase           port.CommentUseCase
+	NotificationUseCase      port.NotificationUseCase
 	ReactionUseCase          port.ReactionUseCase
 	AttachmentUseCase        port.AttachmentUseCase
 	ReportUseCase            port.ReportUseCase
@@ -94,6 +96,7 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		boardUseCase:             deps.BoardUseCase,
 		postUseCase:              deps.PostUseCase,
 		commentUseCase:           deps.CommentUseCase,
+		notificationUseCase:      deps.NotificationUseCase,
 		reactionUseCase:          deps.ReactionUseCase,
 		attachmentUseCase:        deps.AttachmentUseCase,
 		reportUseCase:            deps.ReportUseCase,
@@ -174,6 +177,9 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/guest/upgrade", h.authGinMiddleware, h.handleGuestUpgrade)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
+	v1.GET("/users/me/notifications", h.authGinMiddleware, h.handleMyNotificationsGet)
+	v1.GET("/users/me/notifications/unread-count", h.authGinMiddleware, h.handleMyNotificationsUnreadCountGet)
+	v1.PATCH("/users/me/notifications/:notificationUUID/read", h.authGinMiddleware, h.handleMyNotificationReadPatch)
 	v1.POST("/reports", h.authGinMiddleware, h.handleReportCreate)
 	v1.GET("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspensionGet)
 	v1.PUT("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspend)
@@ -421,6 +427,88 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		return
 	}
 	if err := h.accountUseCase.DeleteMyAccount(c.Request.Context(), userID, req.Password); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleMyNotificationsGet godoc
+// @Summary List My Notifications
+// @Description Returns notifications for the authenticated user with cursor pagination.
+// @Tags Notification
+// @Security BearerAuth
+// @Produce json
+// @Param limit query int false "Page size"
+// @Param cursor query string false "Opaque cursor"
+// @Success 200 {object} response.NotificationList
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/me/notifications [get]
+func (h *HTTPHandler) handleMyNotificationsGet(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	limit, cursor, ok := h.parseLimitCursor(c)
+	if !ok {
+		return
+	}
+	list, err := h.notificationUseCase.GetMyNotifications(c.Request.Context(), userID, limit, cursor)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.NotificationListFromDTO(list))
+}
+
+// handleMyNotificationsUnreadCountGet godoc
+// @Summary Get My Notification Unread Count
+// @Description Returns unread notification count for the authenticated user.
+// @Tags Notification
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} countResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/me/notifications/unread-count [get]
+func (h *HTTPHandler) handleMyNotificationsUnreadCountGet(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	count, err := h.notificationUseCase.GetMyUnreadNotificationCount(c.Request.Context(), userID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, countResponse{Count: count})
+}
+
+// handleMyNotificationReadPatch godoc
+// @Summary Mark My Notification Read
+// @Description Marks one notification as read for the authenticated user.
+// @Tags Notification
+// @Security BearerAuth
+// @Produce json
+// @Param notificationUUID path string true "Notification UUID" format(uuid)
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/me/notifications/{notificationUUID}/read [patch]
+func (h *HTTPHandler) handleMyNotificationReadPatch(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	notificationUUID, ok := parsePathUUID(c, "notificationUUID", "notification")
+	if !ok {
+		return
+	}
+	if err := h.notificationUseCase.MarkMyNotificationRead(c.Request.Context(), userID, notificationUUID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -991,7 +1079,7 @@ func (h *HTTPHandler) handleBoardPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreatePost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardUUID)
+	postID, err := h.postUseCase.CreatePost(c.Request.Context(), req.Title, req.Content, req.Tags, req.MentionedUsernames, authorID, boardUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1032,7 +1120,7 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	postID, err := h.postUseCase.CreateDraftPost(c.Request.Context(), req.Title, req.Content, req.Tags, authorID, boardUUID)
+	postID, err := h.postUseCase.CreateDraftPost(c.Request.Context(), req.Title, req.Content, req.Tags, req.MentionedUsernames, authorID, boardUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1498,7 +1586,7 @@ func (h *HTTPHandler) handlePostCommentsPost(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	id, err := h.commentUseCase.CreateComment(c.Request.Context(), req.Content, authorID, postUUID, req.ParentUUID)
+	id, err := h.commentUseCase.CreateComment(c.Request.Context(), req.Content, req.MentionedUsernames, authorID, postUUID, req.ParentUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return

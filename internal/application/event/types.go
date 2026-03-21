@@ -3,16 +3,18 @@ package event
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 const (
-	EventNameBoardChanged      = "board.changed"
-	EventNamePostChanged       = "post.changed"
-	EventNameCommentChanged    = "comment.changed"
-	EventNameReactionChanged   = "reaction.changed"
-	EventNameAttachmentChanged = "attachment.changed"
-	EventNameReportChanged     = "report.changed"
+	EventNameBoardChanged          = "board.changed"
+	EventNamePostChanged           = "post.changed"
+	EventNameCommentChanged        = "comment.changed"
+	EventNameReactionChanged       = "reaction.changed"
+	EventNameAttachmentChanged     = "attachment.changed"
+	EventNameReportChanged         = "report.changed"
+	EventNameNotificationTriggered = "notification.triggered"
 )
 
 type BoardChanged struct {
@@ -128,5 +130,41 @@ func (e ReportChanged) EventName() string {
 }
 
 func (e ReportChanged) OccurredAt() time.Time {
+	return e.At
+}
+
+type NotificationTriggered struct {
+	EventID                string                  `json:"event_id"`
+	RecipientUserID        int64                   `json:"recipient_user_id"`
+	ActorUserID            int64                   `json:"actor_user_id"`
+	Type                   entity.NotificationType `json:"type"`
+	PostID                 int64                   `json:"post_id"`
+	CommentID              int64                   `json:"comment_id"`
+	ActorNameSnapshot      string                  `json:"actor_name_snapshot"`
+	PostTitleSnapshot      string                  `json:"post_title_snapshot"`
+	CommentPreviewSnapshot string                  `json:"comment_preview_snapshot"`
+	At                     time.Time               `json:"occurred_at"`
+}
+
+func NewNotificationTriggered(recipientUserID, actorUserID int64, notificationType entity.NotificationType, postID, commentID int64, actorNameSnapshot, postTitleSnapshot, commentPreviewSnapshot string) NotificationTriggered {
+	return NotificationTriggered{
+		EventID:                uuid.NewString(),
+		RecipientUserID:        recipientUserID,
+		ActorUserID:            actorUserID,
+		Type:                   notificationType,
+		PostID:                 postID,
+		CommentID:              commentID,
+		ActorNameSnapshot:      actorNameSnapshot,
+		PostTitleSnapshot:      postTitleSnapshot,
+		CommentPreviewSnapshot: commentPreviewSnapshot,
+		At:                     time.Now(),
+	}
+}
+
+func (e NotificationTriggered) EventName() string {
+	return EventNameNotificationTriggered
+}
+
+func (e NotificationTriggered) OccurredAt() time.Time {
 	return e.At
 }

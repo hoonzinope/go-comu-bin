@@ -54,6 +54,19 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 세션 정리는 best effort로 처리되며, 계정 삭제 성공이 우선됩니다.
   - guest 계정은 self-delete를 허용하지 않으며 `403 Forbidden`을 반환합니다.
   - 내부 정리 대상 guest는 background cleanup job이 soft delete 처리합니다.
+- `GET /api/v1/users/me/notifications?limit=10&cursor=` (인증 필요)
+  - 자신의 notification inbox 목록을 조회합니다.
+  - 응답 메타: `has_more`, `next_cursor`
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
+  - 응답 필드: `uuid`, `type`, `actor_uuid`, `post_uuid`, `comment_uuid`, `actor_name`, `post_title`, `comment_preview`, `read_at`, `created_at`
+  - v1 알림 타입은 `post_commented`, `comment_replied`, `mentioned` 입니다.
+  - snapshot은 저장 시점 기준 최소 스냅샷을 사용하며, 현재 길이는 `post_title` 50자, `comment_preview` 50자입니다.
+- `GET /api/v1/users/me/notifications/unread-count` (인증 필요)
+  - 자신의 unread notification 개수를 조회합니다.
+- `PATCH /api/v1/users/me/notifications/{notificationUUID}/read` (인증 필요)
+  - 자신의 notification 한 건을 읽음 처리합니다.
+  - 이미 읽은 notification을 다시 호출해도 성공(`204`)으로 처리합니다.
+  - 다른 사용자의 notification UUID는 `404 Not Found`로 숨깁니다.
 - `GET /api/v1/users/{userUUID}/suspension` (인증 필요, admin)
   - 사용자의 현재 제재 상태를 조회합니다.
   - `userUUID`는 유효한 UUID 형식이어야 하며, 형식 오류는 `400 Bad Request`
@@ -148,8 +161,10 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - guest 계정도 작성할 수 있습니다.
   - 생성 시점 본문에는 `attachment://{attachmentUUID}` 참조를 포함할 수 없습니다.
   - 첨부가 필요한 글은 먼저 draft를 만든 뒤 첨부 업로드와 본문 수정을 거쳐 publish 해야 합니다.
-  - 요청 본문은 선택적 `tags` 배열을 받을 수 있습니다.
+  - 요청 본문은 선택적 `tags`, `mentioned_usernames` 배열을 받을 수 있습니다.
   - `tags`는 최대 10개, 각 항목 최대 30자이며, 앞뒤 공백 제거 후 영문 소문자로 정규화됩니다.
+  - `mentioned_usernames`는 FE mention UI가 명시적으로 구성한 대상 목록만 받습니다.
+  - backend는 `mentioned_usernames`에 포함된 존재하는 사용자만 `mentioned` notification 대상으로 삼습니다.
 - `POST /api/v1/boards/{boardUUID}/posts/drafts` (인증 필요)
   - 임시저장 글을 생성합니다.
   - 생성된 글은 공개 목록/상세에 노출되지 않습니다.
@@ -232,6 +247,18 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 게시글 본문에서 `attachment://{attachmentUUID}` 로 참조 중인 첨부는 삭제할 수 없습니다.
 
 ## Comment
+
+- `GET /api/v1/posts/{postUUID}/comments?limit=10&cursor=`
+  - 응답 메타: `has_more`, `next_cursor`
+  - 삭제된 부모 댓글에 활성 reply가 남아 있으면 tombstone으로 함께 노출할 수 있습니다.
+- `POST /api/v1/posts/{postUUID}/comments` (인증 필요)
+  - guest 계정도 작성할 수 있습니다.
+  - 요청 본문: `content`, 선택적 `parent_uuid`, 선택적 `mentioned_usernames`
+  - `parent_uuid`를 주면 1-depth reply를 생성합니다. reply의 parent는 같은 post의 활성 top-level comment여야 합니다.
+  - top-level comment는 post 작성자에게 `post_commented` notification을 비동기로 생성합니다.
+  - reply는 부모 comment 작성자에게 `comment_replied` notification을 비동기로 생성합니다.
+  - mention 알림은 본문 raw text를 직접 파싱하지 않고, FE가 명시적으로 넘긴 `mentioned_usernames` 목록만 사용합니다.
+  - 자기 자신에게 향하는 notification은 생성하지 않습니다.
 
 - 상태 모델
   - 내부 기본 상태는 `active`, `deleted`

@@ -186,6 +186,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhileTagTransactionL
 		NewReactionRepository(),
 		NewAttachmentRepository(),
 		NewReportRepository(),
+		NewNotificationRepository(),
 		NewOutboxRepository(),
 	)
 
@@ -253,6 +254,7 @@ func TestPostRepository_SelectPublishedPostsByTagName_BlocksWhilePostTagTransact
 		NewReactionRepository(),
 		NewAttachmentRepository(),
 		NewReportRepository(),
+		NewNotificationRepository(),
 		NewOutboxRepository(),
 	)
 

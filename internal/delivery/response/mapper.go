@@ -93,6 +93,25 @@ func CommentListFromDTO(list *model.CommentList) *CommentList {
 	}
 }
 
+func NotificationListFromDTO(list *model.NotificationList) *NotificationList {
+	if list == nil {
+		return &NotificationList{}
+	}
+
+	items := make([]Notification, 0, len(list.Notifications))
+	for _, item := range list.Notifications {
+		items = append(items, notificationFromDTO(item))
+	}
+
+	return &NotificationList{
+		Notifications: items,
+		Limit:         list.Limit,
+		Cursor:        list.Cursor,
+		HasMore:       list.HasMore,
+		NextCursor:    list.NextCursor,
+	}
+}
+
 func ReactionsFromDTO(items []model.Reaction) []Reaction {
 	out := make([]Reaction, 0, len(items))
 	for _, item := range items {
@@ -176,6 +195,21 @@ func commentDetailFromDTO(detail *model.CommentDetail) CommentDetail {
 	return CommentDetail{
 		Comment:   commentPtrFromDTO(detail.Comment),
 		Reactions: reactions,
+	}
+}
+
+func notificationFromDTO(notification model.Notification) Notification {
+	return Notification{
+		UUID:           notification.UUID,
+		Type:           string(notification.Type),
+		ActorUUID:      notification.ActorUUID,
+		PostUUID:       notification.PostUUID,
+		CommentUUID:    notification.CommentUUID,
+		ActorName:      notification.ActorName,
+		PostTitle:      notification.PostTitle,
+		CommentPreview: notification.CommentPreview,
+		ReadAt:         notification.ReadAt,
+		CreatedAt:      notification.CreatedAt,
 	}
 }
 

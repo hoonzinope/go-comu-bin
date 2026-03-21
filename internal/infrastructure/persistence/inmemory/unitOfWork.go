@@ -13,36 +13,38 @@ var _ port.UnitOfWork = (*UnitOfWork)(nil)
 var _ port.TxScope = (*txScope)(nil)
 
 type UnitOfWork struct {
-	mu                   sync.Mutex
-	userRepository       *UserRepository
-	boardRepository      *BoardRepository
-	postRepository       *PostRepository
-	tagRepository        *TagRepository
-	postTagRepo          *PostTagRepository
-	commentRepository    *CommentRepository
-	reactionRepository   *ReactionRepository
-	attachmentRepository *AttachmentRepository
-	reportRepository     *ReportRepository
-	outboxRepository     *OutboxRepository
+	mu                     sync.Mutex
+	userRepository         *UserRepository
+	boardRepository        *BoardRepository
+	postRepository         *PostRepository
+	tagRepository          *TagRepository
+	postTagRepo            *PostTagRepository
+	commentRepository      *CommentRepository
+	reactionRepository     *ReactionRepository
+	attachmentRepository   *AttachmentRepository
+	reportRepository       *ReportRepository
+	notificationRepository *NotificationRepository
+	outboxRepository       *OutboxRepository
 }
 
 type txScope struct {
-	ctx                  context.Context
-	userRepository       port.UserRepository
-	boardRepository      port.BoardRepository
-	postRepository       port.PostRepository
-	tagRepository        port.TagRepository
-	postTagRepository    port.PostTagRepository
-	commentRepository    port.CommentRepository
-	reactionRepository   port.ReactionRepository
-	attachmentRepository port.AttachmentRepository
-	reportRepository     port.ReportRepository
-	outboxAppender       port.OutboxAppender
+	ctx                    context.Context
+	userRepository         port.UserRepository
+	boardRepository        port.BoardRepository
+	postRepository         port.PostRepository
+	tagRepository          port.TagRepository
+	postTagRepository      port.PostTagRepository
+	commentRepository      port.CommentRepository
+	reactionRepository     port.ReactionRepository
+	attachmentRepository   port.AttachmentRepository
+	reportRepository       port.ReportRepository
+	notificationRepository port.NotificationRepository
+	outboxAppender         port.OutboxAppender
 }
 
 func (s *txScope) Context() context.Context { return s.ctx }
 
-func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository, reportRepository *ReportRepository, outboxRepository *OutboxRepository) *UnitOfWork {
+func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository, reportRepository *ReportRepository, notificationRepository *NotificationRepository, outboxRepository *OutboxRepository) *UnitOfWork {
 	userRepository.attachCoordinator(newTxCoordinator())
 	boardRepository.attachCoordinator(newTxCoordinator())
 	postRepository.attachCoordinator(newTxCoordinator())
@@ -52,19 +54,21 @@ func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardReposit
 	reactionRepository.attachCoordinator(newTxCoordinator())
 	attachmentRepository.attachCoordinator(newTxCoordinator())
 	reportRepository.attachCoordinator(newTxCoordinator())
+	notificationRepository.attachCoordinator(newTxCoordinator())
 	outboxRepository.attachCoordinator(newTxCoordinator())
 
 	return &UnitOfWork{
-		userRepository:       userRepository,
-		boardRepository:      boardRepository,
-		postRepository:       postRepository,
-		tagRepository:        tagRepository,
-		postTagRepo:          postTagRepo,
-		commentRepository:    commentRepository,
-		reactionRepository:   reactionRepository,
-		attachmentRepository: attachmentRepository,
-		reportRepository:     reportRepository,
-		outboxRepository:     outboxRepository,
+		userRepository:         userRepository,
+		boardRepository:        boardRepository,
+		postRepository:         postRepository,
+		tagRepository:          tagRepository,
+		postTagRepo:            postTagRepo,
+		commentRepository:      commentRepository,
+		reactionRepository:     reactionRepository,
+		attachmentRepository:   attachmentRepository,
+		reportRepository:       reportRepository,
+		notificationRepository: notificationRepository,
+		outboxRepository:       outboxRepository,
 	}
 }
 
@@ -73,40 +77,46 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 	defer u.mu.Unlock()
 
 	var (
-		postState             postRepositoryState
-		postSnapshotted       bool
-		userState             userRepositoryState
-		userSnapshotted       bool
-		boardState            boardRepositoryState
-		boardSnapshotted      bool
-		tagState              tagRepositoryState
-		tagSnapshotted        bool
-		postTagState          postTagRepositoryState
-		postTagSnapshotted    bool
-		commentState          commentRepositoryState
-		commentSnapshotted    bool
-		reactionState         reactionRepositoryState
-		reactionSnapshotted   bool
-		attachmentState       attachmentRepositoryState
-		attachmentSnapshotted bool
-		reportState           reportRepositoryState
-		reportSnapshotted     bool
-		outboxState           outboxRepositoryState
-		outboxSnapshotted     bool
-		userLocked            bool
-		boardLocked           bool
-		postLocked            bool
-		tagLocked             bool
-		postTagLocked         bool
-		commentLocked         bool
-		reactionLocked        bool
-		attachmentLocked      bool
-		reportLocked          bool
-		outboxLocked          bool
+		postState               postRepositoryState
+		postSnapshotted         bool
+		userState               userRepositoryState
+		userSnapshotted         bool
+		boardState              boardRepositoryState
+		boardSnapshotted        bool
+		tagState                tagRepositoryState
+		tagSnapshotted          bool
+		postTagState            postTagRepositoryState
+		postTagSnapshotted      bool
+		commentState            commentRepositoryState
+		commentSnapshotted      bool
+		reactionState           reactionRepositoryState
+		reactionSnapshotted     bool
+		attachmentState         attachmentRepositoryState
+		attachmentSnapshotted   bool
+		reportState             reportRepositoryState
+		reportSnapshotted       bool
+		notificationState       notificationRepositoryState
+		notificationSnapshotted bool
+		outboxState             outboxRepositoryState
+		outboxSnapshotted       bool
+		userLocked              bool
+		boardLocked             bool
+		postLocked              bool
+		tagLocked               bool
+		postTagLocked           bool
+		commentLocked           bool
+		reactionLocked          bool
+		attachmentLocked        bool
+		reportLocked            bool
+		notificationLocked      bool
+		outboxLocked            bool
 	)
 	defer func() {
 		if outboxLocked {
 			u.outboxRepository.coordinator.unlock()
+		}
+		if notificationLocked {
+			u.notificationRepository.coordinator.unlock()
 		}
 		if reportLocked {
 			u.reportRepository.coordinator.unlock()
@@ -236,6 +246,17 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		reportState = u.reportRepository.snapshot()
 		reportSnapshotted = true
 	}
+	captureNotification := func() {
+		if !notificationLocked {
+			u.notificationRepository.coordinator.lock()
+			notificationLocked = true
+		}
+		if notificationSnapshotted {
+			return
+		}
+		notificationState = u.notificationRepository.snapshot()
+		notificationSnapshotted = true
+	}
 	captureOutbox := func() {
 		if !outboxLocked {
 			u.outboxRepository.coordinator.lock()
@@ -249,17 +270,18 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 	}
 
 	tx := &txScope{
-		ctx:                  ctx,
-		userRepository:       userTxRepository{repo: u.userRepository, beforeWrite: captureUser},
-		boardRepository:      boardTxRepository{repo: u.boardRepository, beforeWrite: captureBoard},
-		postRepository:       postTxRepository{repo: u.postRepository, beforeWrite: capturePost},
-		tagRepository:        tagTxRepository{repo: u.tagRepository, beforeWrite: captureTag},
-		postTagRepository:    postTagTxRepository{repo: u.postTagRepo, beforeWrite: capturePostTag},
-		commentRepository:    commentTxRepository{repo: u.commentRepository, beforeWrite: captureComment},
-		reactionRepository:   reactionTxRepository{repo: u.reactionRepository, beforeWrite: captureReaction},
-		attachmentRepository: attachmentTxRepository{repo: u.attachmentRepository, beforeWrite: captureAttachment},
-		reportRepository:     reportTxRepository{repo: u.reportRepository, beforeWrite: captureReport},
-		outboxAppender:       outboxTxAppender{repo: u.outboxRepository, beforeWrite: captureOutbox},
+		ctx:                    ctx,
+		userRepository:         userTxRepository{repo: u.userRepository, beforeWrite: captureUser},
+		boardRepository:        boardTxRepository{repo: u.boardRepository, beforeWrite: captureBoard},
+		postRepository:         postTxRepository{repo: u.postRepository, beforeWrite: capturePost},
+		tagRepository:          tagTxRepository{repo: u.tagRepository, beforeWrite: captureTag},
+		postTagRepository:      postTagTxRepository{repo: u.postTagRepo, beforeWrite: capturePostTag},
+		commentRepository:      commentTxRepository{repo: u.commentRepository, beforeWrite: captureComment},
+		reactionRepository:     reactionTxRepository{repo: u.reactionRepository, beforeWrite: captureReaction},
+		attachmentRepository:   attachmentTxRepository{repo: u.attachmentRepository, beforeWrite: captureAttachment},
+		reportRepository:       reportTxRepository{repo: u.reportRepository, beforeWrite: captureReport},
+		notificationRepository: notificationTxRepository{repo: u.notificationRepository, beforeWrite: captureNotification},
+		outboxAppender:         outboxTxAppender{repo: u.outboxRepository, beforeWrite: captureOutbox},
 	}
 	if err := fn(tx); err != nil {
 		if userSnapshotted {
@@ -288,6 +310,9 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		}
 		if reportSnapshotted {
 			u.reportRepository.restore(reportState)
+		}
+		if notificationSnapshotted {
+			u.notificationRepository.restore(notificationState)
 		}
 		if outboxSnapshotted {
 			u.outboxRepository.restore(outboxState)
@@ -331,6 +356,10 @@ func (t *txScope) AttachmentRepository() port.AttachmentRepository {
 
 func (t *txScope) ReportRepository() port.ReportRepository {
 	return t.reportRepository
+}
+
+func (t *txScope) NotificationRepository() port.NotificationRepository {
+	return t.notificationRepository
 }
 
 func (t *txScope) Outbox() port.OutboxAppender {
@@ -669,6 +698,11 @@ type reportTxRepository struct {
 	beforeWrite func()
 }
 
+type notificationTxRepository struct {
+	repo        *NotificationRepository
+	beforeWrite func()
+}
+
 type outboxTxAppender struct {
 	repo        *OutboxRepository
 	beforeWrite func()
@@ -745,6 +779,42 @@ func (r reportTxRepository) Update(ctx context.Context, report *entity.Report) e
 		r.beforeWrite()
 	}
 	return r.repo.update(report)
+}
+
+func (r notificationTxRepository) Save(ctx context.Context, notification *entity.Notification) (int64, error) {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.save(notification)
+}
+
+func (r notificationTxRepository) SelectByID(ctx context.Context, id int64) (*entity.Notification, error) {
+	_ = ctx
+	return r.repo.SelectByID(ctx, id)
+}
+
+func (r notificationTxRepository) SelectByUUID(ctx context.Context, notificationUUID string) (*entity.Notification, error) {
+	_ = ctx
+	return r.repo.SelectByUUID(ctx, notificationUUID)
+}
+
+func (r notificationTxRepository) SelectByRecipientUserID(ctx context.Context, recipientUserID int64, limit int, lastID int64) ([]*entity.Notification, error) {
+	_ = ctx
+	return r.repo.SelectByRecipientUserID(ctx, recipientUserID, limit, lastID)
+}
+
+func (r notificationTxRepository) CountUnreadByRecipientUserID(ctx context.Context, recipientUserID int64) (int, error) {
+	_ = ctx
+	return r.repo.CountUnreadByRecipientUserID(ctx, recipientUserID)
+}
+
+func (r notificationTxRepository) MarkRead(ctx context.Context, id int64) error {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.markRead(id)
 }
 
 func (r outboxTxAppender) Append(messages ...port.OutboxMessage) error {

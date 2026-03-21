@@ -54,12 +54,12 @@ func NewServiceWithActionDispatcher(userRepository port.UserRepository, boardRep
 	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, actionDispatcher, cachePolicy, authorizationPolicy, logger...)
 }
 
-func (s *PostService) CreatePost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
-	return s.commandHandler.CreatePost(ctx, title, content, tags, authorID, boardUUID)
+func (s *PostService) CreatePost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
+	return s.commandHandler.CreatePost(ctx, title, content, tags, mentionedUsernames, authorID, boardUUID)
 }
 
-func (s *PostService) CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
-	return s.commandHandler.CreateDraftPost(ctx, title, content, tags, authorID, boardUUID)
+func (s *PostService) CreateDraftPost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
+	return s.commandHandler.CreateDraftPost(ctx, title, content, tags, mentionedUsernames, authorID, boardUUID)
 }
 
 func (s *PostService) GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error) {

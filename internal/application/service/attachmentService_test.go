@@ -150,29 +150,31 @@ func (r *failingAttachmentRepository) Delete(context.Context, int64) error {
 }
 
 type testTxScope struct {
-	ctx        context.Context
-	user       port.UserRepository
-	board      port.BoardRepository
-	post       port.PostRepository
-	tag        port.TagRepository
-	postTag    port.PostTagRepository
-	comment    port.CommentRepository
-	reaction   port.ReactionRepository
-	attachment port.AttachmentRepository
-	outbox     port.OutboxAppender
+	ctx          context.Context
+	user         port.UserRepository
+	board        port.BoardRepository
+	post         port.PostRepository
+	tag          port.TagRepository
+	postTag      port.PostTagRepository
+	comment      port.CommentRepository
+	reaction     port.ReactionRepository
+	attachment   port.AttachmentRepository
+	notification port.NotificationRepository
+	outbox       port.OutboxAppender
 }
 
-func (s testTxScope) Context() context.Context                        { return s.ctx }
-func (s testTxScope) UserRepository() port.UserRepository             { return s.user }
-func (s testTxScope) BoardRepository() port.BoardRepository           { return s.board }
-func (s testTxScope) PostRepository() port.PostRepository             { return s.post }
-func (s testTxScope) TagRepository() port.TagRepository               { return s.tag }
-func (s testTxScope) PostTagRepository() port.PostTagRepository       { return s.postTag }
-func (s testTxScope) CommentRepository() port.CommentRepository       { return s.comment }
-func (s testTxScope) ReactionRepository() port.ReactionRepository     { return s.reaction }
-func (s testTxScope) AttachmentRepository() port.AttachmentRepository { return s.attachment }
-func (s testTxScope) ReportRepository() port.ReportRepository         { return nil }
-func (s testTxScope) Outbox() port.OutboxAppender                     { return s.outbox }
+func (s testTxScope) Context() context.Context                            { return s.ctx }
+func (s testTxScope) UserRepository() port.UserRepository                 { return s.user }
+func (s testTxScope) BoardRepository() port.BoardRepository               { return s.board }
+func (s testTxScope) PostRepository() port.PostRepository                 { return s.post }
+func (s testTxScope) TagRepository() port.TagRepository                   { return s.tag }
+func (s testTxScope) PostTagRepository() port.PostTagRepository           { return s.postTag }
+func (s testTxScope) CommentRepository() port.CommentRepository           { return s.comment }
+func (s testTxScope) ReactionRepository() port.ReactionRepository         { return s.reaction }
+func (s testTxScope) AttachmentRepository() port.AttachmentRepository     { return s.attachment }
+func (s testTxScope) ReportRepository() port.ReportRepository             { return nil }
+func (s testTxScope) NotificationRepository() port.NotificationRepository { return s.notification }
+func (s testTxScope) Outbox() port.OutboxAppender                         { return s.outbox }
 
 type testUnitOfWork struct {
 	scope port.TxScope

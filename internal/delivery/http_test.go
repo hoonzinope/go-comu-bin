@@ -178,6 +178,33 @@ func (f *fakeAccountUseCase) UpgradeGuestAccount(ctx context.Context, userID int
 	return "new-token", nil
 }
 
+type fakeNotificationUseCase struct {
+	getMyNotifications     func(ctx context.Context, userID int64, limit int, cursor string) (*model.NotificationList, error)
+	getMyUnreadCount       func(ctx context.Context, userID int64) (int, error)
+	markMyNotificationRead func(ctx context.Context, userID int64, notificationUUID string) error
+}
+
+func (f *fakeNotificationUseCase) GetMyNotifications(ctx context.Context, userID int64, limit int, cursor string) (*model.NotificationList, error) {
+	if f.getMyNotifications != nil {
+		return f.getMyNotifications(ctx, userID, limit, cursor)
+	}
+	return &model.NotificationList{}, nil
+}
+
+func (f *fakeNotificationUseCase) GetMyUnreadNotificationCount(ctx context.Context, userID int64) (int, error) {
+	if f.getMyUnreadCount != nil {
+		return f.getMyUnreadCount(ctx, userID)
+	}
+	return 0, nil
+}
+
+func (f *fakeNotificationUseCase) MarkMyNotificationRead(ctx context.Context, userID int64, notificationUUID string) error {
+	if f.markMyNotificationRead != nil {
+		return f.markMyNotificationRead(ctx, userID, notificationUUID)
+	}
+	return nil
+}
+
 func TestSwaggerContracts_ResponseSchemasMatchHandlers(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "swagger", "swagger.json"))
 	require.NoError(t, err)
@@ -350,8 +377,8 @@ func (f *fakeOutboxAdminUseCase) DiscardDeadMessage(ctx context.Context, adminID
 }
 
 type fakePostUseCase struct {
-	createPost      func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
-	createDraftPost func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error)
+	createPost      func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error)
+	createDraftPost func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error)
 	getPostsList    func(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error)
 	searchPosts     func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error)
 	getPostsByTag   func(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error)
@@ -361,16 +388,16 @@ type fakePostUseCase struct {
 	deletePost      func(ctx context.Context, postUUID string, authorID int64) error
 }
 
-func (f *fakePostUseCase) CreatePost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
+func (f *fakePostUseCase) CreatePost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
 	if f.createPost != nil {
-		return f.createPost(ctx, title, content, tags, authorID, boardUUID)
+		return f.createPost(ctx, title, content, tags, mentionedUsernames, authorID, boardUUID)
 	}
 	return "post-uuid-1", nil
 }
 
-func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content string, tags []string, authorID int64, boardUUID string) (string, error) {
+func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
 	if f.createDraftPost != nil {
-		return f.createDraftPost(ctx, title, content, tags, authorID, boardUUID)
+		return f.createDraftPost(ctx, title, content, tags, mentionedUsernames, authorID, boardUUID)
 	}
 	return "post-uuid-1", nil
 }
@@ -425,15 +452,15 @@ func (f *fakePostUseCase) DeletePost(ctx context.Context, postUUID string, autho
 }
 
 type fakeCommentUseCase struct {
-	createComment     func(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error)
+	createComment     func(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUID string, parentUUID *string) (string, error)
 	getCommentsByPost func(ctx context.Context, postUUID string, limit int, cursor string) (*model.CommentList, error)
 	updateComment     func(ctx context.Context, commentUUID string, authorID int64, content string) error
 	deleteComment     func(ctx context.Context, commentUUID string, authorID int64) error
 }
 
-func (f *fakeCommentUseCase) CreateComment(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error) {
+func (f *fakeCommentUseCase) CreateComment(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUID string, parentUUID *string) (string, error) {
 	if f.createComment != nil {
-		return f.createComment(ctx, content, authorID, postUUID, parentUUID)
+		return f.createComment(ctx, content, mentionedUsernames, authorID, postUUID, parentUUID)
 	}
 	return "comment-uuid-1", nil
 }
@@ -560,19 +587,21 @@ func newTestHandler(
 	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	notificationUseCase := &fakeNotificationUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:     sessionUseCase,
-		AdminAuthorizer:    user,
-		UserUseCase:        user,
-		AccountUseCase:     account,
-		BoardUseCase:       board,
-		PostUseCase:        post,
-		CommentUseCase:     comment,
-		ReactionUseCase:    reaction,
-		AttachmentUseCase:  attachment,
-		ReportUseCase:      reportUseCase,
-		OutboxAdminUseCase: outboxAdminUseCase,
-		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
+		SessionUseCase:      sessionUseCase,
+		AdminAuthorizer:     user,
+		UserUseCase:         user,
+		AccountUseCase:      account,
+		BoardUseCase:        board,
+		PostUseCase:         post,
+		CommentUseCase:      comment,
+		NotificationUseCase: notificationUseCase,
+		ReactionUseCase:     reaction,
+		AttachmentUseCase:   attachment,
+		ReportUseCase:       reportUseCase,
+		OutboxAdminUseCase:  outboxAdminUseCase,
+		MaxJSONBodyBytes:    defaultMaxJSONBodyBytes,
 	}).Handler
 }
 
@@ -591,19 +620,21 @@ func newTestHandlerWithJSONLimit(
 	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	notificationUseCase := &fakeNotificationUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:     sessionUseCase,
-		AdminAuthorizer:    user,
-		UserUseCase:        user,
-		AccountUseCase:     account,
-		BoardUseCase:       board,
-		PostUseCase:        post,
-		CommentUseCase:     comment,
-		ReactionUseCase:    reaction,
-		AttachmentUseCase:  attachment,
-		ReportUseCase:      reportUseCase,
-		OutboxAdminUseCase: outboxAdminUseCase,
-		MaxJSONBodyBytes:   maxJSONBodyBytes,
+		SessionUseCase:      sessionUseCase,
+		AdminAuthorizer:     user,
+		UserUseCase:         user,
+		AccountUseCase:      account,
+		BoardUseCase:        board,
+		PostUseCase:         post,
+		CommentUseCase:      comment,
+		NotificationUseCase: notificationUseCase,
+		ReactionUseCase:     reaction,
+		AttachmentUseCase:   attachment,
+		ReportUseCase:       reportUseCase,
+		OutboxAdminUseCase:  outboxAdminUseCase,
+		MaxJSONBodyBytes:    maxJSONBodyBytes,
 	}).Handler
 }
 
@@ -622,20 +653,22 @@ func newTestHandlerWithDefaultPageLimit(
 	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	notificationUseCase := &fakeNotificationUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:     sessionUseCase,
-		AdminAuthorizer:    user,
-		UserUseCase:        user,
-		AccountUseCase:     account,
-		BoardUseCase:       board,
-		PostUseCase:        post,
-		CommentUseCase:     comment,
-		ReactionUseCase:    reaction,
-		AttachmentUseCase:  attachment,
-		ReportUseCase:      reportUseCase,
-		OutboxAdminUseCase: outboxAdminUseCase,
-		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
-		DefaultPageLimit:   defaultPageLimit,
+		SessionUseCase:      sessionUseCase,
+		AdminAuthorizer:     user,
+		UserUseCase:         user,
+		AccountUseCase:      account,
+		BoardUseCase:        board,
+		PostUseCase:         post,
+		CommentUseCase:      comment,
+		NotificationUseCase: notificationUseCase,
+		ReactionUseCase:     reaction,
+		AttachmentUseCase:   attachment,
+		ReportUseCase:       reportUseCase,
+		OutboxAdminUseCase:  outboxAdminUseCase,
+		MaxJSONBodyBytes:    defaultMaxJSONBodyBytes,
+		DefaultPageLimit:    defaultPageLimit,
 	}).Handler
 }
 
@@ -658,6 +691,7 @@ func newTestHandlerWithRateLimit(
 	reportUseCase := &fakeReportUseCase{}
 	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
 	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
+	notificationUseCase := &fakeNotificationUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
 		SessionUseCase:        sessionUseCase,
 		AdminAuthorizer:       user,
@@ -666,6 +700,7 @@ func newTestHandlerWithRateLimit(
 		BoardUseCase:          board,
 		PostUseCase:           post,
 		CommentUseCase:        comment,
+		NotificationUseCase:   notificationUseCase,
 		ReactionUseCase:       reaction,
 		AttachmentUseCase:     attachment,
 		ReportUseCase:         reportUseCase,
@@ -694,18 +729,51 @@ func newTestHandlerWithAdminUseCases(
 	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
 	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:     sessionUseCase,
-		AdminAuthorizer:    user,
-		UserUseCase:        user,
-		AccountUseCase:     account,
-		BoardUseCase:       board,
-		PostUseCase:        post,
-		CommentUseCase:     comment,
-		ReactionUseCase:    reaction,
-		AttachmentUseCase:  attachment,
-		ReportUseCase:      report,
-		OutboxAdminUseCase: outboxAdmin,
-		MaxJSONBodyBytes:   defaultMaxJSONBodyBytes,
+		SessionUseCase:      sessionUseCase,
+		AdminAuthorizer:     user,
+		UserUseCase:         user,
+		AccountUseCase:      account,
+		BoardUseCase:        board,
+		PostUseCase:         post,
+		CommentUseCase:      comment,
+		NotificationUseCase: &fakeNotificationUseCase{},
+		ReactionUseCase:     reaction,
+		AttachmentUseCase:   attachment,
+		ReportUseCase:       report,
+		OutboxAdminUseCase:  outboxAdmin,
+		MaxJSONBodyBytes:    defaultMaxJSONBodyBytes,
+	}).Handler
+}
+
+func newTestHandlerWithNotifications(
+	user authUserPort,
+	account port.AccountUseCase,
+	board port.BoardUseCase,
+	post port.PostUseCase,
+	comment port.CommentUseCase,
+	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
+	notification port.NotificationUseCase,
+) http.Handler {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
+	reportUseCase := &fakeReportUseCase{}
+	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:      sessionUseCase,
+		AdminAuthorizer:     user,
+		UserUseCase:         user,
+		AccountUseCase:      account,
+		BoardUseCase:        board,
+		PostUseCase:         post,
+		CommentUseCase:      comment,
+		NotificationUseCase: notification,
+		ReactionUseCase:     reaction,
+		AttachmentUseCase:   attachment,
+		ReportUseCase:       reportUseCase,
+		OutboxAdminUseCase:  outboxAdminUseCase,
+		MaxJSONBodyBytes:    defaultMaxJSONBodyBytes,
 	}).Handler
 }
 
@@ -723,6 +791,10 @@ func doJSONRequest(t *testing.T, handler http.Handler, method, path string, body
 }
 
 type authRequestOption func(*http.Request)
+
+func ptrString(value string) *string {
+	return &value
+}
 
 func withAuthToken(token string) authRequestOption {
 	return func(req *http.Request) {
@@ -1002,10 +1074,11 @@ func TestHandleCreateDraftPost_Success(t *testing.T) {
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			createDraftPost: func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUIDArg string) (string, error) {
+			createDraftPost: func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUIDArg string) (string, error) {
 				assert.Equal(t, "draft", title)
 				assert.Equal(t, "content", content)
 				assert.Nil(t, tags)
+				assert.Nil(t, mentionedUsernames)
 				assert.Equal(t, int64(1), authorID)
 				assert.Equal(t, boardUUID, boardUUIDArg)
 				return "550e8400-e29b-41d4-a716-446655440009", nil
@@ -1032,10 +1105,11 @@ func TestHandleCreatePost_PassesTags(t *testing.T) {
 		&fakeAccountUseCase{},
 		&fakeBoardUseCase{},
 		&fakePostUseCase{
-			createPost: func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUIDArg string) (string, error) {
+			createPost: func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUIDArg string) (string, error) {
 				assert.Equal(t, "hello", title)
 				assert.Equal(t, "body", content)
 				assert.Equal(t, []string{"go", "backend"}, tags)
+				assert.Equal(t, []string{"alice"}, mentionedUsernames)
 				assert.Equal(t, int64(1), authorID)
 				assert.Equal(t, boardUUID, boardUUIDArg)
 				return "550e8400-e29b-41d4-a716-446655440011", nil
@@ -1047,9 +1121,10 @@ func TestHandleCreatePost_PassesTags(t *testing.T) {
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/boards/"+boardUUID+"/posts", map[string]any{
-		"title":   "hello",
-		"content": "body",
-		"tags":    []string{"go", "backend"},
+		"title":               "hello",
+		"content":             "body",
+		"tags":                []string{"go", "backend"},
+		"mentioned_usernames": []string{"alice"},
 	}, 1)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
@@ -1088,8 +1163,9 @@ func TestHandleCreateComment_WithParentUUID_Success(t *testing.T) {
 		&fakeBoardUseCase{},
 		&fakePostUseCase{},
 		&fakeCommentUseCase{
-			createComment: func(ctx context.Context, content string, authorID int64, postUUIDArg string, parentUUIDArg *string) (string, error) {
+			createComment: func(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUIDArg string, parentUUIDArg *string) (string, error) {
 				assert.Equal(t, "reply", content)
+				assert.Equal(t, []string{"alice"}, mentionedUsernames)
 				assert.Equal(t, int64(1), authorID)
 				assert.Equal(t, postUUID, postUUIDArg)
 				require.NotNil(t, parentUUIDArg)
@@ -1102,8 +1178,9 @@ func TestHandleCreateComment_WithParentUUID_Success(t *testing.T) {
 	)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/posts/"+postUUID+"/comments", map[string]any{
-		"content":     "reply",
-		"parent_uuid": parentUUID,
+		"content":             "reply",
+		"parent_uuid":         parentUUID,
+		"mentioned_usernames": []string{"alice"},
 	}, 1)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
@@ -1118,7 +1195,7 @@ func TestHandleCreateComment_BadRequestForMalformedParentUUID(t *testing.T) {
 		&fakeBoardUseCase{},
 		&fakePostUseCase{},
 		&fakeCommentUseCase{
-			createComment: func(ctx context.Context, content string, authorID int64, postUUIDArg string, parentUUIDArg *string) (string, error) {
+			createComment: func(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUIDArg string, parentUUIDArg *string) (string, error) {
 				t.Fatal("service should not be called for malformed parent_uuid")
 				return "", nil
 			},
@@ -1884,9 +1961,10 @@ func TestHTTP_RateLimit_DoesNotTrustForwardedHeaderByDefault(t *testing.T) {
 func TestHTTP_BoardPostsPost_PreservesRawMarkdownInput(t *testing.T) {
 	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
 	post := &fakePostUseCase{
-		createPost: func(ctx context.Context, title, content string, tags []string, authorID int64, boardUUIDArg string) (string, error) {
+		createPost: func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUIDArg string) (string, error) {
 			assert.Equal(t, "hello <script>alert(1)</script>", title)
 			assert.Equal(t, "body <img src=x onerror=alert(1)> `code` ![a](attachment://550e8400-e29b-41d4-a716-446655440003)", content)
+			assert.Nil(t, mentionedUsernames)
 			assert.Equal(t, int64(1), authorID)
 			assert.Equal(t, boardUUID, boardUUIDArg)
 			return "550e8400-e29b-41d4-a716-446655440010", nil
@@ -2348,6 +2426,69 @@ func TestHTTP_PostSearch_InternalServerErrorFallback(t *testing.T) {
 	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/search?q=go", nil)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestHTTP_NotificationsList_Success(t *testing.T) {
+	notifications := &fakeNotificationUseCase{
+		getMyNotifications: func(ctx context.Context, userID int64, limit int, cursor string) (*model.NotificationList, error) {
+			assert.Equal(t, int64(7), userID)
+			assert.Equal(t, 2, limit)
+			assert.Equal(t, "opaque", cursor)
+			return &model.NotificationList{
+				Notifications: []model.Notification{
+					{
+						UUID:           "550e8400-e29b-41d4-a716-446655440090",
+						Type:           model.NotificationTypeMentioned,
+						ActorUUID:      "550e8400-e29b-41d4-a716-446655440091",
+						PostUUID:       "550e8400-e29b-41d4-a716-446655440092",
+						CommentUUID:    ptrString("550e8400-e29b-41d4-a716-446655440093"),
+						ActorName:      "bob",
+						PostTitle:      "hello",
+						CommentPreview: "preview",
+					},
+				},
+				Limit:  2,
+				Cursor: "opaque",
+			}, nil
+		},
+	}
+	handler := newTestHandlerWithNotifications(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{}, notifications)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/me/notifications?limit=2&cursor=opaque", nil, 7)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"type":"mentioned"`)
+	assert.Contains(t, rr.Body.String(), `"actor_name":"bob"`)
+}
+
+func TestHTTP_NotificationsUnreadCount_Success(t *testing.T) {
+	notifications := &fakeNotificationUseCase{
+		getMyUnreadCount: func(ctx context.Context, userID int64) (int, error) {
+			assert.Equal(t, int64(7), userID)
+			return 3, nil
+		},
+	}
+	handler := newTestHandlerWithNotifications(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{}, notifications)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/me/notifications/unread-count", nil, 7)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.JSONEq(t, `{"count":3}`, rr.Body.String())
+}
+
+func TestHTTP_NotificationsRead_Success(t *testing.T) {
+	notifications := &fakeNotificationUseCase{
+		markMyNotificationRead: func(ctx context.Context, userID int64, notificationUUID string) error {
+			assert.Equal(t, int64(7), userID)
+			assert.Equal(t, "550e8400-e29b-41d4-a716-446655440094", notificationUUID)
+			return nil
+		},
+	}
+	handler := newTestHandlerWithNotifications(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{}, notifications)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPatch, "/users/me/notifications/550e8400-e29b-41d4-a716-446655440094/read", nil, 7)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
 func TestHTTP_NotFound(t *testing.T) {

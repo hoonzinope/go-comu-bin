@@ -28,7 +28,7 @@ func NewCommandHandler(unitOfWork port.UnitOfWork, actionDispatcher port.ActionH
 	return newCommentCommandHandler(unitOfWork, actionDispatcher, authorizationPolicy)
 }
 
-func (h *commentCommandHandler) CreateComment(ctx context.Context, content string, authorID int64, postUUID string, parentUUID *string) (string, error) {
+func (h *commentCommandHandler) CreateComment(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUID string, parentUUID *string) (string, error) {
 	if strings.TrimSpace(content) == "" {
 		return "", customerror.ErrInvalidInput
 	}
@@ -59,6 +59,9 @@ func (h *commentCommandHandler) CreateComment(ctx context.Context, content strin
 			return err
 		}
 		newComment := entity.NewComment(content, authorID, post.ID, nil)
+		events := make([]port.DomainEvent, 0, 3)
+		var directRecipientID int64
+		var directNotificationType entity.NotificationType
 		if parentUUID != nil && strings.TrimSpace(*parentUUID) != "" {
 			parent, err := tx.CommentRepository().SelectCommentByUUID(txCtx, strings.TrimSpace(*parentUUID))
 			if err != nil {
@@ -71,13 +74,38 @@ func (h *commentCommandHandler) CreateComment(ctx context.Context, content strin
 				return customerror.ErrInvalidInput
 			}
 			newComment.ParentID = &parent.ID
+			if parent.AuthorID != user.ID {
+				directRecipientID = parent.AuthorID
+				directNotificationType = entity.NotificationTypeCommentReplied
+			}
+		} else if post.AuthorID != user.ID {
+			directRecipientID = post.AuthorID
+			directNotificationType = entity.NotificationTypePostCommented
 		}
 		commentID, err := tx.CommentRepository().Save(txCtx, newComment)
 		if err != nil {
 			return customerror.WrapRepository("save comment", err)
 		}
 		commentUUID = newComment.UUID
-		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewCommentChanged("created", commentID, post.ID)); err != nil {
+		if directRecipientID > 0 {
+			events = append(events, appevent.NewNotificationTriggered(
+				directRecipientID,
+				user.ID,
+				directNotificationType,
+				post.ID,
+				commentID,
+				user.Name,
+				svccommon.TruncateNotificationSnapshot(post.Title, 120),
+				svccommon.TruncateNotificationSnapshot(content, 160),
+			))
+		}
+		events = append(events, appevent.NewCommentChanged("created", commentID, post.ID))
+		mentionEvents, err := svccommon.BuildMentionNotificationEvents(txCtx, tx.UserRepository(), user, mentionedUsernames, post.ID, commentID, post.Title, content)
+		if err != nil {
+			return err
+		}
+		events = append(events, mentionEvents...)
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, events...); err != nil {
 			return err
 		}
 		return nil

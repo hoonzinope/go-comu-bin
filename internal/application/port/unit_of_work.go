@@ -13,6 +13,7 @@ type TxScope interface {
 	ReactionRepository() ReactionRepository
 	AttachmentRepository() AttachmentRepository
 	ReportRepository() ReportRepository
+	NotificationRepository() NotificationRepository
 	Outbox() OutboxAppender
 }
 

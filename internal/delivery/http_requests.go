@@ -34,14 +34,16 @@ type boardRequest struct {
 }
 
 type postRequest struct {
-	Title   string   `json:"title" example:"hello"`
-	Content string   `json:"content" example:"first post"`
-	Tags    []string `json:"tags,omitempty" example:"go,backend"`
+	Title              string   `json:"title" example:"hello"`
+	Content            string   `json:"content" example:"first post"`
+	Tags               []string `json:"tags,omitempty" example:"go,backend"`
+	MentionedUsernames []string `json:"mentioned_usernames,omitempty" example:"alice,bob"`
 }
 
 type commentRequest struct {
-	Content    string  `json:"content" example:"nice post"`
-	ParentUUID *string `json:"parent_uuid,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Content            string   `json:"content" example:"nice post"`
+	ParentUUID         *string  `json:"parent_uuid,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
+	MentionedUsernames []string `json:"mentioned_usernames,omitempty" example:"alice,bob"`
 }
 
 type reactionRequest struct {

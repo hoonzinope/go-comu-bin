@@ -150,12 +150,13 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
 	reportRepository := inmemory.NewReportRepository()
+	notificationRepository := inmemory.NewNotificationRepository()
 	outboxRepository := inmemory.NewOutboxRepository()
 	fileStorage := localfs.NewFileStorage(t.TempDir())
 
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, outboxRepository)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, outboxRepository)
 	appLogger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(outboxRepository, eventSerializer, appLogger, eventOutbox.RelayConfig{
@@ -167,6 +168,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	})
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
+	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
@@ -174,6 +176,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
 	require.NoError(t, postSearchStore.RebuildAll(context.Background()))
 	relayCtx, relayCancel := context.WithCancel(context.Background())
 	outboxRelay.Start(relayCtx)
@@ -192,6 +195,7 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	notificationUseCase := service.NewNotificationService(userRepository, postRepository, commentRepository, notificationRepository)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy())
 	reportUseCase := service.NewReportServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reportRepository, unitOfWork, nil, authorizationPolicy)
 	outboxAdminUseCase := service.NewOutboxAdminService(userRepository, outboxRepository, authorizationPolicy)
@@ -210,17 +214,18 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		sessionRepository,
 	)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
-		SessionUseCase:     sessionUseCase,
-		UserUseCase:        userUseCase,
-		AdminAuthorizer:    userUseCase,
-		AccountUseCase:     accountUseCase,
-		BoardUseCase:       boardUseCase,
-		PostUseCase:        postUseCase,
-		CommentUseCase:     commentUseCase,
-		ReactionUseCase:    reactionUseCase,
-		AttachmentUseCase:  attachmentUseCase,
-		ReportUseCase:      reportUseCase,
-		OutboxAdminUseCase: outboxAdminUseCase,
+		SessionUseCase:      sessionUseCase,
+		UserUseCase:         userUseCase,
+		AdminAuthorizer:     userUseCase,
+		AccountUseCase:      accountUseCase,
+		BoardUseCase:        boardUseCase,
+		PostUseCase:         postUseCase,
+		CommentUseCase:      commentUseCase,
+		NotificationUseCase: notificationUseCase,
+		ReactionUseCase:     reactionUseCase,
+		AttachmentUseCase:   attachmentUseCase,
+		ReportUseCase:       reportUseCase,
+		OutboxAdminUseCase:  outboxAdminUseCase,
 	})
 	return httptest.NewServer(httpServer.Handler)
 }

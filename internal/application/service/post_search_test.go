@@ -28,7 +28,7 @@ func TestPostService_SearchPosts_IndexesCreatedPostViaOutboxRelay(t *testing.T) 
 	boardID := seedBoard(repositories.board, "free", "desc")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	postUUID, err := svc.CreatePost(context.Background(), "go search", "body", []string{"backend"}, userID, mustBoardUUID(t, repositories.board, boardID))
+	postUUID, err := svc.CreatePost(context.Background(), "go search", "body", []string{"backend"}, nil, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
