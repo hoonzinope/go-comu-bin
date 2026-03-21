@@ -3112,3 +3112,46 @@
 - `internal/infrastructure/persistence/inmemory/postSearchRepository_test.go`
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-21 - 다음 우선순위는 user lifecycle 강화로 두고 PointHistory와 notification external delivery는 현재 범위에서 제외한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 `Notification`은 inbox 조회 경험까지 구현되어 있고, 사용자 요구도도 외부 push/mail/webhook 전달보다 화면 내 확인 기능에 더 가깝다.
+- SQLite 전환은 outbox 하나만 durable하게 올리기보다, repository/search/outbox를 한 번에 외부 어댑터로 교체하는 편이 전체 구조와 운영 이해에 더 자연스럽다.
+- `PointHistory`와 포인트 개념은 현재 제품 범위에서 필수 요구로 보이지 않는다.
+- 반면 이메일 인증과 비밀번호 재설정은 실제 사용자 계정 lifecycle 완성에 직접 연결되는 남은 핵심 기능이다.
+
+관찰
+
+- 현재 로드맵에는 `PointHistory`, `durable outbox adapter(SQLite table)`, `Notification 외부 delivery(push/mail/webhook)`가 후속 항목으로 남아 있다.
+- 하지만 현재 팀 판단은 다음과 같다.
+  - `PointHistory`는 도입하지 않는다.
+  - notification은 inbox UI/API까지만 우선 제공하고, 외부 delivery는 현재 범위에서 제외한다.
+  - SQLite는 durable outbox 단독 도입이 아니라 외부 어댑터 일괄 전환 시점에 함께 도입한다.
+- 이 판단을 반영하면 Phase 1의 다음 기능 우선순위는 `이메일 인증 / 비밀번호 재설정`이 된다.
+
+결론
+
+- `PointHistory`는 현재 로드맵 범위에서 제거한다.
+- notification의 현재 목표는 inbox 확인 경험까지로 한정한다.
+- push/mail/webhook 같은 notification external delivery는 현재 범위에서 제외하고, 필요가 생기면 별도 결정으로 다시 연다.
+- SQLite 전환은 `repository + search + outbox`를 포함한 외부 어댑터 일괄 교체 단계에서 추진한다.
+- durable outbox 단독 전환이나 CDC는 현재 우선순위에서 제외한다.
+- 다음 구현 우선순위는 `이메일 인증`과 `비밀번호 재설정`으로 고정한다.
+
+후속 작업
+
+- `docs/ROADMAP.md`에서 PointHistory와 notification external delivery 항목 정리
+- Step 5 설명을 SQLite 외부 어댑터 일괄 전환 기준으로 정리
+- 다음 구현 범위를 email verification / password reset 설계로 전환
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
