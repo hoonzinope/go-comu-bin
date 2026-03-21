@@ -45,6 +45,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 요청 본문: `username`, `email`, `password`
   - 승격 시 기존 `id`, `uuid`, 작성물 소유권은 유지됩니다.
   - 성공 시 응답 헤더 `Authorization`에 새 `Bearer <token>`을 반환하고, 기존 guest token은 즉시 폐기합니다.
+  - 새 bearer token 발급과 기존 guest token 폐기가 함께 완료된 경우에만 승격 성공으로 간주합니다.
   - guest가 아닌 사용자가 호출하면 `400 Bad Request`
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)

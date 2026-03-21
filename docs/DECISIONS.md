@@ -2930,3 +2930,44 @@
 - `internal/application/service/reactionService.go`
 - `internal/application/service/reportService.go`
 - `internal/delivery/http.go`
+
+## 2026-03-21 - guest upgrade는 account orchestration에서 세션 교체와 함께 단일 성공 경계로 처리한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 `POST /api/v1/auth/guest/upgrade`는 guest user row 승격과 bearer token 교체를 delivery에서 두 단계로 나눠 호출한다.
+- 이 구조에서는 user row는 이미 정식 회원으로 바뀌었는데, 뒤이은 session delete/new session save가 실패해 `500`이 나는 부분 커밋이 가능하다.
+- guest upgrade는 문서상 `기존 guest row 재사용 + 기존 token 폐기 + 새 token 발급`이 하나의 사용자 기대 동작이다.
+
+관찰
+
+- `UserService.UpgradeGuest`는 user row 변경만 책임지고, `SessionService.RotateToken`은 세션 교체만 책임진다.
+- 둘 다 각각은 맞는 책임이지만, 현재처럼 delivery에서 순차 조합하면 중간 실패 보상이 없다.
+- `AccountUseCase`는 이미 `delete me + session invalidation` orchestration 경계로 사용 중이라, 계정 전환과 인증 상태 전환을 함께 다루는 위치로도 적합하다.
+
+결론
+
+- guest upgrade 진입점은 delivery가 아니라 `AccountUseCase`로 올린다.
+- `AccountUseCase`는 `guest 검증 -> 새 token 준비/저장 -> user row 승격 -> 기존 token 폐기`를 하나의 orchestration으로 수행한다.
+- 세션 교체와 user 승격 사이 실패가 나면, 새 세션 삭제와 user row 복구를 포함한 보상 흐름으로 기존 상태를 유지한다.
+- delivery는 guest upgrade에서 더 이상 `UserUseCase`와 `SessionUseCase`를 직접 조합하지 않고, account use case 한 번만 호출한다.
+- 기존 `SessionService.RotateToken`은 다른 독립적 token rotation 용도로는 유지할 수 있지만, guest upgrade의 성공 경계를 보장하는 용도로는 직접 사용하지 않는다.
+
+후속 작업
+
+- `AccountUseCase`에 guest upgrade orchestration 메서드 추가
+- guest upgrade rollback/compensation 테스트 추가
+- HTTP handler를 새 account orchestration으로 전환
+- API/ARCHITECTURE 문서에 guest upgrade 책임 경계 반영
+
+관련 문서/코드
+
+- `internal/application/port/account_usecase.go`
+- `internal/application/service/account/service.go`
+- `internal/application/service/user/service.go`
+- `internal/application/service/session/service.go`
+- `internal/delivery/http.go`
