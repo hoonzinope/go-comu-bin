@@ -10,6 +10,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPostSearchStore_RebuildAll_PreservesUpdatesAfterRebuildStart(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	post := testPost("old title", "body", 1, 1)
+	_, err := postRepo.Save(context.Background(), post)
+	require.NoError(t, err)
+	require.NoError(t, searchStore.RebuildAll(context.Background()))
+
+	rebuildLoaded := make(chan struct{})
+	rebuildResume := make(chan struct{})
+	searchStore.afterRebuildLoad = func() {
+		close(rebuildLoaded)
+		<-rebuildResume
+	}
+	defer func() {
+		searchStore.afterRebuildLoad = nil
+	}()
+
+	post.Title = "new title"
+	require.NoError(t, postRepo.Update(context.Background(), post))
+
+	rebuildDone := make(chan error, 1)
+	go func() {
+		rebuildDone <- searchStore.RebuildAll(context.Background())
+	}()
+
+	<-rebuildLoaded
+
+	require.NoError(t, searchStore.UpsertPost(context.Background(), post.ID))
+
+	close(rebuildResume)
+	require.NoError(t, <-rebuildDone)
+
+	results, err := searchStore.SearchPublishedPosts(context.Background(), "new", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, post.ID, results[0].Post.ID)
+
+	oldResults, err := searchStore.SearchPublishedPosts(context.Background(), "old", 10, nil)
+	require.NoError(t, err)
+	assert.Empty(t, oldResults)
+}
+
 func TestPostSearchRepository_SearchPublishedPosts_RanksByFieldWeightAndPhraseBoost(t *testing.T) {
 	tagRepo := NewTagRepository()
 	postTagRepo := NewPostTagRepository()

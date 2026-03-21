@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -31,6 +32,7 @@ type PostSearchStore struct {
 	tagRepository     *TagRepository
 	postTagRepository *PostTagRepository
 	documents         map[int64]searchDocument
+	afterRebuildLoad  func()
 }
 
 type searchDocument struct {
@@ -42,6 +44,7 @@ type searchDocument struct {
 	contentText   string
 	tagText       string
 	allTerms      map[string]struct{}
+	lastUpdatedAt time.Time
 }
 
 func NewPostSearchStore(postRepository *PostRepository, tagRepository *TagRepository, postTagRepository *PostTagRepository) *PostSearchStore {
@@ -120,17 +123,27 @@ func (r *PostSearchStore) RebuildAll(ctx context.Context) error {
 	if r == nil {
 		return nil
 	}
+	startedAt := time.Now()
 	documents, err := r.loadSearchDocuments(ctx)
 	if err != nil {
 		return err
 	}
 	next := make(map[int64]searchDocument, len(documents))
 	for _, document := range documents {
+		document.lastUpdatedAt = startedAt
 		next[document.post.ID] = document
 	}
+	if r.afterRebuildLoad != nil {
+		r.afterRebuildLoad()
+	}
 	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, current := range r.documents {
+		if current.lastUpdatedAt.After(startedAt) {
+			next[id] = current
+		}
+	}
 	r.documents = next
-	r.mu.Unlock()
 	return nil
 }
 
@@ -144,8 +157,16 @@ func (r *PostSearchStore) UpsertPost(ctx context.Context, postID int64) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	now := time.Now()
 	if !ok {
+		if current, exists := r.documents[postID]; exists && current.lastUpdatedAt.After(now) {
+			return nil
+		}
 		delete(r.documents, postID)
+		return nil
+	}
+	document.lastUpdatedAt = now
+	if current, exists := r.documents[postID]; exists && current.lastUpdatedAt.After(now) {
 		return nil
 	}
 	r.documents[postID] = document
@@ -158,8 +179,12 @@ func (r *PostSearchStore) DeletePost(ctx context.Context, postID int64) error {
 		return nil
 	}
 	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	if current, exists := r.documents[postID]; exists && current.lastUpdatedAt.After(now) {
+		return nil
+	}
 	delete(r.documents, postID)
-	r.mu.Unlock()
 	return nil
 }
 
@@ -434,5 +459,6 @@ func cloneSearchDocument(document searchDocument) searchDocument {
 		contentText:   document.contentText,
 		tagText:       document.tagText,
 		allTerms:      clonedTerms,
+		lastUpdatedAt: document.lastUpdatedAt,
 	}
 }

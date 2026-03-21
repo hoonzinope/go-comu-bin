@@ -3074,3 +3074,41 @@
 - `internal/application/service/user/service.go`
 - `internal/application/service/session/service.go`
 - `internal/delivery/http.go`
+
+## 2026-03-21 - post search rebuild는 시작 시점 이후의 최신 인덱스 갱신을 덮어쓰지 않는다
+
+상태
+
+- decided
+
+배경
+
+- `PostSearchStore`는 `post.changed` 이벤트를 소비해 개별 문서를 비동기로 갱신하고, 필요 시 `RebuildAll`로 전체 인덱스를 다시 구성한다.
+- 기존 `RebuildAll`은 문서 로딩을 락 밖에서 수행한 뒤 마지막에 `documents` 맵을 통째로 교체했다.
+- 이 구조에서는 rebuild 시작 후 들어온 `UpsertPost`/`DeletePost`가 최신 상태를 반영하더라도, 뒤늦게 끝난 rebuild가 더 오래된 스냅샷으로 덮어쓸 수 있다.
+
+관찰
+
+- 부팅 시점에는 `RebuildAll` 뒤에 relay를 시작하므로 문제가 드러나지 않는다.
+- 하지만 운영 중 수동 rebuild, 복구 rebuild, 향후 admin rebuild 같은 런타임 재구축 경로가 생기면 stale overwrite가 correctness 문제로 바뀐다.
+- 검색 인덱스는 eventual consistency를 허용하지만, rebuild 자체가 이미 반영된 더 최신 개별 갱신을 되돌리면 안 된다.
+
+결론
+
+- `PostSearchStore`는 문서 단위 최신성 시각을 추적한다.
+- `RebuildAll`은 로딩 시작 시각을 기준으로, 그 이후 `UpsertPost`/`DeletePost`가 갱신한 문서는 rebuild 결과로 덮어쓰지 않는다.
+- `UpsertPost`와 `DeletePost`도 같은 최신성 기준을 사용해 더 오래된 갱신이 최신 문서를 되돌리지 않도록 한다.
+- 이 보호 규칙은 in-memory reference adapter에도 적용하고, 이후 SQLite/외부 search adapter도 같은 의미론을 유지한다.
+
+후속 작업
+
+- `PostSearchStore`에 최신성 guard 추가
+- concurrent rebuild/update 테스트 추가
+- API/ARCHITECTURE 문서에 런타임 rebuild의 최신성 보장 메모 반영
+
+관련 문서/코드
+
+- `internal/infrastructure/persistence/inmemory/postSearchRepository.go`
+- `internal/infrastructure/persistence/inmemory/postSearchRepository_test.go`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`

@@ -460,3 +460,9 @@ internal/
   - `SelectUserByIDIncludingDeleted`: 작성물/리액션 응답용 내부 참조
 - `Save`, `Update`는 `username`과 `uuid` 유니크를 보장한다.
 - 이 구조는 soft delete 후에도 공개 로그인/조회와 내부 참조 복원을 분리하는 목적을 가진다.
+
+## 검색 인덱스 규칙
+
+- `PostSearchStore` 같은 search adapter는 조회 경계와 인덱스 갱신 경계를 함께 구현할 수 있지만, 런타임 전체 rebuild가 더 최신 개별 갱신을 되돌리면 안 된다.
+- `RebuildAll`은 rebuild 시작 이후 `UpsertPost`/`DeletePost`가 반영한 더 최신 문서를 덮어쓰지 않는 guard를 가져야 한다.
+- 이 규칙은 in-memory reference adapter뿐 아니라 이후 SQLite/외부 search adapter에도 동일하게 유지한다.
