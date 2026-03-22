@@ -181,9 +181,9 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.GET("/users/me/notifications/unread-count", h.authGinMiddleware, h.handleMyNotificationsUnreadCountGet)
 	v1.PATCH("/users/me/notifications/:notificationUUID/read", h.authGinMiddleware, h.handleMyNotificationReadPatch)
 	v1.POST("/reports", h.authGinMiddleware, h.handleReportCreate)
-	v1.GET("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspensionGet)
-	v1.PUT("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserSuspend)
-	v1.DELETE("/users/:userUUID/suspension", h.authGinMiddleware, h.handleUserUnsuspend)
+	v1.GET("/users/:userUUID/suspension", h.authGinMiddleware, h.adminGinMiddleware, h.handleUserSuspensionGet)
+	v1.PUT("/users/:userUUID/suspension", h.authGinMiddleware, h.adminGinMiddleware, h.handleUserSuspend)
+	v1.DELETE("/users/:userUUID/suspension", h.authGinMiddleware, h.adminGinMiddleware, h.handleUserUnsuspend)
 
 	v1.GET("/boards", h.handleBoardsGet)
 	v1.POST("/boards", h.authGinMiddleware, h.handleBoardsPost)

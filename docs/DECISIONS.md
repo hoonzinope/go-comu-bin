@@ -150,6 +150,44 @@
 - `docs/ROADMAP.md`
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-22 - suspension 운영 API는 delivery admin middleware에서 먼저 차단한다
+
+상태
+
+- decided
+
+배경
+
+- `GET/PUT/DELETE /api/v1/users/{userUUID}/suspension`는 문서상 admin 전용 운영 API다.
+- 하지만 현재 라우팅은 인증 미들웨어만 거치고, 실제 admin 판정은 `UserService` 내부에서 수행한다.
+- 이 순서에서는 non-admin 요청도 handler 안으로 들어와 UUID/body 검증을 먼저 거치므로, `400`과 `403` 차이를 통해 admin surface의 입력 검증 결과를 관찰할 수 있다.
+
+관찰
+
+- 아키텍처 문서는 HTTP admin middleware를 포함한 권한 확인 경계를 명시한다.
+- suspension use case는 service 내부 `AdminOnly` 체크를 이미 가지고 있어 최종 권한은 막고 있지만, 이는 defense-in-depth여야지 delivery의 1차 경계 대체가 되어서는 안 된다.
+- 기존 malformed UUID 검증은 admin caller에게는 계속 유지되어야 한다.
+
+결론
+
+- suspension GET/PUT/DELETE 라우트는 `authGinMiddleware`와 함께 `adminGinMiddleware`를 적용한다.
+- non-admin 호출은 path/body 검증 전에 `403 Forbidden`으로 종료한다.
+- service 레이어의 `AdminOnly` 검사는 유지해 우회 호출 시에도 동일 invariant를 보장한다.
+- admin caller에 대해서만 기존 UUID/body 검증과 use case 호출 흐름을 유지한다.
+
+후속 작업
+
+- suspension 라우트에 admin middleware 추가
+- non-admin 조기 차단 회귀 테스트 추가
+- 전체 HTTP/통합 테스트로 기존 admin 성공/검증 흐름이 유지되는지 확인
+
+관련 문서/코드
+
+- `internal/delivery/http.go`
+- `internal/delivery/http_test.go`
+- `internal/application/service/user/service.go`
+- `docs/ARCHITECTURE.md`
 - `internal/application/event/types.go`
 - `internal/application/service/post/command_handler.go`
 - `internal/application/service/comment/command_handler.go`

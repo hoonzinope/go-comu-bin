@@ -1627,6 +1627,72 @@ func TestHandleUserUnsuspend_Success(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }
 
+func TestHandleUserSuspensionGet_ForbiddenForNonAdminBeforeValidation(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{
+			getUserSuspension: func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
+				t.Fatal("service should not be called for non-admin request")
+				return nil, nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodGet, "/users/not-a-uuid/suspension", nil, 2)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+func TestHandleUserSuspend_ForbiddenForNonAdminBeforeBodyValidation(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{
+			suspendUser: func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error {
+				t.Fatal("service should not be called for non-admin request")
+				return nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPut, "/users/550e8400-e29b-41d4-a716-446655440007/suspension", map[string]any{
+		"reason":   "spam",
+		"duration": "3d",
+	}, 2)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+func TestHandleUserUnsuspend_ForbiddenForNonAdminBeforeValidation(t *testing.T) {
+	handler := newTestHandler(
+		&fakeUserUseCase{
+			unsuspendUser: func(ctx context.Context, adminID int64, targetUserUUID string) error {
+				t.Fatal("service should not be called for non-admin request")
+				return nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+	)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodDelete, "/users/not-a-uuid/suspension", nil, 2)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
 func TestHandleUserSuspend_BadRequestForMalformedUserUUID(t *testing.T) {
 	handler := newTestHandler(
 		&fakeUserUseCase{
