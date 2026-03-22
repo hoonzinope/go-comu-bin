@@ -116,14 +116,8 @@ func (s *OutboxAdminService) DiscardDeadMessage(ctx context.Context, adminID int
 }
 
 func (s *OutboxAdminService) ensureAdmin(ctx context.Context, adminID int64) error {
-	admin, err := s.userRepository.SelectUserByID(ctx, adminID)
-	if err != nil {
-		return customerror.WrapRepository("select admin by id for outbox admin", err)
-	}
-	if admin == nil {
-		return customerror.ErrUserNotFound
-	}
-	return s.authorizationPolicy.AdminOnly(admin)
+	_, err := svccommon.RequireAdminUser(ctx, s.userRepository, s.authorizationPolicy, adminID, "outbox admin")
+	return err
 }
 
 func (s *OutboxAdminService) ensureDeadMessage(messageID string) error {

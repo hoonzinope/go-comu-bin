@@ -11,6 +11,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -201,14 +202,8 @@ func (s *UserService) VerifyCredentials(ctx context.Context, username, password 
 }
 
 func (s *UserService) EnsureAdmin(ctx context.Context, userID int64) error {
-	user, err := s.userRepository.SelectUserByID(ctx, userID)
-	if err != nil {
-		return customerror.WrapRepository("select user by id for ensure admin", err)
-	}
-	if user == nil {
-		return customerror.ErrUserNotFound
-	}
-	return s.authorizationPolicy.AdminOnly(user)
+	_, err := svccommon.RequireAdminUser(ctx, s.userRepository, s.authorizationPolicy, userID, "ensure admin")
+	return err
 }
 
 func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error {
@@ -225,14 +220,7 @@ func (s *UserService) SuspendUser(ctx context.Context, adminID int64, targetUser
 	}
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
-		if err != nil {
-			return customerror.WrapRepository("select admin by id for suspend user", err)
-		}
-		if admin == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), s.authorizationPolicy, adminID, "suspend user"); err != nil {
 			return err
 		}
 		target, err := tx.UserRepository().SelectUserByUUID(txCtx, targetUserUUID)
@@ -254,14 +242,7 @@ func (s *UserService) GetUserSuspension(ctx context.Context, adminID int64, targ
 	var suspension *model.UserSuspension
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
-		if err != nil {
-			return customerror.WrapRepository("select admin by id for get user suspension", err)
-		}
-		if admin == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), s.authorizationPolicy, adminID, "get user suspension"); err != nil {
 			return err
 		}
 		target, err := tx.UserRepository().SelectUserByUUID(txCtx, targetUserUUID)
@@ -296,14 +277,7 @@ func (s *UserService) GetUserSuspension(ctx context.Context, adminID int64, targ
 func (s *UserService) UnsuspendUser(ctx context.Context, adminID int64, targetUserUUID string) error {
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
-		if err != nil {
-			return customerror.WrapRepository("select admin by id for unsuspend user", err)
-		}
-		if admin == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.AdminOnly(admin); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), s.authorizationPolicy, adminID, "unsuspend user"); err != nil {
 			return err
 		}
 		target, err := tx.UserRepository().SelectUserByUUID(txCtx, targetUserUUID)

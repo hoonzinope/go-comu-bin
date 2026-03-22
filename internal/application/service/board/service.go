@@ -112,14 +112,7 @@ func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, desc
 	var boardUUID string
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("select user by id for create board", err)
-		}
-		if user == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), s.authorizationPolicy, userID, "create board"); err != nil {
 			return err
 		}
 		boardID, err := tx.BoardRepository().Save(txCtx, newBoard)
@@ -144,14 +137,7 @@ func (s *BoardService) UpdateBoard(ctx context.Context, boardUUID string, userID
 	}
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("select user by id for update board", err)
-		}
-		if user == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), s.authorizationPolicy, userID, "update board"); err != nil {
 			return err
 		}
 		existingBoard, err := tx.BoardRepository().SelectBoardByUUID(txCtx, boardUUID)
@@ -179,14 +165,7 @@ func (s *BoardService) UpdateBoard(ctx context.Context, boardUUID string, userID
 func (s *BoardService) DeleteBoard(ctx context.Context, boardUUID string, userID int64) error {
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("select user by id for delete board", err)
-		}
-		if user == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), s.authorizationPolicy, userID, "delete board"); err != nil {
 			return err
 		}
 		existingBoard, err := tx.BoardRepository().SelectBoardByUUID(txCtx, boardUUID)
@@ -220,14 +199,7 @@ func (s *BoardService) DeleteBoard(ctx context.Context, boardUUID string, userID
 func (s *BoardService) SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error {
 	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
-		if err != nil {
-			return customerror.WrapRepository("select user by id for set board visibility", err)
-		}
-		if user == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := s.authorizationPolicy.AdminOnly(user); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), s.authorizationPolicy, userID, "set board visibility"); err != nil {
 			return err
 		}
 		existingBoard, err := tx.BoardRepository().SelectBoardByUUID(txCtx, boardUUID)

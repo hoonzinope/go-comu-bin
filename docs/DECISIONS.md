@@ -188,6 +188,45 @@
 - `internal/delivery/http_test.go`
 - `internal/application/service/user/service.go`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-22 - admin use case의 사용자 조회와 AdminOnly 검증은 공통 helper로 수렴한다
+
+상태
+
+- decided
+
+배경
+
+- suspension 라우트는 delivery에서 먼저 admin middleware로 차단하도록 정리했지만, application service 내부에도 admin 사용자 조회와 `AdminOnly` 검증이 여러 서비스에 반복돼 있다.
+- 현재 `board`, `report`, `outboxadmin`, `user` 서비스는 모두 `SelectUserByID -> nil 확인 -> authorizationPolicy.AdminOnly(...)`를 거의 같은 형태로 반복한다.
+- 이 구조는 방어 심도 자체는 유지하지만, 에러 문구나 nil 처리, 이후 정책 확장 시 드리프트가 생기기 쉽다.
+
+관찰
+
+- service 레이어의 admin 체크는 delivery를 우회하는 호출에 대한 invariant로 유지할 가치가 있다.
+- 반면 동일한 조회/검증 시퀀스를 서비스마다 풀어 쓰는 것은 구조적으로 중복이다.
+- 이미 `service/common`은 여러 서비스가 공유하는 helper를 수용하는 위치로 정의돼 있다.
+
+결론
+
+- service 레이어의 admin invariant는 유지한다.
+- admin 사용자 조회와 `AdminOnly` 판정은 `service/common`의 공통 helper로 수렴한다.
+- 각 서비스는 helper에 operation context만 넘겨 repository wrapping 문구를 유지하고, nil 처리와 정책 적용은 helper가 담당한다.
+- delivery는 조기 차단, service는 공통 helper 기반 invariant라는 이중 경계를 유지한다.
+
+후속 작업
+
+- `service/common`에 admin require helper 추가
+- `board`, `report`, `outboxadmin`, `user` 서비스의 중복 로직을 helper 사용으로 치환
+- helper 단위 테스트와 관련 서비스 회귀 테스트로 기존 권한 동작 유지 확인
+
+관련 문서/코드
+
+- `internal/application/service/common`
+- `internal/application/service/board/service.go`
+- `internal/application/service/report/service.go`
+- `internal/application/service/outboxadmin/service.go`
+- `internal/application/service/user/service.go`
 - `internal/application/event/types.go`
 - `internal/application/service/post/command_handler.go`
 - `internal/application/service/comment/command_handler.go`

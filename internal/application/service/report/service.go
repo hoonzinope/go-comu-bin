@@ -72,14 +72,7 @@ func (h *QueryHandler) GetReports(ctx context.Context, adminID int64, status *mo
 	var out *model.ReportList
 	err := h.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
-		if err != nil {
-			return customerror.WrapRepository("select admin by id for get reports", err)
-		}
-		if admin == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := h.authorizationPolicy.AdminOnly(admin); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), h.authorizationPolicy, adminID, "get reports"); err != nil {
 			return err
 		}
 		items, err := tx.ReportRepository().SelectList(txCtx, entityStatus, limit+1, lastID)
@@ -260,14 +253,7 @@ func (h *CommandHandler) ResolveReport(ctx context.Context, adminID, reportID in
 	}
 	return h.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
-		admin, err := tx.UserRepository().SelectUserByID(txCtx, adminID)
-		if err != nil {
-			return customerror.WrapRepository("select admin by id for resolve report", err)
-		}
-		if admin == nil {
-			return customerror.ErrUserNotFound
-		}
-		if err := h.authorizationPolicy.AdminOnly(admin); err != nil {
+		if _, err := svccommon.RequireAdminUser(txCtx, tx.UserRepository(), h.authorizationPolicy, adminID, "resolve report"); err != nil {
 			return err
 		}
 		report, err := tx.ReportRepository().SelectByID(txCtx, reportID)
