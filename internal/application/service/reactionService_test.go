@@ -291,3 +291,17 @@ func TestReactionService_SetReaction_BlockedForGuestUser(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
+
+func TestReactionService_SetReaction_AllowsUnverifiedRegisteredUser(t *testing.T) {
+	repositories := newTestRepositories()
+	reactionSvc := NewReactionService(repositories.user, repositories.board, repositories.post, repositories.comment, repositories.reaction, repositories.unitOfWork, newTestCache(), newTestCachePolicy())
+	user := entity.NewUserWithEmail("alice", "alice@example.com", "pw")
+	userID, err := repositories.user.Save(context.Background(), user)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+
+	created, err := reactionSvc.SetReaction(context.Background(), userID, mustPostUUID(t, repositories.post, postID), model.ReactionTargetPost, model.ReactionTypeLike)
+	require.NoError(t, err)
+	assert.True(t, created)
+}

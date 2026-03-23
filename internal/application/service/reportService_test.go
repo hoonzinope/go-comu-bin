@@ -109,6 +109,30 @@ func TestReportService_CreateReport_BlockedForGuestUser(t *testing.T) {
 	assert.True(t, errors.Is(err, customerror.ErrForbidden))
 }
 
+func TestReportService_CreateReport_BlockedForUnverifiedUser(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewReportServiceWithActionDispatcher(
+		repositories.user,
+		repositories.post,
+		repositories.comment,
+		repositories.report,
+		repositories.unitOfWork,
+		newTestActionDispatcher(t, repositories, newTestCache()),
+		newTestAuthorizationPolicy(),
+	)
+
+	reporter := entity.NewUserWithEmail("reporter", "reporter@example.com", "pw")
+	reporterID, err := repositories.user.Save(context.Background(), reporter)
+	require.NoError(t, err)
+	authorID := seedUser(repositories.user, "author", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, authorID, boardID, "title", "content")
+
+	_, err = svc.CreateReport(context.Background(), reporterID, model.ReportTargetPost, mustPostUUID(t, repositories.post, postID), model.ReportReasonSpam, "spam")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrEmailVerificationRequired))
+}
+
 func TestReportService_GetReports_AdminOnly(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewReportServiceWithActionDispatcher(

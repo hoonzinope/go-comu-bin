@@ -35,3 +35,13 @@ func TestRoleAuthorizationPolicy_CanWrite(t *testing.T) {
 	assert.True(t, errors.Is(p.CanWrite(&entity.User{Status: entity.UserStatusSuspended, SuspendedUntil: &until}), customerror.ErrUserSuspended))
 	assert.True(t, errors.Is(p.CanWrite(nil), customerror.ErrUnauthorized))
 }
+
+func TestRequireVerifiedEmail(t *testing.T) {
+	verifiedAt := time.Now()
+
+	assert.NoError(t, RequireVerifiedEmail(&entity.User{Role: "admin"}))
+	assert.NoError(t, RequireVerifiedEmail(&entity.User{Email: "alice@example.com", EmailVerifiedAt: &verifiedAt}))
+	assert.True(t, errors.Is(RequireVerifiedEmail(&entity.User{Email: "alice@example.com"}), customerror.ErrEmailVerificationRequired))
+	assert.True(t, errors.Is(RequireVerifiedEmail(&entity.User{}), customerror.ErrEmailVerificationRequired))
+	assert.True(t, errors.Is(RequireVerifiedEmail(nil), customerror.ErrUnauthorized))
+}

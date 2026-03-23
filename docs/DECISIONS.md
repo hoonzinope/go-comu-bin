@@ -151,7 +151,7 @@
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
 
-## 2026-03-23 - email verification v1은 토큰 기반 확인 + 쓰기 제한 + 기본 SMTP 어댑터로 도입한다
+## 2026-03-23 - email verification v1은 토큰 기반 확인 + 선택적 verified-only 쓰기 제한 + 기본 SMTP 어댑터로 도입한다
 
 상태
 
@@ -179,7 +179,9 @@
 - `User`는 `EmailVerifiedAt`을 가지며, verification confirm 성공 시 이를 기록한다.
 - verification token은 해시 저장 + 1회용 + 기본 TTL 30분 정책을 사용한다.
 - 새 verification request가 들어오면 같은 사용자의 기존 미사용 token은 무효화한다.
-- 미인증 사용자는 login/읽기/password reset/email verification 경로는 유지하되, 쓰기 계열 기능은 `email verification required`로 차단한다.
+- 미인증 사용자는 login/읽기/password reset/email verification 경로를 유지한다.
+- guest는 기존 정책대로 `post/comment` 쓰기를 유지하고, `reaction/attachment/report`는 금지한다.
+- 일반 미인증 사용자는 `post/comment/reaction`은 허용하고, verified email이 필요한 `attachment/report`만 `email verification required`로 차단한다.
 - SMTP는 기본 설정 기반 단일 어댑터로 도입하고, 설정이 비활성화된 환경에서는 noop sender를 fallback으로 사용한다.
 - reset/verification 메일은 같은 SMTP sender를 재사용한다.
 

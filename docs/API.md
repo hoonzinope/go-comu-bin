@@ -58,6 +58,11 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 요청 본문: `token`
   - token이 유효하면 사용자 email을 verified 상태로 전환합니다.
   - 유효하지 않거나 만료되었거나 이미 사용된 token은 동일한 공개 에러로 처리합니다.
+- email verification이 필요한 쓰기 기능
+  - `attachment` 업로드/삭제
+  - `report` 생성
+  - 일반 미인증 사용자의 `post/comment/reaction`은 허용됩니다.
+  - guest는 기존 정책대로 `post/comment`만 허용되고, `reaction/attachment/report`는 사용할 수 없습니다.
 - `POST /api/v1/auth/password-reset/request`
   - 요청 본문: `email`
   - email 형식 오류만 `400 Bad Request`로 처리합니다.

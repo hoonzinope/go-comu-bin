@@ -40,8 +40,5 @@ func (p *RoleAuthorizationPolicy) CanWrite(user *entity.User) error {
 	if user.IsSuspended() {
 		return customerror.ErrUserSuspended
 	}
-	if user.Email != "" && !user.IsAdmin() && !user.IsEmailVerified() {
-		return customerror.ErrEmailVerificationRequired
-	}
 	return nil
 }

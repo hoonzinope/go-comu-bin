@@ -267,6 +267,20 @@ func TestAttachmentService_CreatePostAttachment_SucceedsWhenCacheInvalidationFai
 	assert.Equal(t, id, items[0].UUID)
 }
 
+func TestAttachmentService_CreatePostAttachment_BlockedForUnverifiedUser(t *testing.T) {
+	repositories := newTestRepositories()
+	user := entity.NewUserWithEmail("alice", "alice@example.com", "pw")
+	userID, err := repositories.user.Save(context.Background(), user)
+	require.NoError(t, err)
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.unitOfWork, &spyFileStorage{}, newTestCache(), attachmentsvc.DefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	_, err = svc.CreatePostAttachment(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "a.png", "image/png", 10, "attachments/a.png")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrEmailVerificationRequired))
+}
+
 func TestAttachmentService_GetPostAttachments_RequiresPublishedPost(t *testing.T) {
 	repositories := newTestRepositories()
 	userID := seedUser(repositories.user, "alice", "pw", "user")

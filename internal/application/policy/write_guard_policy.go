@@ -21,3 +21,16 @@ func EnsureGuestLifecycleAllowsWrite(user *entity.User) error {
 	}
 	return nil
 }
+
+func RequireVerifiedEmail(user *entity.User) error {
+	if user == nil {
+		return customerror.ErrUnauthorized
+	}
+	if user.IsAdmin() {
+		return nil
+	}
+	if user.Email == "" || !user.IsEmailVerified() {
+		return customerror.ErrEmailVerificationRequired
+	}
+	return nil
+}

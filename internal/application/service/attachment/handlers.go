@@ -235,6 +235,9 @@ func (h *attachmentCommandHandler) CreatePostAttachment(ctx context.Context, pos
 		if err := h.authorizationPolicy.CanWrite(requester); err != nil {
 			return err
 		}
+		if err := policy.RequireVerifiedEmail(requester); err != nil {
+			return err
+		}
 		if err := h.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
 			return err
 		}
@@ -279,6 +282,9 @@ func (h *attachmentCommandHandler) UploadPostAttachment(ctx context.Context, pos
 		return nil, err
 	}
 	if err := h.authorizationPolicy.CanWrite(requester); err != nil {
+		return nil, err
+	}
+	if err := policy.RequireVerifiedEmail(requester); err != nil {
 		return nil, err
 	}
 	if err := h.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
@@ -335,6 +341,9 @@ func (h *attachmentCommandHandler) DeletePostAttachment(ctx context.Context, pos
 			return err
 		}
 		if err := h.authorizationPolicy.CanWrite(requester); err != nil {
+			return err
+		}
+		if err := policy.RequireVerifiedEmail(requester); err != nil {
 			return err
 		}
 		if err := h.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
