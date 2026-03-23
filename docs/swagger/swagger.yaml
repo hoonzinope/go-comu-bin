@@ -55,6 +55,12 @@ definitions:
         example: 3
         type: integer
     type: object
+  delivery.emailVerificationConfirmRequest:
+    properties:
+      token:
+        example: verification-token
+        type: string
+    type: object
   delivery.errorResponse:
     properties:
       error:
@@ -125,6 +131,21 @@ definitions:
     properties:
       password:
         example: pw
+        type: string
+    type: object
+  delivery.passwordResetConfirmRequest:
+    properties:
+      new_password:
+        example: newpw
+        type: string
+      token:
+        example: reset-token
+        type: string
+    type: object
+  delivery.passwordResetRequest:
+    properties:
+      email:
+        example: alice@example.com
         type: string
     type: object
   delivery.postRequest:
@@ -220,6 +241,18 @@ definitions:
       target_uuid:
         type: string
       updated_at:
+        type: string
+    type: object
+  delivery.signUpRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+      password:
+        example: pw
+        type: string
+      username:
+        example: alice
         type: string
     type: object
   delivery.signUpResponse:
@@ -728,6 +761,68 @@ paths:
       summary: Resolve Report
       tags:
       - Admin
+  /auth/email-verification/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Verify the account email using a valid one-time token.
+      parameters:
+      - description: Email verification confirm payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.emailVerificationConfirmRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Confirm Email Verification
+      tags:
+      - Auth
+  /auth/email-verification/request:
+    post:
+      consumes:
+      - application/json
+      description: Create or resend a one-time email verification token for the authenticated
+        user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.signUpResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Request Email Verification
+      tags:
+      - Auth
   /auth/guest:
     post:
       consumes:
@@ -854,6 +949,69 @@ paths:
       security:
       - BearerAuth: []
       summary: Logout
+      tags:
+      - Auth
+  /auth/password-reset/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Reset the account password using a valid one-time token.
+      parameters:
+      - description: Password reset confirm payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.passwordResetConfirmRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Confirm Password Reset
+      tags:
+      - Auth
+  /auth/password-reset/request:
+    post:
+      consumes:
+      - application/json
+      description: Create a one-time password reset token and deliver it through the
+        configured mail sender.
+      parameters:
+      - description: Password reset request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.passwordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.signUpResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: Request Password Reset
       tags:
       - Auth
   /boards:
@@ -2000,7 +2158,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/delivery.userCredentialRequest'
+          $ref: '#/definitions/delivery.signUpRequest'
       produces:
       - application/json
       responses:

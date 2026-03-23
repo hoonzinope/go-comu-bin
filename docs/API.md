@@ -31,7 +31,10 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 ## User
 
 - `POST /api/v1/signup`
+  - 요청 본문: `username`, `email`, `password`
   - `username`은 유니크해야 하며, 중복 시 `409 Conflict`
+  - `email`도 유니크해야 하며, 형식 오류는 `400 Bad Request`
+  - 성공 시 email verification token을 자동 발급해 mail sender 경로로 전달합니다.
 - `POST /api/v1/auth/guest`
   - 서버가 내부 규칙으로 guest 계정을 생성하고 즉시 bearer token을 발급합니다.
   - guest는 일반 사용자와 동일하게 `id`, `uuid`, 세션을 가지지만, 외부에는 guest용 내부 식별자를 노출하지 않습니다.
@@ -46,7 +49,24 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 승격 시 기존 `id`, `uuid`, 작성물 소유권은 유지됩니다.
   - 성공 시 응답 헤더 `Authorization`에 새 `Bearer <token>`을 반환하고, 기존 guest token은 즉시 폐기합니다.
   - 새 bearer token 발급과 기존 guest token 폐기가 함께 완료된 경우에만 승격 성공으로 간주합니다.
+  - 승격 성공 시 email verification token을 자동 발급해 mail sender 경로로 전달합니다.
   - guest가 아닌 사용자가 호출하면 `400 Bad Request`
+- `POST /api/v1/auth/email-verification/request` (인증 필요)
+  - 현재 로그인 사용자 기준으로 email verification token을 새로 발급합니다.
+  - 이미 인증된 사용자도 동일한 성공 응답으로 처리합니다.
+- `POST /api/v1/auth/email-verification/confirm`
+  - 요청 본문: `token`
+  - token이 유효하면 사용자 email을 verified 상태로 전환합니다.
+  - 유효하지 않거나 만료되었거나 이미 사용된 token은 동일한 공개 에러로 처리합니다.
+- `POST /api/v1/auth/password-reset/request`
+  - 요청 본문: `email`
+  - email 형식 오류만 `400 Bad Request`로 처리합니다.
+  - 존재하지 않는 email, guest 계정, soft-deleted 계정 여부는 동일한 성공 응답으로 숨깁니다.
+  - reset token은 API 응답에 포함하지 않고 mail sender 경로로만 전달합니다.
+- `POST /api/v1/auth/password-reset/confirm`
+  - 요청 본문: `token`, `new_password`
+  - token이 유효하면 비밀번호를 변경하고 기존 활성 세션을 모두 무효화합니다.
+  - 유효하지 않거나 만료되었거나 이미 사용된 token은 동일한 공개 에러로 처리합니다.
 - `POST /api/v1/auth/logout` (인증 필요)
 - `DELETE /api/v1/users/me` (인증 필요)
   - 계정은 soft delete 처리되고, 식별 정보는 익명화됩니다.
@@ -85,6 +105,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `POST /api/v1/reports` (인증 필요)
   - 신고를 생성합니다.
   - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
+  - email 미인증 사용자는 사용할 수 없습니다(`403 Forbidden`).
   - 생성 응답은 운영 리소스 식별자인 숫자 `id`를 반환합니다.
   - 요청 본문: `target_type`, `target_uuid`, `reason_code`, 선택적 `reason_detail`
   - `target_type` 허용값: `post`, `comment`
@@ -324,7 +345,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 ```bash
 curl -X POST http://localhost:18577/api/v1/signup \
   -H 'Content-Type: application/json' \
-  -d '{"username":"alice","password":"pw"}'
+  -d '{"username":"alice","email":"alice@example.com","password":"pw"}'
 ```
 
 ### 로그인

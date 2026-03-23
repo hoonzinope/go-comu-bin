@@ -151,6 +151,103 @@
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
 
+## 2026-03-23 - email verification v1은 토큰 기반 확인 + 쓰기 제한 + 기본 SMTP 어댑터로 도입한다
+
+상태
+
+- decided
+
+배경
+
+- password reset v1 이후에도 계정 소유 증명 경로가 없어, email을 수집하는 일반 signup/guest upgrade가 여전히 미검증 상태로 남아 있다.
+- 현재 쓰기 권한 정책은 suspension/guest lifecycle만 반영하고 있어, verified email을 요구하는 서비스 정책을 표현하지 못한다.
+- 메일 발송 경로도 noop/test double 수준이라 실제 운영 메일 전달을 닫지 못했다.
+
+관찰
+
+- `signup`은 `UserService`, guest upgrade와 account lifecycle은 `AccountUseCase`에서 처리된다.
+- 쓰기 계열 도메인은 post/comment/attachment/reaction/report service에서 공통 권한 경계로 제어할 수 있다.
+- in-memory `UnitOfWork`는 verification token 저장소도 트랜잭션 스냅샷 경계에 포함할 수 있다.
+
+결론
+
+- email verification API는 두 단계로 제공한다.
+  - `POST /api/v1/auth/email-verification/request`
+  - `POST /api/v1/auth/email-verification/confirm`
+- `signup`과 `guest upgrade` 직후 verification token을 자동 발급하고 메일을 발송한다.
+- 로그인 사용자는 request API로 verification 메일을 재발송할 수 있다.
+- `User`는 `EmailVerifiedAt`을 가지며, verification confirm 성공 시 이를 기록한다.
+- verification token은 해시 저장 + 1회용 + 기본 TTL 30분 정책을 사용한다.
+- 새 verification request가 들어오면 같은 사용자의 기존 미사용 token은 무효화한다.
+- 미인증 사용자는 login/읽기/password reset/email verification 경로는 유지하되, 쓰기 계열 기능은 `email verification required`로 차단한다.
+- SMTP는 기본 설정 기반 단일 어댑터로 도입하고, 설정이 비활성화된 환경에서는 noop sender를 fallback으로 사용한다.
+- reset/verification 메일은 같은 SMTP sender를 재사용한다.
+
+후속 작업
+
+- `User` verification 상태와 token 저장소 추가
+- signup/guest upgrade/account request-confirm flow 반영
+- SMTP 설정/어댑터와 테스트 추가
+- HTTP/Swagger/API/Architecture/ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/user/service.go`
+- `internal/application/service/account/service.go`
+
+## 2026-03-23 - password reset v1은 email 식별자 + mail sender 포트 + 전체 세션 무효화로 도입한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 일반 `signup` 계정은 `username/password`만 받아 생성되며, guest upgrade만 email을 수집한다.
+- 이 상태에서는 일반 사용자 계정에 대해 email 기반 비밀번호 재설정을 제공할 수 없다.
+- 계정 recovery 기능은 실제 사용자 lifecycle 완성에 직접 연결되므로 우선 구현 가치가 높다.
+- 동시에 계정 존재 여부 노출과 reset token 직접 반환은 보안적으로 불필요한 공격 표면을 넓힌다.
+
+관찰
+
+- 현재 `User` 엔티티는 `Email` 필드를 이미 가지지만, 일반 `signup` 경로에서는 비어 있는 값으로 생성된다.
+- `SessionRepository`는 사용자 단위 세션 전체 무효화(`DeleteByUser`)를 지원하므로, 비밀번호 변경 후 기존 세션을 모두 폐기할 수 있다.
+- 저장소 구조는 `UnitOfWork` 기반 snapshot/rollback 모델을 사용하므로, reset token 저장소도 같은 트랜잭션 경계에 포함하는 편이 일관적이다.
+- 현재 저장소에는 SMTP/mailer/reset token 관련 포트와 어댑터가 없다.
+
+결론
+
+- password reset v1의 대상 식별자는 `email`로 고정한다.
+- 일반 `signup` 요청도 `username, email, password`를 받도록 확장한다.
+- password reset API는 두 단계로 제공한다.
+  - `POST /api/v1/auth/password-reset/request`
+  - `POST /api/v1/auth/password-reset/confirm`
+- request API는 email 형식 오류만 `400`으로 처리하고, 존재하지 않는 email/guest/deleted user는 모두 동일한 성공 응답으로 숨긴다.
+- reset token은 HTTP 응답에 직접 반환하지 않고 `mail sender` 포트로만 전달한다.
+- reset token 저장은 평문이 아니라 해시 저장을 기본으로 하며, token은 1회용이고 기본 TTL은 30분으로 둔다.
+- 동일 사용자에 대한 새 reset request가 들어오면 이전 미사용 token은 무효화하고 최신 token만 유효하게 유지한다.
+- confirm 성공 시 비밀번호 변경, token 소모, 사용자의 모든 활성 세션 무효화를 하나의 성공 경계로 처리한다.
+- guest 계정과 soft-deleted 계정은 reset 대상에서 제외한다.
+- 실제 SMTP 연동은 이번 범위에 포함하지 않고, port + in-memory/test double로 먼저 닫는다.
+
+후속 작업
+
+- `User` signup 경로에 email 수집/중복 검증 반영
+- password reset token repository / token issuer / mail sender 포트 추가
+- in-memory reset token 저장소와 account orchestration 구현
+- HTTP/Swagger/API/Architecture/ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/account/service.go`
+- `internal/application/service/user/service.go`
+
 ## 2026-03-22 - suspension 운영 API는 delivery admin middleware에서 먼저 차단한다
 
 상태
