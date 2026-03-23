@@ -30,6 +30,16 @@ delivery:
       writeRequests: 60
     auth:
       secret: ""
+  mail:
+    enabled: false
+    smtp:
+      host: ""
+      port: 587
+      username: ""
+      password: ""
+      from: ""
+      startTLS: true
+      implicitTLS: false
 
 event:
   outbox:

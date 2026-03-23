@@ -32,7 +32,7 @@ func (v *recordingCredentialVerifier) VerifyCredentials(ctx context.Context, use
 func TestSessionService_Login_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
@@ -76,7 +76,7 @@ func TestSessionService_IssueGuestToken_Success(t *testing.T) {
 func TestSessionService_RotateToken_ReplacesCurrentSession(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
@@ -153,7 +153,7 @@ func TestSessionService_IssueGuestToken_ExpiresGuestWhenSessionStoreSaveFails(t 
 func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
@@ -232,7 +232,7 @@ func TestSessionService_ValidateTokenToId_RejectsExpiredGuest(t *testing.T) {
 func TestSessionService_ValidateTokenToId_DeletedUser(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 	userID, err := userService.VerifyCredentials(context.Background(), "alice", "pw")
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestSessionService_ValidateTokenToId_DeletedUser(t *testing.T) {
 func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	cache := cacheInMemory.NewInMemoryCache()
@@ -284,7 +284,7 @@ func TestSessionService_InvalidateUserSessions_RemovesAllTokens(t *testing.T) {
 func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	sessionRepository := auth.NewCacheSessionRepository(&errorCache{
@@ -300,7 +300,7 @@ func TestSessionService_Login_ReturnsRepositoryFailure_WhenSessionStoreSaveFails
 func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	tokenProvider := auth.NewJwtTokenProvider("test-secret")
@@ -322,7 +322,7 @@ func TestSessionService_Logout_ReturnsRepositoryFailure_WhenSessionDeleteFails(t
 func TestSessionService_InvalidateUserSessions_ReturnsRepositoryFailure_WhenSessionDeleteFails(t *testing.T) {
 	repositories := newTestRepositories()
 	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := userService.SignUp(context.Background(), "alice", "pw")
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	userID, err := userService.VerifyCredentials(context.Background(), "alice", "pw")

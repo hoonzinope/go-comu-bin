@@ -31,6 +31,7 @@ type User struct {
 	GuestIssuedAt    *time.Time
 	GuestActivatedAt *time.Time
 	GuestExpiredAt   *time.Time
+	EmailVerifiedAt  *time.Time
 	Role             string
 	Status           UserStatus
 	SuspensionReason string
@@ -50,6 +51,10 @@ func (u *User) IsGuest() bool {
 
 func (u *User) IsActiveGuest() bool {
 	return u.Guest && u.GuestStatus == GuestStatusActive
+}
+
+func (u *User) IsEmailVerified() bool {
+	return u.EmailVerifiedAt != nil
 }
 
 func (u *User) IsDeleted() bool {
@@ -90,6 +95,7 @@ func (u *User) SoftDelete() {
 	u.GuestIssuedAt = nil
 	u.GuestActivatedAt = nil
 	u.GuestExpiredAt = nil
+	u.EmailVerifiedAt = nil
 	u.Status = UserStatusDeleted
 	u.SuspensionReason = ""
 	u.SuspendedUntil = nil
@@ -98,11 +104,15 @@ func (u *User) SoftDelete() {
 }
 
 func NewUser(name, password string) *User {
+	return NewUserWithEmail(name, "", password)
+}
+
+func NewUserWithEmail(name, email, password string) *User {
 	now := time.Now()
 	return &User{
 		UUID:      uuid.NewString(),
 		Name:      name,
-		Email:     "",
+		Email:     email,
 		Password:  password,
 		Guest:     false,
 		Role:      "user",
@@ -153,7 +163,13 @@ func (u *User) UpgradeGuest(name, email, password string) {
 	u.GuestIssuedAt = nil
 	u.GuestActivatedAt = nil
 	u.GuestExpiredAt = nil
+	u.EmailVerifiedAt = nil
 	u.UpdatedAt = time.Now()
+}
+
+func (u *User) MarkEmailVerified(now time.Time) {
+	u.EmailVerifiedAt = &now
+	u.UpdatedAt = now
 }
 
 func (u *User) MarkGuestActive() {

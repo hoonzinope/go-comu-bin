@@ -19,7 +19,7 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 	t.Run("save and select by id and username", func(t *testing.T) {
 		repo := newRepository()
 
-		user := entity.NewUser("alice", "pw")
+		user := entity.NewUserWithEmail("alice", "alice@example.com", "pw")
 		id, err := repo.Save(context.Background(), user)
 		require.NoError(t, err)
 		assert.NotZero(t, id)
@@ -28,6 +28,11 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.NoError(t, err)
 		require.NotNil(t, byName)
 		assert.Equal(t, id, byName.ID)
+
+		byEmail, err := repo.SelectUserByEmail(context.Background(), "alice@example.com")
+		require.NoError(t, err)
+		require.NotNil(t, byEmail)
+		assert.Equal(t, id, byEmail.ID)
 
 		byID, err := repo.SelectUserByID(context.Background(), id)
 		require.NoError(t, err)
@@ -48,6 +53,17 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		require.NoError(t, err)
 
 		_, err = repo.Save(context.Background(), entity.NewUser("alice", "pw2"))
+		require.Error(t, err)
+		assert.ErrorIs(t, err, customerror.ErrUserAlreadyExists)
+	})
+
+	t.Run("email is unique", func(t *testing.T) {
+		repo := newRepository()
+
+		_, err := repo.Save(context.Background(), entity.NewUserWithEmail("alice", "alice@example.com", "pw"))
+		require.NoError(t, err)
+
+		_, err = repo.Save(context.Background(), entity.NewUserWithEmail("bob", "alice@example.com", "pw2"))
 		require.Error(t, err)
 		assert.ErrorIs(t, err, customerror.ErrUserAlreadyExists)
 	})

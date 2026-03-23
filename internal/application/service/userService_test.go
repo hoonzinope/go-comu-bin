@@ -16,9 +16,33 @@ func TestUserService_SignUp_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	result, err := svc.SignUp(context.Background(), "alice", "pw")
+	result, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
+
+	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, "alice", user.Name)
+}
+
+func TestUserService_SignUp_SendsEmailVerificationWhenConfigured(t *testing.T) {
+	repositories := newTestRepositories()
+	mailer := newRecordingEmailVerificationMailSender()
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	svc := NewUserServiceWithEmailVerification(repositories.user, newTestPasswordHasher(), repositories.unitOfWork, repositories.emailVerification, issuer, mailer, 30*time.Minute)
+
+	result, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+	assert.Equal(t, "ok", result)
+	require.Len(t, mailer.sent, 1)
+	assert.Equal(t, "alice@example.com", mailer.sent[0].email)
+	assert.Equal(t, "verify-token-1", mailer.sent[0].token)
+
+	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.False(t, user.IsEmailVerified())
 }
 
 func TestUserService_IssueGuestAccount_Success(t *testing.T) {
@@ -64,18 +88,38 @@ func TestUserService_IssueGuestAccount_GeneratesUniqueIdentity(t *testing.T) {
 func TestUserService_SignUp_Duplicate(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp(context.Background(), "alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 
-	_, err := svc.SignUp(context.Background(), "alice", "pw2")
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw2")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrUserAlreadyExists))
+}
+
+func TestUserService_SignUp_RejectsDuplicateEmail(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+
+	_, err = svc.SignUp(context.Background(), "bob", "alice@example.com", "pw")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrUserAlreadyExists))
+}
+
+func TestUserService_SignUp_InvalidEmail(t *testing.T) {
+	repositories := newTestRepositories()
+	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+
+	_, err := svc.SignUp(context.Background(), "alice", "not-an-email", "pw")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
 
 func TestUserService_SignUp_TrimsUsernameBeforePersist(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	_, err := svc.SignUp(context.Background(), " alice ", "pw")
+	_, err := svc.SignUp(context.Background(), " alice ", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
@@ -87,10 +131,10 @@ func TestUserService_SignUp_TrimsUsernameBeforePersist(t *testing.T) {
 func TestUserService_SignUp_DuplicateAfterWhitespaceNormalization(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := svc.SignUp(context.Background(), "alice", "pw")
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
-	_, err = svc.SignUp(context.Background(), " alice ", "pw2")
+	_, err = svc.SignUp(context.Background(), " alice ", "alice@example.com", "pw2")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrUserAlreadyExists))
 }
@@ -99,7 +143,7 @@ func TestUserService_SignUp_InvalidInput(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
 
-	_, err := svc.SignUp(context.Background(), " ", "pw")
+	_, err := svc.SignUp(context.Background(), " ", "alice@example.com", "pw")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -107,7 +151,7 @@ func TestUserService_SignUp_InvalidInput(t *testing.T) {
 func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp(context.Background(), "alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
@@ -120,7 +164,7 @@ func TestUserService_DeleteMe_InvalidCredential(t *testing.T) {
 func TestUserService_DeleteMe_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp(context.Background(), "alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
@@ -152,8 +196,8 @@ func TestUserService_DeleteMe_UserNotFound(t *testing.T) {
 func TestUserService_DeleteMe_SucceedsEvenWhenUserHasPostsCommentsAndReactions(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp(context.Background(), "alice", "pw")
-	_, _ = svc.SignUp(context.Background(), "bob", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	_, _ = svc.SignUp(context.Background(), "bob", "bob@example.com", "pw")
 	alice, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, alice)
@@ -174,21 +218,21 @@ func TestUserService_DeleteMe_SucceedsEvenWhenUserHasPostsCommentsAndReactions(t
 func TestUserService_DeleteMe_AllowsReuseOfUsernameAfterSoftDelete(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp(context.Background(), "alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
 	require.NoError(t, svc.DeleteMe(context.Background(), user.ID, "pw"))
 
-	_, err = svc.SignUp(context.Background(), "alice", "pw2")
+	_, err = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw2")
 	require.NoError(t, err)
 }
 
 func TestUserService_DeleteMe_InvalidatesCredentialsAfterSoftDelete(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp(context.Background(), "alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
@@ -253,7 +297,7 @@ func TestUserService_UpgradeGuest_RejectsNonGuest(t *testing.T) {
 func TestUserService_UpgradeGuest_RejectsDuplicateIdentity(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := svc.SignUp(context.Background(), "alice", "pw")
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "pw")
 	guestID, err := repositories.user.Save(context.Background(), guest)
@@ -276,7 +320,7 @@ func TestUserService_VerifyCredentials_UserNotFound(t *testing.T) {
 func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, _ = svc.SignUp(context.Background(), "alice", "pw")
+	_, _ = svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 
 	_, err := svc.VerifyCredentials(context.Background(), "alice", "wrong")
 	require.Error(t, err)
@@ -286,7 +330,7 @@ func TestUserService_VerifyCredentials_WrongPassword(t *testing.T) {
 func TestUserService_VerifyCredentials_TrimsUsername(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
-	_, err := svc.SignUp(context.Background(), "alice", "pw")
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 
 	userID, err := svc.VerifyCredentials(context.Background(), " alice ", "pw")

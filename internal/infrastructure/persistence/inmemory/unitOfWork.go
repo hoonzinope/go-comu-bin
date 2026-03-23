@@ -13,38 +13,63 @@ var _ port.UnitOfWork = (*UnitOfWork)(nil)
 var _ port.TxScope = (*txScope)(nil)
 
 type UnitOfWork struct {
-	mu                     sync.Mutex
-	userRepository         *UserRepository
-	boardRepository        *BoardRepository
-	postRepository         *PostRepository
-	tagRepository          *TagRepository
-	postTagRepo            *PostTagRepository
-	commentRepository      *CommentRepository
-	reactionRepository     *ReactionRepository
-	attachmentRepository   *AttachmentRepository
-	reportRepository       *ReportRepository
-	notificationRepository *NotificationRepository
-	outboxRepository       *OutboxRepository
+	mu                      sync.Mutex
+	userRepository          *UserRepository
+	boardRepository         *BoardRepository
+	postRepository          *PostRepository
+	tagRepository           *TagRepository
+	postTagRepo             *PostTagRepository
+	commentRepository       *CommentRepository
+	reactionRepository      *ReactionRepository
+	attachmentRepository    *AttachmentRepository
+	reportRepository        *ReportRepository
+	notificationRepository  *NotificationRepository
+	emailVerificationTokens *EmailVerificationTokenRepository
+	passwordResetTokens     *PasswordResetTokenRepository
+	outboxRepository        *OutboxRepository
 }
 
 type txScope struct {
-	ctx                    context.Context
-	userRepository         port.UserRepository
-	boardRepository        port.BoardRepository
-	postRepository         port.PostRepository
-	tagRepository          port.TagRepository
-	postTagRepository      port.PostTagRepository
-	commentRepository      port.CommentRepository
-	reactionRepository     port.ReactionRepository
-	attachmentRepository   port.AttachmentRepository
-	reportRepository       port.ReportRepository
-	notificationRepository port.NotificationRepository
-	outboxAppender         port.OutboxAppender
+	ctx                     context.Context
+	userRepository          port.UserRepository
+	boardRepository         port.BoardRepository
+	postRepository          port.PostRepository
+	tagRepository           port.TagRepository
+	postTagRepository       port.PostTagRepository
+	commentRepository       port.CommentRepository
+	reactionRepository      port.ReactionRepository
+	attachmentRepository    port.AttachmentRepository
+	reportRepository        port.ReportRepository
+	notificationRepository  port.NotificationRepository
+	emailVerificationTokens port.EmailVerificationTokenRepository
+	passwordResetTokens     port.PasswordResetTokenRepository
+	outboxAppender          port.OutboxAppender
 }
 
 func (s *txScope) Context() context.Context { return s.ctx }
 
-func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository, reportRepository *ReportRepository, notificationRepository *NotificationRepository, outboxRepository *OutboxRepository) *UnitOfWork {
+func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository, reportRepository *ReportRepository, notificationRepository *NotificationRepository, repositories ...interface{}) *UnitOfWork {
+	emailVerificationTokens := NewEmailVerificationTokenRepository()
+	var passwordResetTokens *PasswordResetTokenRepository
+	var outboxRepository *OutboxRepository
+	switch len(repositories) {
+	case 2:
+		passwordResetTokens, _ = repositories[0].(*PasswordResetTokenRepository)
+		outboxRepository, _ = repositories[1].(*OutboxRepository)
+	case 3:
+		emailVerificationTokens, _ = repositories[0].(*EmailVerificationTokenRepository)
+		passwordResetTokens, _ = repositories[1].(*PasswordResetTokenRepository)
+		outboxRepository, _ = repositories[2].(*OutboxRepository)
+	}
+	if emailVerificationTokens == nil {
+		emailVerificationTokens = NewEmailVerificationTokenRepository()
+	}
+	if passwordResetTokens == nil {
+		passwordResetTokens = NewPasswordResetTokenRepository()
+	}
+	if outboxRepository == nil {
+		outboxRepository = NewOutboxRepository()
+	}
 	userRepository.attachCoordinator(newTxCoordinator())
 	boardRepository.attachCoordinator(newTxCoordinator())
 	postRepository.attachCoordinator(newTxCoordinator())
@@ -55,20 +80,24 @@ func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardReposit
 	attachmentRepository.attachCoordinator(newTxCoordinator())
 	reportRepository.attachCoordinator(newTxCoordinator())
 	notificationRepository.attachCoordinator(newTxCoordinator())
+	emailVerificationTokens.attachCoordinator(newTxCoordinator())
+	passwordResetTokens.attachCoordinator(newTxCoordinator())
 	outboxRepository.attachCoordinator(newTxCoordinator())
 
 	return &UnitOfWork{
-		userRepository:         userRepository,
-		boardRepository:        boardRepository,
-		postRepository:         postRepository,
-		tagRepository:          tagRepository,
-		postTagRepo:            postTagRepo,
-		commentRepository:      commentRepository,
-		reactionRepository:     reactionRepository,
-		attachmentRepository:   attachmentRepository,
-		reportRepository:       reportRepository,
-		notificationRepository: notificationRepository,
-		outboxRepository:       outboxRepository,
+		userRepository:          userRepository,
+		boardRepository:         boardRepository,
+		postRepository:          postRepository,
+		tagRepository:           tagRepository,
+		postTagRepo:             postTagRepo,
+		commentRepository:       commentRepository,
+		reactionRepository:      reactionRepository,
+		attachmentRepository:    attachmentRepository,
+		reportRepository:        reportRepository,
+		notificationRepository:  notificationRepository,
+		emailVerificationTokens: emailVerificationTokens,
+		passwordResetTokens:     passwordResetTokens,
+		outboxRepository:        outboxRepository,
 	}
 }
 
@@ -77,39 +106,45 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 	defer u.mu.Unlock()
 
 	var (
-		postState               postRepositoryState
-		postSnapshotted         bool
-		userState               userRepositoryState
-		userSnapshotted         bool
-		boardState              boardRepositoryState
-		boardSnapshotted        bool
-		tagState                tagRepositoryState
-		tagSnapshotted          bool
-		postTagState            postTagRepositoryState
-		postTagSnapshotted      bool
-		commentState            commentRepositoryState
-		commentSnapshotted      bool
-		reactionState           reactionRepositoryState
-		reactionSnapshotted     bool
-		attachmentState         attachmentRepositoryState
-		attachmentSnapshotted   bool
-		reportState             reportRepositoryState
-		reportSnapshotted       bool
-		notificationState       notificationRepositoryState
-		notificationSnapshotted bool
-		outboxState             outboxRepositoryState
-		outboxSnapshotted       bool
-		userLocked              bool
-		boardLocked             bool
-		postLocked              bool
-		tagLocked               bool
-		postTagLocked           bool
-		commentLocked           bool
-		reactionLocked          bool
-		attachmentLocked        bool
-		reportLocked            bool
-		notificationLocked      bool
-		outboxLocked            bool
+		postState                    postRepositoryState
+		postSnapshotted              bool
+		userState                    userRepositoryState
+		userSnapshotted              bool
+		boardState                   boardRepositoryState
+		boardSnapshotted             bool
+		tagState                     tagRepositoryState
+		tagSnapshotted               bool
+		postTagState                 postTagRepositoryState
+		postTagSnapshotted           bool
+		commentState                 commentRepositoryState
+		commentSnapshotted           bool
+		reactionState                reactionRepositoryState
+		reactionSnapshotted          bool
+		attachmentState              attachmentRepositoryState
+		attachmentSnapshotted        bool
+		reportState                  reportRepositoryState
+		reportSnapshotted            bool
+		notificationState            notificationRepositoryState
+		notificationSnapshotted      bool
+		emailVerificationState       emailVerificationTokenRepositoryState
+		emailVerificationSnapshotted bool
+		passwordResetState           passwordResetTokenRepositoryState
+		passwordResetSnapshotted     bool
+		outboxState                  outboxRepositoryState
+		outboxSnapshotted            bool
+		userLocked                   bool
+		boardLocked                  bool
+		postLocked                   bool
+		tagLocked                    bool
+		postTagLocked                bool
+		commentLocked                bool
+		reactionLocked               bool
+		attachmentLocked             bool
+		reportLocked                 bool
+		notificationLocked           bool
+		emailVerificationLocked      bool
+		passwordResetLocked          bool
+		outboxLocked                 bool
 	)
 	defer func() {
 		if outboxLocked {
@@ -117,6 +152,12 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		}
 		if notificationLocked {
 			u.notificationRepository.coordinator.unlock()
+		}
+		if emailVerificationLocked {
+			u.emailVerificationTokens.coordinator.unlock()
+		}
+		if passwordResetLocked {
+			u.passwordResetTokens.coordinator.unlock()
 		}
 		if reportLocked {
 			u.reportRepository.coordinator.unlock()
@@ -268,20 +309,44 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		outboxState = u.outboxRepository.snapshot()
 		outboxSnapshotted = true
 	}
+	capturePasswordReset := func() {
+		if !passwordResetLocked {
+			u.passwordResetTokens.coordinator.lock()
+			passwordResetLocked = true
+		}
+		if passwordResetSnapshotted {
+			return
+		}
+		passwordResetState = u.passwordResetTokens.snapshot()
+		passwordResetSnapshotted = true
+	}
+	captureEmailVerification := func() {
+		if !emailVerificationLocked {
+			u.emailVerificationTokens.coordinator.lock()
+			emailVerificationLocked = true
+		}
+		if emailVerificationSnapshotted {
+			return
+		}
+		emailVerificationState = u.emailVerificationTokens.snapshot()
+		emailVerificationSnapshotted = true
+	}
 
 	tx := &txScope{
-		ctx:                    ctx,
-		userRepository:         userTxRepository{repo: u.userRepository, beforeWrite: captureUser},
-		boardRepository:        boardTxRepository{repo: u.boardRepository, beforeWrite: captureBoard},
-		postRepository:         postTxRepository{repo: u.postRepository, beforeWrite: capturePost},
-		tagRepository:          tagTxRepository{repo: u.tagRepository, beforeWrite: captureTag},
-		postTagRepository:      postTagTxRepository{repo: u.postTagRepo, beforeWrite: capturePostTag},
-		commentRepository:      commentTxRepository{repo: u.commentRepository, beforeWrite: captureComment},
-		reactionRepository:     reactionTxRepository{repo: u.reactionRepository, beforeWrite: captureReaction},
-		attachmentRepository:   attachmentTxRepository{repo: u.attachmentRepository, beforeWrite: captureAttachment},
-		reportRepository:       reportTxRepository{repo: u.reportRepository, beforeWrite: captureReport},
-		notificationRepository: notificationTxRepository{repo: u.notificationRepository, beforeWrite: captureNotification},
-		outboxAppender:         outboxTxAppender{repo: u.outboxRepository, beforeWrite: captureOutbox},
+		ctx:                     ctx,
+		userRepository:          userTxRepository{repo: u.userRepository, beforeWrite: captureUser},
+		boardRepository:         boardTxRepository{repo: u.boardRepository, beforeWrite: captureBoard},
+		postRepository:          postTxRepository{repo: u.postRepository, beforeWrite: capturePost},
+		tagRepository:           tagTxRepository{repo: u.tagRepository, beforeWrite: captureTag},
+		postTagRepository:       postTagTxRepository{repo: u.postTagRepo, beforeWrite: capturePostTag},
+		commentRepository:       commentTxRepository{repo: u.commentRepository, beforeWrite: captureComment},
+		reactionRepository:      reactionTxRepository{repo: u.reactionRepository, beforeWrite: captureReaction},
+		attachmentRepository:    attachmentTxRepository{repo: u.attachmentRepository, beforeWrite: captureAttachment},
+		reportRepository:        reportTxRepository{repo: u.reportRepository, beforeWrite: captureReport},
+		notificationRepository:  notificationTxRepository{repo: u.notificationRepository, beforeWrite: captureNotification},
+		emailVerificationTokens: emailVerificationTokenTxRepository{repo: u.emailVerificationTokens, beforeWrite: captureEmailVerification},
+		passwordResetTokens:     passwordResetTokenTxRepository{repo: u.passwordResetTokens, beforeWrite: capturePasswordReset},
+		outboxAppender:          outboxTxAppender{repo: u.outboxRepository, beforeWrite: captureOutbox},
 	}
 	if err := fn(tx); err != nil {
 		if userSnapshotted {
@@ -313,6 +378,12 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		}
 		if notificationSnapshotted {
 			u.notificationRepository.restore(notificationState)
+		}
+		if emailVerificationSnapshotted {
+			u.emailVerificationTokens.restore(emailVerificationState)
+		}
+		if passwordResetSnapshotted {
+			u.passwordResetTokens.restore(passwordResetState)
 		}
 		if outboxSnapshotted {
 			u.outboxRepository.restore(outboxState)
@@ -362,6 +433,14 @@ func (t *txScope) NotificationRepository() port.NotificationRepository {
 	return t.notificationRepository
 }
 
+func (t *txScope) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
+	return t.emailVerificationTokens
+}
+
+func (t *txScope) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
+	return t.passwordResetTokens
+}
+
 func (t *txScope) Outbox() port.OutboxAppender {
 	return t.outboxAppender
 }
@@ -386,6 +465,10 @@ func (r userTxRepository) Save(ctx context.Context, user *entity.User) (int64, e
 func (r userTxRepository) SelectUserByUsername(ctx context.Context, username string) (*entity.User, error) {
 	_ = ctx
 	return r.repo.selectUserByUsername(username)
+}
+func (r userTxRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
+	_ = ctx
+	return r.repo.selectUserByEmail(email)
 }
 func (r userTxRepository) SelectUserByUUID(ctx context.Context, userUUID string) (*entity.User, error) {
 	_ = ctx
@@ -425,6 +508,40 @@ func (r userTxRepository) Delete(ctx context.Context, id int64) error {
 type boardTxRepository struct {
 	repo        *BoardRepository
 	beforeWrite func()
+}
+
+type emailVerificationTokenTxRepository struct {
+	repo        *EmailVerificationTokenRepository
+	beforeWrite func()
+}
+
+func (r emailVerificationTokenTxRepository) Save(ctx context.Context, token *entity.EmailVerificationToken) error {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.save(token)
+}
+
+func (r emailVerificationTokenTxRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.EmailVerificationToken, error) {
+	_ = ctx
+	return r.repo.selectByTokenHash(tokenHash)
+}
+
+func (r emailVerificationTokenTxRepository) InvalidateByUser(ctx context.Context, userID int64) error {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.invalidateByUser(userID)
+}
+
+func (r emailVerificationTokenTxRepository) Update(ctx context.Context, token *entity.EmailVerificationToken) error {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.update(token)
 }
 
 func (r boardTxRepository) SelectBoardByID(ctx context.Context, id int64) (*entity.Board, error) {
@@ -703,6 +820,11 @@ type notificationTxRepository struct {
 	beforeWrite func()
 }
 
+type passwordResetTokenTxRepository struct {
+	repo        *PasswordResetTokenRepository
+	beforeWrite func()
+}
+
 type outboxTxAppender struct {
 	repo        *OutboxRepository
 	beforeWrite func()
@@ -815,6 +937,35 @@ func (r notificationTxRepository) MarkRead(ctx context.Context, id int64) error 
 		r.beforeWrite()
 	}
 	return r.repo.markRead(id)
+}
+
+func (r passwordResetTokenTxRepository) Save(ctx context.Context, token *entity.PasswordResetToken) error {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.save(token)
+}
+
+func (r passwordResetTokenTxRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.PasswordResetToken, error) {
+	_ = ctx
+	return r.repo.selectByTokenHash(tokenHash)
+}
+
+func (r passwordResetTokenTxRepository) InvalidateByUser(ctx context.Context, userID int64) error {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.invalidateByUser(userID)
+}
+
+func (r passwordResetTokenTxRepository) Update(ctx context.Context, token *entity.PasswordResetToken) error {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.update(token)
 }
 
 func (r outboxTxAppender) Append(messages ...port.OutboxMessage) error {

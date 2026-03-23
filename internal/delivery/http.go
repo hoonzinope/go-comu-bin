@@ -175,6 +175,10 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/login", h.handleUserLogin)
 	v1.POST("/auth/guest", h.handleGuestIssue)
 	v1.POST("/auth/guest/upgrade", h.authGinMiddleware, h.handleGuestUpgrade)
+	v1.POST("/auth/email-verification/request", h.authGinMiddleware, h.handleEmailVerificationRequest)
+	v1.POST("/auth/email-verification/confirm", h.handleEmailVerificationConfirm)
+	v1.POST("/auth/password-reset/request", h.handlePasswordResetRequest)
+	v1.POST("/auth/password-reset/confirm", h.handlePasswordResetConfirm)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
 	v1.GET("/users/me/notifications", h.authGinMiddleware, h.handleMyNotificationsGet)
@@ -254,14 +258,14 @@ func (h *HTTPHandler) requireAuthUserID(c *gin.Context) (int64, bool) {
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body userCredentialRequest true "Sign up payload"
+// @Param request body signUpRequest true "Sign up payload"
 // @Success 201 {object} signUpResponse
 // @Failure 400 {object} errorResponse
 // @Failure 409 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /signup [post]
 func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
-	var req userCredentialRequest
+	var req signUpRequest
 	if err := h.decodeJSON(c, &req); err != nil {
 		badRequest(c, err)
 		return
@@ -270,7 +274,7 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
-	if _, err := h.userUseCase.SignUp(c.Request.Context(), req.Username, req.Password); err != nil {
+	if _, err := h.userUseCase.SignUp(c.Request.Context(), req.Username, req.Email, req.Password); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
@@ -370,6 +374,116 @@ func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
 	}
 	c.Header("Authorization", "Bearer "+token)
 	c.JSON(http.StatusOK, signUpResponse{Result: "ok"})
+}
+
+// handlePasswordResetRequest godoc
+// @Summary Request Email Verification
+// @Description Create or resend a one-time email verification token for the authenticated user.
+// @Tags Auth
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} signUpResponse
+// @Failure 401 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /auth/email-verification/request [post]
+func (h *HTTPHandler) handleEmailVerificationRequest(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.accountUseCase.RequestEmailVerification(c.Request.Context(), userID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, signUpResponse{Result: "ok"})
+}
+
+// handleEmailVerificationConfirm godoc
+// @Summary Confirm Email Verification
+// @Description Verify the account email using a valid one-time token.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body emailVerificationConfirmRequest true "Email verification confirm payload"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /auth/email-verification/confirm [post]
+func (h *HTTPHandler) handleEmailVerificationConfirm(c *gin.Context) {
+	var req emailVerificationConfirmRequest
+	if err := h.decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := h.accountUseCase.ConfirmEmailVerification(c.Request.Context(), req.Token); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handlePasswordResetRequest godoc
+// @Summary Request Password Reset
+// @Description Create a one-time password reset token and deliver it through the configured mail sender.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body passwordResetRequest true "Password reset request payload"
+// @Success 200 {object} signUpResponse
+// @Failure 400 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /auth/password-reset/request [post]
+func (h *HTTPHandler) handlePasswordResetRequest(c *gin.Context) {
+	var req passwordResetRequest
+	if err := h.decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := h.accountUseCase.RequestPasswordReset(c.Request.Context(), req.Email); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, signUpResponse{Result: "ok"})
+}
+
+// handlePasswordResetConfirm godoc
+// @Summary Confirm Password Reset
+// @Description Reset the account password using a valid one-time token.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body passwordResetConfirmRequest true "Password reset confirm payload"
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /auth/password-reset/confirm [post]
+func (h *HTTPHandler) handlePasswordResetConfirm(c *gin.Context) {
+	var req passwordResetConfirmRequest
+	if err := h.decodeJSON(c, &req); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := req.validate(); err != nil {
+		badRequest(c, err)
+		return
+	}
+	if err := h.accountUseCase.ConfirmPasswordReset(c.Request.Context(), req.Token, req.NewPassword); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // handleUserLogout godoc
@@ -1957,6 +2071,8 @@ func statusForError(err error) int {
 		return http.StatusUnauthorized
 	case errors.Is(err, customerror.ErrInvalidToken):
 		return http.StatusUnauthorized
+	case errors.Is(err, customerror.ErrEmailVerificationRequired):
+		return http.StatusForbidden
 	case errors.Is(err, customerror.ErrForbidden):
 		return http.StatusForbidden
 	case errors.Is(err, customerror.ErrUserSuspended):

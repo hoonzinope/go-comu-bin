@@ -2,6 +2,7 @@ package service
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	accountsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/account"
@@ -21,6 +22,14 @@ func NewAccountServiceWithGuestUpgrade(
 	passwordHasher port.PasswordHasher,
 	tokenProvider port.TokenProvider,
 	sessionRepository port.SessionRepository,
+	verificationTokens port.EmailVerificationTokenRepository,
+	verificationIssuer port.EmailVerificationTokenIssuer,
+	verificationMailer port.EmailVerificationMailSender,
+	verificationTokenTTL time.Duration,
+	resetTokens port.PasswordResetTokenRepository,
+	resetIssuer port.PasswordResetTokenIssuer,
+	resetMailer port.PasswordResetMailSender,
+	resetTokenTTL time.Duration,
 	logger ...*slog.Logger,
 ) *AccountService {
 	return accountsvc.NewServiceWithGuestUpgrade(
@@ -31,6 +40,14 @@ func NewAccountServiceWithGuestUpgrade(
 		passwordHasher,
 		tokenProvider,
 		sessionRepository,
+		verificationTokens,
+		verificationIssuer,
+		verificationMailer,
+		verificationTokenTTL,
+		resetTokens,
+		resetIssuer,
+		resetMailer,
+		resetTokenTTL,
 		logger...,
 	)
 }

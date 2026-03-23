@@ -21,6 +21,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
+	noopmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/noop"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,30 @@ import (
 
 const apiV1Prefix = "/api/v1"
 
+type recordingEmailVerificationMailSender struct {
+	lastTokenByEmail map[string]string
+}
+
+func newRecordingEmailVerificationMailSender() *recordingEmailVerificationMailSender {
+	return &recordingEmailVerificationMailSender{lastTokenByEmail: map[string]string{}}
+}
+
+func (s *recordingEmailVerificationMailSender) SendEmailVerification(ctx context.Context, email, token string, expiresAt time.Time) error {
+	_ = ctx
+	_ = expiresAt
+	s.lastTokenByEmail[email] = token
+	return nil
+}
+
+func (s *recordingEmailVerificationMailSender) tokenFor(email string) string {
+	return s.lastTokenByEmail[email]
+}
+
+type integrationServer struct {
+	*httptest.Server
+	verificationMailer *recordingEmailVerificationMailSender
+}
+
 func TestIntegration_MainFlow(t *testing.T) {
 	server := newIntegrationServer(t)
 	defer server.Close()
@@ -36,7 +61,7 @@ func TestIntegration_MainFlow(t *testing.T) {
 	adminToken := mustLogin(t, server.URL, "admin", "admin")
 	boardUUID := mustCreateBoard(t, server.URL, adminToken, "free", "general board")
 
-	mustSignUp(t, server.URL, "alice", "pw")
+	mustSignUp(t, server, "alice", "pw")
 	aliceToken := mustLogin(t, server.URL, "alice", "pw")
 
 	mustGetBoards(t, server.URL, boardUUID)
@@ -82,7 +107,7 @@ func TestIntegration_DeleteParentCommentAlsoHidesReply(t *testing.T) {
 	adminToken := mustLogin(t, server.URL, "admin", "admin")
 	boardUUID := mustCreateBoard(t, server.URL, adminToken, "free", "general board")
 
-	mustSignUp(t, server.URL, "alice", "pw")
+	mustSignUp(t, server, "alice", "pw")
 	aliceToken := mustLogin(t, server.URL, "alice", "pw")
 
 	postUUID := mustCreatePost(t, server.URL, aliceToken, boardUUID, "hello", "first post")
@@ -100,9 +125,9 @@ func TestIntegration_ForbiddenScenarios(t *testing.T) {
 	adminToken := mustLogin(t, server.URL, "admin", "admin")
 	boardUUID := mustCreateBoard(t, server.URL, adminToken, "free", "general board")
 
-	mustSignUp(t, server.URL, "alice", "pw")
+	mustSignUp(t, server, "alice", "pw")
 	aliceToken := mustLogin(t, server.URL, "alice", "pw")
-	mustSignUp(t, server.URL, "bob", "pw")
+	mustSignUp(t, server, "bob", "pw")
 	bobToken := mustLogin(t, server.URL, "bob", "pw")
 
 	postUUID := mustCreatePost(t, server.URL, aliceToken, boardUUID, "hello", "first post")
@@ -128,7 +153,7 @@ func TestIntegration_GuestUpgrade_RotatesBearerToken(t *testing.T) {
 	defer server.Close()
 
 	guestToken := mustIssueGuest(t, server.URL)
-	newToken := mustUpgradeGuest(t, server.URL, guestToken, "guest-upgraded", "guest-upgraded@example.com", "pw")
+	newToken := mustUpgradeGuest(t, server, guestToken, "guest-upgraded", "guest-upgraded@example.com", "pw")
 
 	require.NotEmpty(t, newToken)
 	assert.NotEqual(t, guestToken, newToken)
@@ -137,7 +162,7 @@ func TestIntegration_GuestUpgrade_RotatesBearerToken(t *testing.T) {
 	assertStatus(t, server.URL, newToken, http.MethodPost, "/auth/logout", map[string]any{}, http.StatusOK)
 }
 
-func newIntegrationServer(t *testing.T) *httptest.Server {
+func newIntegrationServer(t *testing.T) *integrationServer {
 	t.Helper()
 
 	userRepository := inmemory.NewUserRepository()
@@ -151,12 +176,14 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 	attachmentRepository := inmemory.NewAttachmentRepository()
 	reportRepository := inmemory.NewReportRepository()
 	notificationRepository := inmemory.NewNotificationRepository()
+	emailVerificationRepository := inmemory.NewEmailVerificationTokenRepository()
+	passwordResetRepository := inmemory.NewPasswordResetTokenRepository()
 	outboxRepository := inmemory.NewOutboxRepository()
 	fileStorage := localfs.NewFileStorage(t.TempDir())
 
 	cache := cacheInMemory.NewInMemoryCache()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, outboxRepository)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, emailVerificationRepository, passwordResetRepository, outboxRepository)
 	appLogger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(outboxRepository, eventSerializer, appLogger, eventOutbox.RelayConfig{
@@ -185,13 +212,14 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		outboxRelay.Wait()
 	})
 	passwordHasher := auth.NewBcryptPasswordHasher(4)
+	verificationMailer := newRecordingEmailVerificationMailSender()
 	hashedAdminPassword, err := passwordHasher.Hash("admin")
 	require.NoError(t, err)
 	admin := entity.NewAdmin("admin", hashedAdminPassword)
 	_, err = userRepository.Save(context.Background(), admin)
 	require.NoError(t, err)
 
-	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
+	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), verificationMailer, 30*time.Minute)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
@@ -212,6 +240,14 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		passwordHasher,
 		tokenProvider,
 		sessionRepository,
+		emailVerificationRepository,
+		auth.NewEmailVerificationTokenIssuer(),
+		verificationMailer,
+		30*time.Minute,
+		passwordResetRepository,
+		auth.NewPasswordResetTokenIssuer(),
+		noopmail.NewPasswordResetMailSender(),
+		30*time.Minute,
 	)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
 		SessionUseCase:      sessionUseCase,
@@ -227,7 +263,10 @@ func newIntegrationServer(t *testing.T) *httptest.Server {
 		ReportUseCase:       reportUseCase,
 		OutboxAdminUseCase:  outboxAdminUseCase,
 	})
-	return httptest.NewServer(httpServer.Handler)
+	return &integrationServer{
+		Server:             httptest.NewServer(httpServer.Handler),
+		verificationMailer: verificationMailer,
+	}
 }
 
 func testCachePolicy() appcache.Policy {
@@ -249,13 +288,16 @@ func mustLogin(t *testing.T, baseURL, username, password string) string {
 	return token
 }
 
-func mustSignUp(t *testing.T, baseURL, username, password string) {
+func mustSignUp(t *testing.T, server *integrationServer, username, password string) {
 	t.Helper()
+	baseURL := server.URL
 	body, status, _ := requestJSON(t, baseURL, "", http.MethodPost, "/signup", map[string]any{
 		"username": username,
+		"email":    fmt.Sprintf("%s@example.com", username),
 		"password": password,
 	})
 	assert.Equal(t, http.StatusCreated, status, "signup failed: body=%s", string(body))
+	mustConfirmEmailVerification(t, server, fmt.Sprintf("%s@example.com", username))
 }
 
 func mustIssueGuest(t *testing.T, baseURL string) string {
@@ -267,8 +309,9 @@ func mustIssueGuest(t *testing.T, baseURL string) string {
 	return token
 }
 
-func mustUpgradeGuest(t *testing.T, baseURL, token, username, email, password string) string {
+func mustUpgradeGuest(t *testing.T, server *integrationServer, token, username, email, password string) string {
 	t.Helper()
+	baseURL := server.URL
 	body, status, headers := requestJSON(t, baseURL, token, http.MethodPost, "/auth/guest/upgrade", map[string]any{
 		"username": username,
 		"email":    email,
@@ -277,7 +320,18 @@ func mustUpgradeGuest(t *testing.T, baseURL, token, username, email, password st
 	assert.Equal(t, http.StatusOK, status, "upgrade guest failed: body=%s", string(body))
 	newToken := headers.Get("Authorization")
 	require.NotEmpty(t, newToken)
+	mustConfirmEmailVerification(t, server, email)
 	return newToken
+}
+
+func mustConfirmEmailVerification(t *testing.T, server *integrationServer, email string) {
+	t.Helper()
+	token := server.verificationMailer.tokenFor(email)
+	require.NotEmpty(t, token)
+	body, status, _ := requestJSON(t, server.URL, "", http.MethodPost, "/auth/email-verification/confirm", map[string]any{
+		"token": token,
+	})
+	assert.Equal(t, http.StatusNoContent, status, "email verification confirm failed: body=%s", string(body))
 }
 
 func mustLogout(t *testing.T, baseURL, token string) {

@@ -2,8 +2,11 @@ package user
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -23,10 +26,14 @@ var _ port.AdminAuthorizer = (*UserService)(nil)
 type Service = UserService
 
 type UserService struct {
-	userRepository      port.UserRepository
-	passwordHasher      port.PasswordHasher
-	unitOfWork          port.UnitOfWork
-	authorizationPolicy policy.AuthorizationPolicy
+	userRepository       port.UserRepository
+	passwordHasher       port.PasswordHasher
+	unitOfWork           port.UnitOfWork
+	authorizationPolicy  policy.AuthorizationPolicy
+	verificationTokens   port.EmailVerificationTokenRepository
+	verificationIssuer   port.EmailVerificationTokenIssuer
+	verificationMailer   port.EmailVerificationMailSender
+	verificationTokenTTL time.Duration
 }
 
 func NewUserService(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {
@@ -46,16 +53,29 @@ func NewService(userRepository port.UserRepository, passwordHasher port.Password
 	return NewUserService(userRepository, passwordHasher, unitOfWork, authorizationPolicies...)
 }
 
-func (s *UserService) SignUp(ctx context.Context, username, password string) (string, error) {
+func NewUserServiceWithEmailVerification(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, verificationTokens port.EmailVerificationTokenRepository, verificationIssuer port.EmailVerificationTokenIssuer, verificationMailer port.EmailVerificationMailSender, verificationTokenTTL time.Duration, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {
+	svc := NewUserService(userRepository, passwordHasher, unitOfWork, authorizationPolicies...)
+	svc.verificationTokens = verificationTokens
+	svc.verificationIssuer = verificationIssuer
+	svc.verificationMailer = verificationMailer
+	svc.verificationTokenTTL = verificationTokenTTL
+	return svc
+}
+
+func (s *UserService) SignUp(ctx context.Context, username, email, password string) (string, error) {
 	username = normalizeUsername(username)
-	if username == "" || strings.TrimSpace(password) == "" {
+	email = normalizeEmail(email)
+	if username == "" || email == "" || strings.TrimSpace(password) == "" {
+		return "", customerror.ErrInvalidInput
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
 		return "", customerror.ErrInvalidInput
 	}
 	hashedPassword, err := s.passwordHasher.Hash(password)
 	if err != nil {
 		return "", customerror.Wrap(customerror.ErrInternalServerError, "hash password for signup", err)
 	}
-	newUser := entity.NewUser(username, hashedPassword)
+	newUser := entity.NewUserWithEmail(username, email, hashedPassword)
 
 	err = s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
@@ -66,6 +86,13 @@ func (s *UserService) SignUp(ctx context.Context, username, password string) (st
 		if existingUser != nil {
 			return customerror.ErrUserAlreadyExists
 		}
+		existingByEmail, repoErr := tx.UserRepository().SelectUserByEmail(txCtx, email)
+		if repoErr != nil {
+			return customerror.WrapRepository("select user by email for signup", repoErr)
+		}
+		if existingByEmail != nil {
+			return customerror.ErrUserAlreadyExists
+		}
 		_, repoErr = tx.UserRepository().Save(txCtx, newUser)
 		if repoErr != nil {
 			if errors.Is(repoErr, customerror.ErrUserAlreadyExists) {
@@ -73,12 +100,48 @@ func (s *UserService) SignUp(ctx context.Context, username, password string) (st
 			}
 			return customerror.WrapRepository("save user for signup", repoErr)
 		}
+		if err := s.issueAndSendEmailVerification(txCtx, tx, newUser); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
 	return "ok", nil
+}
+
+func (s *UserService) issueAndSendEmailVerification(ctx context.Context, tx port.TxScope, user *entity.User) error {
+	if tx == nil || s.verificationTokens == nil || s.verificationIssuer == nil || s.verificationMailer == nil || user == nil {
+		return nil
+	}
+	if user.Email == "" || user.IsEmailVerified() {
+		return nil
+	}
+	tokenTTL := s.verificationTokenTTL
+	if tokenTTL <= 0 {
+		tokenTTL = 30 * time.Minute
+	}
+	rawToken, err := s.verificationIssuer.Issue()
+	if err != nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "issue email verification token", err)
+	}
+	expiresAt := time.Now().Add(tokenTTL)
+	if err := tx.EmailVerificationTokenRepository().InvalidateByUser(ctx, user.ID); err != nil {
+		return customerror.WrapRepository("invalidate previous email verification tokens", err)
+	}
+	if err := tx.EmailVerificationTokenRepository().Save(ctx, entity.NewEmailVerificationToken(user.ID, hashEmailVerificationToken(rawToken), expiresAt)); err != nil {
+		return customerror.WrapRepository("save email verification token", err)
+	}
+	if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+	}
+	return nil
+}
+
+func hashEmailVerificationToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *UserService) IssueGuestAccount(ctx context.Context) (int64, error) {
@@ -297,4 +360,8 @@ func (s *UserService) UnsuspendUser(ctx context.Context, adminID int64, targetUs
 
 func normalizeUsername(username string) string {
 	return strings.TrimSpace(username)
+}
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }

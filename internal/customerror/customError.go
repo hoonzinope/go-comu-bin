@@ -7,17 +7,18 @@ import (
 
 var (
 	// Public/common
-	ErrInternalServerError = errors.New("internal server error")
-	ErrForbidden           = errors.New("forbidden")
-	ErrUnauthorized        = errors.New("unauthorized")
-	ErrTooManyRequests     = errors.New("too many requests")
-	ErrInvalidInput        = errors.New("invalid input")
-	ErrNotFound            = errors.New("not found")
-	ErrMethodNotAllowed    = errors.New("method not allowed")
-	ErrInvalidCredential   = errors.New("invalid credential")
-	ErrMissingAuthHeader   = errors.New("missing Authorization header")
-	ErrInvalidToken        = errors.New("invalid token")
-	ErrUserSuspended       = errors.New("user suspended")
+	ErrInternalServerError       = errors.New("internal server error")
+	ErrForbidden                 = errors.New("forbidden")
+	ErrUnauthorized              = errors.New("unauthorized")
+	ErrTooManyRequests           = errors.New("too many requests")
+	ErrInvalidInput              = errors.New("invalid input")
+	ErrNotFound                  = errors.New("not found")
+	ErrMethodNotAllowed          = errors.New("method not allowed")
+	ErrInvalidCredential         = errors.New("invalid credential")
+	ErrMissingAuthHeader         = errors.New("missing Authorization header")
+	ErrInvalidToken              = errors.New("invalid token")
+	ErrUserSuspended             = errors.New("user suspended")
+	ErrEmailVerificationRequired = errors.New("email verification required")
 
 	// Public/resource
 	ErrUserAlreadyExists    = errors.New("user already exists")
@@ -92,6 +93,8 @@ func Public(err error) error {
 		return ErrInvalidCredential
 	case errors.Is(err, ErrUserSuspended):
 		return ErrUserSuspended
+	case errors.Is(err, ErrEmailVerificationRequired):
+		return ErrEmailVerificationRequired
 	case errors.Is(err, ErrInvalidInput):
 		return ErrInvalidInput
 	case errors.Is(err, ErrNotFound):

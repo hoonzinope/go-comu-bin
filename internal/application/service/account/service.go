@@ -2,9 +2,13 @@ package account
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"log/slog"
+	"net/mail"
 	"strings"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	svccommon "github.com/hoonzinope/go-comu-bin/internal/application/service/common"
@@ -17,15 +21,26 @@ var _ port.AccountUseCase = (*AccountService)(nil)
 type Service = AccountService
 
 type AccountService struct {
-	userUseCase    port.UserUseCase
-	sessionUseCase port.SessionUseCase
-	userRepository port.UserRepository
-	unitOfWork     port.UnitOfWork
-	passwordHasher port.PasswordHasher
-	tokenProvider  port.TokenProvider
-	sessionRepo    port.SessionRepository
-	logger         *slog.Logger
+	userUseCase          port.UserUseCase
+	sessionUseCase       port.SessionUseCase
+	userRepository       port.UserRepository
+	unitOfWork           port.UnitOfWork
+	passwordHasher       port.PasswordHasher
+	tokenProvider        port.TokenProvider
+	sessionRepo          port.SessionRepository
+	verificationTokens   port.EmailVerificationTokenRepository
+	verificationIssuer   port.EmailVerificationTokenIssuer
+	verificationMailer   port.EmailVerificationMailSender
+	verificationTokenTTL time.Duration
+	resetTokens          port.PasswordResetTokenRepository
+	resetIssuer          port.PasswordResetTokenIssuer
+	resetMailer          port.PasswordResetMailSender
+	resetTokenTTL        time.Duration
+	logger               *slog.Logger
 }
+
+const defaultPasswordResetTokenTTL = 30 * time.Minute
+const defaultEmailVerificationTokenTTL = 30 * time.Minute
 
 func NewAccountService(userUseCase port.UserUseCase, sessionUseCase port.SessionUseCase, logger ...*slog.Logger) *AccountService {
 	return &AccountService{
@@ -47,6 +62,14 @@ func NewAccountServiceWithGuestUpgrade(
 	passwordHasher port.PasswordHasher,
 	tokenProvider port.TokenProvider,
 	sessionRepository port.SessionRepository,
+	verificationTokens port.EmailVerificationTokenRepository,
+	verificationIssuer port.EmailVerificationTokenIssuer,
+	verificationMailer port.EmailVerificationMailSender,
+	verificationTokenTTL time.Duration,
+	resetTokens port.PasswordResetTokenRepository,
+	resetIssuer port.PasswordResetTokenIssuer,
+	resetMailer port.PasswordResetMailSender,
+	resetTokenTTL time.Duration,
 	logger ...*slog.Logger,
 ) *AccountService {
 	svc := NewAccountService(userUseCase, sessionUseCase, logger...)
@@ -55,6 +78,14 @@ func NewAccountServiceWithGuestUpgrade(
 	svc.passwordHasher = passwordHasher
 	svc.tokenProvider = tokenProvider
 	svc.sessionRepo = sessionRepository
+	svc.verificationTokens = verificationTokens
+	svc.verificationIssuer = verificationIssuer
+	svc.verificationMailer = verificationMailer
+	svc.verificationTokenTTL = verificationTokenTTL
+	svc.resetTokens = resetTokens
+	svc.resetIssuer = resetIssuer
+	svc.resetMailer = resetMailer
+	svc.resetTokenTTL = resetTokenTTL
 	return svc
 }
 
@@ -66,6 +97,14 @@ func NewServiceWithGuestUpgrade(
 	passwordHasher port.PasswordHasher,
 	tokenProvider port.TokenProvider,
 	sessionRepository port.SessionRepository,
+	verificationTokens port.EmailVerificationTokenRepository,
+	verificationIssuer port.EmailVerificationTokenIssuer,
+	verificationMailer port.EmailVerificationMailSender,
+	verificationTokenTTL time.Duration,
+	resetTokens port.PasswordResetTokenRepository,
+	resetIssuer port.PasswordResetTokenIssuer,
+	resetMailer port.PasswordResetMailSender,
+	resetTokenTTL time.Duration,
 	logger ...*slog.Logger,
 ) *Service {
 	return NewAccountServiceWithGuestUpgrade(
@@ -76,6 +115,14 @@ func NewServiceWithGuestUpgrade(
 		passwordHasher,
 		tokenProvider,
 		sessionRepository,
+		verificationTokens,
+		verificationIssuer,
+		verificationMailer,
+		verificationTokenTTL,
+		resetTokens,
+		resetIssuer,
+		resetMailer,
+		resetTokenTTL,
 		logger...,
 	)
 }
@@ -150,6 +197,203 @@ func (s *AccountService) UpgradeGuestAccount(ctx context.Context, userID int64, 
 	return newToken, nil
 }
 
+func (s *AccountService) RequestEmailVerification(ctx context.Context, userID int64) error {
+	if s.unitOfWork == nil || s.verificationTokens == nil || s.verificationIssuer == nil || s.verificationMailer == nil {
+		return customerror.ErrInternalServerError
+	}
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
+		if err != nil {
+			return customerror.WrapRepository("select user by id for email verification request", err)
+		}
+		if user == nil {
+			return customerror.ErrUserNotFound
+		}
+		if user.IsGuest() || user.IsDeleted() || user.Email == "" || user.IsEmailVerified() {
+			return nil
+		}
+		return s.issueAndSendEmailVerification(txCtx, tx, user)
+	})
+}
+
+func (s *AccountService) ConfirmEmailVerification(ctx context.Context, token string) error {
+	if s.unitOfWork == nil || s.verificationTokens == nil {
+		return customerror.ErrInternalServerError
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return customerror.ErrInvalidInput
+	}
+	tokenHash := hashEmailVerificationToken(token)
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		verificationToken, err := tx.EmailVerificationTokenRepository().SelectByTokenHash(txCtx, tokenHash)
+		if err != nil {
+			return customerror.WrapRepository("select email verification token for confirm", err)
+		}
+		if verificationToken == nil || !verificationToken.IsUsable(time.Now()) {
+			return customerror.ErrInvalidToken
+		}
+		user, err := tx.UserRepository().SelectUserByID(txCtx, verificationToken.UserID)
+		if err != nil {
+			return customerror.WrapRepository("select user by id for email verification confirm", err)
+		}
+		if user == nil || user.IsGuest() || user.IsDeleted() || user.Email == "" {
+			return customerror.ErrInvalidToken
+		}
+		now := time.Now()
+		if !user.IsEmailVerified() {
+			user.MarkEmailVerified(now)
+			if err := tx.UserRepository().Update(txCtx, user); err != nil {
+				return customerror.WrapRepository("update user for email verification confirm", err)
+			}
+		}
+		if err := tx.EmailVerificationTokenRepository().InvalidateByUser(txCtx, user.ID); err != nil {
+			return customerror.WrapRepository("invalidate email verification tokens", err)
+		}
+		return nil
+	})
+}
+
+func (s *AccountService) RequestPasswordReset(ctx context.Context, email string) error {
+	if s.unitOfWork == nil || s.resetTokens == nil || s.resetIssuer == nil || s.resetMailer == nil {
+		return customerror.ErrInternalServerError
+	}
+	email = normalizeAccountEmail(email)
+	if email == "" {
+		return customerror.ErrInvalidInput
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return customerror.ErrInvalidInput
+	}
+	tokenTTL := s.resetTokenTTL
+	if tokenTTL <= 0 {
+		tokenTTL = defaultPasswordResetTokenTTL
+	}
+
+	var (
+		userID    int64
+		rawToken  string
+		expiresAt time.Time
+	)
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		user, err := tx.UserRepository().SelectUserByEmail(txCtx, email)
+		if err != nil {
+			return customerror.WrapRepository("select user by email for password reset request", err)
+		}
+		if user == nil || user.IsGuest() || user.IsDeleted() {
+			return nil
+		}
+		rawToken, err = s.resetIssuer.Issue()
+		if err != nil {
+			return customerror.Wrap(customerror.ErrInternalServerError, "issue password reset token", err)
+		}
+		expiresAt = time.Now().Add(tokenTTL)
+		userID = user.ID
+		if err := tx.PasswordResetTokenRepository().InvalidateByUser(txCtx, user.ID); err != nil {
+			return customerror.WrapRepository("invalidate previous password reset tokens", err)
+		}
+		if err := tx.PasswordResetTokenRepository().Save(txCtx, entity.NewPasswordResetToken(user.ID, hashResetToken(rawToken), expiresAt)); err != nil {
+			return customerror.WrapRepository("save password reset token", err)
+		}
+		return nil
+	})
+	if err != nil || rawToken == "" {
+		return err
+	}
+	if err := s.resetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
+		rollbackErr := s.invalidatePasswordResetTokens(ctx, userID)
+		if rollbackErr != nil {
+			return errors.Join(
+				customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err),
+				customerror.WrapRepository("rollback password reset token after mail failure", rollbackErr),
+			)
+		}
+		return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
+	}
+	return nil
+}
+
+func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPassword string) error {
+	if s.unitOfWork == nil || s.passwordHasher == nil || s.sessionRepo == nil || s.resetTokens == nil {
+		return customerror.ErrInternalServerError
+	}
+	token = strings.TrimSpace(token)
+	if token == "" || strings.TrimSpace(newPassword) == "" {
+		return customerror.ErrInvalidInput
+	}
+	tokenHash := hashResetToken(token)
+	existingReset, err := s.resetTokens.SelectByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return customerror.WrapRepository("select password reset token before confirm", err)
+	}
+	if existingReset == nil {
+		return customerror.ErrInvalidToken
+	}
+	userID := existingReset.UserID
+	hashedPassword, err := s.passwordHasher.Hash(newPassword)
+	if err != nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "hash password for password reset confirm", err)
+	}
+
+	var (
+		originalUser  *entity.User
+		originalReset *entity.PasswordResetToken
+	)
+	err = s.sessionRepo.WithUserLock(ctx, userID, func(scope port.SessionRepositoryScope) error {
+		err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+			txCtx := tx.Context()
+			resetToken, err := tx.PasswordResetTokenRepository().SelectByTokenHash(txCtx, tokenHash)
+			if err != nil {
+				return customerror.WrapRepository("select password reset token for confirm", err)
+			}
+			if resetToken == nil || !resetToken.IsUsable(time.Now()) {
+				return customerror.ErrInvalidToken
+			}
+			user, err := tx.UserRepository().SelectUserByID(txCtx, resetToken.UserID)
+			if err != nil {
+				return customerror.WrapRepository("select user by id for password reset confirm", err)
+			}
+			if user == nil || user.IsGuest() || user.IsDeleted() {
+				return customerror.ErrInvalidToken
+			}
+
+			userCopy := *user
+			originalUser = &userCopy
+			tokenCopy := *resetToken
+			originalReset = &tokenCopy
+
+			user.Password = hashedPassword
+			user.UpdatedAt = time.Now()
+			if err := tx.UserRepository().Update(txCtx, user); err != nil {
+				return customerror.WrapRepository("update user password for password reset confirm", err)
+			}
+			resetToken.Consume(time.Now())
+			if err := tx.PasswordResetTokenRepository().Update(txCtx, resetToken); err != nil {
+				return customerror.WrapRepository("consume password reset token", err)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if err := scope.DeleteByUser(ctx, userID); err != nil {
+			restoreErr := s.restorePasswordResetState(ctx, originalUser, originalReset)
+			if restoreErr != nil {
+				return errors.Join(
+					customerror.WrapRepository("delete user sessions for password reset confirm", err),
+					customerror.WrapRepository("restore password reset state after session rollback", restoreErr),
+				)
+			}
+			return customerror.WrapRepository("delete user sessions for password reset confirm", err)
+		}
+		return nil
+	})
+	return err
+}
+
 func (s *AccountService) applyGuestUpgrade(ctx context.Context, userID int64, username, email, hashedPassword string) (*entity.User, error) {
 	var original *entity.User
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
@@ -174,6 +418,9 @@ func (s *AccountService) applyGuestUpgrade(ctx context.Context, userID int64, us
 				return customerror.ErrUserAlreadyExists
 			}
 			return customerror.WrapRepository("update user for guest upgrade", err)
+		}
+		if err := s.issueAndSendEmailVerification(txCtx, tx, &upgradedUser); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -202,4 +449,81 @@ func (s *AccountService) restoreUserState(ctx context.Context, user *entity.User
 		}
 		return nil
 	})
+}
+
+func (s *AccountService) restorePasswordResetState(ctx context.Context, user *entity.User, token *entity.PasswordResetToken) error {
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		if user != nil {
+			current, err := tx.UserRepository().SelectUserByIDIncludingDeleted(txCtx, user.ID)
+			if err != nil {
+				return customerror.WrapRepository("select user by id for password reset rollback", err)
+			}
+			if current == nil {
+				return customerror.ErrUserNotFound
+			}
+			restoreUser := *user
+			if err := tx.UserRepository().Update(txCtx, &restoreUser); err != nil {
+				return customerror.WrapRepository("restore user after failed password reset", err)
+			}
+		}
+		if token != nil {
+			restoreToken := *token
+			if err := tx.PasswordResetTokenRepository().Update(txCtx, &restoreToken); err != nil {
+				return customerror.WrapRepository("restore password reset token after failed password reset", err)
+			}
+		}
+		return nil
+	})
+}
+
+func (s *AccountService) invalidatePasswordResetTokens(ctx context.Context, userID int64) error {
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		if err := tx.PasswordResetTokenRepository().InvalidateByUser(tx.Context(), userID); err != nil {
+			return customerror.WrapRepository("invalidate password reset tokens", err)
+		}
+		return nil
+	})
+}
+
+func (s *AccountService) issueAndSendEmailVerification(ctx context.Context, tx port.TxScope, user *entity.User) error {
+	if tx == nil || user == nil || s.verificationTokens == nil || s.verificationIssuer == nil || s.verificationMailer == nil {
+		return nil
+	}
+	if user.Email == "" || user.IsEmailVerified() {
+		return nil
+	}
+	tokenTTL := s.verificationTokenTTL
+	if tokenTTL <= 0 {
+		tokenTTL = defaultEmailVerificationTokenTTL
+	}
+	rawToken, err := s.verificationIssuer.Issue()
+	if err != nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "issue email verification token", err)
+	}
+	expiresAt := time.Now().Add(tokenTTL)
+	if err := tx.EmailVerificationTokenRepository().InvalidateByUser(ctx, user.ID); err != nil {
+		return customerror.WrapRepository("invalidate previous email verification tokens", err)
+	}
+	if err := tx.EmailVerificationTokenRepository().Save(ctx, entity.NewEmailVerificationToken(user.ID, hashEmailVerificationToken(rawToken), expiresAt)); err != nil {
+		return customerror.WrapRepository("save email verification token", err)
+	}
+	if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+	}
+	return nil
+}
+
+func hashResetToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func hashEmailVerificationToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func normalizeAccountEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }

@@ -213,6 +213,9 @@ func (h *CommandHandler) CreateReport(ctx context.Context, reporterUserID int64,
 		if err := policy.ForbidGuest(user); err != nil {
 			return err
 		}
+		if err := h.authorizationPolicy.CanWrite(user); err != nil {
+			return err
+		}
 		targetID, err := h.resolveVisibleReportTargetIDTx(tx, user, entityTargetType, targetUUID)
 		if err != nil {
 			return err

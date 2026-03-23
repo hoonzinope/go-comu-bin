@@ -44,7 +44,13 @@ func (s testTxScopeForOutboxEvents) ReactionRepository() port.ReactionRepository
 func (s testTxScopeForOutboxEvents) AttachmentRepository() port.AttachmentRepository     { return nil }
 func (s testTxScopeForOutboxEvents) ReportRepository() port.ReportRepository             { return nil }
 func (s testTxScopeForOutboxEvents) NotificationRepository() port.NotificationRepository { return nil }
-func (s testTxScopeForOutboxEvents) Outbox() port.OutboxAppender                         { return s.outbox }
+func (s testTxScopeForOutboxEvents) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
+	return nil
+}
+func (s testTxScopeForOutboxEvents) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
+	return nil
+}
+func (s testTxScopeForOutboxEvents) Outbox() port.OutboxAppender { return s.outbox }
 
 func TestDispatchDomainActions_UsesOutboxWithinTransaction(t *testing.T) {
 	outbox := &spyOutboxAppender{}

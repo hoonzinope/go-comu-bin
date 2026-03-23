@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
@@ -22,6 +25,149 @@ type failOnTokenDeleteCache struct {
 	mu          sync.Mutex
 	data        map[string]struct{}
 	deleteCalls int
+}
+
+type recordingPasswordResetMailSender struct {
+	sent []struct {
+		email string
+		token string
+	}
+	err error
+}
+
+type recordingEmailVerificationMailSender struct {
+	sent []struct {
+		email string
+		token string
+	}
+	err error
+}
+
+func newRecordingPasswordResetMailSender() *recordingPasswordResetMailSender {
+	return &recordingPasswordResetMailSender{}
+}
+
+func (s *recordingPasswordResetMailSender) SendPasswordReset(ctx context.Context, email, token string, expiresAt time.Time) error {
+	_ = ctx
+	_ = expiresAt
+	s.sent = append(s.sent, struct {
+		email string
+		token string
+	}{email: email, token: token})
+	return s.err
+}
+
+func newRecordingEmailVerificationMailSender() *recordingEmailVerificationMailSender {
+	return &recordingEmailVerificationMailSender{}
+}
+
+func (s *recordingEmailVerificationMailSender) SendEmailVerification(ctx context.Context, email, token string, expiresAt time.Time) error {
+	_ = ctx
+	_ = expiresAt
+	s.sent = append(s.sent, struct {
+		email string
+		token string
+	}{email: email, token: token})
+	return s.err
+}
+
+func testHashResetToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func testHashEmailVerificationToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+type fixedPasswordResetTokenIssuer struct {
+	tokens []string
+	idx    int
+	err    error
+}
+
+type fixedEmailVerificationTokenIssuer struct {
+	tokens []string
+	idx    int
+	err    error
+}
+
+func (i *fixedEmailVerificationTokenIssuer) Issue() (string, error) {
+	if i.err != nil {
+		return "", i.err
+	}
+	if i.idx >= len(i.tokens) {
+		return "fixed-verification-token", nil
+	}
+	token := i.tokens[i.idx]
+	i.idx++
+	return token, nil
+}
+
+func (i *fixedPasswordResetTokenIssuer) Issue() (string, error) {
+	if i.err != nil {
+		return "", i.err
+	}
+	if i.idx >= len(i.tokens) {
+		return "fixed-reset-token", nil
+	}
+	token := i.tokens[i.idx]
+	i.idx++
+	return token, nil
+}
+
+type failOnDeleteByPrefixCache struct {
+	data map[string]struct{}
+}
+
+func (c *failOnDeleteByPrefixCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
+	_ = ctx
+	_, ok := c.data[key]
+	return nil, ok, nil
+}
+
+func (c *failOnDeleteByPrefixCache) Set(ctx context.Context, key string, value interface{}) error {
+	_ = ctx
+	_ = value
+	if c.data == nil {
+		c.data = map[string]struct{}{}
+	}
+	c.data[key] = struct{}{}
+	return nil
+}
+
+func (c *failOnDeleteByPrefixCache) SetWithTTL(ctx context.Context, key string, value interface{}, ttlSeconds int) error {
+	_ = ttlSeconds
+	return c.Set(ctx, key, value)
+}
+
+func (c *failOnDeleteByPrefixCache) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	_ = ctx
+	_ = prefix
+	return 0, errors.New("delete by prefix failed")
+}
+
+func (c *failOnDeleteByPrefixCache) Delete(ctx context.Context, key string) error {
+	_ = ctx
+	delete(c.data, key)
+	return nil
+}
+
+func (c *failOnDeleteByPrefixCache) ExistsByPrefix(ctx context.Context, prefix string) (bool, error) {
+	_ = ctx
+	for key := range c.data {
+		if strings.HasPrefix(key, prefix) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (c *failOnDeleteByPrefixCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	_ = key
+	_ = ttlSeconds
+	return loader(ctx)
 }
 
 func (c *failOnTokenDeleteCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
@@ -107,7 +253,7 @@ type stubUserUseCase struct {
 	deleteMe func(ctx context.Context, userID int64, password string) error
 }
 
-func (s *stubUserUseCase) SignUp(ctx context.Context, username, password string) (string, error) {
+func (s *stubUserUseCase) SignUp(ctx context.Context, username, email, password string) (string, error) {
 	return "ok", nil
 }
 
@@ -270,6 +416,14 @@ func TestAccountService_UpgradeGuestAccount_Success(t *testing.T) {
 		passwordHasher,
 		tokenProvider,
 		cache,
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		auth.NewPasswordResetTokenIssuer(),
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
 	)
 
 	newToken, err := svc.UpgradeGuestAccount(context.Background(), guestID, oldToken, "alice", "alice@example.com", "pw")
@@ -316,6 +470,14 @@ func TestAccountService_UpgradeGuestAccount_RollsBackWhenSessionDeleteFails(t *t
 		passwordHasher,
 		tokenProvider,
 		sessionRepository,
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		auth.NewPasswordResetTokenIssuer(),
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
 	)
 
 	_, err = svc.UpgradeGuestAccount(context.Background(), guestID, oldToken, "alice", "alice@example.com", "pw")
@@ -335,4 +497,296 @@ func TestAccountService_UpgradeGuestAccount_RollsBackWhenSessionDeleteFails(t *t
 	remainingTokens := cacheBackend.activeNewTokens()
 	require.Len(t, remainingTokens, 1)
 	assert.Contains(t, remainingTokens[0], oldToken)
+}
+
+func TestAccountService_RequestPasswordReset_CreatesTokenAndSendsMail(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+
+	mailer := newRecordingPasswordResetMailSender()
+	issuer := &fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}}
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		issuer,
+		mailer,
+		30*time.Minute,
+	)
+
+	require.NoError(t, svc.RequestPasswordReset(context.Background(), "alice@example.com"))
+	require.Len(t, mailer.sent, 1)
+	assert.Equal(t, "alice@example.com", mailer.sent[0].email)
+	assert.Equal(t, "reset-token-1", mailer.sent[0].token)
+
+	saved, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsUsable(time.Now()))
+}
+
+func TestAccountService_RequestEmailVerification_CreatesTokenAndSendsMail(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	mailer := newRecordingEmailVerificationMailSender()
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		repositories.emailVerification,
+		issuer,
+		mailer,
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	require.NoError(t, svc.RequestEmailVerification(context.Background(), user.ID))
+	require.Len(t, mailer.sent, 1)
+	assert.Equal(t, "alice@example.com", mailer.sent[0].email)
+	assert.Equal(t, "verify-token-1", mailer.sent[0].token)
+
+	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsUsable(time.Now()))
+}
+
+func TestAccountService_ConfirmEmailVerification_VerifiesUserAndConsumesTokens(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	verificationToken := entity.NewEmailVerificationToken(user.ID, testHashEmailVerificationToken("verify-token-1"), time.Now().Add(time.Hour))
+	require.NoError(t, repositories.emailVerification.Save(context.Background(), verificationToken))
+
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		repositories.emailVerification,
+		&fixedEmailVerificationTokenIssuer{},
+		newRecordingEmailVerificationMailSender(),
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	require.NoError(t, svc.ConfirmEmailVerification(context.Background(), "verify-token-1"))
+
+	updatedUser, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, updatedUser)
+	assert.True(t, updatedUser.IsEmailVerified())
+
+	savedToken, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, savedToken)
+	assert.True(t, savedToken.IsConsumed())
+}
+
+func TestAccountService_RequestPasswordReset_InvalidatesPreviousToken(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1", "reset-token-2"}},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	require.NoError(t, svc.RequestPasswordReset(context.Background(), "alice@example.com"))
+	require.NoError(t, svc.RequestPasswordReset(context.Background(), "alice@example.com"))
+
+	first, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	assert.True(t, first.IsConsumed())
+
+	second, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-2"))
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	assert.True(t, second.IsUsable(time.Now()))
+}
+
+func TestAccountService_RequestPasswordReset_IgnoresUnknownEmail(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	mailer := newRecordingPasswordResetMailSender()
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}},
+		mailer,
+		30*time.Minute,
+	)
+
+	require.NoError(t, svc.RequestPasswordReset(context.Background(), "missing@example.com"))
+	assert.Empty(t, mailer.sent)
+}
+
+func TestAccountService_ConfirmPasswordReset_UpdatesPasswordConsumesTokenAndInvalidatesSessions(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "oldpw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	resetToken := entity.NewPasswordResetToken(user.ID, testHashResetToken("reset-token-1"), time.Now().Add(time.Hour))
+	require.NoError(t, repositories.passwordReset.Save(context.Background(), resetToken))
+
+	sessionRepository := auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	require.NoError(t, sessionRepository.Save(context.Background(), user.ID, "token-a", 60))
+	require.NoError(t, sessionRepository.Save(context.Background(), user.ID, "token-b", 60))
+
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		sessionRepository,
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	require.NoError(t, svc.ConfirmPasswordReset(context.Background(), "reset-token-1", "newpw"))
+
+	_, err = userService.VerifyCredentials(context.Background(), "alice", "oldpw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInvalidCredential)
+
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "newpw")
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, userID)
+
+	savedToken, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, savedToken)
+	assert.True(t, savedToken.IsConsumed())
+
+	exists, err := sessionRepository.ExistsByUser(context.Background(), user.ID)
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestAccountService_ConfirmPasswordReset_RollsBackWhenSessionInvalidationFails(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "oldpw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	resetToken := entity.NewPasswordResetToken(user.ID, testHashResetToken("reset-token-1"), time.Now().Add(time.Hour))
+	require.NoError(t, repositories.passwordReset.Save(context.Background(), resetToken))
+
+	sessionRepository := auth.NewCacheSessionRepository(&failOnDeleteByPrefixCache{})
+	require.NoError(t, sessionRepository.Save(context.Background(), user.ID, "token-a", 60))
+
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		sessionRepository,
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	err = svc.ConfirmPasswordReset(context.Background(), "reset-token-1", "newpw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
+
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "oldpw")
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, userID)
+
+	savedToken, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, savedToken)
+	assert.False(t, savedToken.IsConsumed())
 }

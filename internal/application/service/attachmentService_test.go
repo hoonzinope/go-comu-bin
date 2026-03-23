@@ -174,7 +174,13 @@ func (s testTxScope) ReactionRepository() port.ReactionRepository         { retu
 func (s testTxScope) AttachmentRepository() port.AttachmentRepository     { return s.attachment }
 func (s testTxScope) ReportRepository() port.ReportRepository             { return nil }
 func (s testTxScope) NotificationRepository() port.NotificationRepository { return s.notification }
-func (s testTxScope) Outbox() port.OutboxAppender                         { return s.outbox }
+func (s testTxScope) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
+	return nil
+}
+func (s testTxScope) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
+	return nil
+}
+func (s testTxScope) Outbox() port.OutboxAppender { return s.outbox }
 
 type testUnitOfWork struct {
 	scope port.TxScope

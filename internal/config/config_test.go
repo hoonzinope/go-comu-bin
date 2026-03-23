@@ -600,3 +600,42 @@ func TestLoadFromViper_InvalidOutboxConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadFromViper_RequiresSMTPHostWhenMailEnabled(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("delivery.mail.enabled", true)
+	v.Set("delivery.mail.smtp.from", "noreply@example.com")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+
+	cfg, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Contains(t, err.Error(), "delivery.mail.smtp.host")
+}
+
+func TestLoadFromViper_AcceptsSMTPConfigWhenMailEnabled(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("delivery.mail.enabled", true)
+	v.Set("delivery.mail.smtp.host", "smtp.example.com")
+	v.Set("delivery.mail.smtp.port", 587)
+	v.Set("delivery.mail.smtp.from", "noreply@example.com")
+	v.Set("delivery.mail.smtp.startTLS", true)
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+
+	cfg, err := loadFromViper(v)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.True(t, cfg.Delivery.Mail.Enabled)
+	assert.Equal(t, "smtp.example.com", cfg.Delivery.Mail.SMTP.Host)
+	assert.Equal(t, "noreply@example.com", cfg.Delivery.Mail.SMTP.From)
+}

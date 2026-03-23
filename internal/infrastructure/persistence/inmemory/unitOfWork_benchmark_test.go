@@ -21,6 +21,7 @@ func BenchmarkUnitOfWork_WithinTransactionParallelSaveUser(b *testing.B) {
 	attachmentRepository := NewAttachmentRepository()
 	reportRepository := NewReportRepository()
 	notificationRepository := NewNotificationRepository()
+	passwordResetRepository := NewPasswordResetTokenRepository()
 	outboxRepository := NewOutboxRepository()
 	unitOfWork := NewUnitOfWork(
 		userRepository,
@@ -33,6 +34,7 @@ func BenchmarkUnitOfWork_WithinTransactionParallelSaveUser(b *testing.B) {
 		attachmentRepository,
 		reportRepository,
 		notificationRepository,
+		passwordResetRepository,
 		outboxRepository,
 	)
 

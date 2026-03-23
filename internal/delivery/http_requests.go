@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"errors"
+	"net/mail"
 	"strings"
 
 	"github.com/google/uuid"
@@ -13,6 +14,12 @@ type userCredentialRequest struct {
 	Password string `json:"password" example:"pw"`
 }
 
+type signUpRequest struct {
+	Username string `json:"username" example:"alice"`
+	Email    string `json:"email" example:"alice@example.com"`
+	Password string `json:"password" example:"pw"`
+}
+
 type guestUpgradeRequest struct {
 	Username string `json:"username" example:"alice"`
 	Email    string `json:"email" example:"alice@example.com"`
@@ -21,6 +28,19 @@ type guestUpgradeRequest struct {
 
 type passwordOnlyRequest struct {
 	Password string `json:"password" example:"pw"`
+}
+
+type passwordResetRequest struct {
+	Email string `json:"email" example:"alice@example.com"`
+}
+
+type passwordResetConfirmRequest struct {
+	Token       string `json:"token" example:"reset-token"`
+	NewPassword string `json:"new_password" example:"newpw"`
+}
+
+type emailVerificationConfirmRequest struct {
+	Token string `json:"token" example:"verification-token"`
 }
 
 type userSuspensionRequest struct {
@@ -73,6 +93,16 @@ func (r userCredentialRequest) validate() error {
 	return nil
 }
 
+func (r signUpRequest) validate() error {
+	if strings.TrimSpace(r.Username) == "" || strings.TrimSpace(r.Email) == "" || strings.TrimSpace(r.Password) == "" {
+		return errors.New("username, email and password are required")
+	}
+	if _, err := mail.ParseAddress(strings.TrimSpace(r.Email)); err != nil {
+		return errors.New("invalid email")
+	}
+	return nil
+}
+
 func (r passwordOnlyRequest) validate() error {
 	if r.Password == "" {
 		return errors.New("password is required")
@@ -83,6 +113,33 @@ func (r passwordOnlyRequest) validate() error {
 func (r guestUpgradeRequest) validate() error {
 	if strings.TrimSpace(r.Username) == "" || strings.TrimSpace(r.Email) == "" || strings.TrimSpace(r.Password) == "" {
 		return errors.New("username, email and password are required")
+	}
+	if _, err := mail.ParseAddress(strings.TrimSpace(r.Email)); err != nil {
+		return errors.New("invalid email")
+	}
+	return nil
+}
+
+func (r passwordResetRequest) validate() error {
+	if strings.TrimSpace(r.Email) == "" {
+		return errors.New("email is required")
+	}
+	if _, err := mail.ParseAddress(strings.TrimSpace(r.Email)); err != nil {
+		return errors.New("invalid email")
+	}
+	return nil
+}
+
+func (r passwordResetConfirmRequest) validate() error {
+	if strings.TrimSpace(r.Token) == "" || strings.TrimSpace(r.NewPassword) == "" {
+		return errors.New("token and new_password are required")
+	}
+	return nil
+}
+
+func (r emailVerificationConfirmRequest) validate() error {
+	if strings.TrimSpace(r.Token) == "" {
+		return errors.New("token is required")
 	}
 	return nil
 }

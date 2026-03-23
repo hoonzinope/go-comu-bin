@@ -154,13 +154,14 @@ func (h *QueryHandler) ensureTargetExists(ctx context.Context, user *entity.User
 }
 
 type CommandHandler struct {
-	unitOfWork       port.UnitOfWork
-	actionDispatcher port.ActionHookDispatcher
-	queryHandler     *QueryHandler
+	unitOfWork          port.UnitOfWork
+	actionDispatcher    port.ActionHookDispatcher
+	queryHandler        *QueryHandler
+	authorizationPolicy policy.AuthorizationPolicy
 }
 
 func NewCommandHandler(_ port.UserRepository, _ port.BoardRepository, _ port.PostRepository, _ port.CommentRepository, _ port.ReactionRepository, unitOfWork port.UnitOfWork, actionDispatcher port.ActionHookDispatcher, queryHandler *QueryHandler) *CommandHandler {
-	return &CommandHandler{unitOfWork: unitOfWork, actionDispatcher: actionDispatcher, queryHandler: queryHandler}
+	return &CommandHandler{unitOfWork: unitOfWork, actionDispatcher: actionDispatcher, queryHandler: queryHandler, authorizationPolicy: policy.NewRoleAuthorizationPolicy()}
 }
 
 func (h *CommandHandler) SetReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error) {
@@ -244,6 +245,9 @@ func (h *CommandHandler) withReactionTransaction(ctx context.Context, userID, ta
 			return customerror.ErrUserNotFound
 		}
 		if err := policy.ForbidGuest(user); err != nil {
+			return err
+		}
+		if err := h.authorizationPolicy.CanWrite(user); err != nil {
 			return err
 		}
 		postID, err := h.ensureTargetExistsTx(tx, user, targetID, targetType)

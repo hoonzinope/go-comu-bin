@@ -130,3 +130,8 @@ func (s sessionRepositoryScope) Save(ctx context.Context, userID int64, token st
 func (s sessionRepositoryScope) Delete(ctx context.Context, userID int64, token string) error {
 	return s.repo.cache.Delete(ctx, sessionCacheKey(userID, token))
 }
+
+func (s sessionRepositoryScope) DeleteByUser(ctx context.Context, userID int64) error {
+	_, err := s.repo.cache.DeleteByPrefix(ctx, sessionCachePrefix(userID))
+	return err
+}

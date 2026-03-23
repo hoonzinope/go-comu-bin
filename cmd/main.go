@@ -36,6 +36,8 @@ import (
 	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
+	noopmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/noop"
+	smtpmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/smtp"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	rateLimitInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/ratelimit/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
@@ -66,6 +68,8 @@ func main() {
 	attachmentRepository := inmemory.NewAttachmentRepository()
 	reportRepository := inmemory.NewReportRepository()
 	notificationRepository := inmemory.NewNotificationRepository()
+	emailVerificationRepository := inmemory.NewEmailVerificationTokenRepository()
+	passwordResetRepository := inmemory.NewPasswordResetTokenRepository()
 	outboxRepository := inmemory.NewOutboxRepository(
 		inmemory.WithProcessingTimeout(time.Duration(cfg.Event.Outbox.ProcessingLeaseMillis) * time.Millisecond),
 	)
@@ -84,7 +88,7 @@ func main() {
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logger
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, outboxRepository)
+	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, emailVerificationRepository, passwordResetRepository, outboxRepository)
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(
 		outboxRepository,
@@ -117,7 +121,8 @@ func main() {
 	}
 	outboxRelay.Start(appCtx)
 
-	userUseCase := service.NewUserService(userRepository, passwordHasher, unitOfWork)
+	mailers := newMailSenders(cfg)
+	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), mailers, 30*time.Minute)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
@@ -143,6 +148,7 @@ func main() {
 		appLogger,
 	)
 	tokenProvider := auth.NewJwtTokenProvider(jwtSecret(cfg))
+	passwordResetIssuer := auth.NewPasswordResetTokenIssuer()
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	guestCleanupUseCase := service.NewGuestCleanupService(userRepository, postRepository, commentRepository, reactionRepository, reportRepository, sessionRepository, unitOfWork)
 	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase, guestCleanupUseCase); err != nil {
@@ -158,6 +164,14 @@ func main() {
 		passwordHasher,
 		tokenProvider,
 		sessionRepository,
+		emailVerificationRepository,
+		auth.NewEmailVerificationTokenIssuer(),
+		mailers,
+		30*time.Minute,
+		passwordResetRepository,
+		passwordResetIssuer,
+		mailers,
+		30*time.Minute,
 		appLogger,
 	)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
@@ -339,6 +353,25 @@ func cachePolicy(cfg *config.Config) appcache.Policy {
 	return appcache.Policy{
 		ListTTLSeconds:   cfg.Cache.ListTTLSeconds,
 		DetailTTLSeconds: cfg.Cache.DetailTTLSeconds,
+	}
+}
+
+type mailSenders struct {
+	port.PasswordResetMailSender
+	port.EmailVerificationMailSender
+}
+
+func newMailSenders(cfg *config.Config) mailSenders {
+	if cfg != nil && cfg.Delivery.Mail.Enabled {
+		sender := smtpmail.NewSender(*cfg)
+		return mailSenders{
+			PasswordResetMailSender:     sender,
+			EmailVerificationMailSender: sender,
+		}
+	}
+	return mailSenders{
+		PasswordResetMailSender:     noopmail.NewPasswordResetMailSender(),
+		EmailVerificationMailSender: noopmail.NewEmailVerificationMailSender(),
 	}
 }
 

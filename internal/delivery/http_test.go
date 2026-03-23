@@ -32,7 +32,7 @@ import (
 const apiV1Prefix = "/api/v1"
 
 type fakeUserUseCase struct {
-	signUp            func(ctx context.Context, username, password string) (string, error)
+	signUp            func(ctx context.Context, username, email, password string) (string, error)
 	issueGuestAccount func(ctx context.Context) (int64, error)
 	upgradeGuest      func(ctx context.Context, userID int64, username, email, password string) error
 	deleteMe          func(ctx context.Context, userID int64, password string) error
@@ -43,9 +43,9 @@ type fakeUserUseCase struct {
 	ensureAdmin       func(ctx context.Context, userID int64) error
 }
 
-func (f *fakeUserUseCase) SignUp(ctx context.Context, username, password string) (string, error) {
+func (f *fakeUserUseCase) SignUp(ctx context.Context, username, email, password string) (string, error) {
 	if f.signUp != nil {
-		return f.signUp(ctx, username, password)
+		return f.signUp(ctx, username, email, password)
 	}
 	return "ok", nil
 }
@@ -124,6 +124,10 @@ func (f *fakeUserUseCase) SelectUserByUsername(_ context.Context, username strin
 	return &entity.User{ID: 1, Name: username, Status: entity.UserStatusActive}, nil
 }
 
+func (f *fakeUserUseCase) SelectUserByEmail(_ context.Context, email string) (*entity.User, error) {
+	return &entity.User{ID: 1, Email: email, Status: entity.UserStatusActive}, nil
+}
+
 func (f *fakeUserUseCase) SelectUserByUUID(_ context.Context, userUUID string) (*entity.User, error) {
 	return &entity.User{ID: 1, UUID: userUUID, Status: entity.UserStatusActive}, nil
 }
@@ -160,8 +164,12 @@ func (f *fakeUserUseCase) Delete(context.Context, int64) error {
 }
 
 type fakeAccountUseCase struct {
-	deleteMyAccount     func(ctx context.Context, userID int64, password string) error
-	upgradeGuestAccount func(ctx context.Context, userID int64, currentToken, username, email, password string) (string, error)
+	deleteMyAccount          func(ctx context.Context, userID int64, password string) error
+	upgradeGuestAccount      func(ctx context.Context, userID int64, currentToken, username, email, password string) (string, error)
+	requestEmailVerification func(ctx context.Context, userID int64) error
+	confirmEmailVerification func(ctx context.Context, token string) error
+	requestPasswordReset     func(ctx context.Context, email string) error
+	confirmPasswordReset     func(ctx context.Context, token, newPassword string) error
 }
 
 func (f *fakeAccountUseCase) DeleteMyAccount(ctx context.Context, userID int64, password string) error {
@@ -176,6 +184,34 @@ func (f *fakeAccountUseCase) UpgradeGuestAccount(ctx context.Context, userID int
 		return f.upgradeGuestAccount(ctx, userID, currentToken, username, email, password)
 	}
 	return "new-token", nil
+}
+
+func (f *fakeAccountUseCase) RequestEmailVerification(ctx context.Context, userID int64) error {
+	if f.requestEmailVerification != nil {
+		return f.requestEmailVerification(ctx, userID)
+	}
+	return nil
+}
+
+func (f *fakeAccountUseCase) ConfirmEmailVerification(ctx context.Context, token string) error {
+	if f.confirmEmailVerification != nil {
+		return f.confirmEmailVerification(ctx, token)
+	}
+	return nil
+}
+
+func (f *fakeAccountUseCase) RequestPasswordReset(ctx context.Context, email string) error {
+	if f.requestPasswordReset != nil {
+		return f.requestPasswordReset(ctx, email)
+	}
+	return nil
+}
+
+func (f *fakeAccountUseCase) ConfirmPasswordReset(ctx context.Context, token, newPassword string) error {
+	if f.confirmPasswordReset != nil {
+		return f.confirmPasswordReset(ctx, token, newPassword)
+	}
+	return nil
 }
 
 type fakeNotificationUseCase struct {
@@ -1728,7 +1764,7 @@ func TestHTTP_UserSignUp_MethodNotAllowed(t *testing.T) {
 
 func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 	user := &fakeUserUseCase{
-		signUp: func(ctx context.Context, username, password string) (string, error) {
+		signUp: func(ctx context.Context, username, email, password string) (string, error) {
 			return "", customerror.ErrUserAlreadyExists
 		},
 	}
@@ -1736,6 +1772,7 @@ func TestHTTP_UserSignUp_Conflict(t *testing.T) {
 
 	rr := doJSONRequest(t, handler, http.MethodPost, "/signup", map[string]string{
 		"username": "alice",
+		"email":    "alice@example.com",
 		"password": "pw",
 	})
 	assert.Equal(t, http.StatusConflict, rr.Code)
@@ -1805,6 +1842,99 @@ func TestHTTP_GuestUpgrade_BadRequest_WhenEmailMissing(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.JSONEq(t, `{"error":"username, email and password are required"}`, rr.Body.String())
+}
+
+func TestHTTP_EmailVerificationRequest_Success(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{
+		requestEmailVerification: func(ctx context.Context, userID int64) error {
+			assert.Equal(t, int64(1), userID)
+			return nil
+		},
+	}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/email-verification/request", map[string]any{}, 1)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.JSONEq(t, `{"result":"ok"}`, rr.Body.String())
+}
+
+func TestHTTP_EmailVerificationConfirm_NoContent(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{
+		confirmEmailVerification: func(ctx context.Context, token string) error {
+			assert.Equal(t, "verify-token", token)
+			return nil
+		},
+	}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/email-verification/confirm", map[string]any{
+		"token": "verify-token",
+	})
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_EmailVerificationConfirm_BadRequest_WhenTokenMissing(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/email-verification/confirm", map[string]any{})
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"token is required"}`, rr.Body.String())
+}
+
+func TestHTTP_PasswordResetRequest_Success(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{
+		requestPasswordReset: func(ctx context.Context, email string) error {
+			assert.Equal(t, "alice@example.com", email)
+			return nil
+		},
+	}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "alice@example.com",
+	})
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.JSONEq(t, `{"result":"ok"}`, rr.Body.String())
+}
+
+func TestHTTP_PasswordResetRequest_BadRequest_WhenEmailInvalid(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "not-an-email",
+	})
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"invalid email"}`, rr.Body.String())
+}
+
+func TestHTTP_PasswordResetConfirm_NoContent(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{
+		confirmPasswordReset: func(ctx context.Context, token, newPassword string) error {
+			assert.Equal(t, "reset-token", token)
+			assert.Equal(t, "newpw", newPassword)
+			return nil
+		},
+	}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/confirm", map[string]any{
+		"token":        "reset-token",
+		"new_password": "newpw",
+	})
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_PasswordResetConfirm_BadRequest_WhenTokenMissing(t *testing.T) {
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/confirm", map[string]any{
+		"new_password": "newpw",
+	})
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.JSONEq(t, `{"error":"token and new_password are required"}`, rr.Body.String())
 }
 
 func TestHTTP_UserLogin_BadRequest_WhenUsernameMissing(t *testing.T) {
@@ -1889,6 +2019,7 @@ func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
 
 	rr := doJSONRequest(t, handler, http.MethodPost, "/signup", map[string]any{
 		"username": "alice",
+		"email":    "alice@example.com",
 		"password": "pw",
 		"extra":    "unknown",
 	})
@@ -1898,7 +2029,7 @@ func TestHTTP_UserSignUp_UnknownField(t *testing.T) {
 func TestHTTP_UserSignUp_TrailingJSONRejected(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
-	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(`{"username":"alice","password":"pw"}{"extra":true}`))
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(`{"username":"alice","email":"alice@example.com","password":"pw"}{"extra":true}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -1910,7 +2041,7 @@ func TestHTTP_UserSignUp_OversizedJSONRejected(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
 
 	hugeUsername := strings.Repeat("a", int(defaultMaxJSONBodyBytes))
-	body := `{"username":"` + hugeUsername + `","password":"pw"}`
+	body := `{"username":"` + hugeUsername + `","email":"alice@example.com","password":"pw"}`
 	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
@@ -1932,7 +2063,7 @@ func TestHTTP_UserSignUp_OversizedJSONRejected_WithConfiguredLimit(t *testing.T)
 		80,
 	)
 
-	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(`{"username":"alice","password":"`+strings.Repeat("p", 128)+`"}`))
+	req := httptest.NewRequest(http.MethodPost, apiV1Prefix+"/signup", bytes.NewBufferString(`{"username":"alice","email":"alice@example.com","password":"`+strings.Repeat("p", 128)+`"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -1958,6 +2089,7 @@ func TestHTTP_WriteRateLimit_ReturnsTooManyRequests(t *testing.T) {
 
 	reqBody := map[string]any{
 		"username": "alice",
+		"email":    "alice@example.com",
 		"password": "pw",
 	}
 	first := doJSONRequest(t, handler, http.MethodPost, "/signup", reqBody)

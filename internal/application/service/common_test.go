@@ -23,20 +23,22 @@ import (
 )
 
 type testRepositories struct {
-	user         port.UserRepository
-	board        port.BoardRepository
-	post         port.PostRepository
-	postSearch   port.PostSearchRepository
-	indexer      port.PostSearchIndexer
-	tag          port.TagRepository
-	postTag      port.PostTagRepository
-	comment      port.CommentRepository
-	reaction     port.ReactionRepository
-	attachment   port.AttachmentRepository
-	report       port.ReportRepository
-	notification port.NotificationRepository
-	outbox       port.OutboxStore
-	unitOfWork   port.UnitOfWork
+	user              port.UserRepository
+	board             port.BoardRepository
+	post              port.PostRepository
+	postSearch        port.PostSearchRepository
+	indexer           port.PostSearchIndexer
+	tag               port.TagRepository
+	postTag           port.PostTagRepository
+	comment           port.CommentRepository
+	reaction          port.ReactionRepository
+	attachment        port.AttachmentRepository
+	report            port.ReportRepository
+	notification      port.NotificationRepository
+	emailVerification port.EmailVerificationTokenRepository
+	passwordReset     port.PasswordResetTokenRepository
+	outbox            port.OutboxStore
+	unitOfWork        port.UnitOfWork
 }
 
 func newTestRepositories() testRepositories {
@@ -51,22 +53,26 @@ func newTestRepositories() testRepositories {
 	attachmentRepository := inmemory.NewAttachmentRepository()
 	reportRepository := inmemory.NewReportRepository()
 	notificationRepository := inmemory.NewNotificationRepository()
+	emailVerificationRepository := inmemory.NewEmailVerificationTokenRepository()
+	passwordResetRepository := inmemory.NewPasswordResetTokenRepository()
 	outboxRepository := inmemory.NewOutboxRepository()
 	return testRepositories{
-		user:         userRepository,
-		board:        boardRepository,
-		post:         postRepository,
-		postSearch:   postSearchStore,
-		indexer:      postSearchStore,
-		tag:          tagRepository,
-		postTag:      postTagRepository,
-		comment:      commentRepository,
-		reaction:     reactionRepository,
-		attachment:   attachmentRepository,
-		report:       reportRepository,
-		notification: notificationRepository,
-		outbox:       outboxRepository,
-		unitOfWork:   inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, outboxRepository),
+		user:              userRepository,
+		board:             boardRepository,
+		post:              postRepository,
+		postSearch:        postSearchStore,
+		indexer:           postSearchStore,
+		tag:               tagRepository,
+		postTag:           postTagRepository,
+		comment:           commentRepository,
+		reaction:          reactionRepository,
+		attachment:        attachmentRepository,
+		report:            reportRepository,
+		notification:      notificationRepository,
+		emailVerification: emailVerificationRepository,
+		passwordReset:     passwordResetRepository,
+		outbox:            outboxRepository,
+		unitOfWork:        inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, emailVerificationRepository, passwordResetRepository, outboxRepository),
 	}
 }
 
@@ -168,6 +174,8 @@ func seedUser(userRepository port.UserRepository, name, password, role string) i
 		user = entity.NewAdmin(name, password)
 	} else {
 		user = entity.NewUser(name, password)
+		user.Email = name + "@example.com"
+		user.MarkEmailVerified(time.Now())
 	}
 	id, _ := userRepository.Save(context.Background(), user)
 	return id

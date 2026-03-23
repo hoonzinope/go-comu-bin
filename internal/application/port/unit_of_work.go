@@ -14,6 +14,8 @@ type TxScope interface {
 	AttachmentRepository() AttachmentRepository
 	ReportRepository() ReportRepository
 	NotificationRepository() NotificationRepository
+	EmailVerificationTokenRepository() EmailVerificationTokenRepository
+	PasswordResetTokenRepository() PasswordResetTokenRepository
 	Outbox() OutboxAppender
 }
 

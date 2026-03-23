@@ -35,6 +35,10 @@ func (r *stubUserRepository) SelectUserByUsername(ctx context.Context, username 
 	return nil, nil
 }
 
+func (r *stubUserRepository) SelectUserByEmail(context.Context, string) (*entity.User, error) {
+	return nil, nil
+}
+
 func (r *stubUserRepository) SelectUserByUUID(context.Context, string) (*entity.User, error) {
 	return nil, nil
 }

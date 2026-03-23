@@ -88,6 +88,26 @@ func (r *UserRepository) selectUserByUsername(username string) (*entity.User, er
 	return nil, nil
 }
 
+func (r *UserRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectUserByEmail(email)
+}
+
+func (r *UserRepository) selectUserByEmail(email string) (*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	email = normalizeEmail(email)
+	for _, user := range r.userDB.Data {
+		if normalizeEmail(user.Email) == email && email != "" && !user.IsDeleted() {
+			return cloneUser(user), nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *UserRepository) SelectUserByUUID(ctx context.Context, userUUID string) (*entity.User, error) {
 	_ = ctx
 	r.coordinator.enter()
@@ -283,6 +303,10 @@ func cloneUser(user *entity.User) *entity.User {
 		guestExpiredAt := *user.GuestExpiredAt
 		out.GuestExpiredAt = &guestExpiredAt
 	}
+	if user.EmailVerifiedAt != nil {
+		emailVerifiedAt := *user.EmailVerifiedAt
+		out.EmailVerifiedAt = &emailVerifiedAt
+	}
 	if user.DeletedAt != nil {
 		deletedAt := *user.DeletedAt
 		out.DeletedAt = &deletedAt
@@ -291,9 +315,13 @@ func cloneUser(user *entity.User) *entity.User {
 }
 
 func emailsConflict(left, right string) bool {
-	left = strings.TrimSpace(left)
-	right = strings.TrimSpace(right)
+	left = normalizeEmail(left)
+	right = normalizeEmail(right)
 	return left != "" && right != "" && left == right
+}
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }
 
 func guestEligibleForCleanup(user *entity.User, now time.Time, pendingGrace, activeUnusedGrace time.Duration) bool {

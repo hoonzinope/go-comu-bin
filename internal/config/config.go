@@ -64,6 +64,18 @@ type Config struct {
 				Secret string `yaml:"secret"`
 			} `yaml:"auth"`
 		} `yaml:"http"`
+		Mail struct {
+			Enabled bool `yaml:"enabled"`
+			SMTP    struct {
+				Host        string `yaml:"host"`
+				Port        int    `yaml:"port"`
+				Username    string `yaml:"username"`
+				Password    string `yaml:"password"`
+				From        string `yaml:"from"`
+				StartTLS    bool   `yaml:"startTLS"`
+				ImplicitTLS bool   `yaml:"implicitTLS"`
+			} `yaml:"smtp"`
+		} `yaml:"mail"`
 	} `yaml:"delivery"`
 	Event struct {
 		Outbox struct {
@@ -125,6 +137,14 @@ func Load() (*Config, error) {
 		"delivery.http.rateLimit.readRequests",
 		"delivery.http.rateLimit.writeRequests",
 		"delivery.http.auth.secret",
+		"delivery.mail.enabled",
+		"delivery.mail.smtp.host",
+		"delivery.mail.smtp.port",
+		"delivery.mail.smtp.username",
+		"delivery.mail.smtp.password",
+		"delivery.mail.smtp.from",
+		"delivery.mail.smtp.startTLS",
+		"delivery.mail.smtp.implicitTLS",
 		"event.outbox.workerCount",
 		"event.outbox.batchSize",
 		"event.outbox.pollIntervalMillis",
@@ -175,6 +195,8 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("delivery.http.rateLimit.windowSeconds", 60)
 	v.SetDefault("delivery.http.rateLimit.readRequests", 300)
 	v.SetDefault("delivery.http.rateLimit.writeRequests", 60)
+	v.SetDefault("delivery.mail.enabled", false)
+	v.SetDefault("delivery.mail.smtp.port", 587)
 	v.SetDefault("event.outbox.workerCount", 1)
 	v.SetDefault("event.outbox.batchSize", 100)
 	v.SetDefault("event.outbox.pollIntervalMillis", 100)
@@ -251,6 +273,20 @@ func validate(cfg *Config) error {
 	}
 	if len(secret) < minJWTSecretLength {
 		return fmt.Errorf("invalid delivery.http.auth.secret: must be at least %d characters", minJWTSecretLength)
+	}
+	if cfg.Delivery.Mail.Enabled {
+		if strings.TrimSpace(cfg.Delivery.Mail.SMTP.Host) == "" {
+			return fmt.Errorf("invalid delivery.mail.smtp.host: cannot be empty when mail is enabled")
+		}
+		if cfg.Delivery.Mail.SMTP.Port < 1 || cfg.Delivery.Mail.SMTP.Port > 65535 {
+			return fmt.Errorf("invalid delivery.mail.smtp.port: %d (must be 1..65535)", cfg.Delivery.Mail.SMTP.Port)
+		}
+		if strings.TrimSpace(cfg.Delivery.Mail.SMTP.From) == "" {
+			return fmt.Errorf("invalid delivery.mail.smtp.from: cannot be empty when mail is enabled")
+		}
+		if cfg.Delivery.Mail.SMTP.StartTLS && cfg.Delivery.Mail.SMTP.ImplicitTLS {
+			return fmt.Errorf("invalid delivery.mail.smtp: startTLS and implicitTLS cannot both be enabled")
+		}
 	}
 	if cfg.Cache.ListTTLSeconds <= 0 {
 		return fmt.Errorf("invalid cache.listTTLSeconds: %d (must be > 0)", cfg.Cache.ListTTLSeconds)

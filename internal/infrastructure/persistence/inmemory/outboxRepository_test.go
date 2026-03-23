@@ -196,6 +196,7 @@ func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 	attachmentRepository := NewAttachmentRepository()
 	reportRepository := NewReportRepository()
 	notificationRepository := NewNotificationRepository()
+	passwordResetRepository := NewPasswordResetTokenRepository()
 	outboxRepository := NewOutboxRepository()
 	unitOfWork := NewUnitOfWork(
 		userRepository,
@@ -208,6 +209,7 @@ func TestUnitOfWork_OutboxAppendRollback(t *testing.T) {
 		attachmentRepository,
 		reportRepository,
 		notificationRepository,
+		passwordResetRepository,
 		outboxRepository,
 	)
 
