@@ -732,3 +732,29 @@ func TestLoadFromViper_AcceptsPasswordResetRateLimitAndCleanupConfig(t *testing.
 	assert.Equal(t, 600, cfg.Jobs.PasswordResetCleanup.GracePeriodSeconds)
 	assert.Equal(t, 100, cfg.Jobs.PasswordResetCleanup.BatchSize)
 }
+
+func TestLoadFromViper_AcceptsAccountSecurityRateLimitConfig(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("delivery.http.auth.loginRateLimit.enabled", true)
+	v.Set("delivery.http.auth.loginRateLimit.windowSeconds", 60)
+	v.Set("delivery.http.auth.loginRateLimit.maxRequests", 5)
+	v.Set("delivery.http.auth.guestUpgradeRateLimit.enabled", true)
+	v.Set("delivery.http.auth.guestUpgradeRateLimit.windowSeconds", 60)
+	v.Set("delivery.http.auth.guestUpgradeRateLimit.maxRequests", 5)
+
+	cfg, err := loadFromViper(v)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.True(t, cfg.Delivery.HTTP.Auth.LoginRateLimit.Enabled)
+	assert.Equal(t, 60, cfg.Delivery.HTTP.Auth.LoginRateLimit.WindowSeconds)
+	assert.Equal(t, 5, cfg.Delivery.HTTP.Auth.LoginRateLimit.MaxRequests)
+	assert.True(t, cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.Enabled)
+	assert.Equal(t, 60, cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.WindowSeconds)
+	assert.Equal(t, 5, cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.MaxRequests)
+}

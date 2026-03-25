@@ -145,10 +145,12 @@ func (s *AccountService) UpgradeGuestAccount(ctx context.Context, userID int64, 
 	email = strings.TrimSpace(email)
 	currentToken = strings.TrimSpace(currentToken)
 	if username == "" || email == "" || strings.TrimSpace(password) == "" || currentToken == "" {
+		s.logGuestUpgradeAttempt(userID, "invalid_input")
 		return "", customerror.ErrInvalidInput
 	}
 	hashedPassword, err := s.passwordHasher.Hash(password)
 	if err != nil {
+		s.logGuestUpgradeAttempt(userID, "failed")
 		return "", customerror.Wrap(customerror.ErrInternalServerError, "hash password for guest upgrade", err)
 	}
 
@@ -192,8 +194,16 @@ func (s *AccountService) UpgradeGuestAccount(ctx context.Context, userID int64, 
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, customerror.ErrInvalidToken) {
+			s.logGuestUpgradeAttempt(userID, "invalid_token")
+		} else if errors.Is(err, customerror.ErrInvalidInput) {
+			s.logGuestUpgradeAttempt(userID, "invalid_input")
+		} else {
+			s.logGuestUpgradeAttempt(userID, "failed")
+		}
 		return "", err
 	}
+	s.logGuestUpgradeAttempt(userID, "succeeded")
 	return newToken, nil
 }
 
@@ -614,4 +624,16 @@ func (s *AccountService) logPasswordResetConfirm(userID int64, outcome string) {
 		attrs = append(attrs, "user_id", userID)
 	}
 	s.logger.Info("password reset confirm", attrs...)
+}
+
+func (s *AccountService) logGuestUpgradeAttempt(userID int64, outcome string) {
+	if s == nil || s.logger == nil {
+		return
+	}
+	s.logger.Info(
+		"guest upgrade audit",
+		"event", "guest_upgrade_attempt",
+		"user_id", userID,
+		"outcome", outcome,
+	)
 }

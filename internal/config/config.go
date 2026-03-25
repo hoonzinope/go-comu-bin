@@ -61,7 +61,17 @@ type Config struct {
 				WriteRequests int  `yaml:"writeRequests"`
 			} `yaml:"rateLimit"`
 			Auth struct {
-				Secret                            string `yaml:"secret"`
+				Secret         string `yaml:"secret"`
+				LoginRateLimit struct {
+					Enabled       bool `yaml:"enabled"`
+					WindowSeconds int  `yaml:"windowSeconds"`
+					MaxRequests   int  `yaml:"maxRequests"`
+				} `yaml:"loginRateLimit"`
+				GuestUpgradeRateLimit struct {
+					Enabled       bool `yaml:"enabled"`
+					WindowSeconds int  `yaml:"windowSeconds"`
+					MaxRequests   int  `yaml:"maxRequests"`
+				} `yaml:"guestUpgradeRateLimit"`
 				EmailVerificationRequestRateLimit struct {
 					Enabled       bool `yaml:"enabled"`
 					WindowSeconds int  `yaml:"windowSeconds"`
@@ -165,6 +175,12 @@ func Load() (*Config, error) {
 		"delivery.http.rateLimit.readRequests",
 		"delivery.http.rateLimit.writeRequests",
 		"delivery.http.auth.secret",
+		"delivery.http.auth.loginRateLimit.enabled",
+		"delivery.http.auth.loginRateLimit.windowSeconds",
+		"delivery.http.auth.loginRateLimit.maxRequests",
+		"delivery.http.auth.guestUpgradeRateLimit.enabled",
+		"delivery.http.auth.guestUpgradeRateLimit.windowSeconds",
+		"delivery.http.auth.guestUpgradeRateLimit.maxRequests",
 		"delivery.http.auth.emailVerificationRequestRateLimit.enabled",
 		"delivery.http.auth.emailVerificationRequestRateLimit.windowSeconds",
 		"delivery.http.auth.emailVerificationRequestRateLimit.maxRequests",
@@ -239,6 +255,12 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("delivery.http.rateLimit.windowSeconds", 60)
 	v.SetDefault("delivery.http.rateLimit.readRequests", 300)
 	v.SetDefault("delivery.http.rateLimit.writeRequests", 60)
+	v.SetDefault("delivery.http.auth.loginRateLimit.enabled", true)
+	v.SetDefault("delivery.http.auth.loginRateLimit.windowSeconds", 60)
+	v.SetDefault("delivery.http.auth.loginRateLimit.maxRequests", 5)
+	v.SetDefault("delivery.http.auth.guestUpgradeRateLimit.enabled", true)
+	v.SetDefault("delivery.http.auth.guestUpgradeRateLimit.windowSeconds", 60)
+	v.SetDefault("delivery.http.auth.guestUpgradeRateLimit.maxRequests", 5)
 	v.SetDefault("delivery.http.auth.emailVerificationRequestRateLimit.enabled", true)
 	v.SetDefault("delivery.http.auth.emailVerificationRequestRateLimit.windowSeconds", 60)
 	v.SetDefault("delivery.http.auth.emailVerificationRequestRateLimit.maxRequests", 5)
@@ -331,6 +353,38 @@ func validate(cfg *Config) error {
 	}
 	if len(secret) < minJWTSecretLength {
 		return fmt.Errorf("invalid delivery.http.auth.secret: must be at least %d characters", minJWTSecretLength)
+	}
+	if cfg.Delivery.HTTP.Auth.LoginRateLimit.Enabled {
+		if cfg.Delivery.HTTP.Auth.LoginRateLimit.WindowSeconds < minRateLimitWindowSeconds {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.loginRateLimit.windowSeconds: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.LoginRateLimit.WindowSeconds,
+				minRateLimitWindowSeconds,
+			)
+		}
+		if cfg.Delivery.HTTP.Auth.LoginRateLimit.MaxRequests < minRateLimitWriteRequests {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.loginRateLimit.maxRequests: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.LoginRateLimit.MaxRequests,
+				minRateLimitWriteRequests,
+			)
+		}
+	}
+	if cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.Enabled {
+		if cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.WindowSeconds < minRateLimitWindowSeconds {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.guestUpgradeRateLimit.windowSeconds: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.WindowSeconds,
+				minRateLimitWindowSeconds,
+			)
+		}
+		if cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.MaxRequests < minRateLimitWriteRequests {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.guestUpgradeRateLimit.maxRequests: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.MaxRequests,
+				minRateLimitWriteRequests,
+			)
+		}
 	}
 	if cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.Enabled {
 		if cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.WindowSeconds < minRateLimitWindowSeconds {

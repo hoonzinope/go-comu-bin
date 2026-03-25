@@ -31,6 +31,8 @@ const defaultPageLimit = 10
 const defaultRateLimitWindow = 60 * time.Second
 const defaultRateLimitReadRequests = 300
 const defaultRateLimitWriteRequests = 60
+const defaultLoginRateLimitMaxRequests = 5
+const defaultGuestUpgradeRateLimitMaxRequests = 5
 const defaultEmailVerificationRateLimitMaxRequests = 5
 const defaultPasswordResetRateLimitMaxRequests = 5
 const maxPageLimit = 1000
@@ -57,6 +59,12 @@ type HTTPHandler struct {
 	rateLimitWindow                       time.Duration
 	rateLimitReadRequests                 int
 	rateLimitWriteRequests                int
+	loginRateLimitEnabled                 bool
+	loginRateLimitWindow                  time.Duration
+	loginRateLimitMaxRequests             int
+	guestUpgradeRateLimitEnabled          bool
+	guestUpgradeRateLimitWindow           time.Duration
+	guestUpgradeRateLimitMaxRequests      int
 	emailVerificationRateLimitEnabled     bool
 	emailVerificationRateLimitWindow      time.Duration
 	emailVerificationRateLimitMaxRequests int
@@ -89,6 +97,12 @@ type HTTPDependencies struct {
 	RateLimitWindowSecond                  int
 	RateLimitReadRequest                   int
 	RateLimitWriteRequest                  int
+	LoginRateLimitEnabled                  bool
+	LoginRateLimitWindowSecond             int
+	LoginRateLimitMaxRequests              int
+	GuestUpgradeRateLimitEnabled           bool
+	GuestUpgradeRateLimitWindowSecond      int
+	GuestUpgradeRateLimitMaxRequests       int
 	EmailVerificationRateLimitEnabled      bool
 	EmailVerificationRateLimitWindowSecond int
 	EmailVerificationRateLimitMaxRequests  int
@@ -124,6 +138,12 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		rateLimitWindow:                       resolveRateLimitWindow(deps.RateLimitWindowSecond),
 		rateLimitReadRequests:                 resolveRateLimitReadRequests(deps.RateLimitReadRequest),
 		rateLimitWriteRequests:                resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
+		loginRateLimitEnabled:                 deps.LoginRateLimitEnabled,
+		loginRateLimitWindow:                  resolveRateLimitWindow(deps.LoginRateLimitWindowSecond),
+		loginRateLimitMaxRequests:             resolveLoginRateLimitMaxRequests(deps.LoginRateLimitMaxRequests),
+		guestUpgradeRateLimitEnabled:          deps.GuestUpgradeRateLimitEnabled,
+		guestUpgradeRateLimitWindow:           resolveRateLimitWindow(deps.GuestUpgradeRateLimitWindowSecond),
+		guestUpgradeRateLimitMaxRequests:      resolveGuestUpgradeRateLimitMaxRequests(deps.GuestUpgradeRateLimitMaxRequests),
 		emailVerificationRateLimitEnabled:     deps.EmailVerificationRateLimitEnabled,
 		emailVerificationRateLimitWindow:      resolveRateLimitWindow(deps.EmailVerificationRateLimitWindowSecond),
 		emailVerificationRateLimitMaxRequests: resolveEmailVerificationRateLimitMaxRequests(deps.EmailVerificationRateLimitMaxRequests),
@@ -172,6 +192,20 @@ func resolveRateLimitWriteRequests(requests int) int {
 func resolveRateLimitReadRequests(requests int) int {
 	if requests <= 0 {
 		return defaultRateLimitReadRequests
+	}
+	return requests
+}
+
+func resolveLoginRateLimitMaxRequests(requests int) int {
+	if requests <= 0 {
+		return defaultLoginRateLimitMaxRequests
+	}
+	return requests
+}
+
+func resolveGuestUpgradeRateLimitMaxRequests(requests int) int {
+	if requests <= 0 {
+		return defaultGuestUpgradeRateLimitMaxRequests
 	}
 	return requests
 }
@@ -328,6 +362,7 @@ func (h *HTTPHandler) handleUserSignUp(c *gin.Context) {
 // @Header 200 {string} Authorization "Bearer <token>"
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
+// @Failure 429 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /auth/login [post]
 func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
@@ -338,6 +373,18 @@ func (h *HTTPHandler) handleUserLogin(c *gin.Context) {
 	}
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
+		return
+	}
+	if limited, err := h.enforceLoginRateLimit(c, req.Username); err != nil {
+		writeHTTPError(h.logger, c, http.StatusInternalServerError, customerror.Wrap(customerror.ErrInternalServerError, "login rate limit", err))
+		return
+	} else if limited {
+		h.logger.Info(
+			"login audit",
+			"event", "login_attempt",
+			"username_sha256", hashLoginUsernameForAudit(req.Username),
+			"outcome", "rate_limited",
+		)
 		return
 	}
 	token, err := h.sessionUseCase.Login(c.Request.Context(), req.Username, req.Password)
@@ -382,6 +429,7 @@ func (h *HTTPHandler) handleGuestIssue(c *gin.Context) {
 // @Failure 400 {object} errorResponse
 // @Failure 401 {object} errorResponse
 // @Failure 409 {object} errorResponse
+// @Failure 429 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /auth/guest/upgrade [post]
 func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
@@ -401,6 +449,18 @@ func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
 	}
 	if err := req.validate(); err != nil {
 		badRequest(c, err)
+		return
+	}
+	if limited, err := h.enforceGuestUpgradeRateLimit(c, userID); err != nil {
+		writeHTTPError(h.logger, c, http.StatusInternalServerError, customerror.Wrap(customerror.ErrInternalServerError, "guest upgrade rate limit", err))
+		return
+	} else if limited {
+		h.logger.Info(
+			"guest upgrade audit",
+			"event", "guest_upgrade_attempt",
+			"user_id", userID,
+			"outcome", "rate_limited",
+		)
 		return
 	}
 	token, err := h.accountUseCase.UpgradeGuestAccount(c.Request.Context(), userID, currentToken, req.Username, req.Email, req.Password)
@@ -544,6 +604,46 @@ func (h *HTTPHandler) enforcePasswordResetRequestRateLimit(c *gin.Context, email
 		passwordResetRateLimitKey(c.ClientIP(), email),
 		h.passwordResetRateLimitMaxRequests,
 		h.passwordResetRateLimitWindow,
+	)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return false, nil
+	}
+	writeHTTPError(h.logger, c, http.StatusTooManyRequests, customerror.ErrTooManyRequests)
+	return true, nil
+}
+
+func (h *HTTPHandler) enforceLoginRateLimit(c *gin.Context, username string) (bool, error) {
+	if h == nil || !h.loginRateLimitEnabled || h.rateLimiter == nil {
+		return false, nil
+	}
+	allowed, err := h.rateLimiter.Allow(
+		c.Request.Context(),
+		loginRateLimitKey(c.ClientIP(), username),
+		h.loginRateLimitMaxRequests,
+		h.loginRateLimitWindow,
+	)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return false, nil
+	}
+	writeHTTPError(h.logger, c, http.StatusTooManyRequests, customerror.ErrTooManyRequests)
+	return true, nil
+}
+
+func (h *HTTPHandler) enforceGuestUpgradeRateLimit(c *gin.Context, userID int64) (bool, error) {
+	if h == nil || !h.guestUpgradeRateLimitEnabled || h.rateLimiter == nil {
+		return false, nil
+	}
+	allowed, err := h.rateLimiter.Allow(
+		c.Request.Context(),
+		guestUpgradeRateLimitKey(userID, c.ClientIP()),
+		h.guestUpgradeRateLimitMaxRequests,
+		h.guestUpgradeRateLimitWindow,
 	)
 	if err != nil {
 		return false, err
@@ -2275,6 +2375,23 @@ func isReadMethod(method string) bool {
 
 func passwordResetRateLimitKey(clientIP, email string) string {
 	return "password-reset-request:" + clientIP + ":" + normalizePasswordResetEmail(email)
+}
+
+func loginRateLimitKey(clientIP, username string) string {
+	return "login:" + clientIP + ":" + normalizeLoginUsername(username)
+}
+
+func guestUpgradeRateLimitKey(userID int64, clientIP string) string {
+	return fmt.Sprintf("guest-upgrade:user:%d:ip:%s", userID, clientIP)
+}
+
+func normalizeLoginUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func hashLoginUsernameForAudit(username string) string {
+	sum := sha256.Sum256([]byte(normalizeLoginUsername(username)))
+	return fmt.Sprintf("%x", sum[:])
 }
 
 func normalizePasswordResetEmail(email string) string {

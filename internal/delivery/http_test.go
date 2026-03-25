@@ -766,6 +766,12 @@ func newTestHandlerWithRateLimit(
 		RateLimitWindowSecond:              windowSeconds,
 		RateLimitReadRequest:               readRequests,
 		RateLimitWriteRequest:              writeRequests,
+		LoginRateLimitEnabled:              true,
+		LoginRateLimitWindowSecond:         windowSeconds,
+		LoginRateLimitMaxRequests:          1,
+		GuestUpgradeRateLimitEnabled:       true,
+		GuestUpgradeRateLimitWindowSecond:  windowSeconds,
+		GuestUpgradeRateLimitMaxRequests:   1,
 		PasswordResetRateLimitEnabled:      true,
 		PasswordResetRateLimitWindowSecond: windowSeconds,
 		PasswordResetRateLimitMaxRequests:  1,
@@ -1812,6 +1818,41 @@ func TestHTTP_UserLogin_Success(t *testing.T) {
 	assert.Contains(t, rr.Header().Get("Authorization"), "Bearer ")
 }
 
+func TestHTTP_UserLogin_TooManyRequests(t *testing.T) {
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{
+			verifyCredential: func(ctx context.Context, username, password string) (int64, error) {
+				assert.Equal(t, "alice", username)
+				assert.Equal(t, "pw", password)
+				return 1, nil
+			},
+		},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		false,
+		60,
+		300,
+		60,
+	)
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/login", map[string]string{
+		"username": "alice",
+		"password": "pw",
+	})
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	rr = doJSONRequest(t, handler, http.MethodPost, "/auth/login", map[string]string{
+		"username": "alice",
+		"password": "pw",
+	})
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+	assert.JSONEq(t, `{"error":"too many requests"}`, rr.Body.String())
+}
+
 func TestHTTP_GuestIssue_Success(t *testing.T) {
 	handler := newTestHandler(&fakeUserUseCase{
 		issueGuestAccount: func(ctx context.Context) (int64, error) {
@@ -1864,6 +1905,48 @@ func TestHTTP_GuestUpgrade_BadRequest_WhenEmailMissing(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.JSONEq(t, `{"error":"username, email and password are required"}`, rr.Body.String())
+}
+
+func TestHTTP_GuestUpgrade_TooManyRequests(t *testing.T) {
+	callCount := 0
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{
+			upgradeGuestAccount: func(ctx context.Context, userID int64, currentToken, username, email, password string) (string, error) {
+				callCount++
+				return "new-token", nil
+			},
+		},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		false,
+		60,
+		300,
+		60,
+	)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	oldToken, err := tokenProvider.IdToToken(1)
+	require.NoError(t, err)
+	require.NotNil(t, testSessionRepository)
+	require.NoError(t, testSessionRepository.Save(context.Background(), 1, oldToken, tokenProvider.TTLSeconds()))
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/guest/upgrade", map[string]any{
+		"username": "alice",
+		"email":    "alice@example.com",
+		"password": "pw",
+	}, 1, withAuthToken(oldToken))
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	rr = doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/guest/upgrade", map[string]any{
+		"username": "alice",
+		"email":    "alice@example.com",
+		"password": "pw",
+	}, 1, withAuthToken(oldToken))
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+	assert.Equal(t, 1, callCount)
 }
 
 func TestHTTP_EmailVerificationRequest_Success(t *testing.T) {

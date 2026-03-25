@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -114,6 +116,42 @@ func TestSessionService_Login_PropagatesContextToCredentialVerifier(t *testing.T
 	_, err := svc.Login(ctx, "alice", "pw")
 	require.NoError(t, err)
 	assert.Same(t, ctx, verifier.calledCtx)
+}
+
+func TestSessionService_Login_LogsAuditOutcome(t *testing.T) {
+	repositories := newTestRepositories()
+	userService := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	cache := cacheInMemory.NewInMemoryCache()
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	svc := NewSessionService(userService, userService, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository, logger)
+
+	_, err = svc.Login(context.Background(), "alice", "pw")
+	require.NoError(t, err)
+	assert.Contains(t, logBuf.String(), `"event":"login_attempt"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"succeeded"`)
+	assert.NotContains(t, logBuf.String(), `"username":"alice"`)
+	assert.NotContains(t, logBuf.String(), `"password":"pw"`)
+}
+
+func TestSessionService_Login_LogsInvalidCredentials(t *testing.T) {
+	repositories := newTestRepositories()
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	cache := cacheInMemory.NewInMemoryCache()
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	verifier := &recordingCredentialVerifier{err: customerror.ErrInvalidCredential}
+	svc := NewSessionService(verifier, nil, repositories.user, auth.NewJwtTokenProvider("test-secret"), sessionRepository, logger)
+
+	_, err := svc.Login(context.Background(), "alice", "wrong")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInvalidCredential)
+	assert.Contains(t, logBuf.String(), `"event":"login_attempt"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"invalid_credentials"`)
 }
 
 type recordingGuestIssuer struct {

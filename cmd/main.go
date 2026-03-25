@@ -162,7 +162,7 @@ func main() {
 		slog.Error("failed to start background jobs", "error", err)
 		os.Exit(1)
 	}
-	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository)
+	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository, appLogger)
 	accountUseCase := service.NewAccountServiceWithGuestUpgrade(
 		userUseCase,
 		sessionUseCase,
@@ -202,6 +202,12 @@ func main() {
 		RateLimitWindowSecond:                  cfg.Delivery.HTTP.RateLimit.WindowSeconds,
 		RateLimitReadRequest:                   cfg.Delivery.HTTP.RateLimit.ReadRequests,
 		RateLimitWriteRequest:                  cfg.Delivery.HTTP.RateLimit.WriteRequests,
+		LoginRateLimitEnabled:                  cfg.Delivery.HTTP.Auth.LoginRateLimit.Enabled,
+		LoginRateLimitWindowSecond:             cfg.Delivery.HTTP.Auth.LoginRateLimit.WindowSeconds,
+		LoginRateLimitMaxRequests:              cfg.Delivery.HTTP.Auth.LoginRateLimit.MaxRequests,
+		GuestUpgradeRateLimitEnabled:           cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.Enabled,
+		GuestUpgradeRateLimitWindowSecond:      cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.WindowSeconds,
+		GuestUpgradeRateLimitMaxRequests:       cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.MaxRequests,
 		EmailVerificationRateLimitEnabled:      cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.Enabled,
 		EmailVerificationRateLimitWindowSecond: cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.WindowSeconds,
 		EmailVerificationRateLimitMaxRequests:  cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.MaxRequests,

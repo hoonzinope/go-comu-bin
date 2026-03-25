@@ -598,6 +598,88 @@ func TestAccountService_UpgradeGuestAccount_RollsBackWhenSessionDeleteFails(t *t
 	assert.Contains(t, remainingTokens[0], oldToken)
 }
 
+func TestAccountService_UpgradeGuestAccount_LogsSucceeded(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	cache := auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	oldToken, err := tokenProvider.IdToToken(guestID)
+	require.NoError(t, err)
+	require.NoError(t, cache.Save(context.Background(), guestID, oldToken, tokenProvider.TTLSeconds()))
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		tokenProvider,
+		cache,
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		auth.NewPasswordResetTokenIssuer(),
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	_, err = svc.UpgradeGuestAccount(context.Background(), guestID, oldToken, "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+	assert.Contains(t, logBuf.String(), `"event":"guest_upgrade_attempt"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"succeeded"`)
+	assert.Contains(t, logBuf.String(), `"user_id":1`)
+	assert.NotContains(t, logBuf.String(), "alice@example.com")
+}
+
+func TestAccountService_UpgradeGuestAccount_LogsInvalidToken(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	cache := auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		tokenProvider,
+		cache,
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		auth.NewPasswordResetTokenIssuer(),
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	_, err = svc.UpgradeGuestAccount(context.Background(), guestID, "missing-token", "alice", "alice@example.com", "pw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInvalidToken)
+	assert.Contains(t, logBuf.String(), `"event":"guest_upgrade_attempt"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"invalid_token"`)
+}
+
 func TestAccountService_RequestPasswordReset_CreatesTokenAndSendsMail(t *testing.T) {
 	repositories := newTestRepositories()
 	passwordHasher := newTestPasswordHasher()
