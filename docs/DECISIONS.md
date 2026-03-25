@@ -216,6 +216,59 @@
 - `internal/application/service/account/service.go`
 - `internal/infrastructure/mail/smtp/sender.go`
 
+## 2026-03-25 - account security hardening은 login/guest-upgrade 전용 rate limit과 auth audit log로 강화한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 `/api/v1` 전역 rate limit만으로는 login brute-force나 guest upgrade 타깃성 abuse를 엔드포인트별로 충분히 제어하기 어렵다.
+- auth 민감 경로에는 성공/실패 이유를 구조적으로 남기는 audit log가 부족해 운영 추적성이 약하다.
+- lockout, captcha, MFA까지 한 번에 도입하기에는 상태 관리와 제품 정책 결정이 커져 현재 범위를 넘는다.
+
+관찰
+
+- login은 `SessionService.Login`에서 credential 검증과 세션 저장을 처리한다.
+- guest upgrade는 `AccountService.UpgradeGuestAccount`가 세션 교체와 사용자 승격을 하나의 성공 경계로 관리한다.
+- password reset / email verification v2에서 HTTP handler 전용 rate limit과 service audit log 패턴을 이미 도입했다.
+
+결론
+
+- `POST /api/v1/auth/login`에 전용 rate limit을 추가한다.
+  - key: `login:<client-ip>:<normalized-username>`
+- `POST /api/v1/auth/guest/upgrade`에도 전용 rate limit을 추가한다.
+  - key: `guest-upgrade:user:<userID>:ip:<client-ip>`
+- 두 엔드포인트는 기존 `/api/v1` 전역 rate limit과 함께 동작한다.
+- lockout 정책은 이번 범위에 포함하지 않는다.
+- `SessionService.Login`에는 구조화 audit log를 추가한다.
+  - `event=login_attempt`
+  - `username_sha256`
+  - `outcome=succeeded|invalid_credentials|session_save_failed`
+- `AccountService.UpgradeGuestAccount`에도 구조화 audit log를 추가한다.
+  - `event=guest_upgrade_attempt`
+  - `user_id`
+  - `outcome=succeeded|invalid_input|invalid_token|failed`
+- rate-limited outcome은 HTTP handler가 남기고, service/use case와 중복되지 않게 유지한다.
+- raw username, email, password, token은 로그에 남기지 않는다.
+
+후속 작업
+
+- login / guest-upgrade 전용 rate limit 설정/HTTP guard 추가
+- SessionService logger 주입과 login audit test 추가
+- AccountService guest upgrade audit test 추가
+- API/CONFIG/ARCHITECTURE/ROADMAP/Swagger 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/CONFIG.md`
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/session/service.go`
+- `internal/application/service/account/service.go`
+
 ## 2026-03-25 - password reset confirm은 부분 커밋보다 세션 무효화 우선 경계를 택한다
 
 상태

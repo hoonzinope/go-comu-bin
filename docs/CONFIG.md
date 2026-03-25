@@ -49,6 +49,14 @@ delivery:
       writeRequests: 60
     auth:
       secret: "replace-with-real-secret"
+      loginRateLimit:
+        enabled: true
+        windowSeconds: 60
+        maxRequests: 5
+      guestUpgradeRateLimit:
+        enabled: true
+        windowSeconds: 60
+        maxRequests: 5
       emailVerificationRequestRateLimit:
         enabled: true
         windowSeconds: 60
@@ -124,6 +132,10 @@ jobs:
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
 - `delivery.http.auth.secret`: 최소 길이 `32`자 이상
+- `delivery.http.auth.loginRateLimit.windowSeconds`: `enabled=true`일 때 `>= 1`
+- `delivery.http.auth.loginRateLimit.maxRequests`: `enabled=true`일 때 `>= 1`
+- `delivery.http.auth.guestUpgradeRateLimit.windowSeconds`: `enabled=true`일 때 `>= 1`
+- `delivery.http.auth.guestUpgradeRateLimit.maxRequests`: `enabled=true`일 때 `>= 1`
 - `delivery.http.auth.emailVerificationRequestRateLimit.windowSeconds`: `enabled=true`일 때 `>= 1`
 - `delivery.http.auth.emailVerificationRequestRateLimit.maxRequests`: `enabled=true`일 때 `>= 1`
 - `delivery.http.auth.passwordResetRequestRateLimit.windowSeconds`: `enabled=true`일 때 `>= 1`
@@ -181,6 +193,12 @@ jobs:
 - HTTP read/write 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
   - `enabled=true`일 때 `/api/v1` 하위 `GET/HEAD/OPTIONS` 요청은 `readRequests`, `POST/PUT/DELETE/PATCH` 요청은 `writeRequests`를 `method+route+client_ip` 기준으로 적용합니다.
   - 기본 HTTP 서버는 trusted proxy를 비활성화하므로, 별도 reverse proxy trust 구성이 없으면 `X-Forwarded-For` 같은 전달 헤더를 rate limit key에 사용하지 않습니다.
+- login 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.LoginRateLimit.*`
+  - `enabled=true`일 때 `POST /api/v1/auth/login`에 `login:client_ip:normalized_username` 기준 제한을 추가 적용합니다.
+  - username 존재 여부, 비밀번호 오류, 로그인 성공 여부와 무관하게 동일하게 카운트합니다.
+- guest upgrade 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.GuestUpgradeRateLimit.*`
+  - `enabled=true`일 때 `POST /api/v1/auth/guest/upgrade`에 `guest-upgrade:user:<userID>:ip:<client_ip>` 기준 제한을 추가 적용합니다.
+  - guest 여부, 입력 오류, token 오류, 성공 여부와 무관하게 동일하게 카운트합니다.
 - password reset request 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.*`
   - `enabled=true`일 때 `POST /api/v1/auth/password-reset/request`에 `password-reset-request:client_ip:normalized_email` 기준 제한을 추가 적용합니다.
 - email verification request 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.*`

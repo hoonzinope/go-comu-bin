@@ -43,6 +43,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - `POST /api/v1/auth/login`
   - 사용자 미존재 또는 비밀번호 불일치 시 동일하게 `401 Unauthorized`
   - guest 계정은 username/password 로그인 대상이 아닙니다.
+  - 전용 rate limit이 `client_ip + normalized_username` 기준으로 적용되며, 초과 시 `429 Too Many Requests`를 반환합니다.
 - `POST /api/v1/auth/guest/upgrade` (인증 필요)
   - 현재 bearer token 소유자가 guest 계정일 때만 정식 계정으로 승격합니다.
   - 요청 본문: `username`, `email`, `password`
@@ -51,6 +52,7 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 새 bearer token 발급과 기존 guest token 폐기가 함께 완료된 경우에만 승격 성공으로 간주합니다.
   - 승격 성공 시 email verification token을 자동 발급해 mail sender 경로로 전달합니다.
   - guest가 아닌 사용자가 호출하면 `400 Bad Request`
+  - 전용 rate limit이 `user_id + client_ip` 기준으로 적용되며, 초과 시 `429 Too Many Requests`를 반환합니다.
 - `POST /api/v1/auth/email-verification/request` (인증 필요)
   - 현재 로그인 사용자 기준으로 email verification token을 새로 발급합니다.
   - 응답은 `204 No Content`입니다.
