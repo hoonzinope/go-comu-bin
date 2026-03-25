@@ -1046,7 +1046,7 @@ const docTemplate = `{
         },
         "/boards/{boardUUID}/posts": {
             "get": {
-                "description": "Returns posts in board with cursor pagination.",
+                "description": "Returns published posts in a board with cursor pagination. Supports latest, hot, best, and top ordering.",
                 "produces": [
                     "application/json"
                 ],
@@ -1062,6 +1062,18 @@ const docTemplate = `{
                         "name": "boardUUID",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Board sort: hot, best, latest, top",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Top window: 24h, 7d, 30d, all (allowed only when sort=top)",
+                        "name": "window",
+                        "in": "query"
                     },
                     {
                         "maximum": 1000,
@@ -1549,9 +1561,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/posts/feed": {
+            "get": {
+                "description": "Returns the global post feed ordered by hot, best, latest, or top with cursor pagination.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Post"
+                ],
+                "summary": "List Feed Posts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feed sort: hot, best, latest, top",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Top window: 24h, 7d, 30d, all (allowed only when sort=top)",
+                        "name": "window",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque cursor returned by previous feed response",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.PostList"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/posts/search": {
             "get": {
-                "description": "Returns published posts matching title, content, and tag tokens with cursor pagination.",
+                "description": "Returns published posts matching title, content, and tag tokens with cursor pagination. Supports relevance, hot, latest, and top ordering.",
                 "produces": [
                     "application/json"
                 ],
@@ -1566,6 +1638,18 @@ const docTemplate = `{
                         "name": "q",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search sort: relevance, hot, latest, top",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Top window: 24h, 7d, 30d, all (allowed only when sort=top)",
+                        "name": "window",
+                        "in": "query"
                     },
                     {
                         "maximum": 1000,
@@ -2579,7 +2663,7 @@ const docTemplate = `{
         },
         "/tags/{tagName}/posts": {
             "get": {
-                "description": "Returns posts connected to a tag with cursor pagination.",
+                "description": "Returns published posts connected to a tag with cursor pagination. Supports latest, hot, best, and top ordering.",
                 "produces": [
                     "application/json"
                 ],
@@ -2594,6 +2678,18 @@ const docTemplate = `{
                         "name": "tagName",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tag sort: hot, best, latest, top",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Top window: 24h, 7d, 30d, all (allowed only when sort=top)",
+                        "name": "window",
+                        "in": "query"
                     },
                     {
                         "maximum": 1000,

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPost_NewPostAndUpdatePost(t *testing.T) {
@@ -16,16 +17,21 @@ func TestPost_NewPostAndUpdatePost(t *testing.T) {
 	assert.EqualValues(t, 20, p.BoardID)
 	assert.Equal(t, PostStatusPublished, p.Status)
 	assert.Nil(t, p.DeletedAt)
+	require.NotNil(t, p.PublishedAt)
 	assert.False(t, p.CreatedAt.IsZero())
 	assert.False(t, p.UpdatedAt.IsZero())
+	assert.True(t, p.PublishedAt.Equal(p.CreatedAt))
 
 	before := p.UpdatedAt
+	publishedAt := *p.PublishedAt
 	time.Sleep(time.Millisecond)
 	p.Update("new-title", "new-content")
 
 	assert.Equal(t, "new-title", p.Title)
 	assert.Equal(t, "new-content", p.Content)
 	assert.True(t, p.UpdatedAt.After(before))
+	require.NotNil(t, p.PublishedAt)
+	assert.True(t, p.PublishedAt.Equal(publishedAt))
 }
 
 func TestPost_SoftDelete(t *testing.T) {
@@ -43,6 +49,7 @@ func TestPost_NewDraftPost(t *testing.T) {
 	assert.NotEmpty(t, p.UUID)
 	assert.Equal(t, PostStatusDraft, p.Status)
 	assert.Nil(t, p.DeletedAt)
+	assert.Nil(t, p.PublishedAt)
 }
 
 func TestPost_Publish(t *testing.T) {
@@ -52,4 +59,6 @@ func TestPost_Publish(t *testing.T) {
 
 	assert.Equal(t, PostStatusPublished, p.Status)
 	assert.Nil(t, p.DeletedAt)
+	require.NotNil(t, p.PublishedAt)
+	assert.False(t, p.PublishedAt.IsZero())
 }

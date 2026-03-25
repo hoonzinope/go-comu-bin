@@ -63,6 +63,7 @@ func main() {
 	postTagRepository := inmemory.NewPostTagRepository()
 	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
 	postSearchStore := inmemory.NewPostSearchStore(postRepository, tagRepository, postTagRepository)
+	postRankingRepository := inmemory.NewPostRankingRepository()
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
@@ -106,12 +107,16 @@ func main() {
 	)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
+	postRankingHandler := appevent.NewPostRankingHandler(postRankingRepository)
 	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
+	outboxRelay.Subscribe(appevent.EventNamePostChanged, postRankingHandler)
 	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameCommentChanged, postRankingHandler)
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameReactionChanged, postRankingHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
@@ -124,7 +129,7 @@ func main() {
 	mailers := newMailSenders(cfg)
 	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), mailers, 30*time.Minute)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
-	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	notificationUseCase := service.NewNotificationService(userRepository, postRepository, commentRepository, notificationRepository)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), appLogger)
@@ -176,30 +181,30 @@ func main() {
 		appLogger,
 	)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
-		SessionUseCase:           sessionUseCase,
-		AdminAuthorizer:          userUseCase,
-		UserUseCase:              userUseCase,
-		AccountUseCase:           accountUseCase,
-		BoardUseCase:             boardUseCase,
-		PostUseCase:              postUseCase,
-		CommentUseCase:           commentUseCase,
-		NotificationUseCase:      notificationUseCase,
-		ReactionUseCase:          reactionUseCase,
-		AttachmentUseCase:        attachmentUseCase,
-		ReportUseCase:            reportUseCase,
-		OutboxAdminUseCase:       outboxAdminUseCase,
-		RateLimiter:              rateLimiter,
-		AttachmentUploadMaxBytes: cfg.Storage.Attachment.MaxUploadSizeBytes,
-		MaxJSONBodyBytes:         cfg.Delivery.HTTP.MaxJSONBodyBytes,
-		DefaultPageLimit:         cfg.Delivery.HTTP.DefaultPageLimit,
-		RateLimitEnabled:         cfg.Delivery.HTTP.RateLimit.Enabled,
-		RateLimitWindowSecond:    cfg.Delivery.HTTP.RateLimit.WindowSeconds,
-		RateLimitReadRequest:     cfg.Delivery.HTTP.RateLimit.ReadRequests,
-		RateLimitWriteRequest:    cfg.Delivery.HTTP.RateLimit.WriteRequests,
+		SessionUseCase:                     sessionUseCase,
+		AdminAuthorizer:                    userUseCase,
+		UserUseCase:                        userUseCase,
+		AccountUseCase:                     accountUseCase,
+		BoardUseCase:                       boardUseCase,
+		PostUseCase:                        postUseCase,
+		CommentUseCase:                     commentUseCase,
+		NotificationUseCase:                notificationUseCase,
+		ReactionUseCase:                    reactionUseCase,
+		AttachmentUseCase:                  attachmentUseCase,
+		ReportUseCase:                      reportUseCase,
+		OutboxAdminUseCase:                 outboxAdminUseCase,
+		RateLimiter:                        rateLimiter,
+		AttachmentUploadMaxBytes:           cfg.Storage.Attachment.MaxUploadSizeBytes,
+		MaxJSONBodyBytes:                   cfg.Delivery.HTTP.MaxJSONBodyBytes,
+		DefaultPageLimit:                   cfg.Delivery.HTTP.DefaultPageLimit,
+		RateLimitEnabled:                   cfg.Delivery.HTTP.RateLimit.Enabled,
+		RateLimitWindowSecond:              cfg.Delivery.HTTP.RateLimit.WindowSeconds,
+		RateLimitReadRequest:               cfg.Delivery.HTTP.RateLimit.ReadRequests,
+		RateLimitWriteRequest:              cfg.Delivery.HTTP.RateLimit.WriteRequests,
 		PasswordResetRateLimitEnabled:      cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.Enabled,
 		PasswordResetRateLimitWindowSecond: cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.WindowSeconds,
 		PasswordResetRateLimitMaxRequests:  cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.MaxRequests,
-		Logger:                   appLogger,
+		Logger:                             appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)
 	signalCtx, stopSignal := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

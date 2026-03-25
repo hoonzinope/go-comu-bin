@@ -23,6 +23,7 @@ type Post struct {
 	BoardID   int64
 	Status    PostStatus
 	CreatedAt time.Time
+	PublishedAt *time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
 }
@@ -37,6 +38,7 @@ func NewPost(title, content string, authorID, boardID int64) *Post {
 		BoardID:   boardID,
 		Status:    PostStatusPublished,
 		CreatedAt: now,
+		PublishedAt: &now,
 		UpdatedAt: now,
 	}
 }
@@ -71,5 +73,7 @@ func (p *Post) SoftDelete() {
 func (p *Post) Publish() {
 	p.Status = PostStatusPublished
 	p.DeletedAt = nil
-	p.UpdatedAt = time.Now()
+	now := time.Now()
+	p.PublishedAt = &now
+	p.UpdatedAt = now
 }

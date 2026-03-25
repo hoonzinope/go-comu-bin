@@ -162,6 +162,29 @@ func TestIntegration_GuestUpgrade_RotatesBearerToken(t *testing.T) {
 	assertStatus(t, server.URL, newToken, http.MethodPost, "/auth/logout", map[string]any{}, http.StatusOK)
 }
 
+func TestIntegration_PostFeedRanking(t *testing.T) {
+	server := newIntegrationServer(t)
+	defer server.Close()
+
+	adminToken := mustLogin(t, server.URL, "admin", "admin")
+	boardUUID := mustCreateBoard(t, server.URL, adminToken, "free", "general board")
+
+	mustSignUp(t, server, "alice", "pw")
+	aliceToken := mustLogin(t, server.URL, "alice", "pw")
+
+	boostedPostUUID := mustCreatePost(t, server.URL, aliceToken, boardUUID, "boosted", "body")
+	time.Sleep(10 * time.Millisecond)
+	newerPostUUID := mustCreatePost(t, server.URL, aliceToken, boardUUID, "newer", "body")
+
+	mustSetPostReaction(t, server.URL, aliceToken, boostedPostUUID, "like", http.StatusCreated)
+	_ = mustCreateComment(t, server.URL, aliceToken, boostedPostUUID, "nice")
+
+	require.Eventually(t, func() bool {
+		uuids := mustGetFeedPostUUIDs(t, server.URL, "/posts/feed?sort=best")
+		return len(uuids) >= 2 && uuids[0] == boostedPostUUID && uuids[1] == newerPostUUID
+	}, time.Second, 10*time.Millisecond)
+}
+
 func newIntegrationServer(t *testing.T) *integrationServer {
 	t.Helper()
 
@@ -171,6 +194,7 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 	postTagRepository := inmemory.NewPostTagRepository()
 	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
 	postSearchStore := inmemory.NewPostSearchStore(postRepository, tagRepository, postTagRepository)
+	postRankingRepository := inmemory.NewPostRankingRepository()
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
@@ -195,12 +219,16 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 	})
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
+	postRankingHandler := appevent.NewPostRankingHandler(postRankingRepository)
 	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
+	outboxRelay.Subscribe(appevent.EventNamePostChanged, postRankingHandler)
 	outboxRelay.Subscribe(appevent.EventNameCommentChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameCommentChanged, postRankingHandler)
 	outboxRelay.Subscribe(appevent.EventNameReactionChanged, cacheInvalidationHandler)
+	outboxRelay.Subscribe(appevent.EventNameReactionChanged, postRankingHandler)
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
@@ -221,7 +249,7 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 
 	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), verificationMailer, 30*time.Minute)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
-	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	notificationUseCase := service.NewNotificationService(userRepository, postRepository, commentRepository, notificationRepository)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy())
@@ -632,4 +660,21 @@ func requestJSON(t *testing.T, baseURL, token, method, path string, body any) ([
 func mustUnmarshal(t *testing.T, body []byte, dst any) {
 	t.Helper()
 	require.NoError(t, json.Unmarshal(body, dst), "failed to unmarshal body=%s", string(body))
+}
+
+func mustGetFeedPostUUIDs(t *testing.T, baseURL, path string) []string {
+	t.Helper()
+	body, status, _ := requestJSON(t, baseURL, "", http.MethodGet, path, nil)
+	require.Equal(t, http.StatusOK, status, "body=%s", string(body))
+	var payload struct {
+		Posts []struct {
+			UUID string `json:"uuid"`
+		} `json:"posts"`
+	}
+	mustUnmarshal(t, body, &payload)
+	out := make([]string, 0, len(payload.Posts))
+	for _, post := range payload.Posts {
+		out = append(out, post.UUID)
+	}
+	return out
 }

@@ -415,9 +415,10 @@ func (f *fakeOutboxAdminUseCase) DiscardDeadMessage(ctx context.Context, adminID
 type fakePostUseCase struct {
 	createPost      func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error)
 	createDraftPost func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error)
-	getPostsList    func(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error)
-	searchPosts     func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error)
-	getPostsByTag   func(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error)
+	getPostsList    func(ctx context.Context, boardUUID string, sort string, window string, limit int, cursor string) (*model.PostList, error)
+	getFeed         func(ctx context.Context, sort string, window string, limit int, cursor string) (*model.PostList, error)
+	searchPosts     func(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error)
+	getPostsByTag   func(ctx context.Context, tagName string, sort string, window string, limit int, cursor string) (*model.PostList, error)
 	getPostDetail   func(ctx context.Context, postUUID string) (*model.PostDetail, error)
 	publishPost     func(ctx context.Context, postUUID string, authorID int64) error
 	updatePost      func(ctx context.Context, postUUID string, authorID int64, title, content string, tags []string) error
@@ -438,23 +439,30 @@ func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content st
 	return "post-uuid-1", nil
 }
 
-func (f *fakePostUseCase) GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error) {
+func (f *fakePostUseCase) GetPostsList(ctx context.Context, boardUUID string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	if f.getPostsList != nil {
-		return f.getPostsList(ctx, boardUUID, limit, cursor)
+		return f.getPostsList(ctx, boardUUID, sort, window, limit, cursor)
 	}
 	return &model.PostList{}, nil
 }
 
-func (f *fakePostUseCase) SearchPosts(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+func (f *fakePostUseCase) GetFeed(ctx context.Context, sort string, window string, limit int, cursor string) (*model.PostList, error) {
+	if f.getFeed != nil {
+		return f.getFeed(ctx, sort, window, limit, cursor)
+	}
+	return &model.PostList{}, nil
+}
+
+func (f *fakePostUseCase) SearchPosts(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	if f.searchPosts != nil {
-		return f.searchPosts(ctx, query, limit, cursor)
+		return f.searchPosts(ctx, query, sort, window, limit, cursor)
 	}
 	return &model.PostList{}, nil
 }
 
-func (f *fakePostUseCase) GetPostsByTag(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error) {
+func (f *fakePostUseCase) GetPostsByTag(ctx context.Context, tagName string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	if f.getPostsByTag != nil {
-		return f.getPostsByTag(ctx, tagName, limit, cursor)
+		return f.getPostsByTag(ctx, tagName, sort, window, limit, cursor)
 	}
 	return &model.PostList{}, nil
 }
@@ -729,24 +737,24 @@ func newTestHandlerWithRateLimit(
 	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
 	notificationUseCase := &fakeNotificationUseCase{}
 	return NewHTTPServer(":0", HTTPDependencies{
-		SessionUseCase:        sessionUseCase,
-		AdminAuthorizer:       user,
-		UserUseCase:           user,
-		AccountUseCase:        account,
-		BoardUseCase:          board,
-		PostUseCase:           post,
-		CommentUseCase:        comment,
-		NotificationUseCase:   notificationUseCase,
-		ReactionUseCase:       reaction,
-		AttachmentUseCase:     attachment,
-		ReportUseCase:         reportUseCase,
-		OutboxAdminUseCase:    outboxAdminUseCase,
-		RateLimiter:           rateLimiter,
-		MaxJSONBodyBytes:      defaultMaxJSONBodyBytes,
-		RateLimitEnabled:      enabled,
-		RateLimitWindowSecond: windowSeconds,
-		RateLimitReadRequest:  readRequests,
-		RateLimitWriteRequest: writeRequests,
+		SessionUseCase:                     sessionUseCase,
+		AdminAuthorizer:                    user,
+		UserUseCase:                        user,
+		AccountUseCase:                     account,
+		BoardUseCase:                       board,
+		PostUseCase:                        post,
+		CommentUseCase:                     comment,
+		NotificationUseCase:                notificationUseCase,
+		ReactionUseCase:                    reaction,
+		AttachmentUseCase:                  attachment,
+		ReportUseCase:                      reportUseCase,
+		OutboxAdminUseCase:                 outboxAdminUseCase,
+		RateLimiter:                        rateLimiter,
+		MaxJSONBodyBytes:                   defaultMaxJSONBodyBytes,
+		RateLimitEnabled:                   enabled,
+		RateLimitWindowSecond:              windowSeconds,
+		RateLimitReadRequest:               readRequests,
+		RateLimitWriteRequest:              writeRequests,
 		PasswordResetRateLimitEnabled:      true,
 		PasswordResetRateLimitWindowSecond: windowSeconds,
 		PasswordResetRateLimitMaxRequests:  1,
@@ -2350,8 +2358,10 @@ func TestHTTP_BoardPostsGet_Success(t *testing.T) {
 	boardUUID := "550e8400-e29b-41d4-a716-446655440003"
 	postUUID := "550e8400-e29b-41d4-a716-446655440004"
 	post := &fakePostUseCase{
-		getPostsList: func(ctx context.Context, boardUUIDArg string, limit int, cursor string) (*model.PostList, error) {
+		getPostsList: func(ctx context.Context, boardUUIDArg string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 			assert.Equal(t, boardUUID, boardUUIDArg)
+			assert.Equal(t, "", sort)
+			assert.Equal(t, "", window)
 			assert.Equal(t, 2, limit)
 			assert.Equal(t, "opaque-cursor-9", cursor)
 			return &model.PostList{
@@ -2646,8 +2656,10 @@ func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
 
 func TestHTTP_TagPosts_Success(t *testing.T) {
 	post := &fakePostUseCase{
-		getPostsByTag: func(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error) {
+		getPostsByTag: func(ctx context.Context, tagName string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 			assert.Equal(t, "go", tagName)
+			assert.Equal(t, "", sort)
+			assert.Equal(t, "", window)
 			assert.Equal(t, 10, limit)
 			assert.Equal(t, "", cursor)
 			return &model.PostList{
@@ -2664,10 +2676,47 @@ func TestHTTP_TagPosts_Success(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), `"posts":[{"uuid":"550e8400-e29b-41d4-a716-446655440003"`)
 }
 
+func TestHTTP_PostFeed_Success(t *testing.T) {
+	post := &fakePostUseCase{
+		getFeed: func(ctx context.Context, sort string, window string, limit int, cursor string) (*model.PostList, error) {
+			assert.Equal(t, "best", sort)
+			assert.Equal(t, "", window)
+			assert.Equal(t, 2, limit)
+			assert.Equal(t, "opaque-feed-cursor", cursor)
+			return &model.PostList{
+				Posts:  []model.Post{{UUID: "550e8400-e29b-41d4-a716-446655440099", Title: "ranked"}},
+				Limit:  limit,
+				Cursor: cursor,
+			}, nil
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/feed?sort=best&limit=2&cursor=opaque-feed-cursor", nil)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"posts":[{"uuid":"550e8400-e29b-41d4-a716-446655440099"`)
+}
+
+func TestHTTP_PostFeed_InvalidSort(t *testing.T) {
+	post := &fakePostUseCase{
+		getFeed: func(ctx context.Context, sort string, window string, limit int, cursor string) (*model.PostList, error) {
+			return nil, customerror.ErrInvalidInput
+		},
+	}
+	handler := newTestHandler(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, post, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{})
+
+	rr := doJSONRequest(t, handler, http.MethodGet, "/posts/feed?sort=weird", nil)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
 func TestHTTP_PostSearch_Success(t *testing.T) {
 	post := &fakePostUseCase{
-		searchPosts: func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+		searchPosts: func(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 			assert.Equal(t, "go search", query)
+			assert.Equal(t, "", sort)
+			assert.Equal(t, "", window)
 			assert.Equal(t, 2, limit)
 			assert.Equal(t, "opaque-search-cursor", cursor)
 			return &model.PostList{
@@ -2696,7 +2745,7 @@ func TestHTTP_PostSearch_InvalidQuery(t *testing.T) {
 
 func TestHTTP_PostSearch_InvalidCursor(t *testing.T) {
 	post := &fakePostUseCase{
-		searchPosts: func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+		searchPosts: func(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 			return nil, customerror.ErrInvalidInput
 		},
 	}
@@ -2717,7 +2766,7 @@ func TestHTTP_PostSearch_InvalidLimit(t *testing.T) {
 
 func TestHTTP_PostSearch_InternalServerErrorFallback(t *testing.T) {
 	post := &fakePostUseCase{
-		searchPosts: func(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
+		searchPosts: func(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 			return nil, errors.New("unexpected")
 		},
 	}

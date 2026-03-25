@@ -380,6 +380,10 @@ func clonePost(post *entity.Post) *entity.Post {
 		return nil
 	}
 	out := *post
+	if post.PublishedAt != nil {
+		publishedAt := *post.PublishedAt
+		out.PublishedAt = &publishedAt
+	}
 	if post.DeletedAt != nil {
 		deletedAt := *post.DeletedAt
 		out.DeletedAt = &deletedAt

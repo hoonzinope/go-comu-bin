@@ -27,6 +27,7 @@ type testRepositories struct {
 	board             port.BoardRepository
 	post              port.PostRepository
 	postSearch        port.PostSearchRepository
+	postRanking       port.PostRankingRepository
 	indexer           port.PostSearchIndexer
 	tag               port.TagRepository
 	postTag           port.PostTagRepository
@@ -48,6 +49,7 @@ func newTestRepositories() testRepositories {
 	postTagRepository := inmemory.NewPostTagRepository()
 	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
 	postSearchStore := inmemory.NewPostSearchStore(postRepository, tagRepository, postTagRepository)
+	postRankingRepository := inmemory.NewPostRankingRepository()
 	commentRepository := inmemory.NewCommentRepository()
 	reactionRepository := inmemory.NewReactionRepository()
 	attachmentRepository := inmemory.NewAttachmentRepository()
@@ -61,6 +63,7 @@ func newTestRepositories() testRepositories {
 		board:             boardRepository,
 		post:              postRepository,
 		postSearch:        postSearchStore,
+		postRanking:       postRankingRepository,
 		indexer:           postSearchStore,
 		tag:               tagRepository,
 		postTag:           postTagRepository,
@@ -99,6 +102,7 @@ func newTestPostService(t testing.TB, repositories testRepositories, cache port.
 		repositories.board,
 		repositories.post,
 		repositories.postSearch,
+		repositories.postRanking,
 		repositories.tag,
 		repositories.postTag,
 		repositories.attachment,
@@ -140,12 +144,16 @@ func newTestActionDispatcher(t testing.TB, repositories testRepositories, cache 
 	})
 	handler := appevent.NewCacheInvalidationHandler(cache, logger)
 	searchIndexHandler := appevent.NewPostSearchIndexHandler(repositories.indexer)
+	postRankingHandler := appevent.NewPostRankingHandler(repositories.postRanking)
 	notificationHandler := appevent.NewNotificationHandler(repositories.notification)
 	relay.Subscribe(appevent.EventNameBoardChanged, handler)
 	relay.Subscribe(appevent.EventNamePostChanged, handler)
 	relay.Subscribe(appevent.EventNamePostChanged, searchIndexHandler)
+	relay.Subscribe(appevent.EventNamePostChanged, postRankingHandler)
 	relay.Subscribe(appevent.EventNameCommentChanged, handler)
+	relay.Subscribe(appevent.EventNameCommentChanged, postRankingHandler)
 	relay.Subscribe(appevent.EventNameReactionChanged, handler)
+	relay.Subscribe(appevent.EventNameReactionChanged, postRankingHandler)
 	relay.Subscribe(appevent.EventNameAttachmentChanged, handler)
 	relay.Subscribe(appevent.EventNameReportChanged, handler)
 	relay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)

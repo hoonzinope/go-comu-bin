@@ -46,6 +46,128 @@
 - internal/...
 ```
 
+## 2026-03-25 - ranking v1은 전역 feed API + PublishedAt + outbox 기반 비동기 점수 갱신으로 도입한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 공개 post 목록은 board/tag/search 단위로만 제공되고, 전역 소비 피드와 정렬 다양화(`hot`, `best`)는 아직 없다.
+- post search는 이미 `score desc + composite cursor` 규약을 사용하고 있어 ranking read-side를 같은 방식으로 확장할 수 있다.
+- 현재 구조에는 조회수 개념이 없고, outbox relay 기반 비동기 갱신 경계는 이미 마련돼 있다.
+
+관찰
+
+- `Post`는 draft/published 상태를 가지지만 실제 공개 시점 필드가 없어, 오래된 draft를 publish할 때 `CreatedAt`만으로는 최신성 의미가 어긋난다.
+- `post.changed`, `comment.changed`, `reaction.changed` 이벤트는 ranking 계산에 필요한 일부 정보를 아직 충분히 담지 못한다.
+- hidden board 필터는 read path에서 이미 적용되고, 공개 목록 응답은 `PostList` shape로 통일돼 있다.
+
+결론
+
+- ranking v1 공개 API는 새 전역 feed endpoint `GET /api/v1/posts/feed`로 제공한다.
+- 지원 sort는 `hot`, `best`, `latest` 세 가지로 고정하고, 기본 sort는 `hot`으로 둔다.
+- 응답은 기존 `PostList`를 재사용하며 score는 외부에 노출하지 않는다.
+- `Post`에는 `PublishedAt`을 추가한다.
+  - 일반 post 생성 시 `PublishedAt=CreatedAt`
+  - draft 생성 시 `PublishedAt=nil`
+  - draft publish 시 `PublishedAt=now`
+  - update/delete는 `PublishedAt`을 바꾸지 않는다.
+- ranking 시간축은 항상 `PublishedAt`을 사용한다.
+- ranking 점수 입력은 v1에서 `reaction + comment + time`만 사용하고 view count는 포함하지 않는다.
+- `best`는 최근 7일 내 활동 점수로 계산한다. 글 생성 시점 제한은 두지 않는다.
+- 점수 규칙은 다음으로 고정한다.
+  - reaction: `like=+1`, `dislike=-1`
+  - comment created: `+2`
+  - comment deleted: `-2`
+- `latest`: `published_at desc, post_id desc`
+- `best`: `recent_7d_score desc, published_at desc, post_id desc`
+- `hot`: Reddit 스타일 시간 감쇠를 사용한다.
+  - `base = total_reaction_score + total_comment_score`
+  - `order = log10(max(abs(base), 1))`
+  - `sign = -1|0|1`
+  - `seconds = publishedAt.Unix() - 1134028003`
+  - `hot = sign*order + seconds/45000`
+- ranking 갱신은 write path 직접 계산이 아니라 outbox relay 소비로 처리한다.
+- 새 read-side 포트 `PostRankingRepository`를 도입하고, in-memory reference adapter를 구현한다.
+- `best` 계산용 최근 7일 activity ledger는 lazy prune으로 정리하고 별도 cleanup job은 두지 않는다.
+- hidden board, unpublished post, deleted post는 feed 결과에서 제외한다.
+
+후속 작업
+
+- `PublishedAt` 반영과 event payload 확장
+- in-memory ranking repository / cursor / handler / feed query 추가
+- HTTP/Swagger/API/ARCHITECTURE/ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `internal/domain/entity/post.go`
+- `internal/application/event/types.go`
+- `internal/application/service/post/query_handler.go`
+
+## 2026-03-25 - ranking v2는 공통 sort/window 규약으로 feed/board/tag/search 목록을 확장한다
+
+상태
+
+- decided
+
+배경
+
+- ranking v1은 전역 feed에만 `hot/best/latest`를 제공하고, board/tag/search 목록은 각자 다른 정렬 규약을 유지한다.
+- SQLite/영속화 이슈는 후속 단계에서 다루기로 했으므로, 이번 단계는 공개 API 규약과 application read path 확장에 집중한다.
+
+관찰
+
+- feed ranking projection과 outbox relay 갱신 경로는 이미 존재한다.
+- board/tag/search는 각각 `ID cursor`, `tag post list`, `BM25 relevance cursor`로 분리돼 있어 정렬 규약이 통일돼 있지 않다.
+- 현재 점수 입력은 `reaction + comment + time`만 사용하며, view count는 아직 없다.
+
+결론
+
+- ranking v2는 공개 목록 API 전반에 공통 `sort/window` query 규약을 도입한다.
+- 적용 대상:
+  - `GET /api/v1/posts/feed`
+  - `GET /api/v1/boards/{boardUUID}/posts`
+  - `GET /api/v1/tags/{tagName}/posts`
+  - `GET /api/v1/posts/search`
+- 지원 정렬:
+  - `feed`, `board`, `tag`: `hot|best|latest|top`
+  - `search`: `relevance|hot|latest|top`
+- 기본 정렬:
+  - `feed`: `hot`
+  - `board`, `tag`: `latest`
+  - `search`: `relevance`
+- `window`는 `sort=top`일 때만 허용하고, 기본값은 `7d`로 둔다.
+- 허용 window는 `24h`, `7d`, `30d`, `all` 네 가지로 고정한다.
+- `top`은 기간별 누적 점수 정렬이며, 점수 입력은 v1과 동일하게 유지한다.
+  - `like=+1`
+  - `dislike=-1`
+  - `comment created=+2`
+  - `comment deleted=-2`
+- `best`는 기존 최근 7일 activity score 규칙을 유지하고, search에는 도입하지 않는다.
+- ranking cursor는 sort와 window를 모두 포함하는 opaque cursor로 확장한다.
+- search 기본 `relevance`는 기존 BM25 규칙을 유지하되, cursor도 `sort/window`를 포함하는 opaque 형식으로 맞춘다.
+- score와 applied window 같은 메타데이터는 외부 응답에 노출하지 않는다.
+- board/tag/search의 ranking 정렬은 현재 ranking read-side를 재사용하고, search의 ranking 정렬은 검색 결과 집합 내부 재정렬로 해석한다.
+- SQLite 영속화, projection rebuild admin/job, 운영 메트릭은 이번 범위에서 제외한다.
+
+후속 작업
+
+- ranking read-side에 `top`/window 집계 규약 추가
+- board/tag/search query에 공통 sort/window validation + cursor 규약 반영
+- search relevance cursor 확장 및 ranking 재정렬 경로 추가
+- HTTP/Swagger/API/ARCHITECTURE/ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `internal/application/port/post_ranking_repository.go`
+- `internal/application/service/post/query_handler.go`
+
 ## 2026-03-25 - password reset v2는 FE 링크 메일 + IP/email rate limit + cleanup job/audit log로 강화한다
 
 상태

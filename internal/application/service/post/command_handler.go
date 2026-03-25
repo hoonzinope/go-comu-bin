@@ -117,7 +117,7 @@ func (h *postCommandHandler) createPost(ctx context.Context, title, content stri
 			return err
 		}
 		if !draft {
-			events := []port.DomainEvent{appevent.NewPostChanged("created", postID, board.ID, normalizedTags, nil)}
+			events := []port.DomainEvent{appevent.NewPostChanged("created", postID, board.ID, newPost.PublishedAt, normalizedTags, nil)}
 			mentionEvents, err := svccommon.BuildMentionNotificationEvents(txCtx, tx.UserRepository(), user, mentionedUsernames, postID, 0, title, content)
 			if err != nil {
 				return err
@@ -181,7 +181,7 @@ func (h *postCommandHandler) PublishPost(ctx context.Context, postUUID string, a
 		}
 		boardID = post.BoardID
 		postID = post.ID
-		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("published", postID, boardID, currentTags, nil)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("published", postID, boardID, publishedPost.PublishedAt, currentTags, nil)); err != nil {
 			return err
 		}
 		return nil
@@ -244,7 +244,7 @@ func (h *postCommandHandler) UpdatePost(ctx context.Context, postUUID string, au
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("updated", postID, boardID, unionTagNames(currentTagNames, normalizedTags), nil)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("updated", postID, boardID, post.PublishedAt, unionTagNames(currentTagNames, normalizedTags), nil)); err != nil {
 			return err
 		}
 		return nil
@@ -297,7 +297,7 @@ func (h *postCommandHandler) DeletePost(ctx context.Context, postUUID string, au
 		}
 		postID = post.ID
 		boardID = post.BoardID
-		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, currentTagNames, deletedCommentIDs)); err != nil {
+		if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewPostChanged("deleted", postID, boardID, post.PublishedAt, currentTagNames, deletedCommentIDs)); err != nil {
 			return err
 		}
 		return nil

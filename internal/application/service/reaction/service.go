@@ -179,7 +179,7 @@ func (h *CommandHandler) SetReaction(ctx context.Context, userID int64, targetUU
 			return false, false, customerror.WrapRepository("set user target reaction", err)
 		}
 		if (created || changed) && detailPostID != nil {
-			if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewReactionChanged("set", entityTargetType, targetID, *detailPostID)); err != nil {
+			if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewReactionChanged("set", entityTargetType, targetID, *detailPostID, userID, entityReactionType)); err != nil {
 				return false, false, err
 			}
 		}
@@ -204,12 +204,16 @@ func (h *CommandHandler) DeleteReaction(ctx context.Context, userID int64, targe
 		return err
 	}
 	_, _, err = h.withReactionTransaction(ctx, userID, targetID, entityTargetType, func(tx port.TxScope, detailPostID *int64) (bool, bool, error) {
+		existing, err := tx.ReactionRepository().GetUserTargetReaction(tx.Context(), userID, targetID, entityTargetType)
+		if err != nil {
+			return false, false, customerror.WrapRepository("select user target reaction", err)
+		}
 		deleted, err := tx.ReactionRepository().DeleteUserTargetReaction(tx.Context(), userID, targetID, entityTargetType)
 		if err != nil {
 			return false, false, customerror.WrapRepository("delete user target reaction", err)
 		}
-		if deleted && detailPostID != nil {
-			if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewReactionChanged("unset", entityTargetType, targetID, *detailPostID)); err != nil {
+		if deleted && detailPostID != nil && existing != nil {
+			if err := svccommon.DispatchDomainActions(tx, h.actionDispatcher, appevent.NewReactionChanged("unset", entityTargetType, targetID, *detailPostID, userID, existing.Type)); err != nil {
 				return false, false, err
 			}
 		}

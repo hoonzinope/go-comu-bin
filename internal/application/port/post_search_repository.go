@@ -7,6 +7,8 @@ import (
 )
 
 type PostSearchCursor struct {
+	Sort   string
+	Window PostRankingWindow
 	Score  float64
 	PostID int64
 }

@@ -17,7 +17,7 @@ func TestPostService_SearchPosts_InvalidQuery(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.SearchPosts(context.Background(), "   ", 10, "")
+	_, err := svc.SearchPosts(context.Background(), "   ", "", "", 10, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -32,7 +32,7 @@ func TestPostService_SearchPosts_IndexesCreatedPostViaOutboxRelay(t *testing.T) 
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		list, err := svc.SearchPosts(context.Background(), "go search", 10, "")
+		list, err := svc.SearchPosts(context.Background(), "go search", "", "", 10, "")
 		if err != nil {
 			return false
 		}
@@ -54,7 +54,7 @@ func TestPostService_SearchPosts_MatchesTitleContentAndTag(t *testing.T) {
 
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	list, err := svc.SearchPosts(context.Background(), "search", 10, "")
+	list, err := svc.SearchPosts(context.Background(), "search", "", "", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 3)
 	assert.Equal(t, mustPostUUID(t, repositories.post, titlePostID), list.Posts[0].UUID)
@@ -77,7 +77,7 @@ func TestPostService_SearchPosts_AllTermsMatchAndHiddenBoardsExcluded(t *testing
 	rebuildSearchIndex(t, repositories)
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	list, err := svc.SearchPosts(context.Background(), "go search", 10, "")
+	list, err := svc.SearchPosts(context.Background(), "go search", "", "", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
 	assert.Equal(t, mustPostUUID(t, repositories.post, matchingVisibleID), list.Posts[0].UUID)
@@ -98,6 +98,7 @@ func TestPostQueryHandler_SearchPosts_UsesCompositeCursorPagination(t *testing.T
 		repositories.board,
 		repositories.post,
 		repositories.postSearch,
+		repositories.postRanking,
 		repositories.tag,
 		repositories.postTag,
 		repositories.attachment,
@@ -107,7 +108,7 @@ func TestPostQueryHandler_SearchPosts_UsesCompositeCursorPagination(t *testing.T
 		newTestCachePolicy(),
 	)
 
-	page1, err := query.SearchPosts(context.Background(), "alpha beta", 2, "")
+	page1, err := query.SearchPosts(context.Background(), "alpha beta", "", "", 2, "")
 	require.NoError(t, err)
 	require.Len(t, page1.Posts, 2)
 	require.True(t, page1.HasMore)
@@ -115,7 +116,7 @@ func TestPostQueryHandler_SearchPosts_UsesCompositeCursorPagination(t *testing.T
 	assert.Equal(t, mustPostUUID(t, repositories.post, thirdID), page1.Posts[0].UUID)
 	assert.Equal(t, mustPostUUID(t, repositories.post, secondID), page1.Posts[1].UUID)
 
-	page2, err := query.SearchPosts(context.Background(), "alpha beta", 2, *page1.NextCursor)
+	page2, err := query.SearchPosts(context.Background(), "alpha beta", "", "", 2, *page1.NextCursor)
 	require.NoError(t, err)
 	require.Len(t, page2.Posts, 1)
 	assert.Equal(t, mustPostUUID(t, repositories.post, firstID), page2.Posts[0].UUID)
@@ -130,6 +131,7 @@ func TestPostQueryHandler_SearchPosts_InvalidCursor(t *testing.T) {
 		repositories.board,
 		repositories.post,
 		repositories.postSearch,
+		repositories.postRanking,
 		repositories.tag,
 		repositories.postTag,
 		repositories.attachment,
@@ -139,7 +141,7 @@ func TestPostQueryHandler_SearchPosts_InvalidCursor(t *testing.T) {
 		newTestCachePolicy(),
 	)
 
-	_, err := query.SearchPosts(context.Background(), "go", 10, "bad-cursor")
+	_, err := query.SearchPosts(context.Background(), "go", "", "", 10, "bad-cursor")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -151,6 +153,7 @@ func TestPostQueryHandler_SearchPosts_WithoutRepositoryFails(t *testing.T) {
 		repositories.board,
 		repositories.post,
 		nil,
+		repositories.postRanking,
 		repositories.tag,
 		repositories.postTag,
 		repositories.attachment,
@@ -160,6 +163,6 @@ func TestPostQueryHandler_SearchPosts_WithoutRepositoryFails(t *testing.T) {
 		newTestCachePolicy(),
 	)
 
-	_, err := query.SearchPosts(context.Background(), "go", 10, "")
+	_, err := query.SearchPosts(context.Background(), "go", "", "", 10, "")
 	require.Error(t, err)
 }

@@ -11,9 +11,10 @@ import (
 
 func TestChangedEvents_ExposeEventNameAndOccurredAt(t *testing.T) {
 	board := NewBoardChanged("created", 10)
-	post := NewPostChanged("updated", 20, 30, []string{"go", "news"}, nil)
+	publishedAt := time.Now()
+	post := NewPostChanged("updated", 20, 30, &publishedAt, []string{"go", "news"}, nil)
 	comment := NewCommentChanged("deleted", 40, 20)
-	reaction := NewReactionChanged("set", entity.ReactionTargetPost, 20, 20)
+	reaction := NewReactionChanged("set", entity.ReactionTargetPost, 20, 20, 5, entity.ReactionTypeLike)
 	attachment := NewAttachmentChanged("deleted", 50, 20)
 	report := NewReportChanged("resolved", 77, "accepted")
 
@@ -33,7 +34,8 @@ func TestChangedEvents_ExposeEventNameAndOccurredAt(t *testing.T) {
 }
 
 func TestPostChanged_JSONPayloadContainsMinimalFields(t *testing.T) {
-	e := NewPostChanged("deleted", 1, 2, []string{"go"}, []int64{10, 11})
+	publishedAt := time.Now()
+	e := NewPostChanged("deleted", 1, 2, &publishedAt, []string{"go"}, []int64{10, 11})
 
 	payload, err := json.Marshal(e)
 	assert.NoError(t, err)

@@ -1178,13 +1178,22 @@ paths:
       - Board
   /boards/{boardUUID}/posts:
     get:
-      description: Returns posts in board with cursor pagination.
+      description: Returns published posts in a board with cursor pagination. Supports
+        latest, hot, best, and top ordering.
       parameters:
       - description: Board UUID
         format: uuid
         in: path
         name: boardUUID
         required: true
+        type: string
+      - description: 'Board sort: hot, best, latest, top'
+        in: query
+        name: sort
+        type: string
+      - description: 'Top window: 24h, 7d, 30d, all (allowed only when sort=top)'
+        in: query
+        name: window
         type: string
       - description: Page size
         in: query
@@ -2069,15 +2078,64 @@ paths:
       summary: Set My Reaction for Post
       tags:
       - Reaction
+  /posts/feed:
+    get:
+      description: Returns the global post feed ordered by hot, best, latest, or top
+        with cursor pagination.
+      parameters:
+      - description: 'Feed sort: hot, best, latest, top'
+        in: query
+        name: sort
+        type: string
+      - description: 'Top window: 24h, 7d, 30d, all (allowed only when sort=top)'
+        in: query
+        name: window
+        type: string
+      - description: Page size
+        in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Opaque cursor returned by previous feed response
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostList'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      summary: List Feed Posts
+      tags:
+      - Post
   /posts/search:
     get:
       description: Returns published posts matching title, content, and tag tokens
-        with cursor pagination.
+        with cursor pagination. Supports relevance, hot, latest, and top ordering.
       parameters:
       - description: Search query
         in: query
         name: q
         required: true
+        type: string
+      - description: 'Search sort: relevance, hot, latest, top'
+        in: query
+        name: sort
+        type: string
+      - description: 'Top window: 24h, 7d, 30d, all (allowed only when sort=top)'
+        in: query
+        name: window
         type: string
       - description: Page size
         in: query
@@ -2187,12 +2245,21 @@ paths:
       - Auth
   /tags/{tagName}/posts:
     get:
-      description: Returns posts connected to a tag with cursor pagination.
+      description: Returns published posts connected to a tag with cursor pagination.
+        Supports latest, hot, best, and top ordering.
       parameters:
       - description: Normalized tag name
         in: path
         name: tagName
         required: true
+        type: string
+      - description: 'Tag sort: hot, best, latest, top'
+        in: query
+        name: sort
+        type: string
+      - description: 'Top window: 24h, 7d, 30d, all (allowed only when sort=top)'
+        in: query
+        name: window
         type: string
       - description: Page size
         in: query

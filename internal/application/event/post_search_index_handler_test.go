@@ -3,6 +3,7 @@ package event
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/stretchr/testify/assert"
@@ -35,11 +36,12 @@ func (s *spyPostSearchIndexer) HandlePostChanged(ctx context.Context, postID int
 func TestPostSearchIndexHandler_PostChangedRoutesToIndexer(t *testing.T) {
 	indexer := &capturingPostSearchIndexer{}
 	handler := NewPostSearchIndexHandler(indexer)
+	publishedAt := time.Now()
 
-	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("created", 11, 2, []string{"go"}, nil)))
-	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("updated", 12, 2, []string{"go"}, nil)))
-	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("published", 13, 2, []string{"go"}, nil)))
-	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("deleted", 14, 2, []string{"go"}, nil)))
+	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("created", 11, 2, &publishedAt, []string{"go"}, nil)))
+	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("updated", 12, 2, &publishedAt, []string{"go"}, nil)))
+	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("published", 13, 2, &publishedAt, []string{"go"}, nil)))
+	require.NoError(t, handler.Handle(context.Background(), NewPostChanged("deleted", 14, 2, &publishedAt, []string{"go"}, nil)))
 
 	assert.Equal(t, []int64{11, 12, 13}, indexer.upserted)
 	assert.Equal(t, []int64{14}, indexer.deleted)

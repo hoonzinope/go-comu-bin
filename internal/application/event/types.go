@@ -39,13 +39,14 @@ type PostChanged struct {
 	Operation         string    `json:"operation"`
 	PostID            int64     `json:"post_id"`
 	BoardID           int64     `json:"board_id"`
+	PublishedAt       *time.Time `json:"published_at,omitempty"`
 	TagNames          []string  `json:"tag_names,omitempty"`
 	DeletedCommentIDs []int64   `json:"deleted_comment_ids,omitempty"`
 	At                time.Time `json:"occurred_at"`
 }
 
-func NewPostChanged(operation string, postID, boardID int64, tagNames []string, deletedCommentIDs []int64) PostChanged {
-	return PostChanged{Operation: operation, PostID: postID, BoardID: boardID, TagNames: tagNames, DeletedCommentIDs: deletedCommentIDs, At: time.Now()}
+func NewPostChanged(operation string, postID, boardID int64, publishedAt *time.Time, tagNames []string, deletedCommentIDs []int64) PostChanged {
+	return PostChanged{Operation: operation, PostID: postID, BoardID: boardID, PublishedAt: publishedAt, TagNames: tagNames, DeletedCommentIDs: deletedCommentIDs, At: time.Now()}
 }
 
 func (e PostChanged) EventName() string {
@@ -80,11 +81,13 @@ type ReactionChanged struct {
 	TargetType entity.ReactionTargetType `json:"target_type"`
 	TargetID   int64                     `json:"target_id"`
 	PostID     int64                     `json:"post_id"`
+	UserID     int64                     `json:"user_id"`
+	ReactionType entity.ReactionType     `json:"reaction_type"`
 	At         time.Time                 `json:"occurred_at"`
 }
 
-func NewReactionChanged(operation string, targetType entity.ReactionTargetType, targetID, postID int64) ReactionChanged {
-	return ReactionChanged{Operation: operation, TargetType: targetType, TargetID: targetID, PostID: postID, At: time.Now()}
+func NewReactionChanged(operation string, targetType entity.ReactionTargetType, targetID, postID, userID int64, reactionType entity.ReactionType) ReactionChanged {
+	return ReactionChanged{Operation: operation, TargetType: targetType, TargetID: targetID, PostID: postID, UserID: userID, ReactionType: reactionType, At: time.Now()}
 }
 
 func (e ReactionChanged) EventName() string {

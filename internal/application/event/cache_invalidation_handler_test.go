@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/key"
 	"github.com/hoonzinope/go-comu-bin/internal/application/cache/testutil"
@@ -68,8 +69,10 @@ func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
 	require.NoError(t, cache.Set(context.Background(), key.CommentList(10, 10, 0), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetPost), 10), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), 100), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.PostFeedList("hot", "", 10, ""), "cached"))
 
-	e := NewPostChanged("deleted", 10, 2, []string{"go"}, []int64{100})
+	publishedAt := time.Now()
+	e := NewPostChanged("deleted", 10, 2, &publishedAt, []string{"go"}, []int64{100})
 	require.NoError(t, h.Handle(context.Background(), e))
 
 	for _, cacheKey := range []string{
@@ -79,6 +82,7 @@ func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
 		key.CommentList(10, 10, 0),
 		key.ReactionList(string(entity.ReactionTargetPost), 10),
 		key.ReactionList(string(entity.ReactionTargetComment), 100),
+		key.PostFeedList("hot", "", 10, ""),
 	} {
 		_, ok, err := cache.Get(context.Background(), cacheKey)
 		require.NoError(t, err)
@@ -94,11 +98,12 @@ func TestCacheInvalidationHandler_CommentReactionAttachmentChanged(t *testing.T)
 	require.NoError(t, cache.Set(context.Background(), key.CommentList(11, 10, 0), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), 90), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.PostFeedList("hot", "", 10, ""), "cached"))
 	require.NoError(t, h.Handle(context.Background(), NewCommentChanged("deleted", 90, 11)))
 
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetPost), 11), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
-	require.NoError(t, h.Handle(context.Background(), NewReactionChanged("set", entity.ReactionTargetPost, 11, 11)))
+	require.NoError(t, h.Handle(context.Background(), NewReactionChanged("set", entity.ReactionTargetPost, 11, 11, 7, entity.ReactionTypeLike)))
 
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
 	require.NoError(t, h.Handle(context.Background(), NewAttachmentChanged("deleted", 5, 11)))
@@ -108,6 +113,7 @@ func TestCacheInvalidationHandler_CommentReactionAttachmentChanged(t *testing.T)
 		key.PostDetail(11),
 		key.ReactionList(string(entity.ReactionTargetComment), 90),
 		key.ReactionList(string(entity.ReactionTargetPost), 11),
+		key.PostFeedList("hot", "", 10, ""),
 	} {
 		_, ok, err := cache.Get(context.Background(), cacheKey)
 		require.NoError(t, err)
@@ -152,7 +158,8 @@ func TestCacheInvalidationHandler_UsesProvidedContext(t *testing.T) {
 	h := NewCacheInvalidationHandler(cache, logger)
 
 	ctx := context.WithValue(context.Background(), struct{ k string }{k: "rid"}, "rid-1")
-	require.NoError(t, h.Handle(ctx, NewPostChanged("updated", 10, 2, []string{"go"}, nil)))
+	publishedAt := time.Now()
+	require.NoError(t, h.Handle(ctx, NewPostChanged("updated", 10, 2, &publishedAt, []string{"go"}, nil)))
 	assert.Same(t, ctx, cache.deleteCtx)
 	assert.Same(t, ctx, cache.deleteByPrefixCtx)
 }

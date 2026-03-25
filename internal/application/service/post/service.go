@@ -31,27 +31,27 @@ type PostService struct {
 	commandHandler *postCommandHandler
 }
 
-func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
-	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
+func NewPostService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
+	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewPostService(userRepository, boardRepository, postRepository, postSearchRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy, authorizationPolicy, logger...)
+func NewService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
+	return NewPostService(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
+func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *PostService {
 	resolvedLogger := svccommon.ResolveLogger(logger)
 	tagCoordinator := newPostTagCoordinator(tagRepository, postTagRepository)
 	attachmentCoordinator := newPostAttachmentCoordinator(attachmentRepository)
 	deletionWorkflow := newPostDeletionWorkflow(commentRepository, reactionRepository, attachmentCoordinator)
 	return &PostService{
-		queryHandler:   newPostQueryHandler(userRepository, boardRepository, postRepository, postSearchRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy),
+		queryHandler:   newPostQueryHandler(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy),
 		commandHandler: newPostCommandHandler(boardRepository, postRepository, unitOfWork, svccommon.ResolveActionDispatcher(actionDispatcher), authorizationPolicy, resolvedLogger, tagCoordinator, attachmentCoordinator, deletionWorkflow),
 	}
 }
 
-func NewServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, actionDispatcher, cachePolicy, authorizationPolicy, logger...)
+func NewServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
+	return NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, actionDispatcher, cachePolicy, authorizationPolicy, logger...)
 }
 
 func (s *PostService) CreatePost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
@@ -62,16 +62,20 @@ func (s *PostService) CreateDraftPost(ctx context.Context, title, content string
 	return s.commandHandler.CreateDraftPost(ctx, title, content, tags, mentionedUsernames, authorID, boardUUID)
 }
 
-func (s *PostService) GetPostsList(ctx context.Context, boardUUID string, limit int, cursor string) (*model.PostList, error) {
-	return s.queryHandler.GetPostsList(ctx, boardUUID, limit, cursor)
+func (s *PostService) GetPostsList(ctx context.Context, boardUUID string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
+	return s.queryHandler.GetPostsList(ctx, boardUUID, sort, window, limit, cursor)
 }
 
-func (s *PostService) SearchPosts(ctx context.Context, query string, limit int, cursor string) (*model.PostList, error) {
-	return s.queryHandler.SearchPosts(ctx, query, limit, cursor)
+func (s *PostService) SearchPosts(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
+	return s.queryHandler.SearchPosts(ctx, query, sort, window, limit, cursor)
 }
 
-func (s *PostService) GetPostsByTag(ctx context.Context, tagName string, limit int, cursor string) (*model.PostList, error) {
-	return s.queryHandler.GetPostsByTag(ctx, tagName, limit, cursor)
+func (s *PostService) GetFeed(ctx context.Context, sort string, window string, limit int, cursor string) (*model.PostList, error) {
+	return s.queryHandler.GetFeed(ctx, sort, window, limit, cursor)
+}
+
+func (s *PostService) GetPostsByTag(ctx context.Context, tagName string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
+	return s.queryHandler.GetPostsByTag(ctx, tagName, sort, window, limit, cursor)
 }
 
 func (s *PostService) GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error) {

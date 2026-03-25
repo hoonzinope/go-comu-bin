@@ -85,6 +85,7 @@ func TestPostQueryHandler_GetPostDetail(t *testing.T) {
 		repositories.board,
 		repositories.post,
 		repositories.postSearch,
+		repositories.postRanking,
 		repositories.tag,
 		repositories.postTag,
 		repositories.attachment,
@@ -113,6 +114,7 @@ func TestPostQueryHandler_GetPostsByTag(t *testing.T) {
 		repositories.board,
 		repositories.post,
 		repositories.postSearch,
+		repositories.postRanking,
 		repositories.tag,
 		repositories.postTag,
 		repositories.attachment,
@@ -122,7 +124,7 @@ func TestPostQueryHandler_GetPostsByTag(t *testing.T) {
 		newTestCachePolicy(),
 	)
 
-	list, err := query.GetPostsByTag(context.Background(), "go", 10, "")
+	list, err := query.GetPostsByTag(context.Background(), "go", "", "", 10, "")
 	require.NoError(t, err)
 	require.NotNil(t, list)
 	require.Len(t, list.Posts, 1)

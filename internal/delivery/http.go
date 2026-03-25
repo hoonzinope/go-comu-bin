@@ -36,59 +36,59 @@ const maxPageLimit = 1000
 const httpLoggerContextKey = "http_logger"
 
 type HTTPHandler struct {
-	sessionUseCase           port.SessionUseCase
-	adminAuthorizer          port.AdminAuthorizer
-	userUseCase              port.UserUseCase
-	accountUseCase           port.AccountUseCase
-	boardUseCase             port.BoardUseCase
-	postUseCase              port.PostUseCase
-	commentUseCase           port.CommentUseCase
-	notificationUseCase      port.NotificationUseCase
-	reactionUseCase          port.ReactionUseCase
-	attachmentUseCase        port.AttachmentUseCase
-	reportUseCase            port.ReportUseCase
-	outboxAdminUseCase       port.OutboxAdminUseCase
-	rateLimiter              port.RateLimiter
-	attachmentUploadMaxBytes int64
-	maxJSONBodyBytes         int64
-	defaultPageLimit         int
-	rateLimitEnabled         bool
-	rateLimitWindow          time.Duration
-	rateLimitReadRequests    int
-	rateLimitWriteRequests   int
+	sessionUseCase                    port.SessionUseCase
+	adminAuthorizer                   port.AdminAuthorizer
+	userUseCase                       port.UserUseCase
+	accountUseCase                    port.AccountUseCase
+	boardUseCase                      port.BoardUseCase
+	postUseCase                       port.PostUseCase
+	commentUseCase                    port.CommentUseCase
+	notificationUseCase               port.NotificationUseCase
+	reactionUseCase                   port.ReactionUseCase
+	attachmentUseCase                 port.AttachmentUseCase
+	reportUseCase                     port.ReportUseCase
+	outboxAdminUseCase                port.OutboxAdminUseCase
+	rateLimiter                       port.RateLimiter
+	attachmentUploadMaxBytes          int64
+	maxJSONBodyBytes                  int64
+	defaultPageLimit                  int
+	rateLimitEnabled                  bool
+	rateLimitWindow                   time.Duration
+	rateLimitReadRequests             int
+	rateLimitWriteRequests            int
 	passwordResetRateLimitEnabled     bool
 	passwordResetRateLimitWindow      time.Duration
 	passwordResetRateLimitMaxRequests int
-	logger                   *slog.Logger
-	authGinMiddleware        gin.HandlerFunc
-	adminGinMiddleware       gin.HandlerFunc
+	logger                            *slog.Logger
+	authGinMiddleware                 gin.HandlerFunc
+	adminGinMiddleware                gin.HandlerFunc
 }
 
 type HTTPDependencies struct {
-	SessionUseCase           port.SessionUseCase
-	AdminAuthorizer          port.AdminAuthorizer
-	UserUseCase              port.UserUseCase
-	AccountUseCase           port.AccountUseCase
-	BoardUseCase             port.BoardUseCase
-	PostUseCase              port.PostUseCase
-	CommentUseCase           port.CommentUseCase
-	NotificationUseCase      port.NotificationUseCase
-	ReactionUseCase          port.ReactionUseCase
-	AttachmentUseCase        port.AttachmentUseCase
-	ReportUseCase            port.ReportUseCase
-	OutboxAdminUseCase       port.OutboxAdminUseCase
-	RateLimiter              port.RateLimiter
-	AttachmentUploadMaxBytes int64
-	MaxJSONBodyBytes         int64
-	DefaultPageLimit         int
-	RateLimitEnabled         bool
-	RateLimitWindowSecond    int
-	RateLimitReadRequest     int
-	RateLimitWriteRequest    int
+	SessionUseCase                     port.SessionUseCase
+	AdminAuthorizer                    port.AdminAuthorizer
+	UserUseCase                        port.UserUseCase
+	AccountUseCase                     port.AccountUseCase
+	BoardUseCase                       port.BoardUseCase
+	PostUseCase                        port.PostUseCase
+	CommentUseCase                     port.CommentUseCase
+	NotificationUseCase                port.NotificationUseCase
+	ReactionUseCase                    port.ReactionUseCase
+	AttachmentUseCase                  port.AttachmentUseCase
+	ReportUseCase                      port.ReportUseCase
+	OutboxAdminUseCase                 port.OutboxAdminUseCase
+	RateLimiter                        port.RateLimiter
+	AttachmentUploadMaxBytes           int64
+	MaxJSONBodyBytes                   int64
+	DefaultPageLimit                   int
+	RateLimitEnabled                   bool
+	RateLimitWindowSecond              int
+	RateLimitReadRequest               int
+	RateLimitWriteRequest              int
 	PasswordResetRateLimitEnabled      bool
 	PasswordResetRateLimitWindowSecond int
 	PasswordResetRateLimitMaxRequests  int
-	Logger                   *slog.Logger
+	Logger                             *slog.Logger
 }
 
 func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
@@ -97,30 +97,30 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	handler := &HTTPHandler{
-		sessionUseCase:           deps.SessionUseCase,
-		adminAuthorizer:          deps.AdminAuthorizer,
-		userUseCase:              deps.UserUseCase,
-		accountUseCase:           deps.AccountUseCase,
-		boardUseCase:             deps.BoardUseCase,
-		postUseCase:              deps.PostUseCase,
-		commentUseCase:           deps.CommentUseCase,
-		notificationUseCase:      deps.NotificationUseCase,
-		reactionUseCase:          deps.ReactionUseCase,
-		attachmentUseCase:        deps.AttachmentUseCase,
-		reportUseCase:            deps.ReportUseCase,
-		outboxAdminUseCase:       deps.OutboxAdminUseCase,
-		rateLimiter:              deps.RateLimiter,
-		attachmentUploadMaxBytes: deps.AttachmentUploadMaxBytes,
-		maxJSONBodyBytes:         resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
-		defaultPageLimit:         resolveDefaultPageLimit(deps.DefaultPageLimit),
-		rateLimitEnabled:         deps.RateLimitEnabled,
-		rateLimitWindow:          resolveRateLimitWindow(deps.RateLimitWindowSecond),
-		rateLimitReadRequests:    resolveRateLimitReadRequests(deps.RateLimitReadRequest),
-		rateLimitWriteRequests:   resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
+		sessionUseCase:                    deps.SessionUseCase,
+		adminAuthorizer:                   deps.AdminAuthorizer,
+		userUseCase:                       deps.UserUseCase,
+		accountUseCase:                    deps.AccountUseCase,
+		boardUseCase:                      deps.BoardUseCase,
+		postUseCase:                       deps.PostUseCase,
+		commentUseCase:                    deps.CommentUseCase,
+		notificationUseCase:               deps.NotificationUseCase,
+		reactionUseCase:                   deps.ReactionUseCase,
+		attachmentUseCase:                 deps.AttachmentUseCase,
+		reportUseCase:                     deps.ReportUseCase,
+		outboxAdminUseCase:                deps.OutboxAdminUseCase,
+		rateLimiter:                       deps.RateLimiter,
+		attachmentUploadMaxBytes:          deps.AttachmentUploadMaxBytes,
+		maxJSONBodyBytes:                  resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
+		defaultPageLimit:                  resolveDefaultPageLimit(deps.DefaultPageLimit),
+		rateLimitEnabled:                  deps.RateLimitEnabled,
+		rateLimitWindow:                   resolveRateLimitWindow(deps.RateLimitWindowSecond),
+		rateLimitReadRequests:             resolveRateLimitReadRequests(deps.RateLimitReadRequest),
+		rateLimitWriteRequests:            resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
 		passwordResetRateLimitEnabled:     deps.PasswordResetRateLimitEnabled,
 		passwordResetRateLimitWindow:      resolveRateLimitWindow(deps.PasswordResetRateLimitWindowSecond),
 		passwordResetRateLimitMaxRequests: resolvePasswordResetRateLimitMaxRequests(deps.PasswordResetRateLimitMaxRequests),
-		logger:                   logger,
+		logger:                            logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
 		writeHTTPError(handler.logger, c, status, err)
@@ -217,6 +217,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/boards/:boardUUID/posts/drafts", h.authGinMiddleware, h.handleBoardDraftPostsPost)
 	v1.GET("/tags/:tagName/posts", h.handleTagPostsGet)
 
+	v1.GET("/posts/feed", h.handlePostFeedGet)
 	v1.GET("/posts/search", h.handlePostSearchGet)
 	v1.GET("/posts/:postUUID", h.handlePostDetailGet)
 	v1.POST("/posts/:postUUID/publish", h.authGinMiddleware, h.handlePostPublish)
@@ -1177,10 +1178,12 @@ func (h *HTTPHandler) handleBoardDelete(c *gin.Context) {
 
 // handleBoardPostsGet godoc
 // @Summary List Posts by Board
-// @Description Returns posts in board with cursor pagination.
+// @Description Returns published posts in a board with cursor pagination. Supports latest, hot, best, and top ordering.
 // @Tags Post
 // @Produce json
 // @Param boardUUID path string true "Board UUID" format(uuid)
+// @Param sort query string false "Board sort: hot, best, latest, top"
+// @Param window query string false "Top window: 24h, 7d, 30d, all (allowed only when sort=top)"
 // @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param cursor query string false "Opaque cursor returned by previous list response"
 // @Success 200 {object} response.PostList
@@ -1192,12 +1195,13 @@ func (h *HTTPHandler) handleBoardPostsGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-
+	sortBy := strings.TrimSpace(c.Query("sort"))
+	window := strings.TrimSpace(c.Query("window"))
 	limit, cursor, ok := h.parseLimitCursor(c)
 	if !ok {
 		return
 	}
-	posts, err := h.postUseCase.GetPostsList(c.Request.Context(), boardUUID, limit, cursor)
+	posts, err := h.postUseCase.GetPostsList(c.Request.Context(), boardUUID, sortBy, window, limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1289,10 +1293,12 @@ func (h *HTTPHandler) handleBoardDraftPostsPost(c *gin.Context) {
 
 // handleTagPostsGet godoc
 // @Summary List Posts by Tag
-// @Description Returns posts connected to a tag with cursor pagination.
+// @Description Returns published posts connected to a tag with cursor pagination. Supports latest, hot, best, and top ordering.
 // @Tags Tag
 // @Produce json
 // @Param tagName path string true "Normalized tag name"
+// @Param sort query string false "Tag sort: hot, best, latest, top"
+// @Param window query string false "Top window: 24h, 7d, 30d, all (allowed only when sort=top)"
 // @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param cursor query string false "Opaque cursor returned by previous list response"
 // @Success 200 {object} response.PostList
@@ -1306,11 +1312,41 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 		badRequest(c, errors.New("tagName is required"))
 		return
 	}
+	sortBy := strings.TrimSpace(c.Query("sort"))
+	window := strings.TrimSpace(c.Query("window"))
 	limit, cursor, ok := h.parseLimitCursor(c)
 	if !ok {
 		return
 	}
-	posts, err := h.postUseCase.GetPostsByTag(c.Request.Context(), tagName, limit, cursor)
+	posts, err := h.postUseCase.GetPostsByTag(c.Request.Context(), tagName, sortBy, window, limit, cursor)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.PostListFromDTO(posts))
+}
+
+// handlePostSearchGet godoc
+// @Summary List Feed Posts
+// @Description Returns the global post feed ordered by hot, best, latest, or top with cursor pagination.
+// @Tags Post
+// @Produce json
+// @Param sort query string false "Feed sort: hot, best, latest, top"
+// @Param window query string false "Top window: 24h, 7d, 30d, all (allowed only when sort=top)"
+// @Param limit query int false "Page size" minimum(1) maximum(1000)
+// @Param cursor query string false "Opaque cursor returned by previous feed response"
+// @Success 200 {object} response.PostList
+// @Failure 400 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/feed [get]
+func (h *HTTPHandler) handlePostFeedGet(c *gin.Context) {
+	sortBy := strings.TrimSpace(c.Query("sort"))
+	window := strings.TrimSpace(c.Query("window"))
+	limit, cursor, ok := h.parseLimitCursor(c)
+	if !ok {
+		return
+	}
+	posts, err := h.postUseCase.GetFeed(c.Request.Context(), sortBy, window, limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return
@@ -1320,10 +1356,12 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 
 // handlePostSearchGet godoc
 // @Summary Search Posts
-// @Description Returns published posts matching title, content, and tag tokens with cursor pagination.
+// @Description Returns published posts matching title, content, and tag tokens with cursor pagination. Supports relevance, hot, latest, and top ordering.
 // @Tags Post
 // @Produce json
 // @Param q query string true "Search query"
+// @Param sort query string false "Search sort: relevance, hot, latest, top"
+// @Param window query string false "Top window: 24h, 7d, 30d, all (allowed only when sort=top)"
 // @Param limit query int false "Page size" minimum(1) maximum(1000)
 // @Param cursor query string false "Opaque cursor returned by previous search response"
 // @Success 200 {object} response.PostList
@@ -1332,6 +1370,8 @@ func (h *HTTPHandler) handleTagPostsGet(c *gin.Context) {
 // @Router /posts/search [get]
 func (h *HTTPHandler) handlePostSearchGet(c *gin.Context) {
 	query := strings.TrimSpace(c.Query("q"))
+	sortBy := strings.TrimSpace(c.Query("sort"))
+	window := strings.TrimSpace(c.Query("window"))
 	if query == "" {
 		badRequest(c, errors.New("query is required"))
 		return
@@ -1340,7 +1380,7 @@ func (h *HTTPHandler) handlePostSearchGet(c *gin.Context) {
 	if !ok {
 		return
 	}
-	posts, err := h.postUseCase.SearchPosts(c.Request.Context(), query, limit, cursor)
+	posts, err := h.postUseCase.SearchPosts(c.Request.Context(), query, sortBy, window, limit, cursor)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return

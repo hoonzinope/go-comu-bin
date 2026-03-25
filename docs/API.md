@@ -169,15 +169,47 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - 상태 모델
   - 내부 기본 상태는 `draft`, `published`, `deleted`
   - 현재 공개 글 생성 API는 임시저장 기능이 없으므로 생성 시 기본 상태는 `published`
+  - 내부 `PublishedAt`은 ranking/feed 시간축에 사용하며, published create 시 `CreatedAt`, draft publish 시 publish 시각으로 설정됩니다.
   - 삭제 API는 hard delete가 아니라 `deleted` 상태로 전환하는 soft delete 방식
   - 공개 목록/상세 조회에서는 `published`만 노출
-- `GET /api/v1/boards/{boardUUID}/posts?limit=10&cursor=`
+- `GET /api/v1/posts/feed?sort=hot|best|latest|top&window=7d&limit=10&cursor=`
   - 응답 메타: `has_more`, `next_cursor`
+  - `sort` 기본값은 `hot`
+  - `sort` 허용값: `hot`, `best`, `latest`, `top`
+  - `window`는 `sort=top`일 때만 허용됩니다.
+  - `window` 허용값: `24h`, `7d`, `30d`, `all`
+  - `sort=top`이고 `window`가 비어 있으면 기본값은 `7d`
+  - `limit`은 `1..1000` 범위의 정수여야 합니다.
+  - 응답 본문은 기존 post 목록과 동일한 `PostList` shape를 사용하며, ranking score 자체는 외부에 노출하지 않습니다.
+  - `hot`
+    - `reaction(+1/-1)` + `comment(+2)` 누적 점수와 `PublishedAt` 기준 Reddit 스타일 시간 감쇠 정렬을 사용합니다.
+  - `best`
+    - 최근 7일 activity 점수(`like +1`, `dislike -1`, `comment +2`) 기준으로 정렬합니다.
+    - 오래된 글도 최근 7일 내 activity가 있으면 결과에 포함될 수 있습니다.
+  - `latest`
+    - `published_at desc, post_id desc` 기준 정렬입니다.
+  - `top`
+    - 기간별 누적 activity 점수(`like +1`, `dislike -1`, `comment +2`) 기준으로 정렬합니다.
+    - `24h`, `7d`, `30d`는 해당 기간 내 activity만 계산하고, `all`은 전체 누적 점수를 사용합니다.
+  - hidden 게시판, draft, deleted post는 결과에서 제외됩니다.
+  - ranking read-side는 `post.changed`, `comment.changed`, `reaction.changed` outbox relay 소비로 비동기 갱신되므로 write 직후 짧은 eventual consistency 구간이 있을 수 있습니다.
+- `GET /api/v1/boards/{boardUUID}/posts?sort=latest|hot|best|top&window=7d&limit=10&cursor=`
+  - 응답 메타: `has_more`, `next_cursor`
+  - `sort` 기본값은 `latest`
+  - `sort` 허용값: `latest`, `hot`, `best`, `top`
+  - `window`는 `sort=top`일 때만 허용됩니다.
+  - `window` 허용값: `24h`, `7d`, `30d`, `all`
+  - `sort=top`이고 `window`가 비어 있으면 기본값은 `7d`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 게시판이 없으면 `404 Not Found`
-- `GET /api/v1/posts/search?q=go+search&limit=10&cursor=`
+- `GET /api/v1/posts/search?q=go+search&sort=relevance|hot|latest|top&window=7d&limit=10&cursor=`
   - 응답 메타: `has_more`, `next_cursor`
   - `q`는 필수이며, 앞뒤 공백 제거 후 비어 있으면 `400 Bad Request`
+  - `sort` 기본값은 `relevance`
+  - `sort` 허용값: `relevance`, `hot`, `latest`, `top`
+  - `window`는 `sort=top`일 때만 허용됩니다.
+  - `window` 허용값: `24h`, `7d`, `30d`, `all`
+  - `sort=top`이고 `window`가 비어 있으면 기본값은 `7d`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 검색 대상은 `published` post의 `title`, `content`, `tags` 입니다.
   - 검색 토큰화는 한국어/영어 구분 없이 공백 기준이며, 현재는 모든 토큰이 매치되어야 결과에 포함됩니다.
@@ -185,6 +217,8 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 런타임 인덱스 rebuild가 실행되더라도, rebuild 시작 이후 반영된 더 최신 개별 post 인덱스 갱신은 덮어쓰지 않습니다.
   - hidden 게시판의 post는 비admin 공개 검색 결과에서 제외됩니다.
   - 응답 본문은 기존 post 목록과 동일한 `PostList` shape를 사용하며, relevance score/snippet은 외부에 노출하지 않습니다.
+  - `sort=relevance`는 기존 BM25/all-terms-match 정렬을 유지합니다.
+  - `sort=hot|latest|top`은 검색 결과 집합 내부를 ranking/latest 규칙으로 재정렬합니다.
 - `POST /api/v1/boards/{boardUUID}/posts` (인증 필요)
   - 정지된(`suspended`) 사용자는 `403 Forbidden`
   - guest 계정도 작성할 수 있습니다.
@@ -228,9 +262,14 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 
 ## Tag
 
-- `GET /api/v1/tags/{tagName}/posts?limit=10&cursor=`
+- `GET /api/v1/tags/{tagName}/posts?sort=latest|hot|best|top&window=7d&limit=10&cursor=`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
   - 응답 메타: `has_more`, `next_cursor`
+  - `sort` 기본값은 `latest`
+  - `sort` 허용값: `latest`, `hot`, `best`, `top`
+  - `window`는 `sort=top`일 때만 허용됩니다.
+  - `window` 허용값: `24h`, `7d`, `30d`, `all`
+  - `sort=top`이고 `window`가 비어 있으면 기본값은 `7d`
   - `tagName`은 내부적으로 앞뒤 공백 제거 후 영문 소문자로 정규화합니다.
   - tag가 없으면 `404 Not Found`
   - post 목록 응답에는 태그 정보가 포함되지 않습니다.

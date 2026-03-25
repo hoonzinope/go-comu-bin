@@ -51,7 +51,7 @@ func TestPostService_CreateGetListDelete_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, postID)
 
-	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 10, "")
 	require.NoError(t, err)
 	assert.Len(t, list.Posts, 1)
 
@@ -149,7 +149,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	seedPost(repositories.post, userID, boardID, "title3", "content3")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 2, "")
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 2, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 2)
 	assert.True(t, list.HasMore)
@@ -164,7 +164,7 @@ func TestPostService_GetPostsList_InvalidLimit(t *testing.T) {
 	seedPost(repositories.post, userID, boardID, "title", "content")
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 0, "")
+	_, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 0, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -178,7 +178,7 @@ func TestPostService_GetPostsList_ReturnsBoardNotFound_WhenBoardDeleted(t *testi
 	require.NoError(t, repositories.board.Delete(context.Background(), boardID))
 	svc := newTestPostService(t, repositories, newTestCache())
 
-	_, err := svc.GetPostsList(context.Background(), boardUUID, 10, "")
+	_, err := svc.GetPostsList(context.Background(), boardUUID, "", "", 10, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
@@ -193,7 +193,7 @@ func TestPostService_GetPostsList_RechecksBoardInsideCacheLoad(t *testing.T) {
 		require.NoError(t, repositories.board.Delete(context.Background(), boardID))
 	}})
 
-	_, err := svc.GetPostsList(context.Background(), boardUUID, 10, "")
+	_, err := svc.GetPostsList(context.Background(), boardUUID, "", "", 10, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrBoardNotFound))
 }
@@ -231,7 +231,7 @@ func TestPostService_UpdatePost_InvalidatesCaches(t *testing.T) {
 
 	_, err := postSvc.GetPostDetail(context.Background(), mustPostUUID(t, repositories.post, postID))
 	require.NoError(t, err)
-	_, err = postSvc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
+	_, err = postSvc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 10, "")
 	require.NoError(t, err)
 
 	require.NoError(t, postSvc.UpdatePost(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "new", "new-content", nil))
@@ -296,7 +296,7 @@ func TestPostService_DeletePost_SoftDeletedPostIsNoLongerVisible(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrPostNotFound))
 
-	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
 }
@@ -328,13 +328,13 @@ func TestPostService_UpdatePost_SoftDeletesAndReactivatesTagRelations(t *testing
 
 	require.NoError(t, svc.UpdatePost(context.Background(), postID, userID, "title", "content", []string{"go"}))
 
-	backendList, err := svc.GetPostsByTag(context.Background(), "backend", 10, "")
+	backendList, err := svc.GetPostsByTag(context.Background(), "backend", "", "", 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, backendList.Posts)
 
 	require.NoError(t, svc.UpdatePost(context.Background(), postID, userID, "title", "content", []string{"GO", "backend"}))
 
-	backendList, err = svc.GetPostsByTag(context.Background(), "backend", 10, "")
+	backendList, err = svc.GetPostsByTag(context.Background(), "backend", "", "", 10, "")
 	require.NoError(t, err)
 	require.Len(t, backendList.Posts, 1)
 	assert.Equal(t, postID, backendList.Posts[0].UUID)
@@ -350,7 +350,7 @@ func TestPostService_DeletePost_RemovesPostFromTagList(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, svc.DeletePost(context.Background(), postID, userID))
 
-	list, err := svc.GetPostsByTag(context.Background(), "go", 10, "")
+	list, err := svc.GetPostsByTag(context.Background(), "go", "", "", 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
 }
@@ -367,7 +367,7 @@ func TestPostService_GetPostsByTag_ExcludesDraftPosts(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, draftID, publishedID)
 
-	list, err := svc.GetPostsByTag(context.Background(), "go", 10, "")
+	list, err := svc.GetPostsByTag(context.Background(), "go", "", "", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
 	assert.Equal(t, publishedID, list.Posts[0].UUID)
@@ -391,7 +391,7 @@ func TestPostService_GetPostsByTag_ExcludesHiddenBoardPosts(t *testing.T) {
 	hiddenBoard.SetHidden(true)
 	require.NoError(t, repositories.board.Update(context.Background(), hiddenBoard))
 
-	list, err := svc.GetPostsByTag(context.Background(), "go", 10, "")
+	list, err := svc.GetPostsByTag(context.Background(), "go", "", "", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
 	assert.Equal(t, visiblePostID, list.Posts[0].UUID)
@@ -419,7 +419,7 @@ func TestPostService_GetPostsByTag_PaginationIgnoresHiddenBoards(t *testing.T) {
 	hiddenBoard.SetHidden(true)
 	require.NoError(t, repositories.board.Update(context.Background(), hiddenBoard))
 
-	firstPage, err := svc.GetPostsByTag(context.Background(), "go", 1, "")
+	firstPage, err := svc.GetPostsByTag(context.Background(), "go", "", "", 1, "")
 	require.NoError(t, err)
 	require.Len(t, firstPage.Posts, 1)
 	assert.Equal(t, visibleNewerID, firstPage.Posts[0].UUID)
@@ -427,7 +427,7 @@ func TestPostService_GetPostsByTag_PaginationIgnoresHiddenBoards(t *testing.T) {
 	require.NotNil(t, firstPage.NextCursor)
 	assert.NotEmpty(t, *firstPage.NextCursor)
 
-	secondPage, err := svc.GetPostsByTag(context.Background(), "go", 1, *firstPage.NextCursor)
+	secondPage, err := svc.GetPostsByTag(context.Background(), "go", "", "", 1, *firstPage.NextCursor)
 	require.NoError(t, err)
 	require.Len(t, secondPage.Posts, 1)
 	assert.Equal(t, visibleOlderID, secondPage.Posts[0].UUID)
@@ -444,7 +444,7 @@ func TestPostService_GetPostsByTag_RejectsTooLargeLimit(t *testing.T) {
 	_, err := svc.CreatePost(context.Background(), "visible", "content", []string{"go"}, nil, userID, mustBoardUUID(t, repositories.board, boardID))
 	require.NoError(t, err)
 
-	_, err = svc.GetPostsByTag(context.Background(), "go", svccommon.MaxPageLimit+1, "")
+	_, err = svc.GetPostsByTag(context.Background(), "go", "", "", svccommon.MaxPageLimit+1, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
 }
@@ -556,7 +556,7 @@ func TestPostService_CreateDraftPost_DoesNotAppearInPublicList(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotZero(t, postID)
 
-	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 10, "")
 	require.NoError(t, err)
 	assert.Empty(t, list.Posts)
 }
@@ -573,7 +573,7 @@ func TestPostService_PublishPost_MakesDraftVisible(t *testing.T) {
 	err = svc.PublishPost(context.Background(), postID, userID)
 	require.NoError(t, err)
 
-	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), 10, "")
+	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 1)
 	assert.Equal(t, postID, list.Posts[0].UUID)
