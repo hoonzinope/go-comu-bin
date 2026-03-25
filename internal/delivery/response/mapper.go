@@ -208,8 +208,16 @@ func notificationFromDTO(notification model.Notification) Notification {
 		ActorName:      notification.ActorName,
 		PostTitle:      notification.PostTitle,
 		CommentPreview: notification.CommentPreview,
-		ReadAt:         notification.ReadAt,
-		CreatedAt:      notification.CreatedAt,
+		IsRead:         notification.IsRead,
+		TargetKind:     notification.TargetKind,
+		MessageKey:     notification.MessageKey,
+		MessageArgs: MessageArgs{
+			ActorName:      notification.MessageArgs.ActorName,
+			PostTitle:      notification.MessageArgs.PostTitle,
+			CommentPreview: notification.MessageArgs.CommentPreview,
+		},
+		ReadAt:    notification.ReadAt,
+		CreatedAt: notification.CreatedAt,
 	}
 }
 

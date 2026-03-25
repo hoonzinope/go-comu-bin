@@ -947,6 +947,14 @@ func (r notificationTxRepository) MarkRead(ctx context.Context, id int64) error 
 	return r.repo.markRead(id)
 }
 
+func (r notificationTxRepository) MarkAllReadByRecipientUserID(ctx context.Context, recipientUserID int64) (int, error) {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.MarkAllReadByRecipientUserID(ctx, recipientUserID)
+}
+
 func (r passwordResetTokenTxRepository) Save(ctx context.Context, token *entity.PasswordResetToken) error {
 	_ = ctx
 	if r.beforeWrite != nil {

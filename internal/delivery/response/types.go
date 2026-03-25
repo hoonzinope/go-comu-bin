@@ -73,16 +73,26 @@ type CommentDetail struct {
 }
 
 type Notification struct {
-	UUID           string     `json:"uuid"`
-	Type           string     `json:"type"`
-	ActorUUID      string     `json:"actor_uuid"`
-	PostUUID       string     `json:"post_uuid"`
-	CommentUUID    *string    `json:"comment_uuid,omitempty"`
-	ActorName      string     `json:"actor_name"`
-	PostTitle      string     `json:"post_title"`
-	CommentPreview string     `json:"comment_preview"`
-	ReadAt         *time.Time `json:"read_at,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
+	UUID           string      `json:"uuid"`
+	Type           string      `json:"type"`
+	ActorUUID      string      `json:"actor_uuid"`
+	PostUUID       string      `json:"post_uuid"`
+	CommentUUID    *string     `json:"comment_uuid,omitempty"`
+	ActorName      string      `json:"actor_name"`
+	PostTitle      string      `json:"post_title"`
+	CommentPreview string      `json:"comment_preview"`
+	IsRead         bool        `json:"is_read"`
+	TargetKind     string      `json:"target_kind"`
+	MessageKey     string      `json:"message_key"`
+	MessageArgs    MessageArgs `json:"message_args"`
+	ReadAt         *time.Time  `json:"read_at,omitempty"`
+	CreatedAt      time.Time   `json:"created_at"`
+}
+
+type MessageArgs struct {
+	ActorName      string `json:"actor_name"`
+	PostTitle      string `json:"post_title"`
+	CommentPreview string `json:"comment_preview"`
 }
 
 type NotificationList struct {

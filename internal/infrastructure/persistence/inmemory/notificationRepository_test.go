@@ -60,3 +60,31 @@ func TestNotificationRepository_Save_DeduplicatesByEventID(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 }
+
+func TestNotificationRepository_MarkAllReadByRecipientUserID(t *testing.T) {
+	repo := NewNotificationRepository()
+
+	first := entity.NewNotification(100, 200, entity.NotificationTypePostCommented, 300, 0, "bob", "post-a", "comment-a")
+	second := entity.NewNotification(100, 201, entity.NotificationTypeMentioned, 301, 401, "carol", "post-b", "comment-b")
+	other := entity.NewNotification(101, 202, entity.NotificationTypeMentioned, 302, 402, "dave", "post-c", "comment-c")
+
+	_, err := repo.Save(context.Background(), first)
+	require.NoError(t, err)
+	_, err = repo.Save(context.Background(), second)
+	require.NoError(t, err)
+	_, err = repo.Save(context.Background(), other)
+	require.NoError(t, err)
+	require.NoError(t, repo.MarkRead(context.Background(), second.ID))
+
+	changed, err := repo.MarkAllReadByRecipientUserID(context.Background(), 100)
+	require.NoError(t, err)
+	assert.Equal(t, 1, changed)
+
+	count, err := repo.CountUnreadByRecipientUserID(context.Background(), 100)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	otherCount, err := repo.CountUnreadByRecipientUserID(context.Background(), 101)
+	require.NoError(t, err)
+	assert.Equal(t, 1, otherCount)
+}

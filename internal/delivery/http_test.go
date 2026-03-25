@@ -218,6 +218,7 @@ type fakeNotificationUseCase struct {
 	getMyNotifications     func(ctx context.Context, userID int64, limit int, cursor string) (*model.NotificationList, error)
 	getMyUnreadCount       func(ctx context.Context, userID int64) (int, error)
 	markMyNotificationRead func(ctx context.Context, userID int64, notificationUUID string) error
+	markAllMyRead          func(ctx context.Context, userID int64) error
 }
 
 func (f *fakeNotificationUseCase) GetMyNotifications(ctx context.Context, userID int64, limit int, cursor string) (*model.NotificationList, error) {
@@ -237,6 +238,13 @@ func (f *fakeNotificationUseCase) GetMyUnreadNotificationCount(ctx context.Conte
 func (f *fakeNotificationUseCase) MarkMyNotificationRead(ctx context.Context, userID int64, notificationUUID string) error {
 	if f.markMyNotificationRead != nil {
 		return f.markMyNotificationRead(ctx, userID, notificationUUID)
+	}
+	return nil
+}
+
+func (f *fakeNotificationUseCase) MarkAllMyNotificationsRead(ctx context.Context, userID int64) error {
+	if f.markAllMyRead != nil {
+		return f.markAllMyRead(ctx, userID)
 	}
 	return nil
 }
@@ -2927,6 +2935,14 @@ func TestHTTP_NotificationsList_Success(t *testing.T) {
 						ActorName:      "bob",
 						PostTitle:      "hello",
 						CommentPreview: "preview",
+						IsRead:         false,
+						TargetKind:     "comment",
+						MessageKey:     "notification.mentioned",
+						MessageArgs: model.NotificationMessageArgs{
+							ActorName:      "bob",
+							PostTitle:      "hello",
+							CommentPreview: "preview",
+						},
 					},
 				},
 				Limit:  2,
@@ -2941,6 +2957,10 @@ func TestHTTP_NotificationsList_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"type":"mentioned"`)
 	assert.Contains(t, rr.Body.String(), `"actor_name":"bob"`)
+	assert.Contains(t, rr.Body.String(), `"is_read":false`)
+	assert.Contains(t, rr.Body.String(), `"target_kind":"comment"`)
+	assert.Contains(t, rr.Body.String(), `"message_key":"notification.mentioned"`)
+	assert.Contains(t, rr.Body.String(), `"message_args":{"actor_name":"bob","post_title":"hello","comment_preview":"preview"}`)
 }
 
 func TestHTTP_NotificationsUnreadCount_Success(t *testing.T) {
@@ -2969,6 +2989,20 @@ func TestHTTP_NotificationsRead_Success(t *testing.T) {
 	handler := newTestHandlerWithNotifications(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{}, notifications)
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPatch, "/users/me/notifications/550e8400-e29b-41d4-a716-446655440094/read", nil, 7)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_NotificationsReadAll_Success(t *testing.T) {
+	notifications := &fakeNotificationUseCase{
+		markAllMyRead: func(ctx context.Context, userID int64) error {
+			assert.Equal(t, int64(7), userID)
+			return nil
+		},
+	}
+	handler := newTestHandlerWithNotifications(&fakeUserUseCase{}, &fakeAccountUseCase{}, &fakeBoardUseCase{}, &fakePostUseCase{}, &fakeCommentUseCase{}, &fakeReactionUseCase{}, &fakeAttachmentUseCase{}, notifications)
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPatch, "/users/me/notifications/read-all", nil, 7)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 }

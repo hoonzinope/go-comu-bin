@@ -19,8 +19,18 @@ type Notification struct {
 	ActorName      string
 	PostTitle      string
 	CommentPreview string
+	IsRead         bool
+	TargetKind     string
+	MessageKey     string
+	MessageArgs    NotificationMessageArgs
 	ReadAt         *time.Time
 	CreatedAt      time.Time
+}
+
+type NotificationMessageArgs struct {
+	ActorName      string
+	PostTitle      string
+	CommentPreview string
 }
 
 type NotificationList struct {

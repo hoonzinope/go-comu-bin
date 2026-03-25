@@ -97,6 +97,16 @@ func (s *Service) MarkMyNotificationRead(ctx context.Context, userID int64, noti
 	return nil
 }
 
+func (s *Service) MarkAllMyNotificationsRead(ctx context.Context, userID int64) error {
+	if err := s.ensureUserExists(ctx, userID); err != nil {
+		return err
+	}
+	if _, err := s.notificationRepository.MarkAllReadByRecipientUserID(ctx, userID); err != nil {
+		return customerror.WrapRepository("mark all notifications read by recipient user id", err)
+	}
+	return nil
+}
+
 func (s *Service) ensureUserExists(ctx context.Context, userID int64) error {
 	user, err := s.userRepository.SelectUserByID(ctx, userID)
 	if err != nil {
@@ -152,6 +162,10 @@ func (s *Service) notificationsFromEntities(ctx context.Context, items []*entity
 				commentUUID = &value
 			}
 		}
+		targetKind := "post"
+		if commentUUID != nil {
+			targetKind = "comment"
+		}
 		views = append(views, model.Notification{
 			UUID:           item.UUID,
 			Type:           model.NotificationType(item.Type),
@@ -161,9 +175,30 @@ func (s *Service) notificationsFromEntities(ctx context.Context, items []*entity
 			ActorName:      item.ActorNameSnapshot,
 			PostTitle:      item.PostTitleSnapshot,
 			CommentPreview: item.CommentPreviewSnapshot,
-			ReadAt:         item.ReadAt,
-			CreatedAt:      item.CreatedAt,
+			IsRead:         item.ReadAt != nil,
+			TargetKind:     targetKind,
+			MessageKey:     notificationMessageKey(item.Type),
+			MessageArgs: model.NotificationMessageArgs{
+				ActorName:      item.ActorNameSnapshot,
+				PostTitle:      item.PostTitleSnapshot,
+				CommentPreview: item.CommentPreviewSnapshot,
+			},
+			ReadAt:    item.ReadAt,
+			CreatedAt: item.CreatedAt,
 		})
 	}
 	return views, nil
+}
+
+func notificationMessageKey(notificationType entity.NotificationType) string {
+	switch notificationType {
+	case entity.NotificationTypePostCommented:
+		return "notification.post_commented"
+	case entity.NotificationTypeCommentReplied:
+		return "notification.comment_replied"
+	case entity.NotificationTypeMentioned:
+		return "notification.mentioned"
+	default:
+		return "notification.unknown"
+	}
 }

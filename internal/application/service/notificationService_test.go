@@ -37,6 +37,12 @@ func TestNotificationService_GetMyNotificationsAndMarkRead(t *testing.T) {
 	require.Len(t, list.Notifications, 1)
 	assert.Equal(t, model.NotificationTypeCommentReplied, list.Notifications[0].Type)
 	assert.Equal(t, "bob", list.Notifications[0].ActorName)
+	assert.False(t, list.Notifications[0].IsRead)
+	assert.Equal(t, "comment", list.Notifications[0].TargetKind)
+	assert.Equal(t, "notification.comment_replied", list.Notifications[0].MessageKey)
+	assert.Equal(t, "bob", list.Notifications[0].MessageArgs.ActorName)
+	assert.Equal(t, "hello", list.Notifications[0].MessageArgs.PostTitle)
+	assert.Equal(t, "reply", list.Notifications[0].MessageArgs.CommentPreview)
 
 	count, err := svc.GetMyUnreadNotificationCount(context.Background(), recipientID)
 	require.NoError(t, err)
@@ -52,6 +58,48 @@ func TestNotificationService_GetMyNotificationsAndMarkRead(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, stored)
 	require.NotNil(t, stored.ReadAt)
+}
+
+func TestNotificationService_MarkAllMyNotificationsRead(t *testing.T) {
+	repositories := newTestRepositories()
+	ownerID := seedUser(repositories.user, "alice", "pw", "user")
+	otherID := seedUser(repositories.user, "bob", "pw", "user")
+	postID := seedPost(repositories.post, otherID, seedBoard(repositories.board, "free", "desc"), "hello", "content")
+
+	_, err := repositories.notification.Save(context.Background(), entity.NewNotification(
+		ownerID,
+		otherID,
+		entity.NotificationTypePostCommented,
+		postID,
+		0,
+		"bob",
+		"hello",
+		"reply",
+	))
+	require.NoError(t, err)
+	_, err = repositories.notification.Save(context.Background(), entity.NewNotification(
+		otherID,
+		ownerID,
+		entity.NotificationTypeMentioned,
+		postID,
+		0,
+		"alice",
+		"hello",
+		"mention",
+	))
+	require.NoError(t, err)
+
+	svc := NewNotificationService(repositories.user, repositories.post, repositories.comment, repositories.notification)
+
+	require.NoError(t, svc.MarkAllMyNotificationsRead(context.Background(), ownerID))
+
+	ownerCount, err := svc.GetMyUnreadNotificationCount(context.Background(), ownerID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, ownerCount)
+
+	otherCount, err := svc.GetMyUnreadNotificationCount(context.Background(), otherID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, otherCount)
 }
 
 func TestNotificationService_MarkMyNotificationRead_RejectsForeignNotification(t *testing.T) {

@@ -160,6 +160,24 @@ func (r *NotificationRepository) MarkRead(ctx context.Context, id int64) error {
 	return r.markRead(id)
 }
 
+func (r *NotificationRepository) MarkAllReadByRecipientUserID(ctx context.Context, recipientUserID int64) (int, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	changed := 0
+	for _, item := range r.db.Data {
+		if item.RecipientUserID != recipientUserID || item.ReadAt != nil {
+			continue
+		}
+		item.MarkRead()
+		changed++
+	}
+	return changed, nil
+}
+
 func (r *NotificationRepository) markRead(id int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

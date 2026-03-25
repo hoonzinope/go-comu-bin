@@ -252,6 +252,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
 	v1.GET("/users/me/notifications", h.authGinMiddleware, h.handleMyNotificationsGet)
 	v1.GET("/users/me/notifications/unread-count", h.authGinMiddleware, h.handleMyNotificationsUnreadCountGet)
+	v1.PATCH("/users/me/notifications/read-all", h.authGinMiddleware, h.handleMyNotificationsReadAllPatch)
 	v1.PATCH("/users/me/notifications/:notificationUUID/read", h.authGinMiddleware, h.handleMyNotificationReadPatch)
 	v1.POST("/reports", h.authGinMiddleware, h.handleReportCreate)
 	v1.GET("/users/:userUUID/suspension", h.authGinMiddleware, h.adminGinMiddleware, h.handleUserSuspensionGet)
@@ -825,6 +826,28 @@ func (h *HTTPHandler) handleMyNotificationReadPatch(c *gin.Context) {
 		return
 	}
 	if err := h.notificationUseCase.MarkMyNotificationRead(c.Request.Context(), userID, notificationUUID); err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// handleMyNotificationsReadAllPatch godoc
+// @Summary Mark All My Notifications Read
+// @Description Marks all notifications as read for the authenticated user.
+// @Tags Notification
+// @Produce json
+// @Security BearerAuth
+// @Success 204
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/me/notifications/read-all [patch]
+func (h *HTTPHandler) handleMyNotificationsReadAllPatch(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.notificationUseCase.MarkAllMyNotificationsRead(c.Request.Context(), userID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}

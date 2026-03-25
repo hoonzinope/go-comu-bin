@@ -13,4 +13,5 @@ type NotificationRepository interface {
 	SelectByRecipientUserID(ctx context.Context, recipientUserID int64, limit int, lastID int64) ([]*entity.Notification, error)
 	CountUnreadByRecipientUserID(ctx context.Context, recipientUserID int64) (int, error)
 	MarkRead(ctx context.Context, id int64) error
+	MarkAllReadByRecipientUserID(ctx context.Context, recipientUserID int64) (int, error)
 }
