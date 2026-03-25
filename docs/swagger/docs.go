@@ -465,7 +465,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create or resend a one-time email verification token for the authenticated user.",
+                "description": "Create or resend a one-time email verification token for the authenticated user. The token is delivered through the configured mail sender with a frontend verification link.",
                 "consumes": [
                     "application/json"
                 ],
@@ -477,10 +477,13 @@ const docTemplate = `{
                 ],
                 "summary": "Request Email Verification",
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/delivery.signUpResponse"
+                            "$ref": "#/definitions/delivery.errorResponse"
                         }
                     },
                     "401": {
@@ -489,8 +492,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/delivery.errorResponse"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "429": {
+                        "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/delivery.errorResponse"
                         }

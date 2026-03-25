@@ -53,7 +53,10 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - guest가 아닌 사용자가 호출하면 `400 Bad Request`
 - `POST /api/v1/auth/email-verification/request` (인증 필요)
   - 현재 로그인 사용자 기준으로 email verification token을 새로 발급합니다.
-  - 이미 인증된 사용자도 동일한 성공 응답으로 처리합니다.
+  - 응답은 `204 No Content`입니다.
+  - 이미 인증된 사용자, guest, soft-deleted 사용자, email이 없는 사용자도 동일한 `204 no-op`로 처리합니다.
+  - 전용 rate limit이 `user_id` 기준으로 적용되며, 초과 시 `429 Too Many Requests`를 반환합니다.
+  - SMTP가 활성화된 환경에서는 frontend verification 페이지 링크와 fallback token이 함께 메일에 포함됩니다.
 - `POST /api/v1/auth/email-verification/confirm`
   - 요청 본문: `token`
   - token이 유효하면 사용자 email을 verified 상태로 전환합니다.

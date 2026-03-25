@@ -49,6 +49,28 @@ delivery:
       writeRequests: 60
     auth:
       secret: "replace-with-real-secret"
+      emailVerificationRequestRateLimit:
+        enabled: true
+        windowSeconds: 60
+        maxRequests: 5
+      passwordResetRequestRateLimit:
+        enabled: true
+        windowSeconds: 60
+        maxRequests: 5
+  mail:
+    enabled: false
+    emailVerification:
+      baseURL: "https://app.example.com/verify-email"
+    passwordReset:
+      baseURL: "https://app.example.com/reset-password"
+    smtp:
+      host: "smtp.example.com"
+      port: 587
+      username: ""
+      password: ""
+      from: "noreply@example.com"
+      startTLS: true
+      implicitTLS: false
 
 event:
   outbox:
@@ -79,6 +101,16 @@ jobs:
     pendingGracePeriodSeconds: 600
     activeUnusedGracePeriodSeconds: 86400
     batchSize: 50
+  emailVerificationCleanup:
+    enabled: true
+    intervalSeconds: 600
+    gracePeriodSeconds: 600
+    batchSize: 100
+  passwordResetCleanup:
+    enabled: true
+    intervalSeconds: 600
+    gracePeriodSeconds: 600
+    batchSize: 100
 ```
 
 ## 검증 규칙
@@ -92,6 +124,16 @@ jobs:
 - `delivery.http.auth.secret`: 필수(빈 값 불가)
 - `delivery.http.auth.secret`: placeholder 값 금지 (`commu-bin-secret-key`)
 - `delivery.http.auth.secret`: 최소 길이 `32`자 이상
+- `delivery.http.auth.emailVerificationRequestRateLimit.windowSeconds`: `enabled=true`일 때 `>= 1`
+- `delivery.http.auth.emailVerificationRequestRateLimit.maxRequests`: `enabled=true`일 때 `>= 1`
+- `delivery.http.auth.passwordResetRequestRateLimit.windowSeconds`: `enabled=true`일 때 `>= 1`
+- `delivery.http.auth.passwordResetRequestRateLimit.maxRequests`: `enabled=true`일 때 `>= 1`
+- `delivery.mail.emailVerification.baseURL`: `delivery.mail.enabled=true`일 때 필수
+- `delivery.mail.passwordReset.baseURL`: `delivery.mail.enabled=true`일 때 필수
+- `delivery.mail.smtp.host`: `delivery.mail.enabled=true`일 때 필수
+- `delivery.mail.smtp.port`: `delivery.mail.enabled=true`일 때 `1..65535`
+- `delivery.mail.smtp.from`: `delivery.mail.enabled=true`일 때 필수
+- `delivery.mail.smtp.startTLS`와 `delivery.mail.smtp.implicitTLS`: 동시에 `true` 불가
 - `event.outbox.workerCount`: `> 0`
 - `event.outbox.batchSize`: `> 0`
 - `event.outbox.pollIntervalMillis`: `> 0`
@@ -121,6 +163,9 @@ jobs:
 - `jobs.guestCleanup.pendingGracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
 - `jobs.guestCleanup.activeUnusedGracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
 - `jobs.guestCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
+- `jobs.emailVerificationCleanup.intervalSeconds`: `jobs.enabled=true` 이고 `jobs.emailVerificationCleanup.enabled=true`일 때 `> 0`
+- `jobs.emailVerificationCleanup.gracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.emailVerificationCleanup.enabled=true`일 때 `> 0`
+- `jobs.emailVerificationCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.emailVerificationCleanup.enabled=true`일 때 `> 0`
 - `jobs.passwordResetCleanup.intervalSeconds`: `jobs.enabled=true` 이고 `jobs.passwordResetCleanup.enabled=true`일 때 `> 0`
 - `jobs.passwordResetCleanup.gracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.passwordResetCleanup.enabled=true`일 때 `> 0`
 - `jobs.passwordResetCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.passwordResetCleanup.enabled=true`일 때 `> 0`
@@ -138,6 +183,10 @@ jobs:
   - 기본 HTTP 서버는 trusted proxy를 비활성화하므로, 별도 reverse proxy trust 구성이 없으면 `X-Forwarded-For` 같은 전달 헤더를 rate limit key에 사용하지 않습니다.
 - password reset request 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.*`
   - `enabled=true`일 때 `POST /api/v1/auth/password-reset/request`에 `password-reset-request:client_ip:normalized_email` 기준 제한을 추가 적용합니다.
+- email verification request 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.*`
+  - `enabled=true`일 때 `POST /api/v1/auth/email-verification/request`에 `email-verification-request:user:<userID>` 기준 제한을 추가 적용합니다.
+- email verification 메일 링크 base URL: `cmd/main.go` -> `cfg.Delivery.Mail.EmailVerification.BaseURL`
+  - `delivery.mail.enabled=true`이면 필수이며, 메일 본문에 `${baseURL}?token=...` 링크를 생성합니다.
 - password reset 메일 링크 base URL: `cmd/main.go` -> `cfg.Delivery.Mail.PasswordReset.BaseURL`
   - `delivery.mail.enabled=true`이면 필수이며, 메일 본문에 `${baseURL}?token=...` 링크를 생성합니다.
 - outbox relay 워커 수: `cmd/main.go` -> `cfg.Event.Outbox.WorkerCount`
@@ -163,6 +212,8 @@ jobs:
 - guest cleanup 주기/유예/배치 크기: `cfg.Jobs.GuestCleanup.*`
   - `pending`/`expired` guest는 `pendingGracePeriodSeconds` 기준으로 정리합니다.
   - 세션 없음 + 작성물 없음 상태의 `active guest`는 `activeUnusedGracePeriodSeconds` 기준으로 정리합니다.
+- email verification cleanup 주기/유예/배치 크기: `cfg.Jobs.EmailVerificationCleanup.*`
+  - `ConsumedAt <= now - gracePeriod` 또는 `ExpiresAt <= now - gracePeriod` 인 token을 background job이 삭제합니다.
 - password reset cleanup 주기/유예/배치 크기: `cfg.Jobs.PasswordResetCleanup.*`
   - `ConsumedAt <= now - gracePeriod` 또는 `ExpiresAt <= now - gracePeriod` 인 token을 background job이 삭제합니다.
 
