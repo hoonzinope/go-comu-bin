@@ -167,6 +167,28 @@ func (s *recordingGuestCleanupUseCase) CleanupGuests(ctx context.Context, now ti
 	return 0, nil
 }
 
+type stubPasswordResetCleanupUseCase struct{}
+
+func (s stubPasswordResetCleanupUseCase) CleanupPasswordResetTokens(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
+	return 0, nil
+}
+
+type recordingPasswordResetCleanupUseCase struct {
+	lastCtx context.Context
+	called  chan struct{}
+}
+
+func (s *recordingPasswordResetCleanupUseCase) CleanupPasswordResetTokens(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
+	s.lastCtx = ctx
+	if s.called != nil {
+		select {
+		case s.called <- struct{}{}:
+		default:
+		}
+	}
+	return 0, nil
+}
+
 func TestMainHelpers(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Delivery.HTTP.Port = 18577
@@ -208,7 +230,7 @@ func TestStartBackgroundJobs_ReturnsNilWhenDisabled(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Jobs.Enabled = false
 
-	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{})
+	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 }
 
@@ -217,7 +239,7 @@ func TestStartBackgroundJobs_ReturnsNilWhenCleanupJobDisabled(t *testing.T) {
 	cfg.Jobs.Enabled = true
 	cfg.Jobs.AttachmentCleanup.Enabled = false
 
-	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{})
+	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 }
 
@@ -233,7 +255,7 @@ func TestStartBackgroundJobs_PassesParentContextToCleanupUseCase(t *testing.T) {
 	defer cancel()
 	recorder := &recordingAttachmentCleanupUseCase{called: make(chan struct{}, 1)}
 
-	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, recorder, stubGuestCleanupUseCase{})
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, recorder, stubGuestCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 
 	select {
@@ -260,13 +282,40 @@ func TestStartBackgroundJobs_PassesParentContextToGuestCleanupUseCase(t *testing
 	defer cancel()
 	recorder := &recordingGuestCleanupUseCase{called: make(chan struct{}, 1)}
 
-	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, recorder)
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, recorder, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 
 	select {
 	case <-recorder.called:
 	case <-time.After(1500 * time.Millisecond):
 		t.Fatal("guest cleanup job was not triggered")
+	}
+
+	require.NotNil(t, recorder.lastCtx)
+	assert.Same(t, parentCtx, recorder.lastCtx)
+}
+
+func TestStartBackgroundJobs_PassesParentContextToPasswordResetCleanupUseCase(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Jobs.Enabled = true
+	cfg.Jobs.AttachmentCleanup.Enabled = false
+	cfg.Jobs.GuestCleanup.Enabled = false
+	cfg.Jobs.PasswordResetCleanup.Enabled = true
+	cfg.Jobs.PasswordResetCleanup.IntervalSeconds = 1
+	cfg.Jobs.PasswordResetCleanup.GracePeriodSeconds = 60
+	cfg.Jobs.PasswordResetCleanup.BatchSize = 5
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	recorder := &recordingPasswordResetCleanupUseCase{called: make(chan struct{}, 1)}
+
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, recorder)
+	require.NoError(t, err)
+
+	select {
+	case <-recorder.called:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("password reset cleanup job was not triggered")
 	}
 
 	require.NotNil(t, recorder.lastCtx)

@@ -12,6 +12,7 @@ type PasswordResetTokenRepository interface {
 	SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.PasswordResetToken, error)
 	InvalidateByUser(ctx context.Context, userID int64) error
 	Update(ctx context.Context, token *entity.PasswordResetToken) error
+	DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error)
 }
 
 type PasswordResetTokenIssuer interface {

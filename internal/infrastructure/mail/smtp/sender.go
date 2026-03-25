@@ -6,6 +6,7 @@ import (
 	"fmt"
 	netmail "net/mail"
 	netsmtp "net/smtp"
+	"net/url"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ type Sender struct {
 	from        string
 	startTLS    bool
 	implicitTLS bool
+	passwordResetBaseURL string
 	sendMail    func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error
 	dialTLS     func(network, addr string, tlsConfig *tls.Config) (*tls.Conn, error)
 }
@@ -37,13 +39,24 @@ func NewSender(cfg config.Config) *Sender {
 		from:        strings.TrimSpace(cfg.Delivery.Mail.SMTP.From),
 		startTLS:    cfg.Delivery.Mail.SMTP.StartTLS,
 		implicitTLS: cfg.Delivery.Mail.SMTP.ImplicitTLS,
+		passwordResetBaseURL: strings.TrimSpace(cfg.Delivery.Mail.PasswordReset.BaseURL),
 		sendMail:    netsmtp.SendMail,
 		dialTLS:     tls.Dial,
 	}
 }
 
 func (s *Sender) SendPasswordReset(ctx context.Context, email, token string, expiresAt time.Time) error {
-	return s.send(ctx, email, "Password reset", fmt.Sprintf("Use this password reset token before %s:\n\n%s\n", expiresAt.UTC().Format(time.RFC3339), token))
+	resetURL := s.passwordResetBaseURL
+	if resetURL != "" {
+		resetURL += "?token=" + url.QueryEscape(token)
+	}
+	body := fmt.Sprintf(
+		"Use the following password reset link before %s:\n\n%s\n\nIf needed, you can also enter this token manually:\n\n%s\n",
+		expiresAt.UTC().Format(time.RFC3339),
+		resetURL,
+		token,
+	)
+	return s.send(ctx, email, "Password reset", body)
 }
 
 func (s *Sender) SendEmailVerification(ctx context.Context, email, token string, expiresAt time.Time) error {

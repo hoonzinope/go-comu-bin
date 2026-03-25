@@ -968,6 +968,14 @@ func (r passwordResetTokenTxRepository) Update(ctx context.Context, token *entit
 	return r.repo.update(token)
 }
 
+func (r passwordResetTokenTxRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.deleteExpiredOrConsumedBefore(cutoff, limit), nil
+}
+
 func (r outboxTxAppender) Append(messages ...port.OutboxMessage) error {
 	if r.beforeWrite != nil {
 		r.beforeWrite()

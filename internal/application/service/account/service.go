@@ -300,10 +300,15 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 		}
 		return nil
 	})
-	if err != nil || rawToken == "" {
+	if err != nil {
+		return err
+	}
+	if rawToken == "" {
+		s.logPasswordResetRequest(email, "ignored_unknown_or_ineligible")
 		return err
 	}
 	if err := s.resetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
+		s.logPasswordResetRequest(email, "mail_failed")
 		rollbackErr := s.invalidatePasswordResetTokens(ctx, userID)
 		if rollbackErr != nil {
 			return errors.Join(
@@ -313,6 +318,7 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 		}
 		return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
 	}
+	s.logPasswordResetRequest(email, "issued")
 	return nil
 }
 
@@ -330,6 +336,7 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 		return customerror.WrapRepository("select password reset token before confirm", err)
 	}
 	if existingReset == nil {
+		s.logPasswordResetConfirm(0, "invalid_token")
 		return customerror.ErrInvalidToken
 	}
 	userID := existingReset.UserID
@@ -391,6 +398,15 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 		}
 		return nil
 	})
+	if err != nil {
+		if errors.Is(err, customerror.ErrInvalidToken) {
+			s.logPasswordResetConfirm(userID, "invalid_token")
+		} else if errors.Is(err, customerror.ErrRepositoryFailure) {
+			s.logPasswordResetConfirm(userID, "session_invalidation_failed")
+		}
+		return err
+	}
+	s.logPasswordResetConfirm(userID, "confirmed")
 	return err
 }
 
@@ -526,4 +542,30 @@ func hashEmailVerificationToken(token string) string {
 
 func normalizeAccountEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func (s *AccountService) logPasswordResetRequest(email, outcome string) {
+	if s == nil || s.logger == nil {
+		return
+	}
+	s.logger.Info(
+		"password reset request",
+		"event", "password_reset_request",
+		"outcome", outcome,
+		"email_sha256", hashResetToken(normalizeAccountEmail(email)),
+	)
+}
+
+func (s *AccountService) logPasswordResetConfirm(userID int64, outcome string) {
+	if s == nil || s.logger == nil {
+		return
+	}
+	attrs := []any{
+		"event", "password_reset_confirm",
+		"outcome", outcome,
+	}
+	if userID > 0 {
+		attrs = append(attrs, "user_id", userID)
+	}
+	s.logger.Info("password reset confirm", attrs...)
 }

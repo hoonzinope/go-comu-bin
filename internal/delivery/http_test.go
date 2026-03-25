@@ -747,6 +747,9 @@ func newTestHandlerWithRateLimit(
 		RateLimitWindowSecond: windowSeconds,
 		RateLimitReadRequest:  readRequests,
 		RateLimitWriteRequest: writeRequests,
+		PasswordResetRateLimitEnabled:      true,
+		PasswordResetRateLimitWindowSecond: windowSeconds,
+		PasswordResetRateLimitMaxRequests:  1,
 	}).Handler
 }
 
@@ -1907,6 +1910,105 @@ func TestHTTP_PasswordResetRequest_BadRequest_WhenEmailInvalid(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.JSONEq(t, `{"error":"invalid email"}`, rr.Body.String())
+}
+
+func TestHTTP_PasswordResetRequest_RateLimitedByIPAndEmail(t *testing.T) {
+	callCount := 0
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{
+			requestPasswordReset: func(ctx context.Context, email string) error {
+				callCount++
+				return nil
+			},
+		},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		false,
+		60,
+		300,
+		60,
+	)
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "alice@example.com",
+	})
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	rr = doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "alice@example.com",
+	})
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+	assert.Equal(t, 1, callCount)
+}
+
+func TestHTTP_PasswordResetRequest_RateLimitUsesSeparateBucketPerEmail(t *testing.T) {
+	callCount := 0
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{
+			requestPasswordReset: func(ctx context.Context, email string) error {
+				callCount++
+				return nil
+			},
+		},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		false,
+		60,
+		300,
+		60,
+	)
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "alice@example.com",
+	})
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	rr = doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "bob@example.com",
+	})
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, 2, callCount)
+}
+
+func TestHTTP_PasswordResetRequest_RateLimitCountsUnknownEmail(t *testing.T) {
+	callCount := 0
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{
+			requestPasswordReset: func(ctx context.Context, email string) error {
+				callCount++
+				return nil
+			},
+		},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		false,
+		60,
+		300,
+		60,
+	)
+
+	rr := doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "missing@example.com",
+	})
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	rr = doJSONRequest(t, handler, http.MethodPost, "/auth/password-reset/request", map[string]any{
+		"email": "missing@example.com",
+	})
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+	assert.Equal(t, 1, callCount)
 }
 
 func TestHTTP_PasswordResetConfirm_NoContent(t *testing.T) {

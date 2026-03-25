@@ -151,7 +151,8 @@ func main() {
 	passwordResetIssuer := auth.NewPasswordResetTokenIssuer()
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	guestCleanupUseCase := service.NewGuestCleanupService(userRepository, postRepository, commentRepository, reactionRepository, reportRepository, sessionRepository, unitOfWork)
-	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase, guestCleanupUseCase); err != nil {
+	passwordResetCleanupUseCase := service.NewPasswordResetCleanupService(passwordResetRepository)
+	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase, guestCleanupUseCase, passwordResetCleanupUseCase); err != nil {
 		slog.Error("failed to start background jobs", "error", err)
 		os.Exit(1)
 	}
@@ -195,6 +196,9 @@ func main() {
 		RateLimitWindowSecond:    cfg.Delivery.HTTP.RateLimit.WindowSeconds,
 		RateLimitReadRequest:     cfg.Delivery.HTTP.RateLimit.ReadRequests,
 		RateLimitWriteRequest:    cfg.Delivery.HTTP.RateLimit.WriteRequests,
+		PasswordResetRateLimitEnabled:      cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.Enabled,
+		PasswordResetRateLimitWindowSecond: cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.WindowSeconds,
+		PasswordResetRateLimitMaxRequests:  cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.MaxRequests,
 		Logger:                   appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)
@@ -392,7 +396,7 @@ func newFileStorage(cfg *config.Config) (port.FileStorage, error) {
 	}
 }
 
-func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase, guestCleanupUseCase port.GuestCleanupUseCase) error {
+func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase, guestCleanupUseCase port.GuestCleanupUseCase, passwordResetCleanupUseCase port.PasswordResetCleanupUseCase) error {
 	if !cfg.Jobs.Enabled {
 		return nil
 	}
@@ -425,6 +429,24 @@ func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.C
 					return nil
 				}
 				_, err := guestCleanupUseCase.CleanupGuests(ctx, time.Now(), pendingGrace, activeUnusedGrace, batchSize)
+				return err
+			},
+		}); err != nil {
+			return err
+		}
+	}
+	if cfg.Jobs.PasswordResetCleanup.Enabled {
+		interval := time.Duration(cfg.Jobs.PasswordResetCleanup.IntervalSeconds) * time.Second
+		gracePeriod := time.Duration(cfg.Jobs.PasswordResetCleanup.GracePeriodSeconds) * time.Second
+		batchSize := cfg.Jobs.PasswordResetCleanup.BatchSize
+		if err := runner.Register(jobrunner.Job{
+			Name:     "password-reset-cleanup",
+			Interval: interval,
+			Run: func(ctx context.Context) error {
+				if passwordResetCleanupUseCase == nil {
+					return nil
+				}
+				_, err := passwordResetCleanupUseCase.CleanupPasswordResetTokens(ctx, time.Now(), gracePeriod, batchSize)
 				return err
 			},
 		}); err != nil {

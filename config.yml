@@ -30,8 +30,14 @@ delivery:
       writeRequests: 60
     auth:
       secret: ""
+      passwordResetRequestRateLimit:
+        enabled: true
+        windowSeconds: 60
+        maxRequests: 5
   mail:
     enabled: false
+    passwordReset:
+      baseURL: "https://app.example.com/reset-password"
     smtp:
       host: ""
       port: 587
@@ -64,3 +70,14 @@ jobs:
     intervalSeconds: 600
     gracePeriodSeconds: 600
     batchSize: 50
+  guestCleanup:
+    enabled: true
+    intervalSeconds: 600
+    pendingGracePeriodSeconds: 600
+    activeUnusedGracePeriodSeconds: 86400
+    batchSize: 50
+  passwordResetCleanup:
+    enabled: true
+    intervalSeconds: 600
+    gracePeriodSeconds: 600
+    batchSize: 100

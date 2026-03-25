@@ -62,10 +62,18 @@ type Config struct {
 			} `yaml:"rateLimit"`
 			Auth struct {
 				Secret string `yaml:"secret"`
+				PasswordResetRequestRateLimit struct {
+					Enabled       bool `yaml:"enabled"`
+					WindowSeconds int  `yaml:"windowSeconds"`
+					MaxRequests   int  `yaml:"maxRequests"`
+				} `yaml:"passwordResetRequestRateLimit"`
 			} `yaml:"auth"`
 		} `yaml:"http"`
 		Mail struct {
 			Enabled bool `yaml:"enabled"`
+			PasswordReset struct {
+				BaseURL string `yaml:"baseURL"`
+			} `yaml:"passwordReset"`
 			SMTP    struct {
 				Host        string `yaml:"host"`
 				Port        int    `yaml:"port"`
@@ -103,6 +111,12 @@ type Config struct {
 			ActiveUnusedGracePeriodSeconds int  `yaml:"activeUnusedGracePeriodSeconds"`
 			BatchSize                      int  `yaml:"batchSize"`
 		} `yaml:"guestCleanup"`
+		PasswordResetCleanup struct {
+			Enabled            bool `yaml:"enabled"`
+			IntervalSeconds    int  `yaml:"intervalSeconds"`
+			GracePeriodSeconds int  `yaml:"gracePeriodSeconds"`
+			BatchSize          int  `yaml:"batchSize"`
+		} `yaml:"passwordResetCleanup"`
 	} `yaml:"jobs"`
 }
 
@@ -137,7 +151,11 @@ func Load() (*Config, error) {
 		"delivery.http.rateLimit.readRequests",
 		"delivery.http.rateLimit.writeRequests",
 		"delivery.http.auth.secret",
+		"delivery.http.auth.passwordResetRequestRateLimit.enabled",
+		"delivery.http.auth.passwordResetRequestRateLimit.windowSeconds",
+		"delivery.http.auth.passwordResetRequestRateLimit.maxRequests",
 		"delivery.mail.enabled",
+		"delivery.mail.passwordReset.baseURL",
 		"delivery.mail.smtp.host",
 		"delivery.mail.smtp.port",
 		"delivery.mail.smtp.username",
@@ -162,6 +180,10 @@ func Load() (*Config, error) {
 		"jobs.guestCleanup.pendingGracePeriodSeconds",
 		"jobs.guestCleanup.activeUnusedGracePeriodSeconds",
 		"jobs.guestCleanup.batchSize",
+		"jobs.passwordResetCleanup.enabled",
+		"jobs.passwordResetCleanup.intervalSeconds",
+		"jobs.passwordResetCleanup.gracePeriodSeconds",
+		"jobs.passwordResetCleanup.batchSize",
 	)
 
 	if err := v.ReadInConfig(); err != nil {
@@ -195,6 +217,9 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("delivery.http.rateLimit.windowSeconds", 60)
 	v.SetDefault("delivery.http.rateLimit.readRequests", 300)
 	v.SetDefault("delivery.http.rateLimit.writeRequests", 60)
+	v.SetDefault("delivery.http.auth.passwordResetRequestRateLimit.enabled", true)
+	v.SetDefault("delivery.http.auth.passwordResetRequestRateLimit.windowSeconds", 60)
+	v.SetDefault("delivery.http.auth.passwordResetRequestRateLimit.maxRequests", 5)
 	v.SetDefault("delivery.mail.enabled", false)
 	v.SetDefault("delivery.mail.smtp.port", 587)
 	v.SetDefault("event.outbox.workerCount", 1)
@@ -214,6 +239,10 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("jobs.guestCleanup.pendingGracePeriodSeconds", 600)
 	v.SetDefault("jobs.guestCleanup.activeUnusedGracePeriodSeconds", 86400)
 	v.SetDefault("jobs.guestCleanup.batchSize", 50)
+	v.SetDefault("jobs.passwordResetCleanup.enabled", true)
+	v.SetDefault("jobs.passwordResetCleanup.intervalSeconds", 600)
+	v.SetDefault("jobs.passwordResetCleanup.gracePeriodSeconds", 600)
+	v.SetDefault("jobs.passwordResetCleanup.batchSize", 100)
 
 	cfg := &Config{}
 	if err := v.UnmarshalExact(cfg); err != nil {
@@ -274,7 +303,26 @@ func validate(cfg *Config) error {
 	if len(secret) < minJWTSecretLength {
 		return fmt.Errorf("invalid delivery.http.auth.secret: must be at least %d characters", minJWTSecretLength)
 	}
+	if cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.Enabled {
+		if cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.WindowSeconds < minRateLimitWindowSeconds {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.passwordResetRequestRateLimit.windowSeconds: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.WindowSeconds,
+				minRateLimitWindowSeconds,
+			)
+		}
+		if cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.MaxRequests < minRateLimitWriteRequests {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.passwordResetRequestRateLimit.maxRequests: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.MaxRequests,
+				minRateLimitWriteRequests,
+			)
+		}
+	}
 	if cfg.Delivery.Mail.Enabled {
+		if strings.TrimSpace(cfg.Delivery.Mail.PasswordReset.BaseURL) == "" {
+			return fmt.Errorf("invalid delivery.mail.passwordReset.baseURL: cannot be empty when mail is enabled")
+		}
 		if strings.TrimSpace(cfg.Delivery.Mail.SMTP.Host) == "" {
 			return fmt.Errorf("invalid delivery.mail.smtp.host: cannot be empty when mail is enabled")
 		}
@@ -372,6 +420,17 @@ func validate(cfg *Config) error {
 		}
 		if cfg.Jobs.GuestCleanup.BatchSize <= 0 {
 			return fmt.Errorf("invalid jobs.guestCleanup.batchSize: %d (must be > 0)", cfg.Jobs.GuestCleanup.BatchSize)
+		}
+	}
+	if cfg.Jobs.Enabled && cfg.Jobs.PasswordResetCleanup.Enabled {
+		if cfg.Jobs.PasswordResetCleanup.IntervalSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.passwordResetCleanup.intervalSeconds: %d (must be > 0)", cfg.Jobs.PasswordResetCleanup.IntervalSeconds)
+		}
+		if cfg.Jobs.PasswordResetCleanup.GracePeriodSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.passwordResetCleanup.gracePeriodSeconds: %d (must be > 0)", cfg.Jobs.PasswordResetCleanup.GracePeriodSeconds)
+		}
+		if cfg.Jobs.PasswordResetCleanup.BatchSize <= 0 {
+			return fmt.Errorf("invalid jobs.passwordResetCleanup.batchSize: %d (must be > 0)", cfg.Jobs.PasswordResetCleanup.BatchSize)
 		}
 	}
 	if cfg.Admin.Bootstrap.Enabled {

@@ -39,3 +39,44 @@ func TestPasswordResetTokenRepository_SaveSelectInvalidateAndUpdate(t *testing.T
 	require.NotNil(t, updated)
 	assert.True(t, updated.IsConsumed())
 }
+
+func TestPasswordResetTokenRepository_DeleteExpiredOrConsumedBefore(t *testing.T) {
+	repo := NewPasswordResetTokenRepository()
+	expired := entity.NewPasswordResetToken(1, "expired", time.Now().Add(-2*time.Hour))
+	consumed := entity.NewPasswordResetToken(1, "consumed", time.Now().Add(time.Hour))
+	consumedAt := time.Now().Add(-2 * time.Hour)
+	consumed.ConsumedAt = &consumedAt
+	fresh := entity.NewPasswordResetToken(1, "fresh", time.Now().Add(time.Hour))
+
+	require.NoError(t, repo.Save(context.Background(), expired))
+	require.NoError(t, repo.Save(context.Background(), consumed))
+	require.NoError(t, repo.Save(context.Background(), fresh))
+
+	deleted, err := repo.DeleteExpiredOrConsumedBefore(context.Background(), time.Now().Add(-time.Hour), 10)
+	require.NoError(t, err)
+	assert.Equal(t, 2, deleted)
+
+	item, err := repo.SelectByTokenHash(context.Background(), "expired")
+	require.NoError(t, err)
+	assert.Nil(t, item)
+
+	item, err = repo.SelectByTokenHash(context.Background(), "consumed")
+	require.NoError(t, err)
+	assert.Nil(t, item)
+
+	item, err = repo.SelectByTokenHash(context.Background(), "fresh")
+	require.NoError(t, err)
+	require.NotNil(t, item)
+}
+
+func TestPasswordResetTokenRepository_DeleteExpiredOrConsumedBefore_RespectsLimit(t *testing.T) {
+	repo := NewPasswordResetTokenRepository()
+	for i := 0; i < 3; i++ {
+		token := entity.NewPasswordResetToken(1, string(rune('a'+i)), time.Now().Add(-2*time.Hour))
+		require.NoError(t, repo.Save(context.Background(), token))
+	}
+
+	deleted, err := repo.DeleteExpiredOrConsumedBefore(context.Background(), time.Now().Add(-time.Hour), 2)
+	require.NoError(t, err)
+	assert.Equal(t, 2, deleted)
+}

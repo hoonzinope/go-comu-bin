@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -789,4 +790,100 @@ func TestAccountService_ConfirmPasswordReset_RollsBackWhenSessionInvalidationFai
 	require.NoError(t, err)
 	require.NotNil(t, savedToken)
 	assert.False(t, savedToken.IsConsumed())
+}
+
+func TestAccountService_RequestPasswordReset_LogsAuditOutcome(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	require.NoError(t, svc.RequestPasswordReset(context.Background(), "alice@example.com"))
+	assert.Contains(t, logBuf.String(), `"event":"password_reset_request"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"issued"`)
+	assert.NotContains(t, logBuf.String(), "alice@example.com")
+}
+
+func TestAccountService_RequestPasswordReset_LogsIgnoredUnknownOrIneligible(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	require.NoError(t, svc.RequestPasswordReset(context.Background(), "missing@example.com"))
+	assert.Contains(t, logBuf.String(), `"event":"password_reset_request"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"ignored_unknown_or_ineligible"`)
+}
+
+func TestAccountService_ConfirmPasswordReset_LogsInvalidToken(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	err := svc.ConfirmPasswordReset(context.Background(), "missing-token", "newpw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInvalidToken)
+	assert.Contains(t, logBuf.String(), `"event":"password_reset_confirm"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"invalid_token"`)
 }

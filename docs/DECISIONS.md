@@ -46,6 +46,54 @@
 - internal/...
 ```
 
+## 2026-03-25 - password reset v2는 FE 링크 메일 + IP/email rate limit + cleanup job/audit log로 강화한다
+
+상태
+
+- decided
+
+배경
+
+- password reset v1은 token 발급/확인과 전체 세션 무효화까지는 닫았지만, 실제 메일 UX는 raw token 전달 수준에 머물러 있다.
+- 현재 `/api/v1` 전역 rate limit만으로는 password reset request 엔드포인트의 타깃성 abuse를 별도로 제어하기 어렵다.
+- reset token 저장소에는 만료/소비 토큰 정리와 운영 추적을 위한 cleanup/audit 규약이 아직 없다.
+
+관찰
+
+- SMTP sender는 현재 token 평문을 메일 본문에 직접 넣는다.
+- HTTP는 이미 공통 `RateLimiter` 포트와 `429 Too Many Requests` 공개 에러 규약을 사용한다.
+- background job runner는 attachment/guest cleanup에 이미 사용 중이며, 같은 패턴으로 token cleanup을 등록할 수 있다.
+- account service는 `slog` logger를 보유하고 있어 별도 audit 저장소 없이 구조화 로그를 남길 수 있다.
+
+결론
+
+- password reset 메일은 frontend reset 페이지 링크를 사용한다.
+- 새 설정값 `delivery.mail.passwordReset.baseURL`을 도입하고, 링크 형식은 `${baseURL}?token=<urlqueryescaped token>`으로 고정한다.
+- 메일 본문에는 reset 링크, 만료 시각, fallback raw token을 함께 포함한다.
+- `POST /api/v1/auth/password-reset/request`에는 전용 rate limit을 추가한다.
+- 전용 key는 `password-reset-request:<client-ip>:<normalized-email>`로 고정하고, 존재하지 않는 email도 동일하게 카운트한다.
+- 제한 초과 시 공개 응답은 `429 Too Many Requests`를 사용한다.
+- password reset token 저장소에는 cleanup 연산을 추가하고, cleanup 대상은 다음으로 고정한다.
+  - `ConsumedAt != nil && ConsumedAt <= now - gracePeriod`
+  - `ExpiresAt <= now - gracePeriod`
+- cleanup은 background job `password-reset-cleanup`으로 수행한다.
+- structured audit log는 account service에서 남기고, raw token/plain email/new password는 로그에 남기지 않는다.
+- 별도 audit 저장소와 email verification cleanup은 이번 범위에서 제외한다.
+
+후속 작업
+
+- config, SMTP sender, HTTP handler, token repository, background job wiring 반영
+- account service audit log 및 cleanup use case 추가
+- 테스트, Swagger, API/CONFIG/ARCHITECTURE/ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/CONFIG.md`
+- `internal/application/service/account/service.go`
+- `internal/infrastructure/mail/smtp/sender.go`
+
 ## 2026-03-20 - application service 비대화를 내부 협력 객체로 분해한다
 
 상태

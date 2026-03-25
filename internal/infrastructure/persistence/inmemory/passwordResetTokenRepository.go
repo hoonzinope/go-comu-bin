@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -97,6 +98,48 @@ func (r *PasswordResetTokenRepository) update(token *entity.PasswordResetToken) 
 	defer r.mu.Unlock()
 	r.tokens[token.TokenHash] = clonePasswordResetToken(token)
 	return nil
+}
+
+func (r *PasswordResetTokenRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.deleteExpiredOrConsumedBefore(cutoff, limit), nil
+}
+
+func (r *PasswordResetTokenRepository) deleteExpiredOrConsumedBefore(cutoff time.Time, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	type candidate struct {
+		tokenHash  string
+		eligibleAt time.Time
+	}
+	candidates := make([]candidate, 0)
+	for key, token := range r.tokens {
+		switch {
+		case token.ConsumedAt != nil && !token.ConsumedAt.After(cutoff):
+			candidates = append(candidates, candidate{tokenHash: key, eligibleAt: *token.ConsumedAt})
+		case !token.ExpiresAt.After(cutoff):
+			candidates = append(candidates, candidate{tokenHash: key, eligibleAt: token.ExpiresAt})
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].eligibleAt.Equal(candidates[j].eligibleAt) {
+			return candidates[i].tokenHash < candidates[j].tokenHash
+		}
+		return candidates[i].eligibleAt.Before(candidates[j].eligibleAt)
+	})
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	for _, item := range candidates {
+		delete(r.tokens, item.tokenHash)
+	}
+	return len(candidates)
 }
 
 func (r *PasswordResetTokenRepository) snapshot() passwordResetTokenRepositoryState {

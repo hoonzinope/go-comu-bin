@@ -67,7 +67,9 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 요청 본문: `email`
   - email 형식 오류만 `400 Bad Request`로 처리합니다.
   - 존재하지 않는 email, guest 계정, soft-deleted 계정 여부는 동일한 성공 응답으로 숨깁니다.
+  - 전용 rate limit이 `client_ip + normalized_email` 기준으로 적용되며, 초과 시 `429 Too Many Requests`를 반환합니다.
   - reset token은 API 응답에 포함하지 않고 mail sender 경로로만 전달합니다.
+  - SMTP가 활성화된 환경에서는 frontend reset 페이지 링크와 fallback token이 함께 메일에 포함됩니다.
 - `POST /api/v1/auth/password-reset/confirm`
   - 요청 본문: `token`, `new_password`
   - token이 유효하면 비밀번호를 변경하고 기존 활성 세션을 모두 무효화합니다.

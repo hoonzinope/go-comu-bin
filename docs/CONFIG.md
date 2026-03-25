@@ -121,6 +121,9 @@ jobs:
 - `jobs.guestCleanup.pendingGracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
 - `jobs.guestCleanup.activeUnusedGracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
 - `jobs.guestCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.guestCleanup.enabled=true`일 때 `> 0`
+- `jobs.passwordResetCleanup.intervalSeconds`: `jobs.enabled=true` 이고 `jobs.passwordResetCleanup.enabled=true`일 때 `> 0`
+- `jobs.passwordResetCleanup.gracePeriodSeconds`: `jobs.enabled=true` 이고 `jobs.passwordResetCleanup.enabled=true`일 때 `> 0`
+- `jobs.passwordResetCleanup.batchSize`: `jobs.enabled=true` 이고 `jobs.passwordResetCleanup.enabled=true`일 때 `> 0`
 - 알 수 없는 키는 실패 처리 (`UnmarshalExact`)
   - 예: `delivery.http.prt` 오타는 서버 시작 실패
 
@@ -133,6 +136,10 @@ jobs:
 - HTTP read/write 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
   - `enabled=true`일 때 `/api/v1` 하위 `GET/HEAD/OPTIONS` 요청은 `readRequests`, `POST/PUT/DELETE/PATCH` 요청은 `writeRequests`를 `method+route+client_ip` 기준으로 적용합니다.
   - 기본 HTTP 서버는 trusted proxy를 비활성화하므로, 별도 reverse proxy trust 구성이 없으면 `X-Forwarded-For` 같은 전달 헤더를 rate limit key에 사용하지 않습니다.
+- password reset request 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.*`
+  - `enabled=true`일 때 `POST /api/v1/auth/password-reset/request`에 `password-reset-request:client_ip:normalized_email` 기준 제한을 추가 적용합니다.
+- password reset 메일 링크 base URL: `cmd/main.go` -> `cfg.Delivery.Mail.PasswordReset.BaseURL`
+  - `delivery.mail.enabled=true`이면 필수이며, 메일 본문에 `${baseURL}?token=...` 링크를 생성합니다.
 - outbox relay 워커 수: `cmd/main.go` -> `cfg.Event.Outbox.WorkerCount`
 - outbox relay 배치 크기: `cmd/main.go` -> `cfg.Event.Outbox.BatchSize`
 - outbox relay polling 주기(ms): `cmd/main.go` -> `cfg.Event.Outbox.PollIntervalMillis`
@@ -156,6 +163,8 @@ jobs:
 - guest cleanup 주기/유예/배치 크기: `cfg.Jobs.GuestCleanup.*`
   - `pending`/`expired` guest는 `pendingGracePeriodSeconds` 기준으로 정리합니다.
   - 세션 없음 + 작성물 없음 상태의 `active guest`는 `activeUnusedGracePeriodSeconds` 기준으로 정리합니다.
+- password reset cleanup 주기/유예/배치 크기: `cfg.Jobs.PasswordResetCleanup.*`
+  - `ConsumedAt <= now - gracePeriod` 또는 `ExpiresAt <= now - gracePeriod` 인 token을 background job이 삭제합니다.
 
 ## 운영 메모
 

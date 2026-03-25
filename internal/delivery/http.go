@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ const defaultPageLimit = 10
 const defaultRateLimitWindow = 60 * time.Second
 const defaultRateLimitReadRequests = 300
 const defaultRateLimitWriteRequests = 60
+const defaultPasswordResetRateLimitMaxRequests = 5
 const maxPageLimit = 1000
 const httpLoggerContextKey = "http_logger"
 
@@ -54,6 +56,9 @@ type HTTPHandler struct {
 	rateLimitWindow          time.Duration
 	rateLimitReadRequests    int
 	rateLimitWriteRequests   int
+	passwordResetRateLimitEnabled     bool
+	passwordResetRateLimitWindow      time.Duration
+	passwordResetRateLimitMaxRequests int
 	logger                   *slog.Logger
 	authGinMiddleware        gin.HandlerFunc
 	adminGinMiddleware       gin.HandlerFunc
@@ -80,6 +85,9 @@ type HTTPDependencies struct {
 	RateLimitWindowSecond    int
 	RateLimitReadRequest     int
 	RateLimitWriteRequest    int
+	PasswordResetRateLimitEnabled      bool
+	PasswordResetRateLimitWindowSecond int
+	PasswordResetRateLimitMaxRequests  int
 	Logger                   *slog.Logger
 }
 
@@ -109,6 +117,9 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		rateLimitWindow:          resolveRateLimitWindow(deps.RateLimitWindowSecond),
 		rateLimitReadRequests:    resolveRateLimitReadRequests(deps.RateLimitReadRequest),
 		rateLimitWriteRequests:   resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
+		passwordResetRateLimitEnabled:     deps.PasswordResetRateLimitEnabled,
+		passwordResetRateLimitWindow:      resolveRateLimitWindow(deps.PasswordResetRateLimitWindowSecond),
+		passwordResetRateLimitMaxRequests: resolvePasswordResetRateLimitMaxRequests(deps.PasswordResetRateLimitMaxRequests),
 		logger:                   logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
@@ -151,6 +162,13 @@ func resolveRateLimitWriteRequests(requests int) int {
 func resolveRateLimitReadRequests(requests int) int {
 	if requests <= 0 {
 		return defaultRateLimitReadRequests
+	}
+	return requests
+}
+
+func resolvePasswordResetRateLimitMaxRequests(requests int) int {
+	if requests <= 0 {
+		return defaultPasswordResetRateLimitMaxRequests
 	}
 	return requests
 }
@@ -438,6 +456,7 @@ func (h *HTTPHandler) handleEmailVerificationConfirm(c *gin.Context) {
 // @Param request body passwordResetRequest true "Password reset request payload"
 // @Success 200 {object} signUpResponse
 // @Failure 400 {object} errorResponse
+// @Failure 429 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /auth/password-reset/request [post]
 func (h *HTTPHandler) handlePasswordResetRequest(c *gin.Context) {
@@ -450,11 +469,37 @@ func (h *HTTPHandler) handlePasswordResetRequest(c *gin.Context) {
 		badRequest(c, err)
 		return
 	}
+	if limited, err := h.enforcePasswordResetRequestRateLimit(c, req.Email); err != nil {
+		writeHTTPError(h.logger, c, http.StatusInternalServerError, customerror.Wrap(customerror.ErrInternalServerError, "password reset request rate limit", err))
+		return
+	} else if limited {
+		return
+	}
 	if err := h.accountUseCase.RequestPasswordReset(c.Request.Context(), req.Email); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, signUpResponse{Result: "ok"})
+}
+
+func (h *HTTPHandler) enforcePasswordResetRequestRateLimit(c *gin.Context, email string) (bool, error) {
+	if h == nil || !h.passwordResetRateLimitEnabled || h.rateLimiter == nil {
+		return false, nil
+	}
+	allowed, err := h.rateLimiter.Allow(
+		c.Request.Context(),
+		passwordResetRateLimitKey(c.ClientIP(), email),
+		h.passwordResetRateLimitMaxRequests,
+		h.passwordResetRateLimitWindow,
+	)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return false, nil
+	}
+	writeHTTPError(h.logger, c, http.StatusTooManyRequests, customerror.ErrTooManyRequests)
+	return true, nil
 }
 
 // handlePasswordResetConfirm godoc
@@ -2130,6 +2175,19 @@ func isReadMethod(method string) bool {
 	default:
 		return false
 	}
+}
+
+func passwordResetRateLimitKey(clientIP, email string) string {
+	return "password-reset-request:" + clientIP + ":" + normalizePasswordResetEmail(email)
+}
+
+func normalizePasswordResetEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func hashEmailForAudit(email string) string {
+	sum := sha256.Sum256([]byte(normalizePasswordResetEmail(email)))
+	return fmt.Sprintf("%x", sum[:])
 }
 
 func (h *HTTPHandler) parseLimitCursor(c *gin.Context) (int, string, bool) {
