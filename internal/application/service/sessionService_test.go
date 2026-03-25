@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
@@ -120,6 +121,60 @@ type recordingGuestIssuer struct {
 	userID   int64
 }
 
+type failOnNthUpdateUserRepository struct {
+	base        port.UserRepository
+	failOn      int
+	updateCalls int
+	err         error
+}
+
+func (r *failOnNthUpdateUserRepository) Save(ctx context.Context, user *entity.User) (int64, error) {
+	return r.base.Save(ctx, user)
+}
+
+func (r *failOnNthUpdateUserRepository) SelectUserByUsername(ctx context.Context, username string) (*entity.User, error) {
+	return r.base.SelectUserByUsername(ctx, username)
+}
+
+func (r *failOnNthUpdateUserRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
+	return r.base.SelectUserByEmail(ctx, email)
+}
+
+func (r *failOnNthUpdateUserRepository) SelectUserByUUID(ctx context.Context, userUUID string) (*entity.User, error) {
+	return r.base.SelectUserByUUID(ctx, userUUID)
+}
+
+func (r *failOnNthUpdateUserRepository) SelectUserByID(ctx context.Context, id int64) (*entity.User, error) {
+	return r.base.SelectUserByID(ctx, id)
+}
+
+func (r *failOnNthUpdateUserRepository) SelectUserByIDIncludingDeleted(ctx context.Context, id int64) (*entity.User, error) {
+	return r.base.SelectUserByIDIncludingDeleted(ctx, id)
+}
+
+func (r *failOnNthUpdateUserRepository) SelectUsersByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]*entity.User, error) {
+	return r.base.SelectUsersByIDsIncludingDeleted(ctx, ids)
+}
+
+func (r *failOnNthUpdateUserRepository) SelectGuestCleanupCandidates(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) ([]*entity.User, error) {
+	return r.base.SelectGuestCleanupCandidates(ctx, now, pendingGrace, activeUnusedGrace, limit)
+}
+
+func (r *failOnNthUpdateUserRepository) Update(ctx context.Context, user *entity.User) error {
+	r.updateCalls++
+	if r.failOn > 0 && r.updateCalls == r.failOn {
+		if r.err != nil {
+			return r.err
+		}
+		return errors.New("forced guest activation failure")
+	}
+	return r.base.Update(ctx, user)
+}
+
+func (r *failOnNthUpdateUserRepository) Delete(ctx context.Context, id int64) error {
+	return r.base.Delete(ctx, id)
+}
+
 func (g *recordingGuestIssuer) IssueGuestAccount(ctx context.Context) (int64, error) {
 	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
 	userID, err := g.userRepo.Save(ctx, guest)
@@ -148,6 +203,34 @@ func TestSessionService_IssueGuestToken_ExpiresGuestWhenSessionStoreSaveFails(t 
 	assert.True(t, user.IsGuest())
 	assert.Equal(t, entity.GuestStatusExpired, user.GuestStatus)
 	assert.NotNil(t, user.GuestExpiredAt)
+}
+
+func TestSessionService_IssueGuestToken_DoesNotPersistSessionWhenGuestActivationFails(t *testing.T) {
+	repositories := newTestRepositories()
+	wrappedUserRepo := &failOnNthUpdateUserRepository{
+		base:   repositories.user,
+		failOn: 1,
+		err:    errors.New("activate guest failed"),
+	}
+	guestIssuer := &recordingGuestIssuer{userRepo: wrappedUserRepo}
+	cache := cacheInMemory.NewInMemoryCache()
+	sessionRepository := auth.NewCacheSessionRepository(cache)
+	svc := NewSessionService(&recordingCredentialVerifier{}, guestIssuer, wrappedUserRepo, auth.NewJwtTokenProvider("test-secret"), sessionRepository)
+
+	token, err := svc.IssueGuestToken(context.Background())
+	require.Error(t, err)
+	assert.Empty(t, token)
+	assert.True(t, errors.Is(err, customerror.ErrRepositoryFailure))
+
+	exists, err := sessionRepository.ExistsByUser(context.Background(), guestIssuer.userID)
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	user, err := repositories.user.SelectUserByID(context.Background(), guestIssuer.userID)
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.True(t, user.IsGuest())
+	assert.NotEqual(t, entity.GuestStatusActive, user.GuestStatus)
 }
 
 func TestSessionService_ValidateTokenToId_InvalidatedToken(t *testing.T) {

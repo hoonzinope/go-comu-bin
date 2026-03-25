@@ -64,12 +64,12 @@ func (s *SessionService) IssueGuestToken(ctx context.Context) (string, error) {
 		return "", customerror.WrapToken("issue guest token", err)
 	}
 
+	if err := s.markGuestActive(ctx, userID); err != nil {
+		return "", err
+	}
 	if err := s.sessionRepository.Save(ctx, userID, token, s.tokenPort.TTLSeconds()); err != nil {
 		s.expireGuestBestEffort(ctx, userID)
 		return "", customerror.WrapRepository("save guest session", err)
-	}
-	if err := s.markGuestActive(ctx, userID); err != nil {
-		return "", err
 	}
 	return token, nil
 }

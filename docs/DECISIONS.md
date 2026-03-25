@@ -247,6 +247,38 @@
 - `docs/ARCHITECTURE.md`
 - `internal/application/service/account/service.go`
 
+## 2026-03-25 - guest issue는 active 전환 후 session 저장 순서를 따른다
+
+상태
+
+- decided
+
+배경
+
+- guest token 발급은 session 저장 후 `active` 전환이 실패하면 즉시 검증에 실패하는 unusable session을 남길 수 있었다.
+
+관찰
+
+- guest lifecycle은 `pending/active/expired` 상태 전이로 보상 흐름을 이미 표현하고 있다.
+- `pending` 또는 `expired` guest는 인증 경로에서 유효 사용자로 인정되지 않는다.
+
+결론
+
+- guest token 발급은 `pending guest 생성 -> token 준비 -> active 전환 -> session 저장` 순서로 바꾼다.
+- `active` 전환 실패 시 session은 저장하지 않는다.
+- session 저장 실패 시 guest는 기존처럼 `expired`로 보상 전환한다.
+
+후속 작업
+
+- session service 순서 재구성
+- 실패 주입 테스트 추가
+- ARCHITECTURE 문서 흐름 설명 갱신
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/session/service.go`
+
 ## 2026-03-20 - application service 비대화를 내부 협력 객체로 분해한다
 
 상태
