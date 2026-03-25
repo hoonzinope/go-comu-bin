@@ -345,12 +345,32 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 		return customerror.Wrap(customerror.ErrInternalServerError, "hash password for password reset confirm", err)
 	}
 
-	var (
-		originalUser  *entity.User
-		originalReset *entity.PasswordResetToken
-	)
 	err = s.sessionRepo.WithUserLock(ctx, userID, func(scope port.SessionRepositoryScope) error {
 		err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+			txCtx := tx.Context()
+			resetToken, err := tx.PasswordResetTokenRepository().SelectByTokenHash(txCtx, tokenHash)
+			if err != nil {
+				return customerror.WrapRepository("select password reset token before session invalidation", err)
+			}
+			if resetToken == nil || !resetToken.IsUsable(time.Now()) {
+				return customerror.ErrInvalidToken
+			}
+			user, err := tx.UserRepository().SelectUserByID(txCtx, resetToken.UserID)
+			if err != nil {
+				return customerror.WrapRepository("select user by id before session invalidation", err)
+			}
+			if user == nil || user.IsGuest() || user.IsDeleted() {
+				return customerror.ErrInvalidToken
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if err := scope.DeleteByUser(ctx, userID); err != nil {
+			return customerror.WrapRepository("delete user sessions for password reset confirm", err)
+		}
+		return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 			txCtx := tx.Context()
 			resetToken, err := tx.PasswordResetTokenRepository().SelectByTokenHash(txCtx, tokenHash)
 			if err != nil {
@@ -367,11 +387,6 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 				return customerror.ErrInvalidToken
 			}
 
-			userCopy := *user
-			originalUser = &userCopy
-			tokenCopy := *resetToken
-			originalReset = &tokenCopy
-
 			user.Password = hashedPassword
 			user.UpdatedAt = time.Now()
 			if err := tx.UserRepository().Update(txCtx, user); err != nil {
@@ -383,20 +398,6 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 			}
 			return nil
 		})
-		if err != nil {
-			return err
-		}
-		if err := scope.DeleteByUser(ctx, userID); err != nil {
-			restoreErr := s.restorePasswordResetState(ctx, originalUser, originalReset)
-			if restoreErr != nil {
-				return errors.Join(
-					customerror.WrapRepository("delete user sessions for password reset confirm", err),
-					customerror.WrapRepository("restore password reset state after session rollback", restoreErr),
-				)
-			}
-			return customerror.WrapRepository("delete user sessions for password reset confirm", err)
-		}
-		return nil
 	})
 	if err != nil {
 		if errors.Is(err, customerror.ErrInvalidToken) {

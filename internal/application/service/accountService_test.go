@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
@@ -92,6 +93,103 @@ type fixedEmailVerificationTokenIssuer struct {
 	tokens []string
 	idx    int
 	err    error
+}
+
+type failOnNthUserUpdateRepository struct {
+	base        port.UserRepository
+	failOn      int
+	updateCalls int
+	err         error
+}
+
+func (r *failOnNthUserUpdateRepository) Save(ctx context.Context, user *entity.User) (int64, error) {
+	return r.base.Save(ctx, user)
+}
+
+func (r *failOnNthUserUpdateRepository) SelectUserByUsername(ctx context.Context, username string) (*entity.User, error) {
+	return r.base.SelectUserByUsername(ctx, username)
+}
+
+func (r *failOnNthUserUpdateRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
+	return r.base.SelectUserByEmail(ctx, email)
+}
+
+func (r *failOnNthUserUpdateRepository) SelectUserByUUID(ctx context.Context, userUUID string) (*entity.User, error) {
+	return r.base.SelectUserByUUID(ctx, userUUID)
+}
+
+func (r *failOnNthUserUpdateRepository) SelectUserByID(ctx context.Context, id int64) (*entity.User, error) {
+	return r.base.SelectUserByID(ctx, id)
+}
+
+func (r *failOnNthUserUpdateRepository) SelectUserByIDIncludingDeleted(ctx context.Context, id int64) (*entity.User, error) {
+	return r.base.SelectUserByIDIncludingDeleted(ctx, id)
+}
+
+func (r *failOnNthUserUpdateRepository) SelectUsersByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]*entity.User, error) {
+	return r.base.SelectUsersByIDsIncludingDeleted(ctx, ids)
+}
+
+func (r *failOnNthUserUpdateRepository) SelectGuestCleanupCandidates(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) ([]*entity.User, error) {
+	return r.base.SelectGuestCleanupCandidates(ctx, now, pendingGrace, activeUnusedGrace, limit)
+}
+
+func (r *failOnNthUserUpdateRepository) Update(ctx context.Context, user *entity.User) error {
+	r.updateCalls++
+	if r.failOn > 0 && r.updateCalls == r.failOn {
+		if r.err != nil {
+			return r.err
+		}
+		return errors.New("forced user update failure")
+	}
+	return r.base.Update(ctx, user)
+}
+
+func (r *failOnNthUserUpdateRepository) Delete(ctx context.Context, id int64) error {
+	return r.base.Delete(ctx, id)
+}
+
+type accountTestTxScope struct {
+	ctx           context.Context
+	user          port.UserRepository
+	passwordReset port.PasswordResetTokenRepository
+}
+
+func (s accountTestTxScope) Context() context.Context { return s.ctx }
+func (s accountTestTxScope) UserRepository() port.UserRepository {
+	return s.user
+}
+func (s accountTestTxScope) BoardRepository() port.BoardRepository { return nil }
+func (s accountTestTxScope) PostRepository() port.PostRepository   { return nil }
+func (s accountTestTxScope) TagRepository() port.TagRepository     { return nil }
+func (s accountTestTxScope) PostTagRepository() port.PostTagRepository {
+	return nil
+}
+func (s accountTestTxScope) CommentRepository() port.CommentRepository { return nil }
+func (s accountTestTxScope) ReactionRepository() port.ReactionRepository {
+	return nil
+}
+func (s accountTestTxScope) AttachmentRepository() port.AttachmentRepository { return nil }
+func (s accountTestTxScope) ReportRepository() port.ReportRepository         { return nil }
+func (s accountTestTxScope) NotificationRepository() port.NotificationRepository {
+	return nil
+}
+func (s accountTestTxScope) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
+	return nil
+}
+func (s accountTestTxScope) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
+	return s.passwordReset
+}
+func (s accountTestTxScope) Outbox() port.OutboxAppender { return nil }
+
+type accountTestUnitOfWork struct {
+	scope accountTestTxScope
+}
+
+func (u accountTestUnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxScope) error) error {
+	scope := u.scope
+	scope.ctx = ctx
+	return fn(scope)
 }
 
 func (i *fixedEmailVerificationTokenIssuer) Issue() (string, error) {
@@ -781,6 +879,67 @@ func TestAccountService_ConfirmPasswordReset_RollsBackWhenSessionInvalidationFai
 	err = svc.ConfirmPasswordReset(context.Background(), "reset-token-1", "newpw")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
+
+	userID, err := userService.VerifyCredentials(context.Background(), "alice", "oldpw")
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, userID)
+
+	savedToken, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, savedToken)
+	assert.False(t, savedToken.IsConsumed())
+}
+
+func TestAccountService_ConfirmPasswordReset_DoesNotMutateStoredStateBeforeSessionInvalidation(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "oldpw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	resetToken := entity.NewPasswordResetToken(user.ID, testHashResetToken("reset-token-1"), time.Now().Add(time.Hour))
+	require.NoError(t, repositories.passwordReset.Save(context.Background(), resetToken))
+
+	sessionRepository := auth.NewCacheSessionRepository(&failOnDeleteByPrefixCache{})
+	require.NoError(t, sessionRepository.Save(context.Background(), user.ID, "token-a", 60))
+
+	wrappedUserRepo := &failOnNthUserUpdateRepository{
+		base:   repositories.user,
+		failOn: 1,
+		err:    errors.New("update should not be attempted before session invalidation"),
+	}
+	unitOfWork := accountTestUnitOfWork{
+		scope: accountTestTxScope{
+			user:          wrappedUserRepo,
+			passwordReset: repositories.passwordReset,
+		},
+	}
+
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		wrappedUserRepo,
+		unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		sessionRepository,
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	err = svc.ConfirmPasswordReset(context.Background(), "reset-token-1", "newpw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
+	assert.Zero(t, wrappedUserRepo.updateCalls)
 
 	userID, err := userService.VerifyCredentials(context.Background(), "alice", "oldpw")
 	require.NoError(t, err)

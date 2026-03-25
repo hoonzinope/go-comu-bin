@@ -216,6 +216,37 @@
 - `internal/application/service/account/service.go`
 - `internal/infrastructure/mail/smtp/sender.go`
 
+## 2026-03-25 - password reset confirm은 부분 커밋보다 세션 무효화 우선 경계를 택한다
+
+상태
+
+- decided
+
+배경
+
+- `password reset confirm`은 비밀번호 변경과 token 소모가 먼저 반영된 뒤 세션 전체 무효화가 실패하면 부분 커밋 위험이 있었다.
+
+관찰
+
+- 현재 `SessionRepository`는 사용자 단위 전체 삭제는 지원하지만, 실패 후 기존 세션 집합을 복원하는 API는 없다.
+
+결론
+
+- `password reset confirm`은 사용자 락 아래에서 먼저 token/user 유효성을 재검증하고, 세션 전체 무효화가 성공한 뒤에만 비밀번호 변경과 reset token 소모를 commit한다.
+- 즉, 세션 무효화 실패 시 비밀번호와 reset token 상태는 건드리지 않는다.
+- 이 경로는 완전한 cross-store atomic transaction이 아니라 "credential state는 세션 정리가 성공했을 때만 바뀐다"는 안전 경계를 우선한다.
+
+후속 작업
+
+- account service 순서 재구성
+- 실패 주입 테스트 추가
+- ARCHITECTURE 문서 흐름 설명 갱신
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/account/service.go`
+
 ## 2026-03-20 - application service 비대화를 내부 협력 객체로 분해한다
 
 상태
