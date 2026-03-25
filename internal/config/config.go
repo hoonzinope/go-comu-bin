@@ -61,7 +61,12 @@ type Config struct {
 				WriteRequests int  `yaml:"writeRequests"`
 			} `yaml:"rateLimit"`
 			Auth struct {
-				Secret string `yaml:"secret"`
+				Secret                            string `yaml:"secret"`
+				EmailVerificationRequestRateLimit struct {
+					Enabled       bool `yaml:"enabled"`
+					WindowSeconds int  `yaml:"windowSeconds"`
+					MaxRequests   int  `yaml:"maxRequests"`
+				} `yaml:"emailVerificationRequestRateLimit"`
 				PasswordResetRequestRateLimit struct {
 					Enabled       bool `yaml:"enabled"`
 					WindowSeconds int  `yaml:"windowSeconds"`
@@ -70,11 +75,14 @@ type Config struct {
 			} `yaml:"auth"`
 		} `yaml:"http"`
 		Mail struct {
-			Enabled bool `yaml:"enabled"`
+			Enabled           bool `yaml:"enabled"`
+			EmailVerification struct {
+				BaseURL string `yaml:"baseURL"`
+			} `yaml:"emailVerification"`
 			PasswordReset struct {
 				BaseURL string `yaml:"baseURL"`
 			} `yaml:"passwordReset"`
-			SMTP    struct {
+			SMTP struct {
 				Host        string `yaml:"host"`
 				Port        int    `yaml:"port"`
 				Username    string `yaml:"username"`
@@ -111,6 +119,12 @@ type Config struct {
 			ActiveUnusedGracePeriodSeconds int  `yaml:"activeUnusedGracePeriodSeconds"`
 			BatchSize                      int  `yaml:"batchSize"`
 		} `yaml:"guestCleanup"`
+		EmailVerificationCleanup struct {
+			Enabled            bool `yaml:"enabled"`
+			IntervalSeconds    int  `yaml:"intervalSeconds"`
+			GracePeriodSeconds int  `yaml:"gracePeriodSeconds"`
+			BatchSize          int  `yaml:"batchSize"`
+		} `yaml:"emailVerificationCleanup"`
 		PasswordResetCleanup struct {
 			Enabled            bool `yaml:"enabled"`
 			IntervalSeconds    int  `yaml:"intervalSeconds"`
@@ -151,10 +165,14 @@ func Load() (*Config, error) {
 		"delivery.http.rateLimit.readRequests",
 		"delivery.http.rateLimit.writeRequests",
 		"delivery.http.auth.secret",
+		"delivery.http.auth.emailVerificationRequestRateLimit.enabled",
+		"delivery.http.auth.emailVerificationRequestRateLimit.windowSeconds",
+		"delivery.http.auth.emailVerificationRequestRateLimit.maxRequests",
 		"delivery.http.auth.passwordResetRequestRateLimit.enabled",
 		"delivery.http.auth.passwordResetRequestRateLimit.windowSeconds",
 		"delivery.http.auth.passwordResetRequestRateLimit.maxRequests",
 		"delivery.mail.enabled",
+		"delivery.mail.emailVerification.baseURL",
 		"delivery.mail.passwordReset.baseURL",
 		"delivery.mail.smtp.host",
 		"delivery.mail.smtp.port",
@@ -180,6 +198,10 @@ func Load() (*Config, error) {
 		"jobs.guestCleanup.pendingGracePeriodSeconds",
 		"jobs.guestCleanup.activeUnusedGracePeriodSeconds",
 		"jobs.guestCleanup.batchSize",
+		"jobs.emailVerificationCleanup.enabled",
+		"jobs.emailVerificationCleanup.intervalSeconds",
+		"jobs.emailVerificationCleanup.gracePeriodSeconds",
+		"jobs.emailVerificationCleanup.batchSize",
 		"jobs.passwordResetCleanup.enabled",
 		"jobs.passwordResetCleanup.intervalSeconds",
 		"jobs.passwordResetCleanup.gracePeriodSeconds",
@@ -217,6 +239,9 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("delivery.http.rateLimit.windowSeconds", 60)
 	v.SetDefault("delivery.http.rateLimit.readRequests", 300)
 	v.SetDefault("delivery.http.rateLimit.writeRequests", 60)
+	v.SetDefault("delivery.http.auth.emailVerificationRequestRateLimit.enabled", true)
+	v.SetDefault("delivery.http.auth.emailVerificationRequestRateLimit.windowSeconds", 60)
+	v.SetDefault("delivery.http.auth.emailVerificationRequestRateLimit.maxRequests", 5)
 	v.SetDefault("delivery.http.auth.passwordResetRequestRateLimit.enabled", true)
 	v.SetDefault("delivery.http.auth.passwordResetRequestRateLimit.windowSeconds", 60)
 	v.SetDefault("delivery.http.auth.passwordResetRequestRateLimit.maxRequests", 5)
@@ -239,6 +264,10 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("jobs.guestCleanup.pendingGracePeriodSeconds", 600)
 	v.SetDefault("jobs.guestCleanup.activeUnusedGracePeriodSeconds", 86400)
 	v.SetDefault("jobs.guestCleanup.batchSize", 50)
+	v.SetDefault("jobs.emailVerificationCleanup.enabled", true)
+	v.SetDefault("jobs.emailVerificationCleanup.intervalSeconds", 600)
+	v.SetDefault("jobs.emailVerificationCleanup.gracePeriodSeconds", 600)
+	v.SetDefault("jobs.emailVerificationCleanup.batchSize", 100)
 	v.SetDefault("jobs.passwordResetCleanup.enabled", true)
 	v.SetDefault("jobs.passwordResetCleanup.intervalSeconds", 600)
 	v.SetDefault("jobs.passwordResetCleanup.gracePeriodSeconds", 600)
@@ -303,6 +332,22 @@ func validate(cfg *Config) error {
 	if len(secret) < minJWTSecretLength {
 		return fmt.Errorf("invalid delivery.http.auth.secret: must be at least %d characters", minJWTSecretLength)
 	}
+	if cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.Enabled {
+		if cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.WindowSeconds < minRateLimitWindowSeconds {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.emailVerificationRequestRateLimit.windowSeconds: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.WindowSeconds,
+				minRateLimitWindowSeconds,
+			)
+		}
+		if cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.MaxRequests < minRateLimitWriteRequests {
+			return fmt.Errorf(
+				"invalid delivery.http.auth.emailVerificationRequestRateLimit.maxRequests: %d (must be >= %d)",
+				cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.MaxRequests,
+				minRateLimitWriteRequests,
+			)
+		}
+	}
 	if cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.Enabled {
 		if cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.WindowSeconds < minRateLimitWindowSeconds {
 			return fmt.Errorf(
@@ -320,6 +365,9 @@ func validate(cfg *Config) error {
 		}
 	}
 	if cfg.Delivery.Mail.Enabled {
+		if strings.TrimSpace(cfg.Delivery.Mail.EmailVerification.BaseURL) == "" {
+			return fmt.Errorf("invalid delivery.mail.emailVerification.baseURL: cannot be empty when mail is enabled")
+		}
 		if strings.TrimSpace(cfg.Delivery.Mail.PasswordReset.BaseURL) == "" {
 			return fmt.Errorf("invalid delivery.mail.passwordReset.baseURL: cannot be empty when mail is enabled")
 		}
@@ -420,6 +468,17 @@ func validate(cfg *Config) error {
 		}
 		if cfg.Jobs.GuestCleanup.BatchSize <= 0 {
 			return fmt.Errorf("invalid jobs.guestCleanup.batchSize: %d (must be > 0)", cfg.Jobs.GuestCleanup.BatchSize)
+		}
+	}
+	if cfg.Jobs.Enabled && cfg.Jobs.EmailVerificationCleanup.Enabled {
+		if cfg.Jobs.EmailVerificationCleanup.IntervalSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.emailVerificationCleanup.intervalSeconds: %d (must be > 0)", cfg.Jobs.EmailVerificationCleanup.IntervalSeconds)
+		}
+		if cfg.Jobs.EmailVerificationCleanup.GracePeriodSeconds <= 0 {
+			return fmt.Errorf("invalid jobs.emailVerificationCleanup.gracePeriodSeconds: %d (must be > 0)", cfg.Jobs.EmailVerificationCleanup.GracePeriodSeconds)
+		}
+		if cfg.Jobs.EmailVerificationCleanup.BatchSize <= 0 {
+			return fmt.Errorf("invalid jobs.emailVerificationCleanup.batchSize: %d (must be > 0)", cfg.Jobs.EmailVerificationCleanup.BatchSize)
 		}
 	}
 	if cfg.Jobs.Enabled && cfg.Jobs.PasswordResetCleanup.Enabled {

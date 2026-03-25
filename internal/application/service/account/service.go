@@ -201,20 +201,37 @@ func (s *AccountService) RequestEmailVerification(ctx context.Context, userID in
 	if s.unitOfWork == nil || s.verificationTokens == nil || s.verificationIssuer == nil || s.verificationMailer == nil {
 		return customerror.ErrInternalServerError
 	}
-	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+	if userID <= 0 {
+		s.logEmailVerificationRequest(userID, "ignored_unknown_or_ineligible")
+		return nil
+	}
+	outcome := "ignored_unknown_or_ineligible"
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByID(txCtx, userID)
 		if err != nil {
 			return customerror.WrapRepository("select user by id for email verification request", err)
 		}
 		if user == nil {
-			return customerror.ErrUserNotFound
+			return nil
 		}
 		if user.IsGuest() || user.IsDeleted() || user.Email == "" || user.IsEmailVerified() {
 			return nil
 		}
-		return s.issueAndSendEmailVerification(txCtx, tx, user)
+		if err := s.issueAndSendEmailVerification(txCtx, tx, user); err != nil {
+			return err
+		}
+		outcome = "issued"
+		return nil
 	})
+	if err != nil {
+		if strings.Contains(err.Error(), "send email verification mail") {
+			s.logEmailVerificationRequest(userID, "mail_failed")
+		}
+		return err
+	}
+	s.logEmailVerificationRequest(userID, outcome)
+	return nil
 }
 
 func (s *AccountService) ConfirmEmailVerification(ctx context.Context, token string) error {
@@ -226,7 +243,8 @@ func (s *AccountService) ConfirmEmailVerification(ctx context.Context, token str
 		return customerror.ErrInvalidInput
 	}
 	tokenHash := hashEmailVerificationToken(token)
-	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+	var confirmedUserID int64
+	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		verificationToken, err := tx.EmailVerificationTokenRepository().SelectByTokenHash(txCtx, tokenHash)
 		if err != nil {
@@ -252,8 +270,17 @@ func (s *AccountService) ConfirmEmailVerification(ctx context.Context, token str
 		if err := tx.EmailVerificationTokenRepository().InvalidateByUser(txCtx, user.ID); err != nil {
 			return customerror.WrapRepository("invalidate email verification tokens", err)
 		}
+		confirmedUserID = user.ID
 		return nil
 	})
+	if err != nil {
+		if errors.Is(err, customerror.ErrInvalidToken) {
+			s.logEmailVerificationConfirm(confirmedUserID, "invalid_token")
+		}
+		return err
+	}
+	s.logEmailVerificationConfirm(confirmedUserID, "confirmed")
+	return nil
 }
 
 func (s *AccountService) RequestPasswordReset(ctx context.Context, email string) error {
@@ -539,6 +566,24 @@ func hashResetToken(token string) string {
 func hashEmailVerificationToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func (s *AccountService) logEmailVerificationRequest(userID int64, outcome string) {
+	s.logger.Info(
+		"email verification request audit",
+		"event", "email_verification_request",
+		"user_id", userID,
+		"outcome", outcome,
+	)
+}
+
+func (s *AccountService) logEmailVerificationConfirm(userID int64, outcome string) {
+	s.logger.Info(
+		"email verification confirm audit",
+		"event", "email_verification_confirm",
+		"user_id", userID,
+		"outcome", outcome,
+	)
 }
 
 func normalizeAccountEmail(email string) string {

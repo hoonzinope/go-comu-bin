@@ -31,64 +31,71 @@ const defaultPageLimit = 10
 const defaultRateLimitWindow = 60 * time.Second
 const defaultRateLimitReadRequests = 300
 const defaultRateLimitWriteRequests = 60
+const defaultEmailVerificationRateLimitMaxRequests = 5
 const defaultPasswordResetRateLimitMaxRequests = 5
 const maxPageLimit = 1000
 const httpLoggerContextKey = "http_logger"
 
 type HTTPHandler struct {
-	sessionUseCase                    port.SessionUseCase
-	adminAuthorizer                   port.AdminAuthorizer
-	userUseCase                       port.UserUseCase
-	accountUseCase                    port.AccountUseCase
-	boardUseCase                      port.BoardUseCase
-	postUseCase                       port.PostUseCase
-	commentUseCase                    port.CommentUseCase
-	notificationUseCase               port.NotificationUseCase
-	reactionUseCase                   port.ReactionUseCase
-	attachmentUseCase                 port.AttachmentUseCase
-	reportUseCase                     port.ReportUseCase
-	outboxAdminUseCase                port.OutboxAdminUseCase
-	rateLimiter                       port.RateLimiter
-	attachmentUploadMaxBytes          int64
-	maxJSONBodyBytes                  int64
-	defaultPageLimit                  int
-	rateLimitEnabled                  bool
-	rateLimitWindow                   time.Duration
-	rateLimitReadRequests             int
-	rateLimitWriteRequests            int
-	passwordResetRateLimitEnabled     bool
-	passwordResetRateLimitWindow      time.Duration
-	passwordResetRateLimitMaxRequests int
-	logger                            *slog.Logger
-	authGinMiddleware                 gin.HandlerFunc
-	adminGinMiddleware                gin.HandlerFunc
+	sessionUseCase                        port.SessionUseCase
+	adminAuthorizer                       port.AdminAuthorizer
+	userUseCase                           port.UserUseCase
+	accountUseCase                        port.AccountUseCase
+	boardUseCase                          port.BoardUseCase
+	postUseCase                           port.PostUseCase
+	commentUseCase                        port.CommentUseCase
+	notificationUseCase                   port.NotificationUseCase
+	reactionUseCase                       port.ReactionUseCase
+	attachmentUseCase                     port.AttachmentUseCase
+	reportUseCase                         port.ReportUseCase
+	outboxAdminUseCase                    port.OutboxAdminUseCase
+	rateLimiter                           port.RateLimiter
+	attachmentUploadMaxBytes              int64
+	maxJSONBodyBytes                      int64
+	defaultPageLimit                      int
+	rateLimitEnabled                      bool
+	rateLimitWindow                       time.Duration
+	rateLimitReadRequests                 int
+	rateLimitWriteRequests                int
+	emailVerificationRateLimitEnabled     bool
+	emailVerificationRateLimitWindow      time.Duration
+	emailVerificationRateLimitMaxRequests int
+	passwordResetRateLimitEnabled         bool
+	passwordResetRateLimitWindow          time.Duration
+	passwordResetRateLimitMaxRequests     int
+	logger                                *slog.Logger
+	authGinMiddleware                     gin.HandlerFunc
+	adminGinMiddleware                    gin.HandlerFunc
 }
 
 type HTTPDependencies struct {
-	SessionUseCase                     port.SessionUseCase
-	AdminAuthorizer                    port.AdminAuthorizer
-	UserUseCase                        port.UserUseCase
-	AccountUseCase                     port.AccountUseCase
-	BoardUseCase                       port.BoardUseCase
-	PostUseCase                        port.PostUseCase
-	CommentUseCase                     port.CommentUseCase
-	NotificationUseCase                port.NotificationUseCase
-	ReactionUseCase                    port.ReactionUseCase
-	AttachmentUseCase                  port.AttachmentUseCase
-	ReportUseCase                      port.ReportUseCase
-	OutboxAdminUseCase                 port.OutboxAdminUseCase
-	RateLimiter                        port.RateLimiter
-	AttachmentUploadMaxBytes           int64
-	MaxJSONBodyBytes                   int64
-	DefaultPageLimit                   int
-	RateLimitEnabled                   bool
-	RateLimitWindowSecond              int
-	RateLimitReadRequest               int
-	RateLimitWriteRequest              int
-	PasswordResetRateLimitEnabled      bool
-	PasswordResetRateLimitWindowSecond int
-	PasswordResetRateLimitMaxRequests  int
-	Logger                             *slog.Logger
+	SessionUseCase                         port.SessionUseCase
+	AdminAuthorizer                        port.AdminAuthorizer
+	UserUseCase                            port.UserUseCase
+	AccountUseCase                         port.AccountUseCase
+	BoardUseCase                           port.BoardUseCase
+	PostUseCase                            port.PostUseCase
+	CommentUseCase                         port.CommentUseCase
+	NotificationUseCase                    port.NotificationUseCase
+	ReactionUseCase                        port.ReactionUseCase
+	AttachmentUseCase                      port.AttachmentUseCase
+	ReportUseCase                          port.ReportUseCase
+	OutboxAdminUseCase                     port.OutboxAdminUseCase
+	RateLimiter                            port.RateLimiter
+	AttachmentUploadMaxBytes               int64
+	MaxJSONBodyBytes                       int64
+	DefaultPageLimit                       int
+	RateLimitEnabled                       bool
+	RateLimitWindowSecond                  int
+	RateLimitReadRequest                   int
+	RateLimitWriteRequest                  int
+	EmailVerificationRateLimitEnabled      bool
+	EmailVerificationRateLimitWindowSecond int
+	EmailVerificationRateLimitMaxRequests  int
+	PasswordResetRateLimitEnabled          bool
+	PasswordResetRateLimitWindowSecond     int
+	PasswordResetRateLimitMaxRequests      int
+	Logger                                 *slog.Logger
 }
 
 func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
@@ -97,30 +104,33 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	handler := &HTTPHandler{
-		sessionUseCase:                    deps.SessionUseCase,
-		adminAuthorizer:                   deps.AdminAuthorizer,
-		userUseCase:                       deps.UserUseCase,
-		accountUseCase:                    deps.AccountUseCase,
-		boardUseCase:                      deps.BoardUseCase,
-		postUseCase:                       deps.PostUseCase,
-		commentUseCase:                    deps.CommentUseCase,
-		notificationUseCase:               deps.NotificationUseCase,
-		reactionUseCase:                   deps.ReactionUseCase,
-		attachmentUseCase:                 deps.AttachmentUseCase,
-		reportUseCase:                     deps.ReportUseCase,
-		outboxAdminUseCase:                deps.OutboxAdminUseCase,
-		rateLimiter:                       deps.RateLimiter,
-		attachmentUploadMaxBytes:          deps.AttachmentUploadMaxBytes,
-		maxJSONBodyBytes:                  resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
-		defaultPageLimit:                  resolveDefaultPageLimit(deps.DefaultPageLimit),
-		rateLimitEnabled:                  deps.RateLimitEnabled,
-		rateLimitWindow:                   resolveRateLimitWindow(deps.RateLimitWindowSecond),
-		rateLimitReadRequests:             resolveRateLimitReadRequests(deps.RateLimitReadRequest),
-		rateLimitWriteRequests:            resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
-		passwordResetRateLimitEnabled:     deps.PasswordResetRateLimitEnabled,
-		passwordResetRateLimitWindow:      resolveRateLimitWindow(deps.PasswordResetRateLimitWindowSecond),
-		passwordResetRateLimitMaxRequests: resolvePasswordResetRateLimitMaxRequests(deps.PasswordResetRateLimitMaxRequests),
-		logger:                            logger,
+		sessionUseCase:                        deps.SessionUseCase,
+		adminAuthorizer:                       deps.AdminAuthorizer,
+		userUseCase:                           deps.UserUseCase,
+		accountUseCase:                        deps.AccountUseCase,
+		boardUseCase:                          deps.BoardUseCase,
+		postUseCase:                           deps.PostUseCase,
+		commentUseCase:                        deps.CommentUseCase,
+		notificationUseCase:                   deps.NotificationUseCase,
+		reactionUseCase:                       deps.ReactionUseCase,
+		attachmentUseCase:                     deps.AttachmentUseCase,
+		reportUseCase:                         deps.ReportUseCase,
+		outboxAdminUseCase:                    deps.OutboxAdminUseCase,
+		rateLimiter:                           deps.RateLimiter,
+		attachmentUploadMaxBytes:              deps.AttachmentUploadMaxBytes,
+		maxJSONBodyBytes:                      resolveMaxJSONBodyBytes(deps.MaxJSONBodyBytes),
+		defaultPageLimit:                      resolveDefaultPageLimit(deps.DefaultPageLimit),
+		rateLimitEnabled:                      deps.RateLimitEnabled,
+		rateLimitWindow:                       resolveRateLimitWindow(deps.RateLimitWindowSecond),
+		rateLimitReadRequests:                 resolveRateLimitReadRequests(deps.RateLimitReadRequest),
+		rateLimitWriteRequests:                resolveRateLimitWriteRequests(deps.RateLimitWriteRequest),
+		emailVerificationRateLimitEnabled:     deps.EmailVerificationRateLimitEnabled,
+		emailVerificationRateLimitWindow:      resolveRateLimitWindow(deps.EmailVerificationRateLimitWindowSecond),
+		emailVerificationRateLimitMaxRequests: resolveEmailVerificationRateLimitMaxRequests(deps.EmailVerificationRateLimitMaxRequests),
+		passwordResetRateLimitEnabled:         deps.PasswordResetRateLimitEnabled,
+		passwordResetRateLimitWindow:          resolveRateLimitWindow(deps.PasswordResetRateLimitWindowSecond),
+		passwordResetRateLimitMaxRequests:     resolvePasswordResetRateLimitMaxRequests(deps.PasswordResetRateLimitMaxRequests),
+		logger:                                logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
 		writeHTTPError(handler.logger, c, status, err)
@@ -169,6 +179,13 @@ func resolveRateLimitReadRequests(requests int) int {
 func resolvePasswordResetRateLimitMaxRequests(requests int) int {
 	if requests <= 0 {
 		return defaultPasswordResetRateLimitMaxRequests
+	}
+	return requests
+}
+
+func resolveEmailVerificationRateLimitMaxRequests(requests int) int {
+	if requests <= 0 {
+		return defaultEmailVerificationRateLimitMaxRequests
 	}
 	return requests
 }
@@ -397,14 +414,15 @@ func (h *HTTPHandler) handleGuestUpgrade(c *gin.Context) {
 
 // handlePasswordResetRequest godoc
 // @Summary Request Email Verification
-// @Description Create or resend a one-time email verification token for the authenticated user.
+// @Description Create or resend a one-time email verification token for the authenticated user. The token is delivered through the configured mail sender with a frontend verification link.
 // @Tags Auth
 // @Security BearerAuth
 // @Accept json
 // @Produce json
-// @Success 200 {object} signUpResponse
+// @Success 204
+// @Failure 400 {object} errorResponse
+// @Failure 429 {object} errorResponse
 // @Failure 401 {object} errorResponse
-// @Failure 404 {object} errorResponse
 // @Failure 500 {object} errorResponse
 // @Router /auth/email-verification/request [post]
 func (h *HTTPHandler) handleEmailVerificationRequest(c *gin.Context) {
@@ -412,11 +430,45 @@ func (h *HTTPHandler) handleEmailVerificationRequest(c *gin.Context) {
 	if !ok {
 		return
 	}
+	limited, err := h.enforceEmailVerificationRequestRateLimit(c, userID)
+	if err != nil {
+		writeHTTPError(h.logger, c, http.StatusInternalServerError, customerror.Wrap(customerror.ErrInternalServerError, "email verification request rate limit", err))
+		return
+	}
+	if limited {
+		h.logger.Info(
+			"email verification request audit",
+			"event", "email_verification_request",
+			"user_id", userID,
+			"outcome", "rate_limited",
+		)
+		return
+	}
 	if err := h.accountUseCase.RequestEmailVerification(c.Request.Context(), userID); err != nil {
 		writeUseCaseError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, signUpResponse{Result: "ok"})
+	c.Status(http.StatusNoContent)
+}
+
+func (h *HTTPHandler) enforceEmailVerificationRequestRateLimit(c *gin.Context, userID int64) (bool, error) {
+	if h == nil || !h.emailVerificationRateLimitEnabled || h.rateLimiter == nil {
+		return false, nil
+	}
+	allowed, err := h.rateLimiter.Allow(
+		c.Request.Context(),
+		emailVerificationRateLimitKey(userID),
+		h.emailVerificationRateLimitMaxRequests,
+		h.emailVerificationRateLimitWindow,
+	)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return false, nil
+	}
+	writeHTTPError(h.logger, c, http.StatusTooManyRequests, customerror.ErrTooManyRequests)
+	return true, nil
 }
 
 // handleEmailVerificationConfirm godoc
@@ -501,6 +553,10 @@ func (h *HTTPHandler) enforcePasswordResetRequestRateLimit(c *gin.Context, email
 	}
 	writeHTTPError(h.logger, c, http.StatusTooManyRequests, customerror.ErrTooManyRequests)
 	return true, nil
+}
+
+func emailVerificationRateLimitKey(userID int64) string {
+	return fmt.Sprintf("email-verification-request:user:%d", userID)
 }
 
 // handlePasswordResetConfirm godoc

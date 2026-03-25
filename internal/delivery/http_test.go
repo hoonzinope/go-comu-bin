@@ -300,6 +300,17 @@ type spyHandler struct {
 	logger *spyLogger
 }
 
+type stubRateLimiter struct {
+	allowFunc func(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
+}
+
+func (s *stubRateLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
+	if s.allowFunc != nil {
+		return s.allowFunc(ctx, key, limit, window)
+	}
+	return true, nil
+}
+
 func (h *spyHandler) Enabled(context.Context, slog.Level) bool { return true }
 
 func (h *spyHandler) Handle(_ context.Context, record slog.Record) error {
@@ -1865,8 +1876,47 @@ func TestHTTP_EmailVerificationRequest_Success(t *testing.T) {
 
 	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/email-verification/request", map[string]any{}, 1)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.JSONEq(t, `{"result":"ok"}`, rr.Body.String())
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestHTTP_EmailVerificationRequest_TooManyRequests(t *testing.T) {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	sessionRepository := auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	testSessionRepository = sessionRepository
+	sessionUseCase := service.NewSessionService(&fakeUserUseCase{}, &fakeUserUseCase{}, &fakeUserUseCase{}, tokenProvider, sessionRepository)
+	handler := NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:  sessionUseCase,
+		AdminAuthorizer: &fakeUserUseCase{},
+		UserUseCase:     &fakeUserUseCase{},
+		AccountUseCase: &fakeAccountUseCase{
+			requestEmailVerification: func(ctx context.Context, userID int64) error {
+				t.Fatalf("requestEmailVerification should not be called")
+				return nil
+			},
+		},
+		BoardUseCase:        &fakeBoardUseCase{},
+		PostUseCase:         &fakePostUseCase{},
+		CommentUseCase:      &fakeCommentUseCase{},
+		NotificationUseCase: &fakeNotificationUseCase{},
+		ReactionUseCase:     &fakeReactionUseCase{},
+		AttachmentUseCase:   &fakeAttachmentUseCase{},
+		ReportUseCase:       &fakeReportUseCase{},
+		OutboxAdminUseCase:  &fakeOutboxAdminUseCase{},
+		RateLimiter: &stubRateLimiter{allowFunc: func(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
+			assert.Equal(t, "email-verification-request:user:1", key)
+			assert.Equal(t, 5, limit)
+			assert.Equal(t, time.Minute, window)
+			return false, nil
+		}},
+		EmailVerificationRateLimitEnabled:      true,
+		EmailVerificationRateLimitWindowSecond: 60,
+		EmailVerificationRateLimitMaxRequests:  5,
+	}).Handler
+
+	rr := doJSONRequestWithAuth(t, handler, http.MethodPost, "/auth/email-verification/request", map[string]any{}, 1)
+
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+	assert.JSONEq(t, `{"error":"too many requests"}`, rr.Body.String())
 }
 
 func TestHTTP_EmailVerificationConfirm_NoContent(t *testing.T) {

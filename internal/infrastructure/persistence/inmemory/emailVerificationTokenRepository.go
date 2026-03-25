@@ -92,11 +92,38 @@ func (r *EmailVerificationTokenRepository) Update(ctx context.Context, token *en
 	return r.update(token)
 }
 
+func (r *EmailVerificationTokenRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.deleteExpiredOrConsumedBefore(cutoff, limit), nil
+}
+
 func (r *EmailVerificationTokenRepository) update(token *entity.EmailVerificationToken) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tokens[token.TokenHash] = cloneEmailVerificationToken(token)
 	return nil
+}
+
+func (r *EmailVerificationTokenRepository) deleteExpiredOrConsumedBefore(cutoff time.Time, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	deleted := 0
+	for key, token := range r.tokens {
+		if deleted >= limit {
+			break
+		}
+		if token.ExpiresAt.After(cutoff) && (token.ConsumedAt == nil || token.ConsumedAt.After(cutoff)) {
+			continue
+		}
+		delete(r.tokens, key)
+		deleted++
+	}
+	return deleted
 }
 
 func (r *EmailVerificationTokenRepository) snapshot() emailVerificationTokenRepositoryState {

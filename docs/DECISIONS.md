@@ -433,6 +433,51 @@
 - `internal/application/service/user/service.go`
 - `internal/application/service/account/service.go`
 
+## 2026-03-25 - email verification v2는 frontend link 메일 + request rate limit + cleanup/audit를 추가한다
+
+상태
+
+- decided
+
+배경
+
+- email verification v1은 request/confirm 기본 경로는 닫았지만, 메일 UX는 token-only이고 abuse 대응과 token lifecycle 운영 정리가 부족하다.
+- password reset v2에서 메일 링크, 전용 rate limit, cleanup job, audit log 패턴을 이미 도입했으므로 verification도 같은 수준으로 맞추는 편이 일관적이다.
+
+관찰
+
+- 현재 verification request API는 인증 사용자 기준 단순 재발송이며, 이미 verified/ineligible 상태도 내부 no-op 처리한다.
+- SMTP sender는 password reset에는 frontend 링크를 조합하지만 verification 메일은 아직 raw token만 보낸다.
+- verification token 저장소에는 cleanup 연산과 background job 연결이 없다.
+
+결론
+
+- verification 메일은 `delivery.mail.emailVerification.baseURL` 기반 frontend 링크 + fallback token 본문으로 보낸다.
+- `POST /api/v1/auth/email-verification/request`에는 `userID` 기준 전용 rate limit을 추가한다.
+- 이미 verified/ineligible 상태의 request API 공개 응답은 계속 `204 no-op`로 유지한다.
+- verification token 저장소에 cleanup 연산을 추가하고, background job으로 expired/consumed token을 정리한다.
+- structured audit log는 account service의 request/confirm 경로에만 추가한다.
+  - request: `event=email_verification_request`, `user_id`, `outcome`
+  - confirm: `event=email_verification_confirm`, `user_id` 가능 시 포함, `outcome`
+- `signup`/`guest upgrade` 자동 발송은 새 메일 템플릿과 token lifecycle 개선은 공유하지만 별도 audit 이벤트 대상에는 포함하지 않는다.
+
+후속 작업
+
+- SMTP sender / config validation 확장
+- verification request 전용 rate limit 설정/HTTP guard 추가
+- verification token cleanup use case/job/repository 확장
+- account service audit log 추가
+- HTTP/Swagger/API/CONFIG/ARCHITECTURE/ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/API.md`
+- `docs/CONFIG.md`
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/account/service.go`
+- `internal/infrastructure/mail/smtp/sender.go`
+
 ## 2026-03-23 - password reset v1은 email 식별자 + mail sender 포트 + 전체 세션 무효화로 도입한다
 
 상태

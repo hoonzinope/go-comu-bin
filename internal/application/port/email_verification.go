@@ -12,6 +12,7 @@ type EmailVerificationTokenRepository interface {
 	SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.EmailVerificationToken, error)
 	InvalidateByUser(ctx context.Context, userID int64) error
 	Update(ctx context.Context, token *entity.EmailVerificationToken) error
+	DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error)
 }
 
 type EmailVerificationTokenIssuer interface {

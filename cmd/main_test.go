@@ -167,6 +167,28 @@ func (s *recordingGuestCleanupUseCase) CleanupGuests(ctx context.Context, now ti
 	return 0, nil
 }
 
+type stubEmailVerificationCleanupUseCase struct{}
+
+func (s stubEmailVerificationCleanupUseCase) CleanupEmailVerificationTokens(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
+	return 0, nil
+}
+
+type recordingEmailVerificationCleanupUseCase struct {
+	lastCtx context.Context
+	called  chan struct{}
+}
+
+func (s *recordingEmailVerificationCleanupUseCase) CleanupEmailVerificationTokens(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
+	s.lastCtx = ctx
+	if s.called != nil {
+		select {
+		case s.called <- struct{}{}:
+		default:
+		}
+	}
+	return 0, nil
+}
+
 type stubPasswordResetCleanupUseCase struct{}
 
 func (s stubPasswordResetCleanupUseCase) CleanupPasswordResetTokens(ctx context.Context, now time.Time, gracePeriod time.Duration, limit int) (int, error) {
@@ -230,7 +252,7 @@ func TestStartBackgroundJobs_ReturnsNilWhenDisabled(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Jobs.Enabled = false
 
-	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
+	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, stubEmailVerificationCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 }
 
@@ -239,7 +261,7 @@ func TestStartBackgroundJobs_ReturnsNilWhenCleanupJobDisabled(t *testing.T) {
 	cfg.Jobs.Enabled = true
 	cfg.Jobs.AttachmentCleanup.Enabled = false
 
-	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
+	err := startBackgroundJobs(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, stubEmailVerificationCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 }
 
@@ -255,7 +277,7 @@ func TestStartBackgroundJobs_PassesParentContextToCleanupUseCase(t *testing.T) {
 	defer cancel()
 	recorder := &recordingAttachmentCleanupUseCase{called: make(chan struct{}, 1)}
 
-	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, recorder, stubGuestCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, recorder, stubGuestCleanupUseCase{}, stubEmailVerificationCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 
 	select {
@@ -282,7 +304,7 @@ func TestStartBackgroundJobs_PassesParentContextToGuestCleanupUseCase(t *testing
 	defer cancel()
 	recorder := &recordingGuestCleanupUseCase{called: make(chan struct{}, 1)}
 
-	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, recorder, stubPasswordResetCleanupUseCase{})
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, recorder, stubEmailVerificationCleanupUseCase{}, stubPasswordResetCleanupUseCase{})
 	require.NoError(t, err)
 
 	select {
@@ -309,13 +331,40 @@ func TestStartBackgroundJobs_PassesParentContextToPasswordResetCleanupUseCase(t 
 	defer cancel()
 	recorder := &recordingPasswordResetCleanupUseCase{called: make(chan struct{}, 1)}
 
-	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, recorder)
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, stubEmailVerificationCleanupUseCase{}, recorder)
 	require.NoError(t, err)
 
 	select {
 	case <-recorder.called:
 	case <-time.After(1500 * time.Millisecond):
 		t.Fatal("password reset cleanup job was not triggered")
+	}
+
+	require.NotNil(t, recorder.lastCtx)
+	assert.Same(t, parentCtx, recorder.lastCtx)
+}
+
+func TestStartBackgroundJobs_PassesParentContextToEmailVerificationCleanupUseCase(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Jobs.Enabled = true
+	cfg.Jobs.AttachmentCleanup.Enabled = false
+	cfg.Jobs.GuestCleanup.Enabled = false
+	cfg.Jobs.EmailVerificationCleanup.Enabled = true
+	cfg.Jobs.EmailVerificationCleanup.IntervalSeconds = 1
+	cfg.Jobs.EmailVerificationCleanup.GracePeriodSeconds = 60
+	cfg.Jobs.EmailVerificationCleanup.BatchSize = 5
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	recorder := &recordingEmailVerificationCleanupUseCase{called: make(chan struct{}, 1)}
+
+	err := startBackgroundJobs(parentCtx, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg, stubAttachmentCleanupUseCase{}, stubGuestCleanupUseCase{}, recorder, stubPasswordResetCleanupUseCase{})
+	require.NoError(t, err)
+
+	select {
+	case <-recorder.called:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("email verification cleanup job was not triggered")
 	}
 
 	require.NotNil(t, recorder.lastCtx)

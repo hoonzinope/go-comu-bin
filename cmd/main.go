@@ -156,8 +156,9 @@ func main() {
 	passwordResetIssuer := auth.NewPasswordResetTokenIssuer()
 	sessionRepository := auth.NewCacheSessionRepository(cache)
 	guestCleanupUseCase := service.NewGuestCleanupService(userRepository, postRepository, commentRepository, reactionRepository, reportRepository, sessionRepository, unitOfWork)
+	emailVerificationCleanupUseCase := service.NewEmailVerificationCleanupService(emailVerificationRepository)
 	passwordResetCleanupUseCase := service.NewPasswordResetCleanupService(passwordResetRepository)
-	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase, guestCleanupUseCase, passwordResetCleanupUseCase); err != nil {
+	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase, guestCleanupUseCase, emailVerificationCleanupUseCase, passwordResetCleanupUseCase); err != nil {
 		slog.Error("failed to start background jobs", "error", err)
 		os.Exit(1)
 	}
@@ -181,30 +182,33 @@ func main() {
 		appLogger,
 	)
 	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
-		SessionUseCase:                     sessionUseCase,
-		AdminAuthorizer:                    userUseCase,
-		UserUseCase:                        userUseCase,
-		AccountUseCase:                     accountUseCase,
-		BoardUseCase:                       boardUseCase,
-		PostUseCase:                        postUseCase,
-		CommentUseCase:                     commentUseCase,
-		NotificationUseCase:                notificationUseCase,
-		ReactionUseCase:                    reactionUseCase,
-		AttachmentUseCase:                  attachmentUseCase,
-		ReportUseCase:                      reportUseCase,
-		OutboxAdminUseCase:                 outboxAdminUseCase,
-		RateLimiter:                        rateLimiter,
-		AttachmentUploadMaxBytes:           cfg.Storage.Attachment.MaxUploadSizeBytes,
-		MaxJSONBodyBytes:                   cfg.Delivery.HTTP.MaxJSONBodyBytes,
-		DefaultPageLimit:                   cfg.Delivery.HTTP.DefaultPageLimit,
-		RateLimitEnabled:                   cfg.Delivery.HTTP.RateLimit.Enabled,
-		RateLimitWindowSecond:              cfg.Delivery.HTTP.RateLimit.WindowSeconds,
-		RateLimitReadRequest:               cfg.Delivery.HTTP.RateLimit.ReadRequests,
-		RateLimitWriteRequest:              cfg.Delivery.HTTP.RateLimit.WriteRequests,
-		PasswordResetRateLimitEnabled:      cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.Enabled,
-		PasswordResetRateLimitWindowSecond: cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.WindowSeconds,
-		PasswordResetRateLimitMaxRequests:  cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.MaxRequests,
-		Logger:                             appLogger,
+		SessionUseCase:                         sessionUseCase,
+		AdminAuthorizer:                        userUseCase,
+		UserUseCase:                            userUseCase,
+		AccountUseCase:                         accountUseCase,
+		BoardUseCase:                           boardUseCase,
+		PostUseCase:                            postUseCase,
+		CommentUseCase:                         commentUseCase,
+		NotificationUseCase:                    notificationUseCase,
+		ReactionUseCase:                        reactionUseCase,
+		AttachmentUseCase:                      attachmentUseCase,
+		ReportUseCase:                          reportUseCase,
+		OutboxAdminUseCase:                     outboxAdminUseCase,
+		RateLimiter:                            rateLimiter,
+		AttachmentUploadMaxBytes:               cfg.Storage.Attachment.MaxUploadSizeBytes,
+		MaxJSONBodyBytes:                       cfg.Delivery.HTTP.MaxJSONBodyBytes,
+		DefaultPageLimit:                       cfg.Delivery.HTTP.DefaultPageLimit,
+		RateLimitEnabled:                       cfg.Delivery.HTTP.RateLimit.Enabled,
+		RateLimitWindowSecond:                  cfg.Delivery.HTTP.RateLimit.WindowSeconds,
+		RateLimitReadRequest:                   cfg.Delivery.HTTP.RateLimit.ReadRequests,
+		RateLimitWriteRequest:                  cfg.Delivery.HTTP.RateLimit.WriteRequests,
+		EmailVerificationRateLimitEnabled:      cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.Enabled,
+		EmailVerificationRateLimitWindowSecond: cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.WindowSeconds,
+		EmailVerificationRateLimitMaxRequests:  cfg.Delivery.HTTP.Auth.EmailVerificationRequestRateLimit.MaxRequests,
+		PasswordResetRateLimitEnabled:          cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.Enabled,
+		PasswordResetRateLimitWindowSecond:     cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.WindowSeconds,
+		PasswordResetRateLimitMaxRequests:      cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.MaxRequests,
+		Logger:                                 appLogger,
 	})
 	slog.Info("server started", "addr", server.Addr)
 	signalCtx, stopSignal := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -401,7 +405,7 @@ func newFileStorage(cfg *config.Config) (port.FileStorage, error) {
 	}
 }
 
-func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase, guestCleanupUseCase port.GuestCleanupUseCase, passwordResetCleanupUseCase port.PasswordResetCleanupUseCase) error {
+func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.Config, attachmentCleanupUseCase port.AttachmentCleanupUseCase, guestCleanupUseCase port.GuestCleanupUseCase, emailVerificationCleanupUseCase port.EmailVerificationCleanupUseCase, passwordResetCleanupUseCase port.PasswordResetCleanupUseCase) error {
 	if !cfg.Jobs.Enabled {
 		return nil
 	}
@@ -434,6 +438,24 @@ func startBackgroundJobs(ctx context.Context, logger *slog.Logger, cfg *config.C
 					return nil
 				}
 				_, err := guestCleanupUseCase.CleanupGuests(ctx, time.Now(), pendingGrace, activeUnusedGrace, batchSize)
+				return err
+			},
+		}); err != nil {
+			return err
+		}
+	}
+	if cfg.Jobs.EmailVerificationCleanup.Enabled {
+		interval := time.Duration(cfg.Jobs.EmailVerificationCleanup.IntervalSeconds) * time.Second
+		gracePeriod := time.Duration(cfg.Jobs.EmailVerificationCleanup.GracePeriodSeconds) * time.Second
+		batchSize := cfg.Jobs.EmailVerificationCleanup.BatchSize
+		if err := runner.Register(jobrunner.Job{
+			Name:     "email-verification-cleanup",
+			Interval: interval,
+			Run: func(ctx context.Context) error {
+				if emailVerificationCleanupUseCase == nil {
+					return nil
+				}
+				_, err := emailVerificationCleanupUseCase.CleanupEmailVerificationTokens(ctx, time.Now(), gracePeriod, batchSize)
 				return err
 			},
 		}); err != nil {

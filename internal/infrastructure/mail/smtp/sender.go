@@ -18,30 +18,32 @@ var _ port.PasswordResetMailSender = (*Sender)(nil)
 var _ port.EmailVerificationMailSender = (*Sender)(nil)
 
 type Sender struct {
-	host        string
-	port        int
-	username    string
-	password    string
-	from        string
-	startTLS    bool
-	implicitTLS bool
-	passwordResetBaseURL string
-	sendMail    func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error
-	dialTLS     func(network, addr string, tlsConfig *tls.Config) (*tls.Conn, error)
+	host                     string
+	port                     int
+	username                 string
+	password                 string
+	from                     string
+	startTLS                 bool
+	implicitTLS              bool
+	emailVerificationBaseURL string
+	passwordResetBaseURL     string
+	sendMail                 func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error
+	dialTLS                  func(network, addr string, tlsConfig *tls.Config) (*tls.Conn, error)
 }
 
 func NewSender(cfg config.Config) *Sender {
 	return &Sender{
-		host:        strings.TrimSpace(cfg.Delivery.Mail.SMTP.Host),
-		port:        cfg.Delivery.Mail.SMTP.Port,
-		username:    strings.TrimSpace(cfg.Delivery.Mail.SMTP.Username),
-		password:    cfg.Delivery.Mail.SMTP.Password,
-		from:        strings.TrimSpace(cfg.Delivery.Mail.SMTP.From),
-		startTLS:    cfg.Delivery.Mail.SMTP.StartTLS,
-		implicitTLS: cfg.Delivery.Mail.SMTP.ImplicitTLS,
-		passwordResetBaseURL: strings.TrimSpace(cfg.Delivery.Mail.PasswordReset.BaseURL),
-		sendMail:    netsmtp.SendMail,
-		dialTLS:     tls.Dial,
+		host:                     strings.TrimSpace(cfg.Delivery.Mail.SMTP.Host),
+		port:                     cfg.Delivery.Mail.SMTP.Port,
+		username:                 strings.TrimSpace(cfg.Delivery.Mail.SMTP.Username),
+		password:                 cfg.Delivery.Mail.SMTP.Password,
+		from:                     strings.TrimSpace(cfg.Delivery.Mail.SMTP.From),
+		startTLS:                 cfg.Delivery.Mail.SMTP.StartTLS,
+		implicitTLS:              cfg.Delivery.Mail.SMTP.ImplicitTLS,
+		emailVerificationBaseURL: strings.TrimSpace(cfg.Delivery.Mail.EmailVerification.BaseURL),
+		passwordResetBaseURL:     strings.TrimSpace(cfg.Delivery.Mail.PasswordReset.BaseURL),
+		sendMail:                 netsmtp.SendMail,
+		dialTLS:                  tls.Dial,
 	}
 }
 
@@ -60,7 +62,17 @@ func (s *Sender) SendPasswordReset(ctx context.Context, email, token string, exp
 }
 
 func (s *Sender) SendEmailVerification(ctx context.Context, email, token string, expiresAt time.Time) error {
-	return s.send(ctx, email, "Email verification", fmt.Sprintf("Use this email verification token before %s:\n\n%s\n", expiresAt.UTC().Format(time.RFC3339), token))
+	verifyURL := s.emailVerificationBaseURL
+	if verifyURL != "" {
+		verifyURL += "?token=" + url.QueryEscape(token)
+	}
+	body := fmt.Sprintf(
+		"Use the following email verification link before %s:\n\n%s\n\nIf needed, you can also enter this token manually:\n\n%s\n",
+		expiresAt.UTC().Format(time.RFC3339),
+		verifyURL,
+		token,
+	)
+	return s.send(ctx, email, "Email verification", body)
 }
 
 func (s *Sender) send(ctx context.Context, recipient, subject, body string) error {

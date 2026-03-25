@@ -1046,3 +1046,103 @@ func TestAccountService_ConfirmPasswordReset_LogsInvalidToken(t *testing.T) {
 	assert.Contains(t, logBuf.String(), `"event":"password_reset_confirm"`)
 	assert.Contains(t, logBuf.String(), `"outcome":"invalid_token"`)
 }
+
+func TestAccountService_RequestEmailVerification_LogsAuditOutcome(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		repositories.emailVerification,
+		&fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}},
+		newRecordingEmailVerificationMailSender(),
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	require.NoError(t, svc.RequestEmailVerification(context.Background(), user.ID))
+	assert.Contains(t, logBuf.String(), `"event":"email_verification_request"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"issued"`)
+	assert.Contains(t, logBuf.String(), `"user_id":1`)
+	assert.NotContains(t, logBuf.String(), "alice@example.com")
+}
+
+func TestAccountService_RequestEmailVerification_LogsIgnoredUnknownOrIneligible(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		repositories.emailVerification,
+		&fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}},
+		newRecordingEmailVerificationMailSender(),
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	require.NoError(t, svc.RequestEmailVerification(context.Background(), 999))
+	assert.Contains(t, logBuf.String(), `"event":"email_verification_request"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"ignored_unknown_or_ineligible"`)
+}
+
+func TestAccountService_ConfirmEmailVerification_LogsInvalidToken(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		repositories.emailVerification,
+		&fixedEmailVerificationTokenIssuer{},
+		newRecordingEmailVerificationMailSender(),
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+		logger,
+	)
+
+	err := svc.ConfirmEmailVerification(context.Background(), "missing-token")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInvalidToken)
+	assert.Contains(t, logBuf.String(), `"event":"email_verification_confirm"`)
+	assert.Contains(t, logBuf.String(), `"outcome":"invalid_token"`)
+}

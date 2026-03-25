@@ -544,6 +544,14 @@ func (r emailVerificationTokenTxRepository) Update(ctx context.Context, token *e
 	return r.repo.update(token)
 }
 
+func (r emailVerificationTokenTxRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
+	_ = ctx
+	if r.beforeWrite != nil {
+		r.beforeWrite()
+	}
+	return r.repo.deleteExpiredOrConsumedBefore(cutoff, limit), nil
+}
+
 func (r boardTxRepository) SelectBoardByID(ctx context.Context, id int64) (*entity.Board, error) {
 	_ = ctx
 	return r.repo.selectBoardByID(id)

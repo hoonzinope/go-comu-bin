@@ -1,8 +1,8 @@
 package smtp
 
 import (
-	"net/url"
 	netsmtp "net/smtp"
+	"net/url"
 	"testing"
 	"time"
 
@@ -33,6 +33,7 @@ func TestSender_SendEmailVerification_UsesConfiguredTransport(t *testing.T) {
 	cfg.Delivery.Mail.SMTP.Host = "smtp.example.com"
 	cfg.Delivery.Mail.SMTP.Port = 587
 	cfg.Delivery.Mail.SMTP.From = "noreply@example.com"
+	cfg.Delivery.Mail.EmailVerification.BaseURL = "https://app.example.com/verify-email"
 
 	sender := NewSender(cfg)
 	var sentAddr string
@@ -47,6 +48,8 @@ func TestSender_SendEmailVerification_UsesConfiguredTransport(t *testing.T) {
 	}
 	require.NoError(t, sender.SendEmailVerification(t.Context(), "alice@example.com", "verify-token", time.Now().Add(time.Hour)))
 	assert.Equal(t, "smtp.example.com:587", sentAddr)
+	assert.Contains(t, sentMsg, "Subject: Email verification")
+	assert.Contains(t, sentMsg, "https://app.example.com/verify-email?token="+url.QueryEscape("verify-token"))
 	assert.Contains(t, sentMsg, "verify-token")
 }
 
