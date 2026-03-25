@@ -531,6 +531,60 @@
 - `internal/application/service/account/service.go`
 - `internal/infrastructure/mail/smtp/sender.go`
 
+## 2026-03-25 - notification backend contract v2는 UI-friendly 응답 + read-all API로 정리한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 notification inbox API는 목록 조회, unread count, 개별 read 처리만 제공한다.
+- 목록 응답은 snapshot 필드만 있어 프론트가 표현 문구와 이동 타깃을 매번 규칙 기반으로 재조합해야 한다.
+- 현재 레포에는 UI가 없으므로 backend-built route string보다 typed contract를 제공하는 편이 더 안전하다.
+
+관찰
+
+- 현재 목록 응답은 `uuid`, `type`, `actor_uuid`, `post_uuid`, `comment_uuid`, `actor_name`, `post_title`, `comment_preview`, `read_at`, `created_at`까지만 제공한다.
+- unread count API와 개별 read API는 이미 존재한다.
+- notification 적재는 `notification.triggered` outbox event를 통해 비동기 처리되며, type 세트는 `post_commented`, `comment_replied`, `mentioned`로 고정되어 있다.
+
+결론
+
+- `GET /api/v1/users/me/notifications` 응답에 아래 필드를 추가한다.
+  - `is_read`
+  - `target_kind`
+  - `message_key`
+  - `message_args`
+- `target_kind`는 `post|comment`로 고정하고, `comment_uuid != nil`이면 `comment`, 아니면 `post`로 계산한다.
+- `message_key`는 type별 고정값을 사용한다.
+  - `post_commented -> notification.post_commented`
+  - `comment_replied -> notification.comment_replied`
+  - `mentioned -> notification.mentioned`
+- `message_args`는 현재 snapshot 기반 object로 고정한다.
+  - `actor_name`
+  - `post_title`
+  - `comment_preview`
+- `target_path`는 추가하지 않는다. 프론트가 `target_kind + post_uuid/comment_uuid`로 라우팅을 조합한다.
+- bulk read는 `PATCH /api/v1/users/me/notifications/read-all` 한 가지로 제공한다.
+  - UUID 배열 기반 batch read는 이번 범위에 포함하지 않는다.
+- notification 생성 이벤트와 type 세트는 유지한다.
+
+후속 작업
+
+- notification model/response contract 확장
+- notification service query assembly 확장
+- recipient 기준 bulk read 저장소/유스케이스 추가
+- HTTP route / Swagger / API / ARCHITECTURE / ROADMAP 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
+- `internal/application/service/notification/service.go`
+- `internal/delivery/http.go`
+
 ## 2026-03-23 - password reset v1은 email 식별자 + mail sender 포트 + 전체 세션 무효화로 도입한다
 
 상태

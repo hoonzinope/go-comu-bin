@@ -2866,6 +2866,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/me/notifications/read-all": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Marks all notifications as read for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "summary": "Mark All My Notifications Read",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me/notifications/unread-count": {
             "get": {
                 "security": [
@@ -3726,6 +3760,20 @@ const docTemplate = `{
                 }
             }
         },
+        "response.MessageArgs": {
+            "type": "object",
+            "properties": {
+                "actor_name": {
+                    "type": "string"
+                },
+                "comment_preview": {
+                    "type": "string"
+                },
+                "post_title": {
+                    "type": "string"
+                }
+            }
+        },
         "response.Notification": {
             "type": "object",
             "properties": {
@@ -3744,6 +3792,15 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "is_read": {
+                    "type": "boolean"
+                },
+                "message_args": {
+                    "$ref": "#/definitions/response.MessageArgs"
+                },
+                "message_key": {
+                    "type": "string"
+                },
                 "post_title": {
                     "type": "string"
                 },
@@ -3751,6 +3808,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "read_at": {
+                    "type": "string"
+                },
+                "target_kind": {
                     "type": "string"
                 },
                 "type": {

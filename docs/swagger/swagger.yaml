@@ -384,6 +384,15 @@ definitions:
       next_cursor:
         type: string
     type: object
+  response.MessageArgs:
+    properties:
+      actor_name:
+        type: string
+      comment_preview:
+        type: string
+      post_title:
+        type: string
+    type: object
   response.Notification:
     properties:
       actor_name:
@@ -396,11 +405,19 @@ definitions:
         type: string
       created_at:
         type: string
+      is_read:
+        type: boolean
+      message_args:
+        $ref: '#/definitions/response.MessageArgs'
+      message_key:
+        type: string
       post_title:
         type: string
       post_uuid:
         type: string
       read_at:
+        type: string
+      target_kind:
         type: string
       type:
         type: string
@@ -2537,6 +2554,27 @@ paths:
       security:
       - BearerAuth: []
       summary: Mark My Notification Read
+      tags:
+      - Notification
+  /users/me/notifications/read-all:
+    patch:
+      description: Marks all notifications as read for the authenticated user.
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark All My Notifications Read
       tags:
       - Notification
   /users/me/notifications/unread-count:

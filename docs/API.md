@@ -90,11 +90,22 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - 자신의 notification inbox 목록을 조회합니다.
   - 응답 메타: `has_more`, `next_cursor`
   - `limit`은 `1..1000` 범위의 정수여야 합니다.
-  - 응답 필드: `uuid`, `type`, `actor_uuid`, `post_uuid`, `comment_uuid`, `actor_name`, `post_title`, `comment_preview`, `read_at`, `created_at`
-  - v1 알림 타입은 `post_commented`, `comment_replied`, `mentioned` 입니다.
+  - 응답 필드: `uuid`, `type`, `actor_uuid`, `post_uuid`, `comment_uuid`, `actor_name`, `post_title`, `comment_preview`, `is_read`, `target_kind`, `message_key`, `message_args`, `read_at`, `created_at`
+  - `target_kind` 허용값: `post`, `comment`
+  - `comment_uuid != nil`이면 `target_kind=comment`, 아니면 `post`입니다.
+  - `is_read`는 `read_at != nil`의 편의 필드입니다.
+  - `message_key` 허용값
+    - `notification.post_commented`
+    - `notification.comment_replied`
+    - `notification.mentioned`
+  - `message_args`는 `actor_name`, `post_title`, `comment_preview` snapshot을 object로 제공합니다.
+  - 알림 타입은 계속 `post_commented`, `comment_replied`, `mentioned` 입니다.
   - snapshot은 저장 시점 기준 최소 스냅샷을 사용하며, 현재 길이는 `post_title` 50자, `comment_preview` 50자입니다.
 - `GET /api/v1/users/me/notifications/unread-count` (인증 필요)
   - 자신의 unread notification 개수를 조회합니다.
+- `PATCH /api/v1/users/me/notifications/read-all` (인증 필요)
+  - 자신의 unread notification 전체를 읽음 처리합니다.
+  - 이미 모두 읽은 상태여도 성공(`204`)으로 처리합니다.
 - `PATCH /api/v1/users/me/notifications/{notificationUUID}/read` (인증 필요)
   - 자신의 notification 한 건을 읽음 처리합니다.
   - 이미 읽은 notification을 다시 호출해도 성공(`204`)으로 처리합니다.
