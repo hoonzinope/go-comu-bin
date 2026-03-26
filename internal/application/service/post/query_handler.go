@@ -503,17 +503,25 @@ func (h *postQueryHandler) loadRankedPosts(ctx context.Context, sortBy port.Post
 		if len(results) == 0 {
 			break
 		}
-		postsByID := make(map[int64]*entity.Post, len(results))
-		posts := make([]*entity.Post, 0, len(results))
+		postIDs := make([]int64, 0, len(results))
+		seenPostIDs := make(map[int64]struct{}, len(results))
 		for _, result := range results {
-			post, err := h.postRepository.SelectPostByIDIncludingUnpublished(ctx, result.PostID)
-			if err != nil {
-				return nil, customerror.WrapRepository("select post by id for feed", err)
+			if _, ok := seenPostIDs[result.PostID]; ok {
+				continue
 			}
+			seenPostIDs[result.PostID] = struct{}{}
+			postIDs = append(postIDs, result.PostID)
+		}
+		postsByID, err := h.postRepository.SelectPostsByIDsIncludingUnpublished(ctx, postIDs)
+		if err != nil {
+			return nil, customerror.WrapRepository("select posts by ids for feed", err)
+		}
+		posts := make([]*entity.Post, 0, len(postsByID))
+		for _, result := range results {
+			post := postsByID[result.PostID]
 			if post == nil || post.Status != entity.PostStatusPublished {
 				continue
 			}
-			postsByID[result.PostID] = post
 			posts = append(posts, post)
 		}
 		if err := h.resolveBoardVisibility(ctx, posts, boardVisibility); err != nil {

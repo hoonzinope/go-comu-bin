@@ -7,10 +7,28 @@ import (
 	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
+	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type countingPostRepository struct {
+	port.PostRepository
+	singleLookupCount int
+	batchLookupCount  int
+}
+
+func (r *countingPostRepository) SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error) {
+	r.singleLookupCount++
+	return r.PostRepository.SelectPostByIDIncludingUnpublished(ctx, id)
+}
+
+func (r *countingPostRepository) SelectPostsByIDsIncludingUnpublished(ctx context.Context, ids []int64) (map[int64]*entity.Post, error) {
+	r.batchLookupCount++
+	return r.PostRepository.SelectPostsByIDsIncludingUnpublished(ctx, ids)
+}
 
 func TestPostService_GetFeed_DefaultsToHotAndReflectsRankingEvents(t *testing.T) {
 	repositories := newTestRepositories()
@@ -79,6 +97,58 @@ func TestPostService_GetFeed_DefaultsToHotAndReflectsRankingEvents(t *testing.T)
 		}
 		return list.Posts[0].UUID == firstUUID && list.Posts[1].UUID == secondUUID
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestPostService_GetFeed_BatchesRankedPostLookup(t *testing.T) {
+	repositories := newTestRepositories()
+	countingPostRepo := &countingPostRepository{PostRepository: repositories.post}
+	repositories.post = countingPostRepo
+
+	cache := newTestCache()
+	actionDispatcher := newTestActionDispatcher(t, repositories, cache)
+	postSvc := NewPostServiceWithActionDispatcher(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		repositories.postSearch,
+		repositories.postRanking,
+		repositories.tag,
+		repositories.postTag,
+		repositories.attachment,
+		repositories.comment,
+		repositories.reaction,
+		repositories.unitOfWork,
+		cache,
+		actionDispatcher,
+		newTestCachePolicy(),
+		newTestAuthorizationPolicy(),
+	)
+
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	boardUUID := mustBoardUUID(t, repositories.board, boardID)
+
+	_, err := postSvc.CreatePost(context.Background(), "older", "body", nil, nil, userID, boardUUID)
+	require.NoError(t, err)
+	time.Sleep(10 * time.Millisecond)
+	_, err = postSvc.CreatePost(context.Background(), "newer", "body", nil, nil, userID, boardUUID)
+	require.NoError(t, err)
+	_, err = postSvc.CreatePost(context.Background(), "newest", "body", nil, nil, userID, boardUUID)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		results, err := repositories.postRanking.ListFeed(context.Background(), "hot", "", 10, nil)
+		if err != nil {
+			return false
+		}
+		return len(results) == 3
+	}, time.Second, 10*time.Millisecond)
+
+	list, err := postSvc.GetFeed(context.Background(), "", "", 10, "")
+	require.NoError(t, err)
+	require.Len(t, list.Posts, 3)
+	assert.Equal(t, 1, countingPostRepo.batchLookupCount)
+	assert.Zero(t, countingPostRepo.singleLookupCount)
 }
 
 func TestPostService_GetFeed_HidesDraftsAndHiddenBoards(t *testing.T) {

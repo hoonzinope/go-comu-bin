@@ -121,6 +121,25 @@ func (r *PostRepository) SelectPostUUIDsByIDsIncludingDeleted(ctx context.Contex
 	return out, nil
 }
 
+func (r *PostRepository) SelectPostsByIDsIncludingUnpublished(ctx context.Context, ids []int64) (map[int64]*entity.Post, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[int64]*entity.Post, len(ids))
+	for _, id := range ids {
+		post, exists := r.postDB.Data[id]
+		if !exists || post.Status == entity.PostStatusDeleted {
+			continue
+		}
+		out[id] = clonePost(post)
+	}
+	return out, nil
+}
+
 func (r *PostRepository) selectPostByID(id int64) (*entity.Post, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

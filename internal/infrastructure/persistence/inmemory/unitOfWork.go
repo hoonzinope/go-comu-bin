@@ -613,6 +613,10 @@ func (r postTxRepository) SelectPostUUIDsByIDsIncludingDeleted(ctx context.Conte
 	_ = ctx
 	return r.repo.SelectPostUUIDsByIDsIncludingDeleted(ctx, ids)
 }
+func (r postTxRepository) SelectPostsByIDsIncludingUnpublished(ctx context.Context, ids []int64) (map[int64]*entity.Post, error) {
+	_ = ctx
+	return r.repo.SelectPostsByIDsIncludingUnpublished(ctx, ids)
+}
 func (r postTxRepository) SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error) {
 	_ = ctx
 	return r.repo.selectPostByIDIncludingUnpublished(id)
