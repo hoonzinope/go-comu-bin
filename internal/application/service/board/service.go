@@ -19,8 +19,6 @@ import (
 
 var _ port.BoardUseCase = (*BoardService)(nil)
 
-type Service = BoardService
-
 type BoardService struct {
 	userRepository      port.UserRepository
 	boardRepository     port.BoardRepository
@@ -37,10 +35,6 @@ func NewBoardService(userRepository port.UserRepository, boardRepository port.Bo
 	return NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewBoardService(userRepository, boardRepository, postRepository, unitOfWork, cache, cachePolicy, authorizationPolicy, logger...)
-}
-
 func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *BoardService {
 	return &BoardService{
 		userRepository:      userRepository,
@@ -53,10 +47,6 @@ func NewBoardServiceWithActionDispatcher(userRepository port.UserRepository, boa
 		authorizationPolicy: authorizationPolicy,
 		logger:              svccommon.ResolveLogger(logger),
 	}
-}
-
-func NewServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, actionDispatcher, cachePolicy, authorizationPolicy, logger...)
 }
 
 func (s *BoardService) GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {

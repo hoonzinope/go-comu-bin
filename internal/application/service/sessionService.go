@@ -7,8 +7,6 @@ import (
 	sessionsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/session"
 )
 
-type SessionService = sessionsvc.Service
-
-func NewSessionService(credentialVerifier port.CredentialVerifier, guestIssuer port.GuestAccountIssuer, userRepository port.UserRepository, tokenPort port.TokenProvider, sessionRepository port.SessionRepository, logger ...*slog.Logger) *SessionService {
-	return sessionsvc.NewService(credentialVerifier, guestIssuer, userRepository, tokenPort, sessionRepository, logger...)
+func NewSessionService(credentialVerifier port.CredentialVerifier, guestIssuer port.GuestAccountIssuer, userRepository port.UserRepository, tokenPort port.TokenProvider, sessionRepository port.SessionRepository, logger ...*slog.Logger) *sessionsvc.SessionService {
+	return sessionsvc.NewSessionService(credentialVerifier, guestIssuer, userRepository, tokenPort, sessionRepository, logger...)
 }

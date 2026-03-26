@@ -15,8 +15,6 @@ import (
 
 var _ port.OutboxAdminUseCase = (*OutboxAdminService)(nil)
 
-type Service = OutboxAdminService
-
 type OutboxAdminService struct {
 	userRepository      port.UserRepository
 	outboxStore         port.OutboxStore
@@ -31,10 +29,6 @@ func NewOutboxAdminService(userRepository port.UserRepository, outboxStore port.
 		authorizationPolicy: authorizationPolicy,
 		logger:              svccommon.ResolveLogger(logger),
 	}
-}
-
-func NewService(userRepository port.UserRepository, outboxStore port.OutboxStore, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewOutboxAdminService(userRepository, outboxStore, authorizationPolicy, logger...)
 }
 
 func (s *OutboxAdminService) GetDeadMessages(ctx context.Context, adminID int64, limit int, lastID string) (*model.OutboxDeadMessageList, error) {

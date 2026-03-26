@@ -5,8 +5,6 @@ import (
 	emailverificationcleanupsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/emailverificationcleanup"
 )
 
-type EmailVerificationCleanupService = emailverificationcleanupsvc.Service
-
-func NewEmailVerificationCleanupService(verificationTokens port.EmailVerificationTokenRepository) *EmailVerificationCleanupService {
+func NewEmailVerificationCleanupService(verificationTokens port.EmailVerificationTokenRepository) *emailverificationcleanupsvc.Service {
 	return emailverificationcleanupsvc.NewService(verificationTokens)
 }

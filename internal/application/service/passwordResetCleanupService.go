@@ -5,8 +5,6 @@ import (
 	passwordresetcleanupsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/passwordresetcleanup"
 )
 
-type PasswordResetCleanupService = passwordresetcleanupsvc.Service
-
-func NewPasswordResetCleanupService(resetTokens port.PasswordResetTokenRepository) *PasswordResetCleanupService {
+func NewPasswordResetCleanupService(resetTokens port.PasswordResetTokenRepository) *passwordresetcleanupsvc.Service {
 	return passwordresetcleanupsvc.NewService(resetTokens)
 }

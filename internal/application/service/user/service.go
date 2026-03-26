@@ -23,8 +23,6 @@ var _ port.UserUseCase = (*UserService)(nil)
 var _ port.CredentialVerifier = (*UserService)(nil)
 var _ port.AdminAuthorizer = (*UserService)(nil)
 
-type Service = UserService
-
 type UserService struct {
 	userRepository       port.UserRepository
 	passwordHasher       port.PasswordHasher
@@ -47,10 +45,6 @@ func NewUserService(userRepository port.UserRepository, passwordHasher port.Pass
 		unitOfWork:          unitOfWork,
 		authorizationPolicy: authorizationPolicy,
 	}
-}
-
-func NewService(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, authorizationPolicies ...policy.AuthorizationPolicy) *Service {
-	return NewUserService(userRepository, passwordHasher, unitOfWork, authorizationPolicies...)
 }
 
 func NewUserServiceWithEmailVerification(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, verificationTokens port.EmailVerificationTokenRepository, verificationIssuer port.EmailVerificationTokenIssuer, verificationMailer port.EmailVerificationMailSender, verificationTokenTTL time.Duration, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {

@@ -94,7 +94,7 @@ func newTestAuthorizationPolicy() policy.AuthorizationPolicy {
 	return policy.NewRoleAuthorizationPolicy()
 }
 
-func newTestPostService(t testing.TB, repositories testRepositories, cache port.Cache) *PostService {
+func newTestPostService(t testing.TB, repositories testRepositories, cache port.Cache) port.PostUseCase {
 	t.Helper()
 	actionDispatcher := newTestActionDispatcher(t, repositories, cache)
 	return NewPostServiceWithActionDispatcher(
@@ -116,7 +116,7 @@ func newTestPostService(t testing.TB, repositories testRepositories, cache port.
 	)
 }
 
-func newTestBoardService(t testing.TB, repositories testRepositories, cache port.Cache) *BoardService {
+func newTestBoardService(t testing.TB, repositories testRepositories, cache port.Cache) port.BoardUseCase {
 	t.Helper()
 	actionDispatcher := newTestActionDispatcher(t, repositories, cache)
 	return NewBoardServiceWithActionDispatcher(

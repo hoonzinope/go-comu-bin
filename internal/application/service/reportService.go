@@ -8,8 +8,6 @@ import (
 	reportsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/report"
 )
 
-type ReportService = reportsvc.Service
-
 func NewReportServiceWithActionDispatcher(
 	userRepository port.UserRepository,
 	postRepository port.PostRepository,
@@ -19,6 +17,6 @@ func NewReportServiceWithActionDispatcher(
 	actionDispatcher port.ActionHookDispatcher,
 	authorizationPolicy policy.AuthorizationPolicy,
 	logger ...*slog.Logger,
-) *ReportService {
+) *reportsvc.Service {
 	return reportsvc.NewServiceWithActionDispatcher(userRepository, postRepository, commentRepository, reportRepository, unitOfWork, actionDispatcher, authorizationPolicy, logger...)
 }

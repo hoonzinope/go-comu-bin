@@ -10,8 +10,6 @@ import (
 
 var _ port.GuestCleanupUseCase = (*GuestCleanupService)(nil)
 
-type Service = GuestCleanupService
-
 type GuestCleanupService struct {
 	userRepository     port.UserRepository
 	postRepository     port.PostRepository
@@ -32,10 +30,6 @@ func NewGuestCleanupService(userRepository port.UserRepository, postRepository p
 		sessionRepository:  sessionRepository,
 		unitOfWork:         unitOfWork,
 	}
-}
-
-func NewService(userRepository port.UserRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, reportRepository port.ReportRepository, sessionRepository port.SessionRepository, unitOfWork port.UnitOfWork) *Service {
-	return NewGuestCleanupService(userRepository, postRepository, commentRepository, reactionRepository, reportRepository, sessionRepository, unitOfWork)
 }
 
 func (s *GuestCleanupService) CleanupGuests(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) (int, error) {

@@ -14,8 +14,6 @@ import (
 
 var _ port.SessionUseCase = (*SessionService)(nil)
 
-type Service = SessionService
-
 type SessionService struct {
 	credentialVerifier port.CredentialVerifier
 	guestIssuer        port.GuestAccountIssuer
@@ -34,10 +32,6 @@ func NewSessionService(credentialVerifier port.CredentialVerifier, guestIssuer p
 		sessionRepository:  sessionRepository,
 		logger:             svccommon.ResolveLogger(logger),
 	}
-}
-
-func NewService(credentialVerifier port.CredentialVerifier, guestIssuer port.GuestAccountIssuer, userRepository port.UserRepository, tokenPort port.TokenProvider, sessionRepository port.SessionRepository, logger ...*slog.Logger) *Service {
-	return NewSessionService(credentialVerifier, guestIssuer, userRepository, tokenPort, sessionRepository, logger...)
 }
 
 func (s *SessionService) Login(ctx context.Context, username, password string) (string, error) {

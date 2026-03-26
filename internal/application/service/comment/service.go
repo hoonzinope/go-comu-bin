@@ -13,8 +13,6 @@ import (
 
 var _ port.CommentUseCase = (*CommentService)(nil)
 
-type Service = CommentService
-
 type CommentService struct {
 	queryHandler   *commentQueryHandler
 	commandHandler *commentCommandHandler
@@ -24,19 +22,11 @@ func NewCommentService(userRepository port.UserRepository, boardRepository port.
 	return NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy, authorizationPolicy, logger...)
 }
 
-func NewService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewCommentService(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, cachePolicy, authorizationPolicy, logger...)
-}
-
 func NewCommentServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *CommentService {
 	return &CommentService{
 		queryHandler:   newCommentQueryHandler(userRepository, boardRepository, postRepository, commentRepository, cache, cachePolicy),
 		commandHandler: newCommentCommandHandler(unitOfWork, svccommon.ResolveActionDispatcher(actionDispatcher), authorizationPolicy),
 	}
-}
-
-func NewServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, unitOfWork port.UnitOfWork, cache port.Cache, actionDispatcher port.ActionHookDispatcher, cachePolicy appcache.Policy, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, actionDispatcher, cachePolicy, authorizationPolicy, logger...)
 }
 
 func (s *CommentService) CreateComment(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUID string, parentUUID *string) (string, error) {

@@ -8,10 +8,8 @@ import (
 	accountsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/account"
 )
 
-type AccountService = accountsvc.Service
-
-func NewAccountService(userUseCase port.UserUseCase, sessionUseCase port.SessionUseCase, logger ...*slog.Logger) *AccountService {
-	return accountsvc.NewService(userUseCase, sessionUseCase, logger...)
+func NewAccountService(userUseCase port.UserUseCase, sessionUseCase port.SessionUseCase, logger ...*slog.Logger) *accountsvc.AccountService {
+	return accountsvc.NewAccountService(userUseCase, sessionUseCase, logger...)
 }
 
 func NewAccountServiceWithGuestUpgrade(
@@ -31,8 +29,8 @@ func NewAccountServiceWithGuestUpgrade(
 	resetMailer port.PasswordResetMailSender,
 	resetTokenTTL time.Duration,
 	logger ...*slog.Logger,
-) *AccountService {
-	return accountsvc.NewServiceWithGuestUpgrade(
+) *accountsvc.AccountService {
+	return accountsvc.NewAccountServiceWithGuestUpgrade(
 		userUseCase,
 		sessionUseCase,
 		userRepository,

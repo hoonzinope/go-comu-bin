@@ -15,8 +15,6 @@ import (
 var _ port.AttachmentUseCase = (*AttachmentService)(nil)
 var _ port.AttachmentCleanupUseCase = (*AttachmentService)(nil)
 
-type Service = AttachmentService
-
 type AttachmentService struct {
 	queryHandler    *attachmentQueryHandler
 	commandHandler  *attachmentCommandHandler
@@ -27,16 +25,8 @@ func NewAttachmentService(userRepository port.UserRepository, boardRepository po
 	return NewAttachmentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, ImageOptimizationConfig{Enabled: true, JPEGQuality: 82}, authorizationPolicy, logger...)
 }
 
-func NewService(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewAttachmentService(userRepository, boardRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, maxUploadSizeBytes, authorizationPolicy, logger...)
-}
-
 func NewAttachmentServiceWithOptions(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
 	return NewAttachmentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, nil, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
-}
-
-func NewServiceWithOptions(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewAttachmentServiceWithOptions(userRepository, boardRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
 }
 
 func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *AttachmentService {
@@ -46,10 +36,6 @@ func NewAttachmentServiceWithActionDispatcher(userRepository port.UserRepository
 		commandHandler:  newAttachmentCommandHandler(boardRepository, postRepository, userRepository, unitOfWork, fileStorage, svccommon.ResolveActionDispatcher(actionDispatcher), maxUploadSizeBytes, imageOptimization, authorizationPolicy, resolvedLogger),
 		cleanupWorkflow: newAttachmentCleanupWorkflow(attachmentRepository, fileStorage),
 	}
-}
-
-func NewServiceWithActionDispatcher(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, attachmentRepository port.AttachmentRepository, unitOfWork port.UnitOfWork, fileStorage port.FileStorage, cache port.Cache, actionDispatcher port.ActionHookDispatcher, maxUploadSizeBytes int64, imageOptimization ImageOptimizationConfig, authorizationPolicy policy.AuthorizationPolicy, logger ...*slog.Logger) *Service {
-	return NewAttachmentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, attachmentRepository, unitOfWork, fileStorage, cache, actionDispatcher, maxUploadSizeBytes, imageOptimization, authorizationPolicy, logger...)
 }
 
 func (s *AttachmentService) CreatePostAttachment(ctx context.Context, postUUID string, userID int64, fileName, contentType string, sizeBytes int64, storageKey string) (string, error) {
