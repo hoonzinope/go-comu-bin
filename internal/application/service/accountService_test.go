@@ -269,6 +269,82 @@ func (c *failOnDeleteByPrefixCache) GetOrSetWithTTL(ctx context.Context, key str
 	return loader(ctx)
 }
 
+type failOnNthSetWithTTLCache struct {
+	mu              sync.Mutex
+	data            map[string]struct{}
+	failOn          int
+	setWithTTLCalls int
+}
+
+func (c *failOnNthSetWithTTLCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.data[key]
+	return nil, ok, nil
+}
+
+func (c *failOnNthSetWithTTLCache) Set(ctx context.Context, key string, value interface{}) error {
+	return c.SetWithTTL(ctx, key, value, 0)
+}
+
+func (c *failOnNthSetWithTTLCache) SetWithTTL(ctx context.Context, key string, value interface{}, ttlSeconds int) error {
+	_ = ctx
+	_ = value
+	_ = ttlSeconds
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setWithTTLCalls++
+	if c.failOn > 0 && c.setWithTTLCalls == c.failOn {
+		return errors.New("session save failed")
+	}
+	if c.data == nil {
+		c.data = map[string]struct{}{}
+	}
+	c.data[key] = struct{}{}
+	return nil
+}
+
+func (c *failOnNthSetWithTTLCache) Delete(ctx context.Context, key string) error {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.data, key)
+	return nil
+}
+
+func (c *failOnNthSetWithTTLCache) DeleteByPrefix(ctx context.Context, prefix string) (int, error) {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	deleted := 0
+	for key := range c.data {
+		if strings.HasPrefix(key, prefix) {
+			delete(c.data, key)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
+func (c *failOnNthSetWithTTLCache) ExistsByPrefix(ctx context.Context, prefix string) (bool, error) {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key := range c.data {
+		if strings.HasPrefix(key, prefix) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (c *failOnNthSetWithTTLCache) GetOrSetWithTTL(ctx context.Context, key string, ttlSeconds int, loader func(context.Context) (interface{}, error)) (interface{}, error) {
+	_ = key
+	_ = ttlSeconds
+	return loader(ctx)
+}
+
 func (c *failOnTokenDeleteCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
 	_ = ctx
 	c.mu.Lock()
@@ -972,7 +1048,7 @@ func TestAccountService_ConfirmPasswordReset_RollsBackWhenSessionInvalidationFai
 	assert.False(t, savedToken.IsConsumed())
 }
 
-func TestAccountService_ConfirmPasswordReset_DoesNotMutateStoredStateBeforeSessionInvalidation(t *testing.T) {
+func TestAccountService_ConfirmPasswordReset_RestoresStateAfterSessionInvalidationFails(t *testing.T) {
 	repositories := newTestRepositories()
 	passwordHasher := newTestPasswordHasher()
 	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
@@ -989,9 +1065,7 @@ func TestAccountService_ConfirmPasswordReset_DoesNotMutateStoredStateBeforeSessi
 	require.NoError(t, sessionRepository.Save(context.Background(), user.ID, "token-a", 60))
 
 	wrappedUserRepo := &failOnNthUserUpdateRepository{
-		base:   repositories.user,
-		failOn: 1,
-		err:    errors.New("update should not be attempted before session invalidation"),
+		base: repositories.user,
 	}
 	unitOfWork := accountTestUnitOfWork{
 		scope: accountTestTxScope{
@@ -1021,7 +1095,7 @@ func TestAccountService_ConfirmPasswordReset_DoesNotMutateStoredStateBeforeSessi
 	err = svc.ConfirmPasswordReset(context.Background(), "reset-token-1", "newpw")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
-	assert.Zero(t, wrappedUserRepo.updateCalls)
+	assert.Equal(t, 2, wrappedUserRepo.updateCalls)
 
 	userID, err := userService.VerifyCredentials(context.Background(), "alice", "oldpw")
 	require.NoError(t, err)
@@ -1031,6 +1105,63 @@ func TestAccountService_ConfirmPasswordReset_DoesNotMutateStoredStateBeforeSessi
 	require.NoError(t, err)
 	require.NotNil(t, savedToken)
 	assert.False(t, savedToken.IsConsumed())
+}
+
+func TestAccountService_UpgradeGuestAccount_RollsBackWhenNewSessionSaveFails(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	cacheBackend := &failOnNthSetWithTTLCache{failOn: 2}
+	sessionRepository := auth.NewCacheSessionRepository(cacheBackend)
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	oldToken, err := tokenProvider.IdToToken(guestID)
+	require.NoError(t, err)
+	require.NoError(t, sessionRepository.Save(context.Background(), guestID, oldToken, tokenProvider.TTLSeconds()))
+
+	emailIssuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	mailer := newRecordingEmailVerificationMailSender()
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		tokenProvider,
+		sessionRepository,
+		repositories.emailVerification,
+		emailIssuer,
+		mailer,
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	_, err = svc.UpgradeGuestAccount(context.Background(), guestID, oldToken, "alice", "alice@example.com", "pw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
+
+	userAfter, err := repositories.user.SelectUserByID(context.Background(), guestID)
+	require.NoError(t, err)
+	require.NotNil(t, userAfter)
+	assert.True(t, userAfter.IsGuest())
+	assert.Equal(t, "guest-1", userAfter.Name)
+
+	oldExists, err := sessionRepository.Exists(context.Background(), guestID, oldToken)
+	require.NoError(t, err)
+	assert.True(t, oldExists)
+
+	savedVerification, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, savedVerification)
+	assert.True(t, savedVerification.IsConsumed())
+
+	assert.Len(t, mailer.sent, 1)
 }
 
 func TestAccountService_RequestPasswordReset_LogsAuditOutcome(t *testing.T) {

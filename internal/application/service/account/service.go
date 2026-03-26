@@ -18,8 +18,6 @@ import (
 
 var _ port.AccountUseCase = (*AccountService)(nil)
 
-type Service = AccountService
-
 type AccountService struct {
 	userUseCase          port.UserUseCase
 	sessionUseCase       port.SessionUseCase
@@ -48,10 +46,6 @@ func NewAccountService(userUseCase port.UserUseCase, sessionUseCase port.Session
 		sessionUseCase: sessionUseCase,
 		logger:         svccommon.ResolveLogger(logger),
 	}
-}
-
-func NewService(userUseCase port.UserUseCase, sessionUseCase port.SessionUseCase, logger ...*slog.Logger) *Service {
-	return NewAccountService(userUseCase, sessionUseCase, logger...)
 }
 
 func NewAccountServiceWithGuestUpgrade(
@@ -106,7 +100,7 @@ func NewServiceWithGuestUpgrade(
 	resetMailer port.PasswordResetMailSender,
 	resetTokenTTL time.Duration,
 	logger ...*slog.Logger,
-) *Service {
+) *AccountService {
 	return NewAccountServiceWithGuestUpgrade(
 		userUseCase,
 		sessionUseCase,
@@ -168,26 +162,37 @@ func (s *AccountService) UpgradeGuestAccount(ctx context.Context, userID int64, 
 		if err != nil {
 			return customerror.WrapToken("issue guest upgrade token", err)
 		}
-		if err := scope.Save(ctx, userID, candidateToken, s.tokenProvider.TTLSeconds()); err != nil {
-			return customerror.WrapRepository("save upgraded session", err)
+		if err := scope.Delete(ctx, userID, currentToken); err != nil {
+			return customerror.WrapRepository("delete current session for guest upgrade", err)
 		}
 
 		originalUser, err := s.applyGuestUpgrade(ctx, userID, username, email, hashedPassword)
 		if err != nil {
-			_ = scope.Delete(ctx, userID, candidateToken)
+			restoreErr := scope.Save(ctx, userID, currentToken, s.tokenProvider.TTLSeconds())
+			if restoreErr != nil {
+				return errors.Join(
+					err,
+					customerror.WrapRepository("restore current session after failed guest upgrade", restoreErr),
+				)
+			}
 			return err
 		}
 
-		if err := scope.Delete(ctx, userID, currentToken); err != nil {
-			restoreErr := s.restoreUserState(ctx, originalUser)
+		if err := scope.Save(ctx, userID, candidateToken, s.tokenProvider.TTLSeconds()); err != nil {
 			_ = scope.Delete(ctx, userID, candidateToken)
-			if restoreErr != nil {
-				return errors.Join(
-					customerror.WrapRepository("delete current session for guest upgrade", err),
-					customerror.WrapRepository("restore guest after session rollback", restoreErr),
-				)
+			restoreUserErr := s.restoreUserState(ctx, originalUser)
+			restoreTokenErr := scope.Save(ctx, userID, currentToken, s.tokenProvider.TTLSeconds())
+			rollbackErrs := []error{customerror.WrapRepository("save upgraded session", err)}
+			if restoreUserErr != nil {
+				rollbackErrs = append(rollbackErrs, customerror.WrapRepository("restore guest after failed upgrade", restoreUserErr))
 			}
-			return customerror.WrapRepository("delete current session for guest upgrade", err)
+			if invalidateErr := s.invalidateEmailVerificationTokens(ctx, userID); invalidateErr != nil {
+				rollbackErrs = append(rollbackErrs, invalidateErr)
+			}
+			if restoreTokenErr != nil {
+				rollbackErrs = append(rollbackErrs, customerror.WrapRepository("restore current session after failed guest upgrade", restoreTokenErr))
+			}
+			return errors.Join(rollbackErrs...)
 		}
 
 		newToken = candidateToken
@@ -383,31 +388,11 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 	}
 
 	err = s.sessionRepo.WithUserLock(ctx, userID, func(scope port.SessionRepositoryScope) error {
+		var (
+			originalUser  *entity.User
+			originalToken *entity.PasswordResetToken
+		)
 		err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-			txCtx := tx.Context()
-			resetToken, err := tx.PasswordResetTokenRepository().SelectByTokenHash(txCtx, tokenHash)
-			if err != nil {
-				return customerror.WrapRepository("select password reset token before session invalidation", err)
-			}
-			if resetToken == nil || !resetToken.IsUsable(time.Now()) {
-				return customerror.ErrInvalidToken
-			}
-			user, err := tx.UserRepository().SelectUserByID(txCtx, resetToken.UserID)
-			if err != nil {
-				return customerror.WrapRepository("select user by id before session invalidation", err)
-			}
-			if user == nil || user.IsGuest() || user.IsDeleted() {
-				return customerror.ErrInvalidToken
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		if err := scope.DeleteByUser(ctx, userID); err != nil {
-			return customerror.WrapRepository("delete user sessions for password reset confirm", err)
-		}
-		return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 			txCtx := tx.Context()
 			resetToken, err := tx.PasswordResetTokenRepository().SelectByTokenHash(txCtx, tokenHash)
 			if err != nil {
@@ -423,6 +408,10 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 			if user == nil || user.IsGuest() || user.IsDeleted() {
 				return customerror.ErrInvalidToken
 			}
+			originalUserCopy := *user
+			originalTokenCopy := *resetToken
+			originalUser = &originalUserCopy
+			originalToken = &originalTokenCopy
 
 			user.Password = hashedPassword
 			user.UpdatedAt = time.Now()
@@ -435,6 +424,20 @@ func (s *AccountService) ConfirmPasswordReset(ctx context.Context, token, newPas
 			}
 			return nil
 		})
+		if err != nil {
+			return err
+		}
+		if err := scope.DeleteByUser(ctx, userID); err != nil {
+			restoreErr := s.restorePasswordResetState(ctx, originalUser, originalToken)
+			if restoreErr != nil {
+				return errors.Join(
+					customerror.WrapRepository("delete user sessions for password reset confirm", err),
+					customerror.WrapRepository("restore password reset state after failed session invalidation", restoreErr),
+				)
+			}
+			return customerror.WrapRepository("delete user sessions for password reset confirm", err)
+		}
+		return nil
 	})
 	if err != nil {
 		if errors.Is(err, customerror.ErrInvalidToken) {
@@ -526,6 +529,15 @@ func (s *AccountService) restorePasswordResetState(ctx context.Context, user *en
 			if err := tx.PasswordResetTokenRepository().Update(txCtx, &restoreToken); err != nil {
 				return customerror.WrapRepository("restore password reset token after failed password reset", err)
 			}
+		}
+		return nil
+	})
+}
+
+func (s *AccountService) invalidateEmailVerificationTokens(ctx context.Context, userID int64) error {
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		if err := tx.EmailVerificationTokenRepository().InvalidateByUser(tx.Context(), userID); err != nil {
+			return customerror.WrapRepository("invalidate email verification tokens", err)
 		}
 		return nil
 	})
