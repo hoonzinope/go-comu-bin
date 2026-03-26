@@ -39,6 +39,7 @@ import (
 	noopmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/noop"
 	smtpmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/smtp"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
+	sqlitepersist "github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/sqlite"
 	rateLimitInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/ratelimit/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
 	objectstorage "github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/object"
@@ -57,22 +58,32 @@ func main() {
 	appCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	userRepository := inmemory.NewUserRepository()
-	boardRepository := inmemory.NewBoardRepository()
-	tagRepository := inmemory.NewTagRepository()
-	postTagRepository := inmemory.NewPostTagRepository()
-	postRepository := inmemory.NewPostRepository(tagRepository, postTagRepository)
-	postSearchStore := inmemory.NewPostSearchStore(postRepository, tagRepository, postTagRepository)
+	authDB, err := sqlitepersist.Open(appCtx, sqlitepersist.Options{Path: cfg.Database.Path})
+	if err != nil {
+		slog.Error("failed to initialize sqlite auth database", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if closeErr := authDB.Close(); closeErr != nil {
+			slog.Warn("failed to close sqlite auth database", "error", closeErr)
+		}
+	}()
+
+	userRepository := sqlitepersist.NewUserRepository(authDB)
+	boardRepository := sqlitepersist.NewBoardRepository(authDB)
+	tagRepository := sqlitepersist.NewTagRepository(authDB)
+	postTagRepository := sqlitepersist.NewPostTagRepository(authDB)
+	postRepository := sqlitepersist.NewPostRepository(authDB)
+	postSearchRepository := sqlitepersist.NewPostSearchRepository(authDB)
 	postRankingRepository := inmemory.NewPostRankingRepository()
-	commentRepository := inmemory.NewCommentRepository()
-	reactionRepository := inmemory.NewReactionRepository()
-	attachmentRepository := inmemory.NewAttachmentRepository()
-	reportRepository := inmemory.NewReportRepository()
-	notificationRepository := inmemory.NewNotificationRepository()
-	emailVerificationRepository := inmemory.NewEmailVerificationTokenRepository()
-	passwordResetRepository := inmemory.NewPasswordResetTokenRepository()
-	outboxRepository := inmemory.NewOutboxRepository(
-		inmemory.WithProcessingTimeout(time.Duration(cfg.Event.Outbox.ProcessingLeaseMillis) * time.Millisecond),
+	commentRepository := sqlitepersist.NewCommentRepository(authDB)
+	reactionRepository := sqlitepersist.NewReactionRepository(authDB)
+	attachmentRepository := sqlitepersist.NewAttachmentRepository(authDB)
+	reportRepository := sqlitepersist.NewReportRepository(authDB)
+	notificationRepository := sqlitepersist.NewNotificationRepository(authDB)
+	outboxRepository := sqlitepersist.NewOutboxRepository(
+		authDB,
+		sqlitepersist.WithProcessingTimeout(time.Duration(cfg.Event.Outbox.ProcessingLeaseMillis)*time.Millisecond),
 	)
 	fileStorage, err := newFileStorage(cfg)
 	if err != nil {
@@ -89,7 +100,9 @@ func main() {
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logger
-	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, emailVerificationRepository, passwordResetRepository, outboxRepository)
+	emailVerificationRepository := sqlitepersist.NewEmailVerificationTokenRepository(authDB)
+	passwordResetRepository := sqlitepersist.NewPasswordResetTokenRepository(authDB)
+	unitOfWork := sqlitepersist.NewUnitOfWork(authDB, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, emailVerificationRepository, passwordResetRepository, outboxRepository)
 	eventSerializer := appevent.NewJSONEventSerializer()
 	outboxRelay := eventOutbox.NewRelay(
 		outboxRepository,
@@ -106,7 +119,7 @@ func main() {
 		},
 	)
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
-	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
+	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchRepository)
 	postRankingHandler := appevent.NewPostRankingHandler(postRankingRepository)
 	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
@@ -120,7 +133,7 @@ func main() {
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
-	if err := postSearchStore.RebuildAll(appCtx); err != nil {
+	if err := postSearchRepository.RebuildAll(appCtx); err != nil {
 		slog.Error("failed to build post search index", "error", err)
 		os.Exit(1)
 	}
@@ -129,7 +142,7 @@ func main() {
 	mailers := newMailSenders(cfg)
 	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), mailers, 30*time.Minute)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
-	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
+	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	notificationUseCase := service.NewNotificationService(userRepository, postRepository, commentRepository, notificationRepository)
 	reactionUseCase := service.NewReactionServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), appLogger)

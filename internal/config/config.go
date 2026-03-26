@@ -22,6 +22,9 @@ type Config struct {
 		ListTTLSeconds   int `yaml:"listTTLSeconds"`
 		DetailTTLSeconds int `yaml:"detailTTLSeconds"`
 	} `yaml:"cache"`
+	Database struct {
+		Path string `yaml:"path"`
+	} `yaml:"database"`
 	Admin struct {
 		Bootstrap struct {
 			Enabled  bool   `yaml:"enabled"`
@@ -154,6 +157,7 @@ func Load() (*Config, error) {
 	bindEnv(v,
 		"cache.listTTLSeconds",
 		"cache.detailTTLSeconds",
+		"database.path",
 		"admin.bootstrap.enabled",
 		"admin.bootstrap.username",
 		"admin.bootstrap.password",
@@ -243,6 +247,7 @@ func bindEnv(v *viper.Viper, keys ...string) {
 func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("cache.listTTLSeconds", 30)
 	v.SetDefault("cache.detailTTLSeconds", 30)
+	v.SetDefault("database.path", "./data/data.db")
 	v.SetDefault("admin.bootstrap.enabled", false)
 	v.SetDefault("storage.provider", "local")
 	v.SetDefault("storage.local.rootDir", "./data/uploads")
@@ -443,6 +448,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Cache.DetailTTLSeconds <= 0 {
 		return fmt.Errorf("invalid cache.detailTTLSeconds: %d (must be > 0)", cfg.Cache.DetailTTLSeconds)
+	}
+	if strings.TrimSpace(cfg.Database.Path) == "" {
+		return fmt.Errorf("invalid database.path: cannot be empty")
 	}
 	switch cfg.Storage.Provider {
 	case "local":
