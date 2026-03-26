@@ -1158,10 +1158,9 @@ func TestAccountService_UpgradeGuestAccount_RollsBackWhenNewSessionSaveFails(t *
 
 	savedVerification, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
 	require.NoError(t, err)
-	require.NotNil(t, savedVerification)
-	assert.True(t, savedVerification.IsConsumed())
+	assert.Nil(t, savedVerification)
 
-	assert.Len(t, mailer.sent, 1)
+	assert.Empty(t, mailer.sent)
 }
 
 func TestAccountService_RequestPasswordReset_LogsAuditOutcome(t *testing.T) {

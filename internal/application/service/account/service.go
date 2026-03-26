@@ -162,35 +162,26 @@ func (s *AccountService) UpgradeGuestAccount(ctx context.Context, userID int64, 
 		if err != nil {
 			return customerror.WrapToken("issue guest upgrade token", err)
 		}
-		if err := scope.Delete(ctx, userID, currentToken); err != nil {
-			return customerror.WrapRepository("delete current session for guest upgrade", err)
+		if err := scope.Save(ctx, userID, candidateToken, s.tokenProvider.TTLSeconds()); err != nil {
+			return customerror.WrapRepository("save upgraded session", err)
 		}
 
 		originalUser, err := s.applyGuestUpgrade(ctx, userID, username, email, hashedPassword)
 		if err != nil {
-			restoreErr := scope.Save(ctx, userID, currentToken, s.tokenProvider.TTLSeconds())
-			if restoreErr != nil {
-				return errors.Join(
-					err,
-					customerror.WrapRepository("restore current session after failed guest upgrade", restoreErr),
-				)
-			}
+			_ = scope.Delete(ctx, userID, candidateToken)
 			return err
 		}
 
-		if err := scope.Save(ctx, userID, candidateToken, s.tokenProvider.TTLSeconds()); err != nil {
-			_ = scope.Delete(ctx, userID, candidateToken)
-			restoreUserErr := s.restoreUserState(ctx, originalUser)
-			restoreTokenErr := scope.Save(ctx, userID, currentToken, s.tokenProvider.TTLSeconds())
-			rollbackErrs := []error{customerror.WrapRepository("save upgraded session", err)}
-			if restoreUserErr != nil {
+		if err := scope.Delete(ctx, userID, currentToken); err != nil {
+			rollbackErrs := []error{customerror.WrapRepository("delete current session for guest upgrade", err)}
+			if deleteErr := scope.Delete(ctx, userID, candidateToken); deleteErr != nil {
+				rollbackErrs = append(rollbackErrs, customerror.WrapRepository("delete upgraded session after failed guest upgrade", deleteErr))
+			}
+			if restoreUserErr := s.restoreUserState(ctx, originalUser); restoreUserErr != nil {
 				rollbackErrs = append(rollbackErrs, customerror.WrapRepository("restore guest after failed upgrade", restoreUserErr))
 			}
 			if invalidateErr := s.invalidateEmailVerificationTokens(ctx, userID); invalidateErr != nil {
 				rollbackErrs = append(rollbackErrs, invalidateErr)
-			}
-			if restoreTokenErr != nil {
-				rollbackErrs = append(rollbackErrs, customerror.WrapRepository("restore current session after failed guest upgrade", restoreTokenErr))
 			}
 			return errors.Join(rollbackErrs...)
 		}
