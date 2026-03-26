@@ -30,6 +30,8 @@ func TestEmailVerificationTokenRepository_SaveInvalidateAndCleanup(t *testing.T)
 	now := time.Now()
 	first := entity.NewEmailVerificationToken(1, "hash-1", now.Add(time.Hour))
 	second := entity.NewEmailVerificationToken(1, "hash-2", now.Add(time.Hour))
+	first.CreatedAt = now.Add(-time.Minute)
+	second.CreatedAt = now
 	require.NoError(t, repo.Save(context.Background(), first))
 	require.NoError(t, repo.Save(context.Background(), second))
 
@@ -37,6 +39,11 @@ func TestEmailVerificationTokenRepository_SaveInvalidateAndCleanup(t *testing.T)
 	require.NoError(t, err)
 	require.NotNil(t, loaded)
 	assert.Equal(t, int64(1), loaded.UserID)
+
+	latest, err := repo.SelectLatestByUser(context.Background(), 1)
+	require.NoError(t, err)
+	require.NotNil(t, latest)
+	assert.Equal(t, "hash-2", latest.TokenHash)
 
 	require.NoError(t, repo.InvalidateByUser(context.Background(), 1))
 	loaded, err = repo.SelectByTokenHash(context.Background(), "hash-1")
@@ -57,6 +64,8 @@ func TestPasswordResetTokenRepository_SaveInvalidateAndCleanup(t *testing.T) {
 	now := time.Now()
 	first := entity.NewPasswordResetToken(1, "hash-1", now.Add(time.Hour))
 	second := entity.NewPasswordResetToken(1, "hash-2", now.Add(time.Hour))
+	first.CreatedAt = now.Add(-time.Minute)
+	second.CreatedAt = now
 	require.NoError(t, repo.Save(context.Background(), first))
 	require.NoError(t, repo.Save(context.Background(), second))
 
@@ -64,6 +73,11 @@ func TestPasswordResetTokenRepository_SaveInvalidateAndCleanup(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, loaded)
 	assert.Equal(t, int64(1), loaded.UserID)
+
+	latest, err := repo.SelectLatestByUser(context.Background(), 1)
+	require.NoError(t, err)
+	require.NotNil(t, latest)
+	assert.Equal(t, "hash-2", latest.TokenHash)
 
 	require.NoError(t, repo.InvalidateByUser(context.Background(), 1))
 	loaded, err = repo.SelectByTokenHash(context.Background(), "hash-1")

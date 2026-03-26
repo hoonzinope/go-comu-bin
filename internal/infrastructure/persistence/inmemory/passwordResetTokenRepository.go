@@ -64,6 +64,28 @@ func (r *PasswordResetTokenRepository) selectByTokenHash(tokenHash string) (*ent
 	return clonePasswordResetToken(token), nil
 }
 
+func (r *PasswordResetTokenRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.PasswordResetToken, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectLatestByUser(userID), nil
+}
+
+func (r *PasswordResetTokenRepository) selectLatestByUser(userID int64) *entity.PasswordResetToken {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var latest *entity.PasswordResetToken
+	for _, token := range r.tokens {
+		if token.UserID != userID {
+			continue
+		}
+		if latest == nil || token.CreatedAt.After(latest.CreatedAt) || (token.CreatedAt.Equal(latest.CreatedAt) && token.TokenHash > latest.TokenHash) {
+			latest = token
+		}
+	}
+	return clonePasswordResetToken(latest)
+}
+
 func (r *PasswordResetTokenRepository) InvalidateByUser(ctx context.Context, userID int64) error {
 	_ = ctx
 	r.coordinator.enter()

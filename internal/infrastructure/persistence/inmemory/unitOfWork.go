@@ -110,7 +110,7 @@ func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardReposit
 
 func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxScope) error) error {
 	u.mu.Lock()
-	defer u.mu.Unlock()
+	released := false
 
 	var (
 		postState                    postRepositoryState
@@ -153,46 +153,66 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		passwordResetLocked          bool
 		outboxLocked                 bool
 	)
-	defer func() {
+	releaseLocks := func() {
 		if outboxLocked {
 			u.outboxRepository.coordinator.unlock()
+			outboxLocked = false
 		}
 		if notificationLocked {
 			u.notificationRepository.coordinator.unlock()
+			notificationLocked = false
 		}
 		if emailVerificationLocked {
 			u.emailVerificationTokens.coordinator.unlock()
+			emailVerificationLocked = false
 		}
 		if passwordResetLocked {
 			u.passwordResetTokens.coordinator.unlock()
+			passwordResetLocked = false
 		}
 		if reportLocked {
 			u.reportRepository.coordinator.unlock()
+			reportLocked = false
 		}
 		if attachmentLocked {
 			u.attachmentRepository.coordinator.unlock()
+			attachmentLocked = false
 		}
 		if reactionLocked {
 			u.reactionRepository.coordinator.unlock()
+			reactionLocked = false
 		}
 		if commentLocked {
 			u.commentRepository.coordinator.unlock()
+			commentLocked = false
 		}
 		if postTagLocked {
 			u.postTagRepo.coordinator.unlock()
+			postTagLocked = false
 		}
 		if tagLocked {
 			u.tagRepository.coordinator.unlock()
+			tagLocked = false
 		}
 		if postLocked {
 			u.postRepository.coordinator.unlock()
+			postLocked = false
 		}
 		if boardLocked {
 			u.boardRepository.coordinator.unlock()
+			boardLocked = false
 		}
 		if userLocked {
 			u.userRepository.coordinator.unlock()
+			userLocked = false
 		}
+	}
+	defer func() {
+		if released {
+			return
+		}
+		releaseLocks()
+		u.mu.Unlock()
 	}()
 
 	capturePost := func() {
@@ -397,6 +417,9 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		}
 		return err
 	}
+	releaseLocks()
+	u.mu.Unlock()
+	released = true
 	for _, hook := range tx.afterCommit {
 		if hook == nil {
 			continue
@@ -541,6 +564,11 @@ func (r emailVerificationTokenTxRepository) Save(ctx context.Context, token *ent
 func (r emailVerificationTokenTxRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.EmailVerificationToken, error) {
 	_ = ctx
 	return r.repo.selectByTokenHash(tokenHash)
+}
+
+func (r emailVerificationTokenTxRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.EmailVerificationToken, error) {
+	_ = ctx
+	return r.repo.selectLatestByUser(userID), nil
 }
 
 func (r emailVerificationTokenTxRepository) InvalidateByUser(ctx context.Context, userID int64) error {
@@ -985,6 +1013,11 @@ func (r passwordResetTokenTxRepository) Save(ctx context.Context, token *entity.
 func (r passwordResetTokenTxRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.PasswordResetToken, error) {
 	_ = ctx
 	return r.repo.selectByTokenHash(tokenHash)
+}
+
+func (r passwordResetTokenTxRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.PasswordResetToken, error) {
+	_ = ctx
+	return r.repo.selectLatestByUser(userID), nil
 }
 
 func (r passwordResetTokenTxRepository) InvalidateByUser(ctx context.Context, userID int64) error {

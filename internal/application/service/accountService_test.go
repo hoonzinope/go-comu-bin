@@ -98,6 +98,7 @@ type fixedEmailVerificationTokenIssuer struct {
 type failingEmailVerificationTokenRepository struct {
 	base          port.EmailVerificationTokenRepository
 	invalidateErr error
+	updateErr     error
 }
 
 func (r *failingEmailVerificationTokenRepository) Save(ctx context.Context, token *entity.EmailVerificationToken) error {
@@ -108,6 +109,10 @@ func (r *failingEmailVerificationTokenRepository) SelectByTokenHash(ctx context.
 	return r.base.SelectByTokenHash(ctx, tokenHash)
 }
 
+func (r *failingEmailVerificationTokenRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.EmailVerificationToken, error) {
+	return r.base.SelectLatestByUser(ctx, userID)
+}
+
 func (r *failingEmailVerificationTokenRepository) InvalidateByUser(ctx context.Context, userID int64) error {
 	if r.invalidateErr != nil {
 		return r.invalidateErr
@@ -116,6 +121,9 @@ func (r *failingEmailVerificationTokenRepository) InvalidateByUser(ctx context.C
 }
 
 func (r *failingEmailVerificationTokenRepository) Update(ctx context.Context, token *entity.EmailVerificationToken) error {
+	if r.updateErr != nil {
+		return r.updateErr
+	}
 	return r.base.Update(ctx, token)
 }
 
@@ -742,7 +750,7 @@ func TestAccountService_UpgradeGuestAccount_RollsBackGuestStateWhenMailSendFails
 	assert.False(t, saved.IsUsable(time.Now()))
 }
 
-func TestAccountService_UpgradeGuestAccount_KeepsGuestStateWhenVerificationCleanupFails(t *testing.T) {
+func TestAccountService_UpgradeGuestAccount_RollsBackGuestStateWhenVerificationActivationFails(t *testing.T) {
 	repositories := newTestRepositories()
 	passwordHasher := newTestPasswordHasher()
 	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
@@ -757,9 +765,7 @@ func TestAccountService_UpgradeGuestAccount_KeepsGuestStateWhenVerificationClean
 	require.NoError(t, cache.Save(context.Background(), guestID, oldToken, tokenProvider.TTLSeconds()))
 
 	mailer := newRecordingEmailVerificationMailSender()
-	mailer.err = errors.New("send failed")
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
-	cleanupErr := errors.New("cleanup failed")
 	svc := NewAccountServiceWithGuestUpgrade(
 		userService,
 		&stubSessionUseCase{},
@@ -770,7 +776,7 @@ func TestAccountService_UpgradeGuestAccount_KeepsGuestStateWhenVerificationClean
 		cache,
 		&failingEmailVerificationTokenRepository{
 			base:          repositories.emailVerification,
-			invalidateErr: cleanupErr,
+			updateErr:     errors.New("activation failed"),
 		},
 		issuer,
 		mailer,
@@ -784,7 +790,7 @@ func TestAccountService_UpgradeGuestAccount_KeepsGuestStateWhenVerificationClean
 	_, err = svc.UpgradeGuestAccount(context.Background(), guestID, oldToken, "alice", "alice@example.com", "pw")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
-	assert.Contains(t, err.Error(), "cleanup failed")
+	assert.Contains(t, err.Error(), "activation failed")
 
 	userAfter, err := repositories.user.SelectUserByID(context.Background(), guestID)
 	require.NoError(t, err)
@@ -800,7 +806,8 @@ func TestAccountService_UpgradeGuestAccount_KeepsGuestStateWhenVerificationClean
 	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
 	require.NoError(t, err)
 	require.NotNil(t, saved)
-	assert.True(t, saved.IsUsable(time.Now()))
+	assert.True(t, saved.IsConsumed())
+	assert.False(t, saved.IsUsable(time.Now()))
 }
 
 func TestAccountService_UpgradeGuestAccount_RollsBackWhenSessionDeleteFails(t *testing.T) {
@@ -1093,6 +1100,51 @@ func TestAccountService_RequestEmailVerification_DoesNotSendMailWhenCommitFails(
 	err = svc.RequestEmailVerification(context.Background(), user.ID)
 	require.Error(t, err)
 	require.Empty(t, mailer.sent)
+}
+
+func TestAccountService_RequestEmailVerification_RollsBackWhenMailSendFails(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	mailer := newRecordingEmailVerificationMailSender()
+	mailer.err = errors.New("send failed")
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		repositories.emailVerification,
+		issuer,
+		mailer,
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	err = svc.RequestEmailVerification(context.Background(), user.ID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
+	require.Len(t, mailer.sent, 1)
+	assert.Equal(t, "alice@example.com", mailer.sent[0].email)
+	assert.Equal(t, "verify-token-1", mailer.sent[0].token)
+
+	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsConsumed())
+	assert.False(t, saved.IsUsable(time.Now()))
 }
 
 func TestAccountService_ConfirmEmailVerification_VerifiesUserAndConsumesTokens(t *testing.T) {

@@ -245,9 +245,6 @@ func (s *AccountService) RequestEmailVerification(ctx context.Context, userID in
 	if err != nil {
 		if strings.Contains(err.Error(), "send email verification mail") {
 			s.logEmailVerificationRequest(userID, "mail_failed")
-			if invalidateErr := s.invalidateEmailVerificationTokens(context.Background(), userID); invalidateErr != nil {
-				return errors.Join(err, invalidateErr)
-			}
 		}
 		return err
 	}
@@ -321,7 +318,6 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 	}
 
 	outcome := "ignored_unknown_or_ineligible"
-	var userID int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByEmail(txCtx, email)
@@ -331,20 +327,25 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 		if user == nil || user.IsGuest() || user.IsDeleted() {
 			return nil
 		}
-		userID = user.ID
 		rawToken, err := s.resetIssuer.Issue()
 		if err != nil {
 			return customerror.Wrap(customerror.ErrInternalServerError, "issue password reset token", err)
 		}
 		expiresAt := time.Now().Add(tokenTTL)
+		tokenHash := hashResetToken(rawToken)
+		resetToken := entity.NewPasswordResetToken(user.ID, tokenHash, expiresAt)
+		resetToken.Consume(time.Now())
 		if err := tx.PasswordResetTokenRepository().InvalidateByUser(txCtx, user.ID); err != nil {
 			return customerror.WrapRepository("invalidate previous password reset tokens", err)
 		}
-		if err := tx.PasswordResetTokenRepository().Save(txCtx, entity.NewPasswordResetToken(user.ID, hashResetToken(rawToken), expiresAt)); err != nil {
+		if err := tx.PasswordResetTokenRepository().Save(txCtx, resetToken); err != nil {
 			return customerror.WrapRepository("save password reset token", err)
 		}
 		tx.AfterCommit(func() error {
 			if err := s.resetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
+				return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
+			}
+			if err := s.activatePasswordResetToken(context.Background(), user.ID, tokenHash); err != nil {
 				return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
 			}
 			return nil
@@ -355,9 +356,6 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 	if err != nil {
 		if strings.Contains(err.Error(), "send password reset mail") {
 			s.logPasswordResetRequest(email, "mail_failed")
-			if invalidateErr := s.invalidatePasswordResetTokens(context.Background(), userID); invalidateErr != nil {
-				return errors.Join(err, invalidateErr)
-			}
 		}
 		return err
 	}
@@ -554,6 +552,48 @@ func (s *AccountService) invalidatePasswordResetTokens(ctx context.Context, user
 	})
 }
 
+func (s *AccountService) activateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string) error {
+	if s == nil || s.verificationTokens == nil || userID <= 0 || tokenHash == "" {
+		return nil
+	}
+	latestToken, err := s.verificationTokens.SelectLatestByUser(ctx, userID)
+	if err != nil {
+		return customerror.WrapRepository("select latest email verification token after send", err)
+	}
+	if latestToken == nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", errors.New("latest email verification token not found"))
+	}
+	if latestToken.TokenHash != tokenHash || !latestToken.IsConsumed() {
+		return nil
+	}
+	latestToken.ConsumedAt = nil
+	if err := s.verificationTokens.Update(ctx, latestToken); err != nil {
+		return customerror.WrapRepository("send email verification mail", err)
+	}
+	return nil
+}
+
+func (s *AccountService) activatePasswordResetToken(ctx context.Context, userID int64, tokenHash string) error {
+	if s == nil || s.resetTokens == nil || userID <= 0 || tokenHash == "" {
+		return nil
+	}
+	latestToken, err := s.resetTokens.SelectLatestByUser(ctx, userID)
+	if err != nil {
+		return customerror.WrapRepository("select latest password reset token after send", err)
+	}
+	if latestToken == nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", errors.New("latest password reset token not found"))
+	}
+	if latestToken.TokenHash != tokenHash || !latestToken.IsConsumed() {
+		return nil
+	}
+	latestToken.ConsumedAt = nil
+	if err := s.resetTokens.Update(ctx, latestToken); err != nil {
+		return customerror.WrapRepository("send password reset mail", err)
+	}
+	return nil
+}
+
 func (s *AccountService) issueAndSendEmailVerification(ctx context.Context, tx port.TxScope, user *entity.User) error {
 	if tx == nil || user == nil || s.verificationTokens == nil || s.verificationIssuer == nil || s.verificationMailer == nil {
 		return nil
@@ -570,14 +610,20 @@ func (s *AccountService) issueAndSendEmailVerification(ctx context.Context, tx p
 		return customerror.Wrap(customerror.ErrInternalServerError, "issue email verification token", err)
 	}
 	expiresAt := time.Now().Add(tokenTTL)
+	tokenHash := hashEmailVerificationToken(rawToken)
+	verificationToken := entity.NewEmailVerificationToken(user.ID, tokenHash, expiresAt)
+	verificationToken.Consume(time.Now())
 	if err := tx.EmailVerificationTokenRepository().InvalidateByUser(ctx, user.ID); err != nil {
 		return customerror.WrapRepository("invalidate previous email verification tokens", err)
 	}
-	if err := tx.EmailVerificationTokenRepository().Save(ctx, entity.NewEmailVerificationToken(user.ID, hashEmailVerificationToken(rawToken), expiresAt)); err != nil {
+	if err := tx.EmailVerificationTokenRepository().Save(ctx, verificationToken); err != nil {
 		return customerror.WrapRepository("save email verification token", err)
 	}
 	tx.AfterCommit(func() error {
 		if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
+			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+		}
+		if err := s.activateEmailVerificationToken(context.Background(), user.ID, tokenHash); err != nil {
 			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
 		}
 		return nil

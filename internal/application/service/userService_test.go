@@ -43,6 +43,11 @@ func TestUserService_SignUp_SendsEmailVerificationWhenConfigured(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.False(t, user.IsEmailVerified())
+
+	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsUsable(time.Now()))
 }
 
 func TestUserService_SignUp_DoesNotSendVerificationEmailWhenCommitFails(t *testing.T) {
@@ -101,19 +106,17 @@ func TestUserService_SignUp_RollsBackCreatedUserWhenMailSendFails(t *testing.T) 
 	assert.False(t, saved.IsUsable(time.Now()))
 }
 
-func TestUserService_SignUp_DeletesUserWhenVerificationCleanupFails(t *testing.T) {
+func TestUserService_SignUp_DeletesUserWhenVerificationActivationFails(t *testing.T) {
 	repositories := newTestRepositories()
 	mailer := newRecordingEmailVerificationMailSender()
-	mailer.err = errors.New("send failed")
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
-	cleanupErr := errors.New("cleanup failed")
 	svc := NewUserServiceWithEmailVerification(
 		repositories.user,
 		newTestPasswordHasher(),
 		repositories.unitOfWork,
 		&failingEmailVerificationTokenRepository{
 			base:          repositories.emailVerification,
-			invalidateErr: cleanupErr,
+			updateErr:     errors.New("activation failed"),
 		},
 		issuer,
 		mailer,
@@ -123,7 +126,7 @@ func TestUserService_SignUp_DeletesUserWhenVerificationCleanupFails(t *testing.T
 	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
-	assert.Contains(t, err.Error(), "cleanup failed")
+	assert.Contains(t, err.Error(), "activation failed")
 
 	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
 	require.NoError(t, err)
@@ -132,7 +135,8 @@ func TestUserService_SignUp_DeletesUserWhenVerificationCleanupFails(t *testing.T
 	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
 	require.NoError(t, err)
 	require.NotNil(t, saved)
-	assert.True(t, saved.IsUsable(time.Now()))
+	assert.True(t, saved.IsConsumed())
+	assert.False(t, saved.IsUsable(time.Now()))
 }
 
 func TestUserService_IssueGuestAccount_Success(t *testing.T) {

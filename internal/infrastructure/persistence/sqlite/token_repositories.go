@@ -37,6 +37,10 @@ func (r *EmailVerificationTokenRepository) SelectByTokenHash(ctx context.Context
 	return selectEmailVerificationToken(ctx, r.exec, tokenHash)
 }
 
+func (r *EmailVerificationTokenRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.EmailVerificationToken, error) {
+	return selectLatestEmailVerificationTokenByUser(ctx, r.exec, userID)
+}
+
 func (r *EmailVerificationTokenRepository) InvalidateByUser(ctx context.Context, userID int64) error {
 	return invalidateTokensByUser(ctx, r.exec, "email_verification_tokens", userID)
 }
@@ -55,6 +59,10 @@ func (r *PasswordResetTokenRepository) Save(ctx context.Context, token *entity.P
 
 func (r *PasswordResetTokenRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.PasswordResetToken, error) {
 	return selectPasswordResetToken(ctx, r.exec, tokenHash)
+}
+
+func (r *PasswordResetTokenRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.PasswordResetToken, error) {
+	return selectLatestPasswordResetTokenByUser(ctx, r.exec, userID)
 }
 
 func (r *PasswordResetTokenRepository) InvalidateByUser(ctx context.Context, userID int64) error {
@@ -172,6 +180,32 @@ WHERE token_hash = ?
 	return &out, nil
 }
 
+func selectLatestEmailVerificationTokenByUser(ctx context.Context, exec sqlExecutor, userID int64) (*entity.EmailVerificationToken, error) {
+	row := exec.QueryRowContext(ctx, `
+SELECT token_hash, user_id, created_at, expires_at, consumed_at
+FROM email_verification_tokens
+WHERE user_id = ?
+ORDER BY created_at DESC, token_hash DESC
+LIMIT 1
+`, userID)
+	var (
+		out        entity.EmailVerificationToken
+		createdAt  int64
+		expiresAt  int64
+		consumedAt sql.NullInt64
+	)
+	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("select latest email verification token: %w", err)
+	}
+	out.CreatedAt = time.Unix(0, createdAt).UTC()
+	out.ExpiresAt = time.Unix(0, expiresAt).UTC()
+	out.ConsumedAt = unixNanoToTimePtr(consumedAt)
+	return &out, nil
+}
+
 func selectPasswordResetToken(ctx context.Context, exec sqlExecutor, tokenHash string) (*entity.PasswordResetToken, error) {
 	row := exec.QueryRowContext(ctx, `
 SELECT token_hash, user_id, created_at, expires_at, consumed_at
@@ -189,6 +223,32 @@ WHERE token_hash = ?
 			return nil, nil
 		}
 		return nil, fmt.Errorf("select password reset token: %w", err)
+	}
+	out.CreatedAt = time.Unix(0, createdAt).UTC()
+	out.ExpiresAt = time.Unix(0, expiresAt).UTC()
+	out.ConsumedAt = unixNanoToTimePtr(consumedAt)
+	return &out, nil
+}
+
+func selectLatestPasswordResetTokenByUser(ctx context.Context, exec sqlExecutor, userID int64) (*entity.PasswordResetToken, error) {
+	row := exec.QueryRowContext(ctx, `
+SELECT token_hash, user_id, created_at, expires_at, consumed_at
+FROM password_reset_tokens
+WHERE user_id = ?
+ORDER BY created_at DESC, token_hash DESC
+LIMIT 1
+`, userID)
+	var (
+		out        entity.PasswordResetToken
+		createdAt  int64
+		expiresAt  int64
+		consumedAt sql.NullInt64
+	)
+	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("select latest password reset token: %w", err)
 	}
 	out.CreatedAt = time.Unix(0, createdAt).UTC()
 	out.ExpiresAt = time.Unix(0, expiresAt).UTC()

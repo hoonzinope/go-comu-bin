@@ -22,6 +22,15 @@ func TestPasswordResetTokenRepository_SaveSelectInvalidateAndUpdate(t *testing.T
 	assert.Equal(t, int64(1), saved.UserID)
 	assert.True(t, saved.IsUsable(time.Now()))
 
+	next := entity.NewPasswordResetToken(1, "hash-2", time.Now().Add(time.Hour))
+	next.CreatedAt = token.CreatedAt.Add(time.Minute)
+	require.NoError(t, repo.Save(context.Background(), next))
+
+	latest, err := repo.SelectLatestByUser(context.Background(), 1)
+	require.NoError(t, err)
+	require.NotNil(t, latest)
+	assert.Equal(t, "hash-2", latest.TokenHash)
+
 	require.NoError(t, repo.InvalidateByUser(context.Background(), 1))
 
 	invalidated, err := repo.SelectByTokenHash(context.Background(), "hash-1")
@@ -29,8 +38,6 @@ func TestPasswordResetTokenRepository_SaveSelectInvalidateAndUpdate(t *testing.T
 	require.NotNil(t, invalidated)
 	assert.True(t, invalidated.IsConsumed())
 
-	next := entity.NewPasswordResetToken(1, "hash-2", time.Now().Add(time.Hour))
-	require.NoError(t, repo.Save(context.Background(), next))
 	next.Consume(time.Now())
 	require.NoError(t, repo.Update(context.Background(), next))
 

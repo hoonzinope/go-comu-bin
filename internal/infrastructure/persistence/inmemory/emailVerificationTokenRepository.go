@@ -63,6 +63,28 @@ func (r *EmailVerificationTokenRepository) selectByTokenHash(tokenHash string) (
 	return cloneEmailVerificationToken(token), nil
 }
 
+func (r *EmailVerificationTokenRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.EmailVerificationToken, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectLatestByUser(userID), nil
+}
+
+func (r *EmailVerificationTokenRepository) selectLatestByUser(userID int64) *entity.EmailVerificationToken {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var latest *entity.EmailVerificationToken
+	for _, token := range r.tokens {
+		if token.UserID != userID {
+			continue
+		}
+		if latest == nil || token.CreatedAt.After(latest.CreatedAt) || (token.CreatedAt.Equal(latest.CreatedAt) && token.TokenHash > latest.TokenHash) {
+			latest = token
+		}
+	}
+	return cloneEmailVerificationToken(latest)
+}
+
 func (r *EmailVerificationTokenRepository) InvalidateByUser(ctx context.Context, userID int64) error {
 	_ = ctx
 	r.coordinator.enter()

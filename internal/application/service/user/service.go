@@ -105,9 +105,6 @@ func (s *UserService) SignUp(ctx context.Context, username, email, password stri
 			if deleteErr := s.deleteSignupUserAfterMailFailure(context.Background(), newUser.ID); deleteErr != nil {
 				rollbackErrs = append(rollbackErrs, deleteErr)
 			}
-			if cleanupErr := s.invalidateEmailVerificationTokens(context.Background(), newUser.ID); cleanupErr != nil {
-				rollbackErrs = append(rollbackErrs, cleanupErr)
-			}
 			if len(rollbackErrs) > 1 {
 				return "", errors.Join(rollbackErrs...)
 			}
@@ -133,14 +130,20 @@ func (s *UserService) issueAndSendEmailVerification(ctx context.Context, tx port
 		return customerror.Wrap(customerror.ErrInternalServerError, "issue email verification token", err)
 	}
 	expiresAt := time.Now().Add(tokenTTL)
+	tokenHash := hashEmailVerificationToken(rawToken)
+	verificationToken := entity.NewEmailVerificationToken(user.ID, tokenHash, expiresAt)
+	verificationToken.Consume(time.Now())
 	if err := tx.EmailVerificationTokenRepository().InvalidateByUser(ctx, user.ID); err != nil {
 		return customerror.WrapRepository("invalidate previous email verification tokens", err)
 	}
-	if err := tx.EmailVerificationTokenRepository().Save(ctx, entity.NewEmailVerificationToken(user.ID, hashEmailVerificationToken(rawToken), expiresAt)); err != nil {
+	if err := tx.EmailVerificationTokenRepository().Save(ctx, verificationToken); err != nil {
 		return customerror.WrapRepository("save email verification token", err)
 	}
 	tx.AfterCommit(func() error {
 		if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
+			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+		}
+		if err := s.activateEmailVerificationToken(context.Background(), user.ID, tokenHash); err != nil {
 			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
 		}
 		return nil
@@ -161,12 +164,23 @@ func (s *UserService) deleteSignupUserAfterMailFailure(ctx context.Context, user
 	})
 }
 
-func (s *UserService) invalidateEmailVerificationTokens(ctx context.Context, userID int64) error {
-	if s == nil || s.verificationTokens == nil || userID <= 0 {
+func (s *UserService) activateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string) error {
+	if s == nil || s.verificationTokens == nil || userID <= 0 || tokenHash == "" {
 		return nil
 	}
-	if err := s.verificationTokens.InvalidateByUser(ctx, userID); err != nil {
-		return customerror.WrapRepository("invalidate email verification tokens after mail failure", err)
+	latestToken, err := s.verificationTokens.SelectLatestByUser(ctx, userID)
+	if err != nil {
+		return customerror.WrapRepository("select latest email verification token after send", err)
+	}
+	if latestToken == nil {
+		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", errors.New("latest email verification token not found"))
+	}
+	if latestToken.TokenHash != tokenHash || !latestToken.IsConsumed() {
+		return nil
+	}
+	latestToken.ConsumedAt = nil
+	if err := s.verificationTokens.Update(ctx, latestToken); err != nil {
+		return customerror.WrapRepository("send email verification mail", err)
 	}
 	return nil
 }

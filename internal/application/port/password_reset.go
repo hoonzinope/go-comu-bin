@@ -10,6 +10,7 @@ import (
 type PasswordResetTokenRepository interface {
 	Save(ctx context.Context, token *entity.PasswordResetToken) error
 	SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.PasswordResetToken, error)
+	SelectLatestByUser(ctx context.Context, userID int64) (*entity.PasswordResetToken, error)
 	InvalidateByUser(ctx context.Context, userID int64) error
 	Update(ctx context.Context, token *entity.PasswordResetToken) error
 	DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error)
