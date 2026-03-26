@@ -361,8 +361,8 @@
 - search cursor 파서는 sort family별로 분기한다.
   - `relevance`는 기존 search cursor 형식을 사용한다.
   - `hot|latest|top`은 feed cursor 형식을 사용한다.
-- password reset 발급은 메일 발송 실패 시 live token이 남지 않는 경계로 유지한다.
-  - token 저장/무효화와 메일 발송은 같은 success boundary 안에서 처리한다.
+- password reset 발급은 메일 발송 실패 시 live token이 남지 않도록, token을 먼저 pending 상태로 저장하고 발송 성공 후에만 활성화한다.
+  - token 저장/무효화와 mail activation은 하나의 후속 처리 경계 안에서 처리한다.
 
 후속 작업
 
