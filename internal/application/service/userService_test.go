@@ -45,6 +45,31 @@ func TestUserService_SignUp_SendsEmailVerificationWhenConfigured(t *testing.T) {
 	assert.False(t, user.IsEmailVerified())
 }
 
+func TestUserService_SignUp_DoesNotSendVerificationEmailWhenCommitFails(t *testing.T) {
+	repositories := newTestRepositories()
+	mailer := newRecordingEmailVerificationMailSender()
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	svc := NewUserServiceWithEmailVerification(
+		repositories.user,
+		newTestPasswordHasher(),
+		failingCommitUnitOfWork{
+			scope: &accountTestTxScope{
+				user:              repositories.user,
+				emailVerification: repositories.emailVerification,
+			},
+			err: errors.New("commit failed"),
+		},
+		repositories.emailVerification,
+		issuer,
+		mailer,
+		30*time.Minute,
+	)
+
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.Error(t, err)
+	require.Empty(t, mailer.sent)
+}
+
 func TestUserService_IssueGuestAccount_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)

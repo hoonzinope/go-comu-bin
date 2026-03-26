@@ -85,11 +85,19 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 		passwordResetRepo:      NewPasswordResetTokenRepository(tx),
 		outbox:                 NewOutboxAppender(tx),
 	}
-	if err := fn(scope); err != nil {
+	if err := fn(&scope); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit sqlite transaction: %w", err)
+	}
+	for _, hook := range scope.afterCommit {
+		if hook == nil {
+			continue
+		}
+		if err := hook(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -109,27 +117,35 @@ type sqliteTxScope struct {
 	emailVerificationRepo  *EmailVerificationTokenRepository
 	passwordResetRepo      *PasswordResetTokenRepository
 	outbox                 port.OutboxAppender
+	afterCommit            []func() error
 }
 
-func (s sqliteTxScope) Context() context.Context                    { return s.ctx }
-func (s sqliteTxScope) UserRepository() port.UserRepository         { return s.userRepository }
-func (s sqliteTxScope) BoardRepository() port.BoardRepository       { return s.boardRepository }
-func (s sqliteTxScope) PostRepository() port.PostRepository         { return s.postRepository }
-func (s sqliteTxScope) TagRepository() port.TagRepository           { return s.tagRepository }
-func (s sqliteTxScope) PostTagRepository() port.PostTagRepository   { return s.postTagRepository }
-func (s sqliteTxScope) CommentRepository() port.CommentRepository   { return s.commentRepository }
-func (s sqliteTxScope) ReactionRepository() port.ReactionRepository { return s.reactionRepository }
-func (s sqliteTxScope) AttachmentRepository() port.AttachmentRepository {
+func (s *sqliteTxScope) AfterCommit(fn func() error) {
+	if fn == nil {
+		return
+	}
+	s.afterCommit = append(s.afterCommit, fn)
+}
+
+func (s *sqliteTxScope) Context() context.Context                    { return s.ctx }
+func (s *sqliteTxScope) UserRepository() port.UserRepository         { return s.userRepository }
+func (s *sqliteTxScope) BoardRepository() port.BoardRepository       { return s.boardRepository }
+func (s *sqliteTxScope) PostRepository() port.PostRepository         { return s.postRepository }
+func (s *sqliteTxScope) TagRepository() port.TagRepository           { return s.tagRepository }
+func (s *sqliteTxScope) PostTagRepository() port.PostTagRepository   { return s.postTagRepository }
+func (s *sqliteTxScope) CommentRepository() port.CommentRepository   { return s.commentRepository }
+func (s *sqliteTxScope) ReactionRepository() port.ReactionRepository { return s.reactionRepository }
+func (s *sqliteTxScope) AttachmentRepository() port.AttachmentRepository {
 	return s.attachmentRepository
 }
-func (s sqliteTxScope) ReportRepository() port.ReportRepository { return s.reportRepository }
-func (s sqliteTxScope) NotificationRepository() port.NotificationRepository {
+func (s *sqliteTxScope) ReportRepository() port.ReportRepository { return s.reportRepository }
+func (s *sqliteTxScope) NotificationRepository() port.NotificationRepository {
 	return s.notificationRepository
 }
-func (s sqliteTxScope) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
+func (s *sqliteTxScope) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
 	return s.emailVerificationRepo
 }
-func (s sqliteTxScope) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
+func (s *sqliteTxScope) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
 	return s.passwordResetRepo
 }
-func (s sqliteTxScope) Outbox() port.OutboxAppender { return s.outbox }
+func (s *sqliteTxScope) Outbox() port.OutboxAppender { return s.outbox }

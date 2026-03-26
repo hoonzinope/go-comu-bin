@@ -100,6 +100,11 @@ func (s *UserService) SignUp(ctx context.Context, username, email, password stri
 		return nil
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "send email verification mail") {
+			if invalidateErr := s.invalidateEmailVerificationTokens(context.Background(), newUser.ID); invalidateErr != nil {
+				return "", errors.Join(err, invalidateErr)
+			}
+		}
 		return "", err
 	}
 	return "ok", nil
@@ -127,8 +132,21 @@ func (s *UserService) issueAndSendEmailVerification(ctx context.Context, tx port
 	if err := tx.EmailVerificationTokenRepository().Save(ctx, entity.NewEmailVerificationToken(user.ID, hashEmailVerificationToken(rawToken), expiresAt)); err != nil {
 		return customerror.WrapRepository("save email verification token", err)
 	}
-	if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
-		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+	tx.AfterCommit(func() error {
+		if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
+			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+		}
+		return nil
+	})
+	return nil
+}
+
+func (s *UserService) invalidateEmailVerificationTokens(ctx context.Context, userID int64) error {
+	if s == nil || s.verificationTokens == nil || userID <= 0 {
+		return nil
+	}
+	if err := s.verificationTokens.InvalidateByUser(ctx, userID); err != nil {
+		return customerror.WrapRepository("invalidate email verification tokens after mail failure", err)
 	}
 	return nil
 }

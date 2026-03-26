@@ -39,7 +39,8 @@ func TestSender_SendEmailVerification_UsesConfiguredTransport(t *testing.T) {
 	sender := NewSender(cfg)
 	var sentAddr string
 	var sentMsg string
-	sender.sendMail = func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
+	sender.sendMail = func(ctx context.Context, addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
+		_ = ctx
 		_ = auth
 		_ = from
 		_ = to
@@ -63,7 +64,8 @@ func TestSender_SendPasswordReset_IncludesFrontendLinkAndFallbackToken(t *testin
 
 	sender := NewSender(cfg)
 	var sentMsg string
-	sender.sendMail = func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
+	sender.sendMail = func(ctx context.Context, addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
+		_ = ctx
 		_ = addr
 		_ = auth
 		_ = from
@@ -87,27 +89,43 @@ func TestSender_SendEmailVerification_ReturnsPromptlyWhenContextCanceled(t *test
 
 	sender := NewSender(cfg)
 	started := make(chan struct{}, 1)
-	sender.sendMail = func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
+	finished := make(chan struct{}, 1)
+	sender.sendMail = func(ctx context.Context, addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
 		_ = addr
 		_ = auth
 		_ = from
 		_ = to
 		_ = msg
 		started <- struct{}{}
-		time.Sleep(100 * time.Millisecond)
-		return nil
+		<-ctx.Done()
+		finished <- struct{}{}
+		return ctx.Err()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
 
-	start := time.Now()
-	err := sender.SendEmailVerification(ctx, "alice@example.com", "verify-token", time.Now().Add(time.Hour))
-	require.ErrorIs(t, err, context.Canceled)
-	assert.Less(t, time.Since(start), 50*time.Millisecond)
+	done := make(chan error, 1)
+	go func() {
+		done <- sender.SendEmailVerification(ctx, "alice@example.com", "verify-token", time.Now().Add(time.Hour))
+	}()
+
 	select {
 	case <-started:
-		t.Fatal("sendMail should not start when context is already canceled")
+	case <-time.After(time.Second):
+		t.Fatal("sendMail did not start")
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("send should return promptly after cancellation")
+	}
+
+	select {
+	case <-finished:
 	default:
+		t.Fatal("sendMail should finish before SendEmailVerification returns")
 	}
 }

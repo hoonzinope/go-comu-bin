@@ -150,37 +150,44 @@ func (r *failOnNthUserUpdateRepository) Delete(ctx context.Context, id int64) er
 }
 
 type accountTestTxScope struct {
-	ctx           context.Context
-	user          port.UserRepository
-	passwordReset port.PasswordResetTokenRepository
+	ctx               context.Context
+	user              port.UserRepository
+	emailVerification port.EmailVerificationTokenRepository
+	passwordReset     port.PasswordResetTokenRepository
+	afterCommit       []func() error
 }
 
-func (s accountTestTxScope) Context() context.Context { return s.ctx }
-func (s accountTestTxScope) UserRepository() port.UserRepository {
+func (s *accountTestTxScope) Context() context.Context { return s.ctx }
+func (s *accountTestTxScope) AfterCommit(fn func() error) {
+	if fn != nil {
+		s.afterCommit = append(s.afterCommit, fn)
+	}
+}
+func (s *accountTestTxScope) UserRepository() port.UserRepository {
 	return s.user
 }
-func (s accountTestTxScope) BoardRepository() port.BoardRepository { return nil }
-func (s accountTestTxScope) PostRepository() port.PostRepository   { return nil }
-func (s accountTestTxScope) TagRepository() port.TagRepository     { return nil }
-func (s accountTestTxScope) PostTagRepository() port.PostTagRepository {
+func (s *accountTestTxScope) BoardRepository() port.BoardRepository { return nil }
+func (s *accountTestTxScope) PostRepository() port.PostRepository   { return nil }
+func (s *accountTestTxScope) TagRepository() port.TagRepository     { return nil }
+func (s *accountTestTxScope) PostTagRepository() port.PostTagRepository {
 	return nil
 }
-func (s accountTestTxScope) CommentRepository() port.CommentRepository { return nil }
-func (s accountTestTxScope) ReactionRepository() port.ReactionRepository {
+func (s *accountTestTxScope) CommentRepository() port.CommentRepository { return nil }
+func (s *accountTestTxScope) ReactionRepository() port.ReactionRepository {
 	return nil
 }
-func (s accountTestTxScope) AttachmentRepository() port.AttachmentRepository { return nil }
-func (s accountTestTxScope) ReportRepository() port.ReportRepository         { return nil }
-func (s accountTestTxScope) NotificationRepository() port.NotificationRepository {
+func (s *accountTestTxScope) AttachmentRepository() port.AttachmentRepository { return nil }
+func (s *accountTestTxScope) ReportRepository() port.ReportRepository         { return nil }
+func (s *accountTestTxScope) NotificationRepository() port.NotificationRepository {
 	return nil
 }
-func (s accountTestTxScope) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
-	return nil
+func (s *accountTestTxScope) EmailVerificationTokenRepository() port.EmailVerificationTokenRepository {
+	return s.emailVerification
 }
-func (s accountTestTxScope) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
+func (s *accountTestTxScope) PasswordResetTokenRepository() port.PasswordResetTokenRepository {
 	return s.passwordReset
 }
-func (s accountTestTxScope) Outbox() port.OutboxAppender { return nil }
+func (s *accountTestTxScope) Outbox() port.OutboxAppender { return nil }
 
 type accountTestUnitOfWork struct {
 	scope accountTestTxScope
@@ -189,7 +196,35 @@ type accountTestUnitOfWork struct {
 func (u accountTestUnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxScope) error) error {
 	scope := u.scope
 	scope.ctx = ctx
-	return fn(scope)
+	if err := fn(&scope); err != nil {
+		return err
+	}
+	for _, hook := range scope.afterCommit {
+		if hook == nil {
+			continue
+		}
+		if err := hook(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type failingCommitUnitOfWork struct {
+	scope *accountTestTxScope
+	err   error
+}
+
+func (u failingCommitUnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxScope) error) error {
+	if u.scope == nil {
+		return u.err
+	}
+	scope := *u.scope
+	scope.ctx = ctx
+	if err := fn(&scope); err != nil {
+		return err
+	}
+	return u.err
 }
 
 func (i *fixedEmailVerificationTokenIssuer) Issue() (string, error) {
@@ -794,6 +829,44 @@ func TestAccountService_RequestPasswordReset_CreatesTokenAndSendsMail(t *testing
 	assert.True(t, saved.IsUsable(time.Now()))
 }
 
+func TestAccountService_RequestPasswordReset_DoesNotSendMailWhenCommitFails(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+
+	mailer := newRecordingPasswordResetMailSender()
+	issuer := &fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}}
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		failingCommitUnitOfWork{
+			scope: &accountTestTxScope{
+				user:          repositories.user,
+				passwordReset: repositories.passwordReset,
+			},
+			err: errors.New("commit failed"),
+		},
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		issuer,
+		mailer,
+		30*time.Minute,
+	)
+
+	err = svc.RequestPasswordReset(context.Background(), "alice@example.com")
+	require.Error(t, err)
+	require.Empty(t, mailer.sent)
+}
+
 func TestAccountService_RequestEmailVerification_CreatesTokenAndSendsMail(t *testing.T) {
 	repositories := newTestRepositories()
 	passwordHasher := newTestPasswordHasher()
@@ -833,6 +906,47 @@ func TestAccountService_RequestEmailVerification_CreatesTokenAndSendsMail(t *tes
 	require.NoError(t, err)
 	require.NotNil(t, saved)
 	assert.True(t, saved.IsUsable(time.Now()))
+}
+
+func TestAccountService_RequestEmailVerification_DoesNotSendMailWhenCommitFails(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	mailer := newRecordingEmailVerificationMailSender()
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		failingCommitUnitOfWork{
+			scope: &accountTestTxScope{
+				user:              repositories.user,
+				emailVerification: repositories.emailVerification,
+			},
+			err: errors.New("commit failed"),
+		},
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		repositories.emailVerification,
+		issuer,
+		mailer,
+		30*time.Minute,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{},
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	err = svc.RequestEmailVerification(context.Background(), user.ID)
+	require.Error(t, err)
+	require.Empty(t, mailer.sent)
 }
 
 func TestAccountService_ConfirmEmailVerification_VerifiesUserAndConsumesTokens(t *testing.T) {
@@ -952,7 +1066,9 @@ func TestAccountService_RequestPasswordReset_RollsBackWhenMailSendFails(t *testi
 
 	saved, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-1"))
 	require.NoError(t, err)
-	assert.Nil(t, saved)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsConsumed())
+	assert.False(t, saved.IsUsable(time.Now()))
 }
 
 func TestAccountService_RequestPasswordReset_IgnoresUnknownEmail(t *testing.T) {

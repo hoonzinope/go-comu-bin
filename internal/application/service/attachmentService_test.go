@@ -163,7 +163,12 @@ type testTxScope struct {
 	outbox       port.OutboxAppender
 }
 
-func (s testTxScope) Context() context.Context                            { return s.ctx }
+func (s testTxScope) Context() context.Context { return s.ctx }
+func (s testTxScope) AfterCommit(fn func() error) {
+	if fn != nil {
+		_ = fn()
+	}
+}
 func (s testTxScope) UserRepository() port.UserRepository                 { return s.user }
 func (s testTxScope) BoardRepository() port.BoardRepository               { return s.board }
 func (s testTxScope) PostRepository() port.PostRepository                 { return s.post }

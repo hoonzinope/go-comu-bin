@@ -54,3 +54,44 @@ func TestFileStorage_Save_ReturnsCanceledWhenContextAlreadyCanceled(t *testing.T
 	_, statErr := os.Stat(filepath.Join(rootDir, "posts/1/a.txt"))
 	assert.True(t, os.IsNotExist(statErr))
 }
+
+func TestFileStorage_Save_CleansUpPartialFileWhenContextCancelsMidCopy(t *testing.T) {
+	rootDir := t.TempDir()
+	storage := NewFileStorage(rootDir)
+	ctx, cancel := context.WithCancel(context.Background())
+	firstRead := make(chan struct{})
+	reader := &cancelAfterFirstChunkReader{
+		ctx:       ctx,
+		firstRead: firstRead,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- storage.Save(ctx, "posts/1/a.txt", reader)
+	}()
+
+	<-firstRead
+	cancel()
+
+	err := <-errCh
+	require.ErrorIs(t, err, context.Canceled)
+	_, statErr := os.Stat(filepath.Join(rootDir, "posts/1/a.txt"))
+	assert.True(t, os.IsNotExist(statErr))
+}
+
+type cancelAfterFirstChunkReader struct {
+	ctx       context.Context
+	firstRead chan struct{}
+	emitted   bool
+}
+
+func (r *cancelAfterFirstChunkReader) Read(p []byte) (int, error) {
+	if !r.emitted {
+		r.emitted = true
+		copy(p, "hello")
+		close(r.firstRead)
+		return len("hello"), nil
+	}
+	<-r.ctx.Done()
+	return 0, r.ctx.Err()
+}

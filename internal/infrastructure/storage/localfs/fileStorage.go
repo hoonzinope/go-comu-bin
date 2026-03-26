@@ -38,13 +38,30 @@ func (s *FileStorage) Save(ctx context.Context, key string, content io.Reader) e
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	file, err := os.Create(fullPath)
+	dir := filepath.Dir(fullPath)
+	file, err := os.CreateTemp(dir, ".upload-*")
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	tempPath := file.Name()
+	defer func() {
+		_ = file.Close()
+		if tempPath != "" {
+			_ = os.Remove(tempPath)
+		}
+	}()
 	_, err = io.Copy(file, &contextReader{ctx: ctx, reader: content})
-	return err
+	if err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, fullPath); err != nil {
+		return err
+	}
+	tempPath = ""
+	return nil
 }
 
 func (s *FileStorage) Open(ctx context.Context, key string) (io.ReadCloser, error) {

@@ -169,6 +169,11 @@ func (s *AccountService) UpgradeGuestAccount(ctx context.Context, userID int64, 
 		originalUser, err := s.applyGuestUpgrade(ctx, userID, username, email, hashedPassword)
 		if err != nil {
 			_ = scope.Delete(ctx, userID, candidateToken)
+			if strings.Contains(err.Error(), "send email verification mail") {
+				if invalidateErr := s.invalidateEmailVerificationTokens(context.Background(), userID); invalidateErr != nil {
+					return errors.Join(err, invalidateErr)
+				}
+			}
 			return err
 		}
 
@@ -233,6 +238,9 @@ func (s *AccountService) RequestEmailVerification(ctx context.Context, userID in
 	if err != nil {
 		if strings.Contains(err.Error(), "send email verification mail") {
 			s.logEmailVerificationRequest(userID, "mail_failed")
+			if invalidateErr := s.invalidateEmailVerificationTokens(context.Background(), userID); invalidateErr != nil {
+				return errors.Join(err, invalidateErr)
+			}
 		}
 		return err
 	}
@@ -306,6 +314,7 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 	}
 
 	outcome := "ignored_unknown_or_ineligible"
+	var userID int64
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByEmail(txCtx, email)
@@ -315,6 +324,7 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 		if user == nil || user.IsGuest() || user.IsDeleted() {
 			return nil
 		}
+		userID = user.ID
 		rawToken, err := s.resetIssuer.Issue()
 		if err != nil {
 			return customerror.Wrap(customerror.ErrInternalServerError, "issue password reset token", err)
@@ -326,15 +336,21 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 		if err := tx.PasswordResetTokenRepository().Save(txCtx, entity.NewPasswordResetToken(user.ID, hashResetToken(rawToken), expiresAt)); err != nil {
 			return customerror.WrapRepository("save password reset token", err)
 		}
-		if err := s.resetMailer.SendPasswordReset(txCtx, email, rawToken, expiresAt); err != nil {
-			return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
-		}
+		tx.AfterCommit(func() error {
+			if err := s.resetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
+				return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
+			}
+			return nil
+		})
 		outcome = "issued"
 		return nil
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "send password reset mail") {
 			s.logPasswordResetRequest(email, "mail_failed")
+			if invalidateErr := s.invalidatePasswordResetTokens(context.Background(), userID); invalidateErr != nil {
+				return errors.Join(err, invalidateErr)
+			}
 		}
 		return err
 	}
@@ -552,9 +568,12 @@ func (s *AccountService) issueAndSendEmailVerification(ctx context.Context, tx p
 	if err := tx.EmailVerificationTokenRepository().Save(ctx, entity.NewEmailVerificationToken(user.ID, hashEmailVerificationToken(rawToken), expiresAt)); err != nil {
 		return customerror.WrapRepository("save email verification token", err)
 	}
-	if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
-		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
-	}
+	tx.AfterCommit(func() error {
+		if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
+			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+		}
+		return nil
+	})
 	return nil
 }
 

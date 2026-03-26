@@ -4,6 +4,7 @@ import "context"
 
 type TxScope interface {
 	Context() context.Context
+	AfterCommit(func() error)
 	UserRepository() UserRepository
 	BoardRepository() BoardRepository
 	PostRepository() PostRepository

@@ -44,9 +44,16 @@ type txScope struct {
 	emailVerificationTokens port.EmailVerificationTokenRepository
 	passwordResetTokens     port.PasswordResetTokenRepository
 	outboxAppender          port.OutboxAppender
+	afterCommit             []func() error
 }
 
 func (s *txScope) Context() context.Context { return s.ctx }
+func (s *txScope) AfterCommit(fn func() error) {
+	if fn == nil {
+		return
+	}
+	s.afterCommit = append(s.afterCommit, fn)
+}
 
 func NewUnitOfWork(userRepository *UserRepository, boardRepository *BoardRepository, postRepository *PostRepository, tagRepository *TagRepository, postTagRepo *PostTagRepository, commentRepository *CommentRepository, reactionRepository *ReactionRepository, attachmentRepository *AttachmentRepository, reportRepository *ReportRepository, notificationRepository *NotificationRepository, repositories ...interface{}) *UnitOfWork {
 	emailVerificationTokens := NewEmailVerificationTokenRepository()
@@ -389,6 +396,14 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 			u.outboxRepository.restore(outboxState)
 		}
 		return err
+	}
+	for _, hook := range tx.afterCommit {
+		if hook == nil {
+			continue
+		}
+		if err := hook(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -33,7 +33,12 @@ type testTxScopeForOutboxEvents struct {
 	outbox port.OutboxAppender
 }
 
-func (s testTxScopeForOutboxEvents) Context() context.Context                            { return context.Background() }
+func (s testTxScopeForOutboxEvents) Context() context.Context { return context.Background() }
+func (s testTxScopeForOutboxEvents) AfterCommit(fn func() error) {
+	if fn != nil {
+		_ = fn()
+	}
+}
 func (s testTxScopeForOutboxEvents) UserRepository() port.UserRepository                 { return nil }
 func (s testTxScopeForOutboxEvents) BoardRepository() port.BoardRepository               { return nil }
 func (s testTxScopeForOutboxEvents) PostRepository() port.PostRepository                 { return nil }

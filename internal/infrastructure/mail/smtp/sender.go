@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	netmail "net/mail"
 	netsmtp "net/smtp"
 	"net/url"
@@ -27,12 +28,11 @@ type Sender struct {
 	implicitTLS              bool
 	emailVerificationBaseURL string
 	passwordResetBaseURL     string
-	sendMail                 func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error
-	dialTLS                  func(network, addr string, tlsConfig *tls.Config) (*tls.Conn, error)
+	sendMail                 func(ctx context.Context, addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error
 }
 
 func NewSender(cfg config.Config) *Sender {
-	return &Sender{
+	sender := &Sender{
 		host:                     strings.TrimSpace(cfg.Delivery.Mail.SMTP.Host),
 		port:                     cfg.Delivery.Mail.SMTP.Port,
 		username:                 strings.TrimSpace(cfg.Delivery.Mail.SMTP.Username),
@@ -42,9 +42,9 @@ func NewSender(cfg config.Config) *Sender {
 		implicitTLS:              cfg.Delivery.Mail.SMTP.ImplicitTLS,
 		emailVerificationBaseURL: strings.TrimSpace(cfg.Delivery.Mail.EmailVerification.BaseURL),
 		passwordResetBaseURL:     strings.TrimSpace(cfg.Delivery.Mail.PasswordReset.BaseURL),
-		sendMail:                 netsmtp.SendMail,
-		dialTLS:                  tls.Dial,
 	}
+	sender.sendMail = sender.sendBlocking
+	return sender
 }
 
 func (s *Sender) SendPasswordReset(ctx context.Context, email, token string, expiresAt time.Time) error {
@@ -86,43 +86,46 @@ func (s *Sender) send(ctx context.Context, recipient, subject, body string) erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	result := make(chan error, 1)
-	go func() {
-		result <- s.sendBlocking(recipient, msg)
-	}()
-	select {
-	case err := <-result:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
+	if s.sendMail == nil {
+		return s.sendBlocking(ctx, fmt.Sprintf("%s:%d", s.host, s.port), s.auth(), s.from, []string{recipient}, msg)
 	}
+	return s.sendMail(ctx, fmt.Sprintf("%s:%d", s.host, s.port), s.auth(), s.from, []string{recipient}, msg)
 }
 
-func (s *Sender) sendBlocking(recipient string, msg []byte) error {
-	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+func (s *Sender) sendBlocking(ctx context.Context, addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
+	if len(to) == 0 {
+		return fmt.Errorf("missing recipient")
+	}
+	recipient := to[0]
 	if s.implicitTLS {
-		return s.sendImplicitTLS(addr, recipient, msg)
+		return s.sendImplicitTLS(ctx, addr, auth, from, recipient, msg)
 	}
-	return s.sendMail(addr, s.auth(), s.from, []string{recipient}, msg)
+	return s.sendSMTP(ctx, addr, auth, from, recipient, msg)
 }
 
-func (s *Sender) sendImplicitTLS(addr, recipient string, msg []byte) error {
-	conn, err := s.dialTLS("tcp", addr, &tls.Config{ServerName: s.host, MinVersion: tls.VersionTLS12})
+func (s *Sender) sendSMTP(ctx context.Context, addr string, auth netsmtp.Auth, from, recipient string, msg []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
+	stop := watchContext(ctx, conn)
+	defer stop()
 	client, err := netsmtp.NewClient(conn, s.host)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
-	if auth := s.auth(); auth != nil {
+	if auth != nil {
 		if err := client.Auth(auth); err != nil {
 			return err
 		}
 	}
-	if err := client.Mail(s.from); err != nil {
+	if err := client.Mail(from); err != nil {
 		return err
 	}
 	if err := client.Rcpt(recipient); err != nil {
@@ -140,6 +143,69 @@ func (s *Sender) sendImplicitTLS(addr, recipient string, msg []byte) error {
 		return err
 	}
 	return client.Quit()
+}
+
+func (s *Sender) sendImplicitTLS(ctx context.Context, addr string, auth netsmtp.Auth, from, recipient string, msg []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	dialer := &net.Dialer{}
+	rawConn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer rawConn.Close()
+	tlsConn := tls.Client(rawConn, &tls.Config{ServerName: s.host, MinVersion: tls.VersionTLS12})
+	stop := watchContext(ctx, tlsConn)
+	defer stop()
+	if err := tlsConn.Handshake(); err != nil {
+		return err
+	}
+	client, err := netsmtp.NewClient(tlsConn, s.host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return err
+		}
+	}
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	if err := client.Rcpt(recipient); err != nil {
+		return err
+	}
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		_ = w.Close()
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
+}
+
+func watchContext(ctx context.Context, closer net.Conn) func() {
+	if ctx == nil {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = closer.Close()
+		case <-done:
+		}
+	}()
+	return func() {
+		close(done)
+	}
 }
 
 func (s *Sender) auth() netsmtp.Auth {
