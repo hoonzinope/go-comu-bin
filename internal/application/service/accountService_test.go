@@ -918,6 +918,43 @@ func TestAccountService_RequestPasswordReset_InvalidatesPreviousToken(t *testing
 	assert.True(t, second.IsUsable(time.Now()))
 }
 
+func TestAccountService_RequestPasswordReset_RollsBackWhenMailSendFails(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.NoError(t, err)
+
+	mailer := newRecordingPasswordResetMailSender()
+	mailer.err = errors.New("send failed")
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		auth.NewJwtTokenProvider("test-secret"),
+		auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache()),
+		nil,
+		nil,
+		nil,
+		0,
+		repositories.passwordReset,
+		&fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}},
+		mailer,
+		30*time.Minute,
+	)
+
+	err = svc.RequestPasswordReset(context.Background(), "alice@example.com")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
+	require.Len(t, mailer.sent, 1)
+
+	saved, err := repositories.passwordReset.SelectByTokenHash(context.Background(), testHashResetToken("reset-token-1"))
+	require.NoError(t, err)
+	assert.Nil(t, saved)
+}
+
 func TestAccountService_RequestPasswordReset_IgnoresUnknownEmail(t *testing.T) {
 	repositories := newTestRepositories()
 	passwordHasher := newTestPasswordHasher()

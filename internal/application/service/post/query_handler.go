@@ -218,13 +218,13 @@ func (h *postQueryHandler) SearchPosts(ctx context.Context, query string, sortVa
 	if err != nil {
 		return nil, err
 	}
-	searchCursor, err := decodeSearchCursor(searchSort, string(window), cursor)
-	if err != nil {
-		return nil, err
-	}
 	cacheKey := key.PostSearchSortedList(normalizedQuery, searchSort, string(window), limit, cursor)
 	value, err := h.cache.GetOrSetWithTTL(ctx, cacheKey, h.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
 		if searchSort == searchSortRelevance {
+			searchCursor, err := decodeSearchCursor(searchSort, string(window), cursor)
+			if err != nil {
+				return nil, err
+			}
 			return h.loadPublishedPostsBySearch(ctx, normalizedQuery, limit, searchCursor, cursor)
 		}
 		return h.loadRankedSearchPosts(ctx, normalizedQuery, rankingSort, window, limit, cursor)

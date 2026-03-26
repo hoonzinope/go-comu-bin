@@ -305,11 +305,7 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 		tokenTTL = defaultPasswordResetTokenTTL
 	}
 
-	var (
-		userID    int64
-		rawToken  string
-		expiresAt time.Time
-	)
+	outcome := "ignored_unknown_or_ineligible"
 	err := s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
 		txCtx := tx.Context()
 		user, err := tx.UserRepository().SelectUserByEmail(txCtx, email)
@@ -319,39 +315,30 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 		if user == nil || user.IsGuest() || user.IsDeleted() {
 			return nil
 		}
-		rawToken, err = s.resetIssuer.Issue()
+		rawToken, err := s.resetIssuer.Issue()
 		if err != nil {
 			return customerror.Wrap(customerror.ErrInternalServerError, "issue password reset token", err)
 		}
-		expiresAt = time.Now().Add(tokenTTL)
-		userID = user.ID
+		expiresAt := time.Now().Add(tokenTTL)
 		if err := tx.PasswordResetTokenRepository().InvalidateByUser(txCtx, user.ID); err != nil {
 			return customerror.WrapRepository("invalidate previous password reset tokens", err)
 		}
 		if err := tx.PasswordResetTokenRepository().Save(txCtx, entity.NewPasswordResetToken(user.ID, hashResetToken(rawToken), expiresAt)); err != nil {
 			return customerror.WrapRepository("save password reset token", err)
 		}
+		if err := s.resetMailer.SendPasswordReset(txCtx, email, rawToken, expiresAt); err != nil {
+			return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
+		}
+		outcome = "issued"
 		return nil
 	})
 	if err != nil {
-		return err
-	}
-	if rawToken == "" {
-		s.logPasswordResetRequest(email, "ignored_unknown_or_ineligible")
-		return err
-	}
-	if err := s.resetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
-		s.logPasswordResetRequest(email, "mail_failed")
-		rollbackErr := s.invalidatePasswordResetTokens(ctx, userID)
-		if rollbackErr != nil {
-			return errors.Join(
-				customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err),
-				customerror.WrapRepository("rollback password reset token after mail failure", rollbackErr),
-			)
+		if strings.Contains(err.Error(), "send password reset mail") {
+			s.logPasswordResetRequest(email, "mail_failed")
 		}
-		return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
+		return err
 	}
-	s.logPasswordResetRequest(email, "issued")
+	s.logPasswordResetRequest(email, outcome)
 	return nil
 }
 

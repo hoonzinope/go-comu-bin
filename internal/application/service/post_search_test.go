@@ -9,6 +9,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	postsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/post"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -122,6 +123,55 @@ func TestPostQueryHandler_SearchPosts_UsesCompositeCursorPagination(t *testing.T
 	assert.Equal(t, mustPostUUID(t, repositories.post, firstID), page2.Posts[0].UUID)
 	assert.False(t, page2.HasMore)
 	assert.Nil(t, page2.NextCursor)
+}
+
+func TestPostQueryHandler_SearchPosts_RankedCursorPaginationUsesFeedCursor(t *testing.T) {
+	repositories := newTestRepositories()
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	firstID := seedPost(repositories.post, userID, boardID, "alpha beta", "alpha beta")
+	secondID := seedPost(repositories.post, userID, boardID, "alpha beta", "alpha beta")
+	thirdID := seedPost(repositories.post, userID, boardID, "alpha beta", "alpha beta")
+
+	base := time.Date(2026, 3, 26, 10, 0, 0, 0, time.UTC)
+	require.NoError(t, repositories.postRanking.UpsertPostSnapshot(context.Background(), firstID, boardID, ptrTime(base.Add(-2*time.Hour)), entity.PostStatusPublished))
+	require.NoError(t, repositories.postRanking.UpsertPostSnapshot(context.Background(), secondID, boardID, ptrTime(base.Add(-1*time.Hour)), entity.PostStatusPublished))
+	require.NoError(t, repositories.postRanking.UpsertPostSnapshot(context.Background(), thirdID, boardID, ptrTime(base), entity.PostStatusPublished))
+	rebuildSearchIndex(t, repositories)
+
+	query := postsvc.NewQueryHandler(
+		repositories.user,
+		repositories.board,
+		repositories.post,
+		repositories.postSearch,
+		repositories.postRanking,
+		repositories.tag,
+		repositories.postTag,
+		repositories.attachment,
+		repositories.comment,
+		repositories.reaction,
+		newTestCache(),
+		newTestCachePolicy(),
+	)
+
+	page1, err := query.SearchPosts(context.Background(), "alpha beta", "latest", "", 2, "")
+	require.NoError(t, err)
+	require.Len(t, page1.Posts, 2)
+	require.True(t, page1.HasMore)
+	require.NotNil(t, page1.NextCursor)
+	assert.Equal(t, mustPostUUID(t, repositories.post, thirdID), page1.Posts[0].UUID)
+	assert.Equal(t, mustPostUUID(t, repositories.post, secondID), page1.Posts[1].UUID)
+
+	page2, err := query.SearchPosts(context.Background(), "alpha beta", "latest", "", 2, *page1.NextCursor)
+	require.NoError(t, err)
+	require.Len(t, page2.Posts, 1)
+	assert.Equal(t, mustPostUUID(t, repositories.post, firstID), page2.Posts[0].UUID)
+	assert.False(t, page2.HasMore)
+	assert.Nil(t, page2.NextCursor)
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
 }
 
 func TestPostQueryHandler_SearchPosts_InvalidCursor(t *testing.T) {
