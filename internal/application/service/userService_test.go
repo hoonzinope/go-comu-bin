@@ -70,6 +70,37 @@ func TestUserService_SignUp_DoesNotSendVerificationEmailWhenCommitFails(t *testi
 	require.Empty(t, mailer.sent)
 }
 
+func TestUserService_SignUp_RollsBackCreatedUserWhenMailSendFails(t *testing.T) {
+	repositories := newTestRepositories()
+	mailer := newRecordingEmailVerificationMailSender()
+	mailer.err = errors.New("send failed")
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	svc := NewUserServiceWithEmailVerification(
+		repositories.user,
+		newTestPasswordHasher(),
+		repositories.unitOfWork,
+		repositories.emailVerification,
+		issuer,
+		mailer,
+		30*time.Minute,
+	)
+
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
+	require.Len(t, mailer.sent, 1)
+
+	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
+	require.NoError(t, err)
+	assert.Nil(t, user)
+
+	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsConsumed())
+	assert.False(t, saved.IsUsable(time.Now()))
+}
+
 func TestUserService_IssueGuestAccount_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)

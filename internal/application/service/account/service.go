@@ -170,9 +170,16 @@ func (s *AccountService) UpgradeGuestAccount(ctx context.Context, userID int64, 
 		if err != nil {
 			_ = scope.Delete(ctx, userID, candidateToken)
 			if strings.Contains(err.Error(), "send email verification mail") {
-				if invalidateErr := s.invalidateEmailVerificationTokens(context.Background(), userID); invalidateErr != nil {
-					return errors.Join(err, invalidateErr)
+				rollbackErrs := []error{err}
+				if originalUser != nil {
+					if restoreErr := s.restoreUserState(context.Background(), originalUser); restoreErr != nil {
+						rollbackErrs = append(rollbackErrs, customerror.WrapRepository("restore guest after failed upgrade", restoreErr))
+					}
 				}
+				if invalidateErr := s.invalidateEmailVerificationTokens(context.Background(), userID); invalidateErr != nil {
+					rollbackErrs = append(rollbackErrs, invalidateErr)
+				}
+				return errors.Join(rollbackErrs...)
 			}
 			return err
 		}
@@ -476,7 +483,7 @@ func (s *AccountService) applyGuestUpgrade(ctx context.Context, userID int64, us
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return original, err
 	}
 	return original, nil
 }

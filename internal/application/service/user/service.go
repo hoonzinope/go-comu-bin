@@ -101,8 +101,8 @@ func (s *UserService) SignUp(ctx context.Context, username, email, password stri
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "send email verification mail") {
-			if invalidateErr := s.invalidateEmailVerificationTokens(context.Background(), newUser.ID); invalidateErr != nil {
-				return "", errors.Join(err, invalidateErr)
+			if rollbackErr := s.rollbackSignupAfterMailFailure(context.Background(), newUser.ID); rollbackErr != nil {
+				return "", errors.Join(err, rollbackErr)
 			}
 		}
 		return "", err
@@ -141,19 +141,22 @@ func (s *UserService) issueAndSendEmailVerification(ctx context.Context, tx port
 	return nil
 }
 
-func (s *UserService) invalidateEmailVerificationTokens(ctx context.Context, userID int64) error {
-	if s == nil || s.verificationTokens == nil || userID <= 0 {
+func (s *UserService) rollbackSignupAfterMailFailure(ctx context.Context, userID int64) error {
+	if s == nil || s.unitOfWork == nil || userID <= 0 {
 		return nil
 	}
-	if err := s.verificationTokens.InvalidateByUser(ctx, userID); err != nil {
-		return customerror.WrapRepository("invalidate email verification tokens after mail failure", err)
-	}
-	return nil
-}
-
-func hashEmailVerificationToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
+	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
+		txCtx := tx.Context()
+		if err := tx.UserRepository().Delete(txCtx, userID); err != nil {
+			return customerror.WrapRepository("delete user after failed signup", err)
+		}
+		if tokenRepo := tx.EmailVerificationTokenRepository(); tokenRepo != nil {
+			if err := tokenRepo.InvalidateByUser(txCtx, userID); err != nil {
+				return customerror.WrapRepository("invalidate email verification tokens after failed signup", err)
+			}
+		}
+		return nil
+	})
 }
 
 func (s *UserService) IssueGuestAccount(ctx context.Context) (int64, error) {
@@ -186,6 +189,11 @@ func (s *UserService) IssueGuestAccount(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return guestID, nil
+}
+
+func hashEmailVerificationToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *UserService) UpgradeGuest(ctx context.Context, userID int64, username, email, password string) error {

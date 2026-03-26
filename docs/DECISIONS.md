@@ -258,6 +258,42 @@
 - login / guest-upgrade 전용 rate limit 설정/HTTP guard 추가
 - SessionService logger 주입과 login audit test 추가
 - AccountService guest upgrade audit test 추가
+
+## 2026-03-26 - signup과 guest upgrade는 verification mail 실패 시 compensating rollback으로 caller-visible atomicity를 유지한다
+
+상태
+
+- decided
+
+배경
+
+- signup과 guest upgrade는 verification mail을 durable state 커밋 이후에 보내면, 메일 실패 시 호출자에게는 실패처럼 보이지만 실제 계정 상태는 이미 바뀌는 불일치가 생긴다.
+- 이전 변경은 pre-commit mail 발송 문제를 막았지만, 그 대신 signup과 guest upgrade의 성공 경계를 깨뜨렸다.
+
+관찰
+
+- `UserService.SignUp`은 user row 저장 후 verification token을 만들고, 메일은 after-commit 훅에서 보낸다.
+- `AccountService.UpgradeGuestAccount`는 guest 승격과 token 저장을 먼저 commit한 뒤, verification mail을 after-commit 훅에서 보낸다.
+- `UserRepository.Delete`는 현재 구현에서 hard delete이며, `UserRepository.Update`와 `restoreUserState()`로 guest 승격을 되돌릴 수 있다.
+
+결론
+
+- signup mail 실패는 user row와 verification token을 compensating transaction으로 되돌린다.
+- guest upgrade mail 실패는 candidate session을 제거한 뒤, 원래 guest row를 restore하고 verification token을 무효화한다.
+- caller-visible semantics는 "실패 시 durable state가 원래대로 유지된다"로 맞춘다.
+
+후속 작업
+
+- signup mail failure rollback 테스트 추가
+- guest upgrade mail failure restore 테스트 추가
+- review DB의 관련 finding 상태를 closed로 갱신
+
+관련 문서/코드
+
+- `internal/application/service/user/service.go`
+- `internal/application/service/account/service.go`
+- `internal/infrastructure/persistence/sqlite/unit_of_work.go`
+- `internal/infrastructure/persistence/inmemory/unitOfWork.go`
 - API/CONFIG/ARCHITECTURE/ROADMAP/Swagger 정합성 반영
 
 관련 문서/코드

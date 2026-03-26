@@ -657,6 +657,63 @@ func TestAccountService_UpgradeGuestAccount_Success(t *testing.T) {
 	assert.True(t, newExists)
 }
 
+func TestAccountService_UpgradeGuestAccount_RollsBackGuestStateWhenMailSendFails(t *testing.T) {
+	repositories := newTestRepositories()
+	passwordHasher := newTestPasswordHasher()
+	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
+	guest := entity.NewGuest("guest-1", "guest-1@example.invalid", "hashed-secret")
+	guestID, err := repositories.user.Save(context.Background(), guest)
+	require.NoError(t, err)
+
+	cache := auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	oldToken, err := tokenProvider.IdToToken(guestID)
+	require.NoError(t, err)
+	require.NoError(t, cache.Save(context.Background(), guestID, oldToken, tokenProvider.TTLSeconds()))
+
+	mailer := newRecordingEmailVerificationMailSender()
+	mailer.err = errors.New("send failed")
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	svc := NewAccountServiceWithGuestUpgrade(
+		userService,
+		&stubSessionUseCase{},
+		repositories.user,
+		repositories.unitOfWork,
+		passwordHasher,
+		tokenProvider,
+		cache,
+		repositories.emailVerification,
+		issuer,
+		mailer,
+		30*time.Minute,
+		repositories.passwordReset,
+		auth.NewPasswordResetTokenIssuer(),
+		newRecordingPasswordResetMailSender(),
+		30*time.Minute,
+	)
+
+	_, err = svc.UpgradeGuestAccount(context.Background(), guestID, oldToken, "alice", "alice@example.com", "pw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
+
+	userAfter, err := repositories.user.SelectUserByID(context.Background(), guestID)
+	require.NoError(t, err)
+	require.NotNil(t, userAfter)
+	assert.True(t, userAfter.IsGuest())
+	assert.Equal(t, "guest-1", userAfter.Name)
+	assert.Equal(t, "guest-1@example.invalid", userAfter.Email)
+
+	oldExists, err := cache.Exists(context.Background(), guestID, oldToken)
+	require.NoError(t, err)
+	assert.True(t, oldExists)
+
+	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsConsumed())
+	assert.False(t, saved.IsUsable(time.Now()))
+}
+
 func TestAccountService_UpgradeGuestAccount_RollsBackWhenSessionDeleteFails(t *testing.T) {
 	repositories := newTestRepositories()
 	passwordHasher := newTestPasswordHasher()
