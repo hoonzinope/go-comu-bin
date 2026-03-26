@@ -3756,3 +3756,39 @@
 - `.agents/skills/code-quality-auditor/references/CHECKLIST.md`
 - `.documents/review/AI_REVIEW.md`
 - `.documents/review/REFACTOR_BACKLOG.md`
+
+## 2026-03-26 - guest upgrade는 replacement session이 durable 해진 뒤에 current session을 폐기한다
+
+상태
+
+- decided
+
+배경
+
+- guest upgrade는 여전히 user row 승격과 bearer token 교체를 하나의 성공 경계로 다루어야 한다.
+- 다만 current session을 먼저 지우는 순서는 replacement session 저장 실패나 rollback 실패 시 기존 세션을 잃을 위험을 키운다.
+- 기존 guest token을 가능한 오래 유지한 채 replacement session을 먼저 durable 하게 만들면, 실패 복구가 "기존 세션 유지" 쪽으로 단순해진다.
+
+관찰
+
+- account orchestration은 replacement token을 먼저 저장한 다음 user 승격과 current token 폐기를 이어서 수행할 수 있다.
+- replacement token 저장이 실패하면 user row는 아직 손대지 않았으므로 current session을 그대로 유지할 수 있다.
+- user 승격 성공 후 current token 폐기가 실패하면 replacement token만 되돌리고 기존 guest/session 상태를 유지할 수 있다.
+
+결론
+
+- `AccountService.UpgradeGuestAccount`는 replacement session 저장을 current session 폐기보다 앞에 둔다.
+- replacement session 저장이 성공하기 전에는 current session을 폐기하지 않는다.
+- replacement session 저장 또는 current session 폐기 중 실패가 나면, 기존 guest/session 상태를 유지하도록 보상 처리를 수행한다.
+
+실행 결과
+
+- `internal/application/service/account/service.go`의 guest upgrade 순서를 replacement-first로 정리 완료
+- guest upgrade rollback regression test 추가 완료
+- `docs/ARCHITECTURE.md`의 guest upgrade success boundary를 새 순서로 정합성 반영 완료
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `internal/application/service/account/service.go`
+- `internal/application/service/accountService_test.go`
