@@ -21,6 +21,9 @@ cache:
   listTTLSeconds: 30
   detailTTLSeconds: 30
 
+database:
+  path: "./data/data.db"
+
 storage:
   provider: "local"
   local:
@@ -161,6 +164,7 @@ jobs:
 - `cache.listTTLSeconds`: `> 0`
 - `cache.detailTTLSeconds`: `> 0`
 - `storage.local.rootDir`: 필수(빈 값 불가)
+- `database.path`: SQLite auth DB 파일 경로, 필수
 - `storage.provider`: `local | object`
 - `storage.object.endpoint`: provider가 `object`일 때 필수
 - `storage.object.bucket`: provider가 `object`일 때 필수
@@ -219,6 +223,7 @@ jobs:
 - bootstrap admin: `cmd/main.go` -> `cfg.Admin.Bootstrap.*`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`
+- SQLite auth DB 경로: `cfg.Database.Path`
 - 파일 저장 provider: `cfg.Storage.Provider`
 - object storage endpoint/bucket: `cfg.Storage.Object.Endpoint`, `cfg.Storage.Object.Bucket`
 - attachment 최대 업로드 크기(bytes): `cfg.Storage.Attachment.MaxUploadSizeBytes`

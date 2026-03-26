@@ -3792,3 +3792,262 @@
 - `docs/ARCHITECTURE.md`
 - `internal/application/service/account/service.go`
 - `internal/application/service/accountService_test.go`
+
+## 2026-03-26 - Step 5 SQLite foundation uses an internal migration ledger first
+
+상태
+
+- decided
+
+배경
+
+- Step 5의 첫 실제 slice는 repository adapter 전환 전에 SQLite 파일 DB를 안정적으로 여는 기반이 필요하다.
+- 아직 전체 repository/search/outbox 전환이 시작되지 않았으므로, 외부 migration 도구를 먼저 도입하면 의존성만 늘고 runtime behavior는 바뀌지 않는다.
+- 첫 slice에는 ordered SQL 적용과 재실행 방지용 ledger가 핵심이다.
+
+관찰
+
+- 현재 runtime은 여전히 in-memory repository를 사용하지만, SQLite package만으로도 파일 DB open, pragma 적용, migration ledger 기록은 가능하다.
+- `schema_migrations` 테이블은 첫 adapter slice에서 replay safety를 확보하기에 충분하다.
+
+결론
+
+- Step 5 foundation은 ordered `.sql` 파일과 내부 `schema_migrations` ledger로 시작한다.
+- 다음 Step 5 slice는 User/Auth adapter wiring이다.
+- 외부 migration tool(goose/golang-migrate)은 이후 필요성이 확인되면 다시 검토한다.
+
+실행 결과
+
+- `internal/infrastructure/persistence/sqlite/open.go`
+- `internal/infrastructure/persistence/sqlite/migrate.go`
+- `internal/infrastructure/persistence/sqlite/open_test.go`
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `internal/infrastructure/persistence/sqlite/open.go`
+- `internal/infrastructure/persistence/sqlite/migrate.go`
+
+## 2026-03-26 - Step 5 User/Auth slice is wired to the SQLite auth DB
+
+상태
+
+- decided
+
+배경
+
+- Step 5의 첫 실제 adapter wiring은 사용자 계정과 인증 토큰 계열을 durable storage로 옮기는 slice였다.
+- user/account signup, guest upgrade, email verification, password reset은 모두 `UserRepository`와 token repository의 의미 계약에 직접 의존한다.
+- 나머지 Board/Post 계열은 아직 in-memory UoW를 유지해도 auth slice의 의미를 검증할 수 있다.
+
+관찰
+
+- `cmd/main.go`는 이제 `cfg.Database.Path`를 사용해 SQLite auth DB를 열고, `UserRepository`/verification token repo/password reset token repo를 그 DB에 붙인다.
+- `sqlite.UnitOfWork`는 auth repo를 tx-bound SQLite repository로 묶고, 나머지 repo는 기존 wiring을 유지한다.
+- 전체 테스트가 통과해 기존 auth/service 계약을 깨지 않았음을 확인했다.
+
+결론
+
+- Step 5의 `User/Auth` slice는 완료된 것으로 본다.
+- 다음 Step 5 slice는 `Board/Post` adapter wiring이다.
+- 이후 순서는 roadmap 권장 순서대로 `Outbox -> Search`다.
+
+실행 결과
+
+- `cmd/main.go`의 auth wiring을 SQLite DB 기반으로 전환
+- `internal/config/config.go`에 `database.path` 추가
+- `internal/infrastructure/persistence/sqlite/*` auth repo/UoW 추가
+
+## 2026-03-26 - Step 5 Board/Post repositories are wired into main and tx scope
+
+상태
+
+- decided
+
+배경
+
+- Board/Post slice는 auth slice보다 훨씬 넓어서, 먼저 SQLite repository와 검색 query adapter를 올려 두고 `cmd/main.go` wiring을 별도 단계로 분리하는 편이 안전하다.
+- `postSearchRepository`는 in-memory projection 대신 SQLite tables를 직접 조회하는 방식으로 구현해도, 서비스 계약과 테스트를 유지할 수 있다.
+
+관찰
+
+- `internal/infrastructure/persistence/sqlite`에 `BoardRepository`, `TagRepository`, `PostTagRepository`, `PostRepository`, `PostSearchRepository`를 추가했다.
+- repository contract tests와 search smoke test가 통과했다.
+- `cmd/main.go`는 board/tag/post/post-tag/search를 SQLite DB에 붙이고, `sqlite.UnitOfWork`는 tx-bound SQLite repo를 사용한다.
+- 전체 테스트가 통과해 `CreateBoard`, `CreatePost`, `DeletePost`, search path가 새로운 wiring에서 유지됨을 확인했다.
+
+결론
+
+- Step 5의 Board/Post slice는 wiring까지 완료다.
+- 다음 Step 5 slice는 Outbox 내구화다.
+
+실행 결과
+
+- `internal/infrastructure/persistence/sqlite/board_repository.go`
+- `internal/infrastructure/persistence/sqlite/tag_repository.go`
+- `internal/infrastructure/persistence/sqlite/post_tag_repository.go`
+- `internal/infrastructure/persistence/sqlite/post_repository.go`
+- `internal/infrastructure/persistence/sqlite/post_search_repository.go`
+- `internal/infrastructure/persistence/sqlite/repository_test.go`
+- `cmd/main.go`
+- `internal/infrastructure/persistence/sqlite/unit_of_work.go`
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `internal/infrastructure/persistence/sqlite/*`
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `internal/config/config.go`
+- `internal/infrastructure/persistence/sqlite/user_repository.go`
+- `internal/infrastructure/persistence/sqlite/token_repositories.go`
+
+## 2026-03-26 - Step 5 Outbox is durable on SQLite and wired into relay/admin/tx append
+
+상태
+
+- decided
+
+배경
+
+- Outbox는 relay durability와 admin dead-message 운영 경로를 동시에 책임진다.
+- in-memory outbox는 프로세스 재시작 시 메시지 상태를 잃기 때문에, Step 5의 마지막 infrastructure slice로 durable store가 필요했다.
+
+관찰
+
+- `internal/infrastructure/persistence/sqlite`에 `OutboxRepository`와 tx-bound appender를 추가했다.
+- `cmd/main.go`는 SQLite outbox store를 relay와 admin usecase에 연결하고, `sqlite.UnitOfWork`는 tx append를 같은 DB로 보낸다.
+- `SelectDead`, `MarkRetry`, `MarkDead`, `FetchReady`, `MarkSucceeded` contract tests와 전체 테스트가 통과했다.
+
+결론
+
+- Step 5의 Outbox slice는 완료다.
+- 다음 Step 5 slice는 Search의 FTS5 전환이다.
+
+실행 결과
+
+- `internal/infrastructure/persistence/sqlite/outbox_repository.go`
+- `internal/infrastructure/persistence/sqlite/outbox_repository_test.go`
+- `internal/infrastructure/persistence/sqlite/migrations/0003_outbox.sql`
+- `cmd/main.go`
+- `internal/infrastructure/persistence/sqlite/unit_of_work.go`
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `internal/infrastructure/persistence/sqlite/*`
+
+## 2026-03-26 - Step 5 Search is backed by SQLite FTS5 while ranking stays in Go
+
+상태
+
+- decided
+
+배경
+
+- Step 5의 마지막 search slice는 기존 ranking/cursor 계약을 깨지 않으면서 SQLite 기반 전문 검색으로 넘어가야 했다.
+- 검색 순위는 이미 Go scoring helper로 정해져 있으므로, FTS5는 후보 집합 필터 역할만 맡기는 편이 의미 보존에 유리하다.
+- FTS5 자체 ranking을 외부에 노출하면 현재 search cursor/score 의미와 어긋날 수 있다.
+
+관찰
+
+- 현재 search repository는 published post와 active tag를 조합한 문서를 만들고, 그 문서 전체를 기준으로 기존 BM25 유사 scoring을 계산한다.
+- outbox relay가 search indexer를 호출하므로, search index는 개별 post 변경에 반응해 유지할 수 있다.
+- FTS5는 rowid 기반 후보 필터로 쓰고, 실제 점수 계산과 cursor 비교는 기존 Go 로직을 유지할 수 있다.
+
+결론
+
+- SQLite search adapter는 `post_search_fts` virtual table을 유지한다.
+- `RebuildAll`/`UpsertPost`/`DeletePost`는 이 FTS5 인덱스를 갱신하는 책임을 가진다.
+- `SearchPublishedPosts`는 FTS5로 후보 row를 먼저 좁힌 뒤, 기존 Go scoring helper로 최종 순위를 계산한다.
+- 외부 응답의 score/cursor semantics는 그대로 유지한다.
+
+후속 작업
+
+- `internal/infrastructure/persistence/sqlite/migrations/0004_search_fts.sql` 추가
+- `internal/infrastructure/persistence/sqlite/post_search_repository.go`를 FTS5 기반 후보 필터로 전환
+- search repository contract/maintenance 테스트 추가
+- ROADMAP current state memo에 Search FTS5 완료 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `internal/infrastructure/persistence/sqlite/post_search_repository.go`
+- `internal/application/port/post_search_repository.go`
+
+## 2026-03-26 - Step 5 remaining SQLite slices are comment -> reaction -> attachment -> report -> notification
+
+상태
+
+- decided
+
+배경
+
+- `docs/ROADMAP.md`의 Step 5는 auth, board/post, outbox, search가 닫힌 뒤에도 일부 도메인이 in-memory로 남아 있었다.
+- 남은 도메인은 서로 의존성이 달라서, 댓글을 먼저 옮긴 뒤 reaction/attachment/report/notification 순으로 진행하는 편이 안전하다.
+- ranking projection은 outbox 기반 read-side 성격이 강하므로, 이번 remaining slice 묶음에서는 별도 전환 대상으로 두지 않는다.
+
+관찰
+
+- `comment`는 `post deletion`, `guest cleanup`, `reaction/report`의 visibility check에 쓰인다.
+- `reaction`은 `post/comment` target에 대한 unique upsert/delete semantics가 중요하다.
+- `attachment`는 cleanup candidate 조회와 orphan/pending-delete lifecycle이 핵심이다.
+- `report`는 duplicate reporter/target 방지와 admin list/resolve 흐름이 핵심이다.
+- `notification`은 dedup, unread count, mark-read/read-all이 핵심이다.
+
+결론
+
+- 남은 SQLite 전환 순서는 `comment -> reaction -> attachment -> report -> notification`으로 고정한다.
+- 각 slice는 migration, repository, contract/regression test, `cmd/main.go` wiring, `sqlite.UnitOfWork` tx binding을 포함한다.
+- ranking projection은 이번 묶음에 포함하지 않는다.
+
+후속 작업
+
+- comment SQLite repository/migration/test 구현
+- reaction SQLite repository/migration/test 구현
+- attachment SQLite repository/migration/test 구현
+- report SQLite repository/migration/test 구현
+- notification SQLite repository/migration/test 구현
+- wiring 및 문서 정합성 반영
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `cmd/main.go`
+- `internal/infrastructure/persistence/inmemory/unitOfWork.go`
+
+## 2026-03-26 - Step 5 remaining SQLite slices have been implemented and MQ bridge is excluded
+
+상태
+
+- decided
+
+배경
+
+- remaining persistence slices were implemented after the order was fixed to `comment -> reaction -> attachment -> report -> notification`.
+- after the SQLite adapters were wired and tests passed, the only optional Step 5 item left was MQ bridge.
+
+관찰
+
+- `comment`, `reaction`, `attachment`, `report`, `notification` now have SQLite repositories and migrations.
+- `sqlite.UnitOfWork` creates tx-bound repositories for those domains.
+- `cmd/main.go` now wires the same SQLite DB into those repositories.
+- Full test suite passes.
+
+결론
+
+- Step 5 is complete without introducing an MQ bridge.
+- Step 6 remains the next implementation step.
+
+후속 작업
+
+- Step 6 observability/exceptions work
+- keep Step 5 docs as completed, not as an open transition slice
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `cmd/main.go`
+- `internal/infrastructure/persistence/sqlite/*`
