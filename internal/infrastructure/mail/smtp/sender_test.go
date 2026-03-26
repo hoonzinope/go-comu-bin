@@ -1,6 +1,7 @@
 package smtp
 
 import (
+	"context"
 	netsmtp "net/smtp"
 	"net/url"
 	"testing"
@@ -75,4 +76,38 @@ func TestSender_SendPasswordReset_IncludesFrontendLinkAndFallbackToken(t *testin
 	assert.Contains(t, sentMsg, "Subject: Password reset")
 	assert.Contains(t, sentMsg, "https://app.example.com/reset-password?token="+url.QueryEscape("reset-token+/="))
 	assert.Contains(t, sentMsg, "reset-token+/=")
+}
+
+func TestSender_SendEmailVerification_ReturnsPromptlyWhenContextCanceled(t *testing.T) {
+	cfg := config.Config{}
+	cfg.Delivery.Mail.SMTP.Host = "smtp.example.com"
+	cfg.Delivery.Mail.SMTP.Port = 587
+	cfg.Delivery.Mail.SMTP.From = "noreply@example.com"
+	cfg.Delivery.Mail.EmailVerification.BaseURL = "https://app.example.com/verify-email"
+
+	sender := NewSender(cfg)
+	started := make(chan struct{}, 1)
+	sender.sendMail = func(addr string, auth netsmtp.Auth, from string, to []string, msg []byte) error {
+		_ = addr
+		_ = auth
+		_ = from
+		_ = to
+		_ = msg
+		started <- struct{}{}
+		time.Sleep(100 * time.Millisecond)
+		return nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	err := sender.SendEmailVerification(ctx, "alice@example.com", "verify-token", time.Now().Add(time.Hour))
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Less(t, time.Since(start), 50*time.Millisecond)
+	select {
+	case <-started:
+		t.Fatal("sendMail should not start when context is already canceled")
+	default:
+	}
 }

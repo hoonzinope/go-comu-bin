@@ -76,11 +76,29 @@ func (s *Sender) SendEmailVerification(ctx context.Context, email, token string,
 }
 
 func (s *Sender) send(ctx context.Context, recipient, subject, body string) error {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	msg, err := s.buildMessage(recipient, subject, body)
 	if err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	result := make(chan error, 1)
+	go func() {
+		result <- s.sendBlocking(recipient, msg)
+	}()
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Sender) sendBlocking(recipient string, msg []byte) error {
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	if s.implicitTLS {
 		return s.sendImplicitTLS(addr, recipient, msg)

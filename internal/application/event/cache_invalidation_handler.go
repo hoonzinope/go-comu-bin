@@ -41,6 +41,7 @@ func (h *CacheInvalidationHandler) handleBoardChanged(ctx context.Context, e Boa
 	h.bestEffortDeleteByPrefix(ctx, key.PostListPrefix(e.BoardID), "invalidate post list by board event")
 	h.bestEffortDeleteByPrefix(ctx, key.PostSearchListPrefix(), "invalidate post search list by board event")
 	h.bestEffortDeleteByPrefix(ctx, key.PostFeedListPrefix(), "invalidate post feed by board event")
+	h.bestEffortDeleteByPrefix(ctx, key.RankedPostListPrefix(e.BoardID), "invalidate ranked post list by board event")
 	if e.Operation != "visibility" {
 		return
 	}
@@ -49,15 +50,18 @@ func (h *CacheInvalidationHandler) handleBoardChanged(ctx context.Context, e Boa
 	h.bestEffortDeleteByPrefix(ctx, key.CommentListGlobalPrefix(), "invalidate comment list by board visibility event")
 	h.bestEffortDeleteByPrefix(ctx, key.ReactionListPrefix(), "invalidate reaction list by board visibility event")
 	h.bestEffortDeleteByPrefix(ctx, key.TagPostListGlobalPrefix(), "invalidate tag post list by board visibility event")
+	h.bestEffortDeleteByPrefix(ctx, key.RankedTagPostListGlobalPrefix(), "invalidate ranked tag post list by board visibility event")
 }
 
 func (h *CacheInvalidationHandler) handlePostChanged(ctx context.Context, e PostChanged) {
 	h.bestEffortDeleteByPrefix(ctx, key.PostListPrefix(e.BoardID), "invalidate post list by event")
 	h.bestEffortDeleteByPrefix(ctx, key.PostSearchListPrefix(), "invalidate post search list by event")
 	h.bestEffortDeleteByPrefix(ctx, key.PostFeedListPrefix(), "invalidate post feed by event")
+	h.bestEffortDeleteByPrefix(ctx, key.RankedPostListPrefix(e.BoardID), "invalidate ranked post list by event")
 	h.bestEffortDelete(ctx, key.PostDetail(e.PostID), "invalidate post detail by event")
 	for _, tagName := range e.TagNames {
 		h.bestEffortDeleteByPrefix(ctx, key.TagPostListPrefix(tagName), "invalidate tag post list by event")
+		h.bestEffortDeleteByPrefix(ctx, key.RankedTagPostListPrefix(tagName), "invalidate ranked tag post list by event")
 	}
 	if e.Operation != "deleted" {
 		return
@@ -72,6 +76,9 @@ func (h *CacheInvalidationHandler) handlePostChanged(ctx context.Context, e Post
 func (h *CacheInvalidationHandler) handleCommentChanged(ctx context.Context, e CommentChanged) {
 	h.bestEffortDeleteByPrefix(ctx, key.CommentListPrefix(e.PostID), "invalidate comment list by event")
 	h.bestEffortDeleteByPrefix(ctx, key.PostFeedListPrefix(), "invalidate post feed by comment event")
+	h.bestEffortDeleteByPrefix(ctx, key.PostSearchListPrefix(), "invalidate post search list by comment event")
+	h.bestEffortDeleteByPrefix(ctx, key.RankedPostListGlobalPrefix(), "invalidate ranked post list by comment event")
+	h.bestEffortDeleteByPrefix(ctx, key.RankedTagPostListGlobalPrefix(), "invalidate ranked tag post list by comment event")
 	h.bestEffortDelete(ctx, key.PostDetail(e.PostID), "invalidate post detail by comment event")
 	if e.Operation == "deleted" {
 		h.bestEffortDelete(ctx, key.ReactionList(string(entity.ReactionTargetComment), e.CommentID), "invalidate comment reaction list by comment delete event")
@@ -81,6 +88,9 @@ func (h *CacheInvalidationHandler) handleCommentChanged(ctx context.Context, e C
 func (h *CacheInvalidationHandler) handleReactionChanged(ctx context.Context, e ReactionChanged) {
 	h.bestEffortDelete(ctx, key.ReactionList(string(e.TargetType), e.TargetID), "invalidate reaction list by event")
 	h.bestEffortDeleteByPrefix(ctx, key.PostFeedListPrefix(), "invalidate post feed by reaction event")
+	h.bestEffortDeleteByPrefix(ctx, key.PostSearchListPrefix(), "invalidate post search list by reaction event")
+	h.bestEffortDeleteByPrefix(ctx, key.RankedPostListGlobalPrefix(), "invalidate ranked post list by reaction event")
+	h.bestEffortDeleteByPrefix(ctx, key.RankedTagPostListGlobalPrefix(), "invalidate ranked tag post list by reaction event")
 	h.bestEffortDelete(ctx, key.PostDetail(e.PostID), "invalidate post detail by reaction event")
 }
 

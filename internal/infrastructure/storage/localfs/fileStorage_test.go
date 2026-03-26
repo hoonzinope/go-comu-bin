@@ -42,3 +42,15 @@ func TestFileStorage_Save_RejectsPathTraversal(t *testing.T) {
 	err := storage.Save(context.Background(), "../escape.txt", strings.NewReader("hello"))
 	require.Error(t, err)
 }
+
+func TestFileStorage_Save_ReturnsCanceledWhenContextAlreadyCanceled(t *testing.T) {
+	rootDir := t.TempDir()
+	storage := NewFileStorage(rootDir)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := storage.Save(ctx, "posts/1/a.txt", strings.NewReader("hello"))
+	require.ErrorIs(t, err, context.Canceled)
+	_, statErr := os.Stat(filepath.Join(rootDir, "posts/1/a.txt"))
+	assert.True(t, os.IsNotExist(statErr))
+}

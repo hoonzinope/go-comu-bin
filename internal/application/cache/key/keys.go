@@ -59,11 +59,27 @@ func PostFeedListPrefix() string {
 }
 
 func RankedPostList(boardID int64, sortBy, window string, limit int, cursor string) string {
-	return fmt.Sprintf("posts:list:board:%d:sort:%s:window:%s:limit:%d:cursor:%s", boardID, sortBy, window, limit, cursor)
+	return fmt.Sprintf("posts:ranked:list:board:%d:sort:%s:window:%s:limit:%d:cursor:%s", boardID, sortBy, window, limit, cursor)
 }
 
 func RankedTagPostList(tagName, sortBy, window string, limit int, cursor string) string {
-	return fmt.Sprintf("tags:posts:name:%s:sort:%s:window:%s:limit:%d:cursor:%s", tagName, sortBy, window, limit, cursor)
+	return fmt.Sprintf("tags:ranked:posts:name:%s:sort:%s:window:%s:limit:%d:cursor:%s", tagName, sortBy, window, limit, cursor)
+}
+
+func RankedPostListPrefix(boardID int64) string {
+	return fmt.Sprintf("posts:ranked:list:board:%d:", boardID)
+}
+
+func RankedPostListGlobalPrefix() string {
+	return "posts:ranked:list:"
+}
+
+func RankedTagPostListPrefix(tagName string) string {
+	return fmt.Sprintf("tags:ranked:posts:name:%s:", tagName)
+}
+
+func RankedTagPostListGlobalPrefix() string {
+	return "tags:ranked:posts:name:"
 }
 
 func CommentList(postID int64, limit int, lastID int64) string {

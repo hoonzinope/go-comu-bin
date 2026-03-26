@@ -22,12 +22,20 @@ func NewFileStorage(rootDir string) *FileStorage {
 }
 
 func (s *FileStorage) Save(ctx context.Context, key string, content io.Reader) error {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	fullPath, err := s.resolve(key)
 	if err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	file, err := os.Create(fullPath)
@@ -35,12 +43,14 @@ func (s *FileStorage) Save(ctx context.Context, key string, content io.Reader) e
 		return err
 	}
 	defer file.Close()
-	_, err = io.Copy(file, content)
+	_, err = io.Copy(file, &contextReader{ctx: ctx, reader: content})
 	return err
 }
 
 func (s *FileStorage) Open(ctx context.Context, key string) (io.ReadCloser, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	fullPath, err := s.resolve(key)
 	if err != nil {
 		return nil, err
@@ -49,9 +59,14 @@ func (s *FileStorage) Open(ctx context.Context, key string) (io.ReadCloser, erro
 }
 
 func (s *FileStorage) Delete(ctx context.Context, key string) error {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	fullPath, err := s.resolve(key)
 	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	err = os.Remove(fullPath)
@@ -70,4 +85,16 @@ func (s *FileStorage) resolve(key string) (string, error) {
 		return "", fmt.Errorf("invalid storage key")
 	}
 	return filepath.Join(s.rootDir, cleanKey), nil
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
 }

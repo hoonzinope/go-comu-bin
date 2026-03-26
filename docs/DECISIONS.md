@@ -269,6 +269,75 @@
 - `internal/application/service/session/service.go`
 - `internal/application/service/account/service.go`
 
+## 2026-03-26 - search ranked cursor는 relevance cursor와 분리하고, password reset 발급은 메일 실패 시 live token이 남지 않게 처리한다
+
+상태
+
+- decided
+
+배경
+
+- ranked search 페이지는 feed-style 정렬/커서를 반환하는 반면, relevance search는 별도의 search cursor를 사용한다.
+- password reset 요청은 메일 발송 실패 시에도 reset token이 storage에 남지 않아야 한다.
+
+관찰
+
+- `GET /api/v1/posts/search`는 `sort=relevance`와 `sort=hot|latest|top`의 cursor 형식이 다르다.
+- password reset token은 저장 후 메일 발송되는 흐름이라, 발송 실패 시 토큰 정리 경계가 중요하다.
+
+결론
+
+- search cursor 파서는 sort family별로 분기한다.
+  - `relevance`는 기존 search cursor 형식을 사용한다.
+  - `hot|latest|top`은 feed cursor 형식을 사용한다.
+- password reset 발급은 메일 발송 실패 시 live token이 남지 않는 경계로 유지한다.
+  - token 저장/무효화와 메일 발송은 같은 success boundary 안에서 처리한다.
+
+후속 작업
+
+- `internal/application/service/post/query_handler.go`의 ranked search cursor 분기 정리
+- `internal/application/service/account/service.go`의 password reset 발급/발송 경계 회귀 테스트 추가
+
+관련 문서/코드
+
+- `docs/API.md`
+- `internal/application/service/post/query_handler.go`
+- `internal/application/service/account/service.go`
+
+## 2026-03-26 - ranked cache invalidation과 ctx-aware 외부 I/O는 boundary별로 명시적으로 처리한다
+
+상태
+
+- decided
+
+배경
+
+- ranked board/tag/search 결과는 write 이벤트 이후에도 stale cache가 남으면 공개 목록의 정렬/가시성이 어긋날 수 있다.
+- SMTP와 local filesystem adapter는 request/job `ctx`를 받지만, 현재는 cancel/shutdown 신호를 충분히 반영하지 않는다.
+
+관찰
+
+- comment/reaction 이벤트는 post feed/detail cache만 무효화하고, ranked board/tag/search cache는 남겨 둔다.
+- SMTP sender는 blocking network I/O에 `ctx`를 반영하지 않고, local filesystem storage는 file I/O 전반에 `ctx`를 반영하지 않는다.
+
+결론
+
+- ranked cache는 normal cache와 별개 prefix로 관리하고, ranking에 영향을 주는 write 이벤트마다 해당 prefix를 지운다.
+- search ranking cache는 comment/reaction 변경에도 무효화한다.
+- SMTP/localfs adapter는 request/job `ctx`를 확인하고, cancel된 작업은 가능한 빨리 중단한다.
+
+후속 작업
+
+- `internal/application/event/cache_invalidation_handler.go`의 ranked/search prefix 무효화 추가
+- `internal/infrastructure/mail/smtp/sender.go`와 `internal/infrastructure/storage/localfs/fileStorage.go`의 ctx-aware 처리 추가
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `internal/application/event/cache_invalidation_handler.go`
+- `internal/infrastructure/mail/smtp/sender.go`
+- `internal/infrastructure/storage/localfs/fileStorage.go`
+
 ## 2026-03-25 - password reset confirm은 부분 커밋보다 세션 무효화 우선 경계를 택한다
 
 상태

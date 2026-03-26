@@ -43,6 +43,8 @@ func TestCacheInvalidationHandler_BoardVisibilityChanged_InvalidatesVisibilitySe
 	require.NoError(t, cache.Set(context.Background(), key.CommentList(11, 10, 0), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetPost), 11), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.TagPostList("go", 10, 0), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.RankedPostList(2, "hot", "", 10, ""), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.RankedTagPostList("go", "hot", "", 10, ""), "cached"))
 
 	require.NoError(t, h.Handle(context.Background(), NewBoardChanged("visibility", 2)))
 
@@ -51,6 +53,8 @@ func TestCacheInvalidationHandler_BoardVisibilityChanged_InvalidatesVisibilitySe
 		key.CommentList(11, 10, 0),
 		key.ReactionList(string(entity.ReactionTargetPost), 11),
 		key.TagPostList("go", 10, 0),
+		key.RankedPostList(2, "hot", "", 10, ""),
+		key.RankedTagPostList("go", "hot", "", 10, ""),
 	} {
 		_, ok, err := cache.Get(context.Background(), cacheKey)
 		require.NoError(t, err)
@@ -66,10 +70,13 @@ func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(10), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.PostList(2, 10, 0), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.TagPostList("go", 10, 0), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.RankedPostList(2, "hot", "", 10, ""), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.RankedTagPostList("go", "hot", "", 10, ""), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.CommentList(10, 10, 0), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetPost), 10), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), 100), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.PostFeedList("hot", "", 10, ""), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.PostSearchSortedList("alpha beta", "hot", "", 10, ""), "cached"))
 
 	publishedAt := time.Now()
 	e := NewPostChanged("deleted", 10, 2, &publishedAt, []string{"go"}, []int64{100})
@@ -79,10 +86,13 @@ func TestCacheInvalidationHandler_PostChangedDelete(t *testing.T) {
 		key.PostDetail(10),
 		key.PostList(2, 10, 0),
 		key.TagPostList("go", 10, 0),
+		key.RankedPostList(2, "hot", "", 10, ""),
+		key.RankedTagPostList("go", "hot", "", 10, ""),
 		key.CommentList(10, 10, 0),
 		key.ReactionList(string(entity.ReactionTargetPost), 10),
 		key.ReactionList(string(entity.ReactionTargetComment), 100),
 		key.PostFeedList("hot", "", 10, ""),
+		key.PostSearchSortedList("alpha beta", "hot", "", 10, ""),
 	} {
 		_, ok, err := cache.Get(context.Background(), cacheKey)
 		require.NoError(t, err)
@@ -99,6 +109,9 @@ func TestCacheInvalidationHandler_CommentReactionAttachmentChanged(t *testing.T)
 	require.NoError(t, cache.Set(context.Background(), key.PostDetail(11), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetComment), 90), "cached"))
 	require.NoError(t, cache.Set(context.Background(), key.PostFeedList("hot", "", 10, ""), "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.PostSearchListPrefix()+"alpha", "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.RankedPostListGlobalPrefix()+"board:2:sort:hot:window:7d:limit:10:cursor:", "cached"))
+	require.NoError(t, cache.Set(context.Background(), key.RankedTagPostListGlobalPrefix()+"go:sort:hot:window:7d:limit:10:cursor:", "cached"))
 	require.NoError(t, h.Handle(context.Background(), NewCommentChanged("deleted", 90, 11)))
 
 	require.NoError(t, cache.Set(context.Background(), key.ReactionList(string(entity.ReactionTargetPost), 11), "cached"))
@@ -114,6 +127,7 @@ func TestCacheInvalidationHandler_CommentReactionAttachmentChanged(t *testing.T)
 		key.ReactionList(string(entity.ReactionTargetComment), 90),
 		key.ReactionList(string(entity.ReactionTargetPost), 11),
 		key.PostFeedList("hot", "", 10, ""),
+		key.PostSearchListPrefix() + "alpha",
 	} {
 		_, ok, err := cache.Get(context.Background(), cacheKey)
 		require.NoError(t, err)
