@@ -3716,3 +3716,43 @@
 - `docs/ROADMAP.md`
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-26 - code-quality-auditor 리뷰 저장소는 SQLite를 원본으로 하고 Markdown은 append export 로그로 유지한다
+
+상태
+
+- decided
+
+배경
+
+- `code-quality-auditor`는 현재 `.documents/review/AI_REVIEW.md`와 `.documents/review/REFACTOR_BACKLOG.md`를 직접 수정하는 방식으로 리뷰 결과를 누적한다.
+- 이 방식은 사람이 읽고 Git diff를 보기에는 편하지만, round 번호, finding ID, backlog ID, open high 수, 상태 변경 이력을 구조적으로 검증하거나 조회하기 어렵다.
+- 특히 `AI_REVIEW.md`는 round별 스냅샷이 한 파일에 append되고, `REFACTOR_BACKLOG.md`는 구조적 refactor 항목이 장기 누적되므로, 형식 규약과 중복 제어를 도구로 강제할 필요가 있다.
+
+관찰
+
+- 리뷰 결과는 고정된 구조를 가진다. round, finding, acceptance criteria, refactor backlog, backlog 상태 변화는 각각 분리된 엔티티로 다루는 편이 자연스럽다.
+- 반면 기존 Markdown 파일은 팀이 직접 읽고 Git 이력으로 추적하는 용도로는 여전히 유용하다.
+- 따라서 원본 저장소와 사람 친화적 로그 표현을 분리하는 편이 현재 목적에 맞다.
+
+결론
+
+- `code-quality-auditor`의 리뷰 원본 저장소는 `.documents/review/review.db` SQLite 파일로 고정한다.
+- 기존 `.documents/review/AI_REVIEW.md`와 `.documents/review/REFACTOR_BACKLOG.md` 이력은 SQLite로 전량 마이그레이션한다.
+- 향후 리뷰 실행은 SQLite에 먼저 기록한 뒤, 같은 실행에서 이번에 새로 생성된 review round와 backlog 변화만 Markdown에 append export 한다.
+- `AI_REVIEW.md`는 round log로 유지하고, `REFACTOR_BACKLOG.md`는 backlog item log와 backlog update log를 함께 담는다.
+- 현재 최신 상태 조회와 구조적 검증은 Markdown이 아니라 SQLite 질의를 기준으로 한다.
+
+후속 작업
+
+- `code-quality-auditor` 스킬에 SQLite 기반 CLI 추가
+- legacy Markdown import와 append export 테스트 추가
+- 스킬 문서와 참조 자료를 DB 기록 + append export 흐름으로 갱신
+
+관련 문서/코드
+
+- `.agents/skills/code-quality-auditor/SKILL.md`
+- `.agents/skills/code-quality-auditor/references/formats.md`
+- `.agents/skills/code-quality-auditor/references/CHECKLIST.md`
+- `.documents/review/AI_REVIEW.md`
+- `.documents/review/REFACTOR_BACKLOG.md`
