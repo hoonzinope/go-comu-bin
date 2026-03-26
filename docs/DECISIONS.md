@@ -294,6 +294,41 @@
 - `internal/application/service/account/service.go`
 - `internal/infrastructure/persistence/sqlite/unit_of_work.go`
 - `internal/infrastructure/persistence/inmemory/unitOfWork.go`
+
+## 2026-03-26 - signup rollback은 durable delete와 token cleanup을 분리하고, guest-upgrade rollback은 restore와 token cleanup을 분리한다
+
+상태
+
+- decided
+
+배경
+
+- signup과 guest-upgrade 보상 로직이 token cleanup 실패에 묶이면, 메인 state 복원까지 실패로 되돌아가는 문제가 남는다.
+- token cleanup은 메인 state restore보다 낮은 우선순위의 정리 작업이므로, 실패해도 계정 상태 복원은 유지되어야 한다.
+
+관찰
+
+- signup rollback은 created user 삭제와 verification token cleanup을 같은 transaction으로 처리하고 있었다.
+- guest upgrade rollback은 restore와 token cleanup을 같은 error handler 안에서 처리하고 있었다.
+
+결론
+
+- signup rollback은 `delete user`를 먼저 durable하게 커밋하고, token cleanup은 별도 best-effort 작업으로 분리한다.
+- guest upgrade rollback은 guest row restore를 우선 보장하고, token cleanup 실패는 restore 결과를 되돌리지 않는다.
+- 회귀 테스트는 mail 실패와 cleanup 실패를 별도로 주입해 state restore가 유지되는지 검증한다.
+
+후속 작업
+
+- signup cleanup failure test 추가
+- guest-upgrade cleanup failure test 추가
+- review DB의 관련 finding 상태를 다시 검증
+
+관련 문서/코드
+
+- `internal/application/service/user/service.go`
+- `internal/application/service/account/service.go`
+- `internal/application/service/userService_test.go`
+- `internal/application/service/accountService_test.go`
 - API/CONFIG/ARCHITECTURE/ROADMAP/Swagger 정합성 반영
 
 관련 문서/코드

@@ -536,12 +536,13 @@ func (s *AccountService) restorePasswordResetState(ctx context.Context, user *en
 }
 
 func (s *AccountService) invalidateEmailVerificationTokens(ctx context.Context, userID int64) error {
-	return s.unitOfWork.WithinTransaction(ctx, func(tx port.TxScope) error {
-		if err := tx.EmailVerificationTokenRepository().InvalidateByUser(tx.Context(), userID); err != nil {
-			return customerror.WrapRepository("invalidate email verification tokens", err)
-		}
+	if s == nil || s.verificationTokens == nil || userID <= 0 {
 		return nil
-	})
+	}
+	if err := s.verificationTokens.InvalidateByUser(ctx, userID); err != nil {
+		return customerror.WrapRepository("invalidate email verification tokens", err)
+	}
+	return nil
 }
 
 func (s *AccountService) invalidatePasswordResetTokens(ctx context.Context, userID int64) error {

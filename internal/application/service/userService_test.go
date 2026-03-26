@@ -101,6 +101,40 @@ func TestUserService_SignUp_RollsBackCreatedUserWhenMailSendFails(t *testing.T) 
 	assert.False(t, saved.IsUsable(time.Now()))
 }
 
+func TestUserService_SignUp_DeletesUserWhenVerificationCleanupFails(t *testing.T) {
+	repositories := newTestRepositories()
+	mailer := newRecordingEmailVerificationMailSender()
+	mailer.err = errors.New("send failed")
+	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
+	cleanupErr := errors.New("cleanup failed")
+	svc := NewUserServiceWithEmailVerification(
+		repositories.user,
+		newTestPasswordHasher(),
+		repositories.unitOfWork,
+		&failingEmailVerificationTokenRepository{
+			base:          repositories.emailVerification,
+			invalidateErr: cleanupErr,
+		},
+		issuer,
+		mailer,
+		30*time.Minute,
+	)
+
+	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
+	assert.Contains(t, err.Error(), "cleanup failed")
+
+	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
+	require.NoError(t, err)
+	assert.Nil(t, user)
+
+	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.True(t, saved.IsUsable(time.Now()))
+}
+
 func TestUserService_IssueGuestAccount_Success(t *testing.T) {
 	repositories := newTestRepositories()
 	svc := NewUserService(repositories.user, newTestPasswordHasher(), repositories.unitOfWork)
