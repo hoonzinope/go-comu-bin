@@ -1,0 +1,47 @@
+# AGENTS.md instructions for /Users/hoonzi/go-proj/commu-bin
+
+## Work sequence
+- For change work in this repository, the default sequence is fixed:
+  `결정 문서 기록 -> TDD -> 구현 -> 테스트 통과 -> 문서 정합성 반영 -> 커밋/푸시`
+
+## Branch rule
+- 브랜치 생성이 필요한 작업이라도, 새 브랜치를 만들기 전에 반드시 사용자에게 먼저 확인을 요청한다.
+
+## Skills
+A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used for this repository. Each entry includes a name, description, and file path so the agent can open the source for full instructions when using a specific skill.
+
+### Available skills
+- code-quality-auditor: Audit code for bugs, security, and refactor candidates. Logs findings to `.documents/review/` without modifying source code. (file: /Users/hoonzi/go-proj/commu-bin/.agents/skills/code-quality-auditor/SKILL.md)
+
+## How to use skills
+- Discovery: The list above is the canonical set of repository-local skills for this workspace.
+- Trigger rules: If the user names a skill, references `$skill-name`, or the task clearly matches a listed skill's description, the agent must use that skill for the turn.
+- Missing or blocked: If a named skill cannot be read, the agent should say so briefly and continue with the best fallback.
+
+## Skill loading rules
+1. Open the referenced `SKILL.md` and read only enough to follow the workflow.
+2. Resolve relative paths in the skill relative to the skill directory first.
+3. Load only the referenced files needed for the current task; avoid bulk-reading unrelated assets.
+4. If the skill provides scripts, templates, or assets, prefer using them over recreating equivalent content manually.
+
+## Coordination
+- Use the minimal set of skills needed to complete the request.
+- State which skill is being used and why in one short line before substantial work.
+- Do not carry repository-local skills across turns unless the user re-mentions them or the new request clearly matches the same skill.
+- Think in English, but respond to the user in Korean.
+
+## Context hygiene
+- Keep loaded context small and task-focused.
+- Prefer summaries over pasting long skill contents into the conversation.
+- Avoid deep reference chasing unless the skill requires it.
+
+## CLI defaults
+- Use `fd` instead of `find` for file discovery whenever possible.
+- Use `rg` (`ripgrep`) instead of `grep` for text search whenever possible.
+- Use `bat --style=plain` instead of `cat` for reading file contents whenever possible.
+- Use `eza` instead of `ls` for directory listings whenever possible.
+- Use `ast-grep` for structural code search, code-aware refactors, and syntax-aware matching when the task goes beyond plain text search.
+- Use `jq` and `yq` in pipelines when parsing or transforming JSON/YAML or API responses.
+- Use `gh` for GitHub-related work in non-interactive mode, preferring machine-readable output such as `--json`.
+- Use `ruff` for Python linting and formatting tasks.
+- For CLI commands that talk to external services, prefer non-interactive flags such as `--yes`, `--quiet`, `--non-interactive`, and machine-readable output such as `--json` or `--format json` whenever the tool supports them.
