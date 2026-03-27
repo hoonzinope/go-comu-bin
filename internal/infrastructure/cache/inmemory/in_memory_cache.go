@@ -109,6 +109,21 @@ func (c *InMemoryCache) ExistsByPrefix(ctx context.Context, prefix string) (bool
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if strings.HasSuffix(prefix, ":") {
+		for _, key := range c.keysForIndexedPrefixLocked(prefix) {
+			entry, exists := c.store[key]
+			if !exists {
+				continue
+			}
+			if entry.hasExpiry && time.Now().After(entry.expiresAt) {
+				c.deleteLocked(key)
+				continue
+			}
+			return true, nil
+		}
+		return false, nil
+	}
+
 	for key, entry := range c.store {
 		if !strings.HasPrefix(key, prefix) {
 			continue

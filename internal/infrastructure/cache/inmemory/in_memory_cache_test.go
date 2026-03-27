@@ -117,3 +117,28 @@ func TestInMemoryCache_DeleteByPrefix_UsesPrefixIndex(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok)
 }
+
+func TestInMemoryCache_ExistsByPrefix_UsesPrefixIndex(t *testing.T) {
+	cache := NewInMemoryCache()
+	ctx := context.Background()
+	require.NoError(t, cache.Set(ctx, "session:user:1:token-a", "a"))
+	require.NoError(t, cache.Set(ctx, "session:user:1:token-b", "b"))
+	require.NoError(t, cache.Set(ctx, "session:user:2:token-c", "c"))
+
+	exists, err := cache.ExistsByPrefix(ctx, "session:user:1:")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	cache.mu.RLock()
+	keysForPrefix := len(cache.prefixIndex["session:user:1:"])
+	cache.mu.RUnlock()
+	assert.Equal(t, 2, keysForPrefix)
+
+	deleted, err := cache.DeleteByPrefix(ctx, "session:user:1:")
+	require.NoError(t, err)
+	assert.Equal(t, 2, deleted)
+
+	exists, err = cache.ExistsByPrefix(ctx, "session:user:1:")
+	require.NoError(t, err)
+	assert.False(t, exists)
+}

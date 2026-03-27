@@ -32,6 +32,7 @@ type PostSearchStore struct {
 	tagRepository     *TagRepository
 	postTagRepository *PostTagRepository
 	documents         map[int64]searchDocument
+	index             searchIndexStats
 	afterRebuildLoad  func()
 }
 
@@ -47,12 +48,24 @@ type searchDocument struct {
 	lastUpdatedAt time.Time
 }
 
+type searchIndexStats struct {
+	documentCount     int
+	titleTokenCount   int
+	tagTokenCount     int
+	contentTokenCount int
+	titleDF           map[string]int
+	tagDF             map[string]int
+	contentDF         map[string]int
+	termPostings      map[string]map[int64]struct{}
+}
+
 func NewPostSearchStore(postRepository *PostRepository, tagRepository *TagRepository, postTagRepository *PostTagRepository) *PostSearchStore {
 	return &PostSearchStore{
 		postRepository:    postRepository,
 		tagRepository:     tagRepository,
 		postTagRepository: postTagRepository,
 		documents:         make(map[int64]searchDocument),
+		index:             newSearchIndexStats(),
 	}
 }
 
@@ -78,26 +91,33 @@ func (r *PostSearchStore) SearchPublishedPosts(ctx context.Context, query string
 		return []port.PostSearchResult{}, nil
 	}
 	normalizedPhrase := normalizeSearchText(query)
-	documents := r.snapshotDocuments()
-	if len(documents) == 0 {
+	uniqueQueryTerms := uniqueSearchTerms(queryTerms)
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if len(r.documents) == 0 || r.index.documentCount == 0 {
 		return []port.PostSearchResult{}, nil
 	}
 
-	titleDF := documentFrequency(documents, func(doc searchDocument) []string { return doc.titleTokens })
-	tagDF := documentFrequency(documents, func(doc searchDocument) []string { return doc.tagTokens })
-	contentDF := documentFrequency(documents, func(doc searchDocument) []string { return doc.contentTokens })
-	avgTitleLen := averageFieldLength(documents, func(doc searchDocument) []string { return doc.titleTokens })
-	avgTagLen := averageFieldLength(documents, func(doc searchDocument) []string { return doc.tagTokens })
-	avgContentLen := averageFieldLength(documents, func(doc searchDocument) []string { return doc.contentTokens })
+	candidateIDs := r.index.matchingPostIDs(uniqueQueryTerms)
+	if len(candidateIDs) == 0 {
+		return []port.PostSearchResult{}, nil
+	}
 
-	results := make([]port.PostSearchResult, 0, len(documents))
-	for _, doc := range documents {
-		if !containsAllTerms(doc.allTerms, queryTerms) {
+	avgTitleLen := averageFieldLengthFromTotals(r.index.titleTokenCount, r.index.documentCount)
+	avgTagLen := averageFieldLengthFromTotals(r.index.tagTokenCount, r.index.documentCount)
+	avgContentLen := averageFieldLengthFromTotals(r.index.contentTokenCount, r.index.documentCount)
+
+	results := make([]port.PostSearchResult, 0, len(candidateIDs))
+	for _, postID := range candidateIDs {
+		doc, ok := r.documents[postID]
+		if !ok {
 			continue
 		}
-		score := weightedBM25(doc.titleTokens, queryTerms, titleDF, avgTitleLen, len(documents), searchTitleWeight)
-		score += weightedBM25(doc.tagTokens, queryTerms, tagDF, avgTagLen, len(documents), searchTagWeight)
-		score += weightedBM25(doc.contentTokens, queryTerms, contentDF, avgContentLen, len(documents), searchContentWeight)
+		score := weightedBM25(doc.titleTokens, queryTerms, r.index.titleDF, avgTitleLen, r.index.documentCount, searchTitleWeight)
+		score += weightedBM25(doc.tagTokens, queryTerms, r.index.tagDF, avgTagLen, r.index.documentCount, searchTagWeight)
+		score += weightedBM25(doc.contentTokens, queryTerms, r.index.contentDF, avgContentLen, r.index.documentCount, searchContentWeight)
 		score += phraseBoost(doc, normalizedPhrase)
 		if cursor != nil && !searchResultAfterCursor(score, doc.post.ID, *cursor) {
 			continue
@@ -144,6 +164,7 @@ func (r *PostSearchStore) RebuildAll(ctx context.Context) error {
 		}
 	}
 	r.documents = next
+	r.rebuildIndexLocked()
 	return nil
 }
 
@@ -158,18 +179,20 @@ func (r *PostSearchStore) UpsertPost(ctx context.Context, postID int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now()
-	if !ok {
-		if current, exists := r.documents[postID]; exists && current.lastUpdatedAt.After(now) {
-			return nil
-		}
+	current, exists := r.documents[postID]
+	if exists && current.lastUpdatedAt.After(now) {
+		return nil
+	}
+	if exists {
+		r.removeDocumentLocked(current)
 		delete(r.documents, postID)
+	}
+	if !ok {
 		return nil
 	}
 	document.lastUpdatedAt = now
-	if current, exists := r.documents[postID]; exists && current.lastUpdatedAt.After(now) {
-		return nil
-	}
 	r.documents[postID] = document
+	r.addDocumentLocked(document)
 	return nil
 }
 
@@ -181,21 +204,15 @@ func (r *PostSearchStore) DeletePost(ctx context.Context, postID int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now()
-	if current, exists := r.documents[postID]; exists && current.lastUpdatedAt.After(now) {
+	current, exists := r.documents[postID]
+	if exists && current.lastUpdatedAt.After(now) {
 		return nil
+	}
+	if exists {
+		r.removeDocumentLocked(current)
 	}
 	delete(r.documents, postID)
 	return nil
-}
-
-func (r *PostSearchStore) snapshotDocuments() []searchDocument {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	documents := make([]searchDocument, 0, len(r.documents))
-	for _, document := range r.documents {
-		documents = append(documents, cloneSearchDocument(document))
-	}
-	return documents
 }
 
 func (r *PostSearchStore) loadSearchDocuments(ctx context.Context) ([]searchDocument, error) {
@@ -264,6 +281,21 @@ func (r *PostSearchStore) loadSearchDocumentByPostID(ctx context.Context, postID
 		return searchDocument{}, false, nil
 	}
 	return document, true, nil
+}
+
+func (r *PostSearchStore) rebuildIndexLocked() {
+	r.index = newSearchIndexStats()
+	for _, document := range r.documents {
+		r.index.addDocument(document)
+	}
+}
+
+func (r *PostSearchStore) addDocumentLocked(document searchDocument) {
+	r.index.addDocument(document)
+}
+
+func (r *PostSearchStore) removeDocumentLocked(document searchDocument) {
+	r.index.removeDocument(document)
 }
 
 type searchRepositorySnapshot struct {
@@ -349,43 +381,31 @@ func tokenizeSearchText(text string) []string {
 	return strings.Fields(normalized)
 }
 
+func uniqueSearchTerms(tokens []string) []string {
+	if len(tokens) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(tokens))
+	unique := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		if _, ok := seen[token]; ok {
+			continue
+		}
+		seen[token] = struct{}{}
+		unique = append(unique, token)
+	}
+	return unique
+}
+
 func normalizeSearchText(text string) string {
 	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(text))), " ")
 }
 
-func containsAllTerms(termSet map[string]struct{}, queryTerms []string) bool {
-	for _, term := range queryTerms {
-		if _, ok := termSet[term]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
-func documentFrequency(documents []searchDocument, field func(searchDocument) []string) map[string]int {
-	df := make(map[string]int)
-	for _, doc := range documents {
-		seen := make(map[string]struct{})
-		for _, token := range field(doc) {
-			if _, ok := seen[token]; ok {
-				continue
-			}
-			seen[token] = struct{}{}
-			df[token]++
-		}
-	}
-	return df
-}
-
-func averageFieldLength(documents []searchDocument, field func(searchDocument) []string) float64 {
-	if len(documents) == 0 {
+func averageFieldLengthFromTotals(totalTokens, documentCount int) float64 {
+	if documentCount == 0 {
 		return 0
 	}
-	total := 0
-	for _, doc := range documents {
-		total += len(field(doc))
-	}
-	return float64(total) / float64(len(documents))
+	return float64(totalTokens) / float64(documentCount)
 }
 
 func weightedBM25(tokens, queryTerms []string, df map[string]int, avgLen float64, totalDocs int, weight float64) float64 {
@@ -460,5 +480,121 @@ func cloneSearchDocument(document searchDocument) searchDocument {
 		tagText:       document.tagText,
 		allTerms:      clonedTerms,
 		lastUpdatedAt: document.lastUpdatedAt,
+	}
+}
+
+func newSearchIndexStats() searchIndexStats {
+	return searchIndexStats{
+		titleDF:      make(map[string]int),
+		tagDF:        make(map[string]int),
+		contentDF:    make(map[string]int),
+		termPostings: make(map[string]map[int64]struct{}),
+	}
+}
+
+func (s *searchIndexStats) addDocument(document searchDocument) {
+	if s == nil {
+		return
+	}
+	s.documentCount++
+	s.titleTokenCount += len(document.titleTokens)
+	s.tagTokenCount += len(document.tagTokens)
+	s.contentTokenCount += len(document.contentTokens)
+	s.updateFieldCounts(s.titleDF, document.titleTokens, 1)
+	s.updateFieldCounts(s.tagDF, document.tagTokens, 1)
+	s.updateFieldCounts(s.contentDF, document.contentTokens, 1)
+	for term := range document.allTerms {
+		postings := s.termPostings[term]
+		if postings == nil {
+			postings = make(map[int64]struct{})
+			s.termPostings[term] = postings
+		}
+		postings[document.post.ID] = struct{}{}
+	}
+}
+
+func (s *searchIndexStats) removeDocument(document searchDocument) {
+	if s == nil {
+		return
+	}
+	if s.documentCount > 0 {
+		s.documentCount--
+	}
+	s.titleTokenCount -= len(document.titleTokens)
+	s.tagTokenCount -= len(document.tagTokens)
+	s.contentTokenCount -= len(document.contentTokens)
+	s.updateFieldCounts(s.titleDF, document.titleTokens, -1)
+	s.updateFieldCounts(s.tagDF, document.tagTokens, -1)
+	s.updateFieldCounts(s.contentDF, document.contentTokens, -1)
+	for term := range document.allTerms {
+		postings, ok := s.termPostings[term]
+		if !ok {
+			continue
+		}
+		delete(postings, document.post.ID)
+		if len(postings) == 0 {
+			delete(s.termPostings, term)
+		}
+	}
+}
+
+func (s *searchIndexStats) matchingPostIDs(queryTerms []string) []int64 {
+	if s == nil || len(queryTerms) == 0 {
+		return nil
+	}
+	baseTerm := ""
+	var basePosting map[int64]struct{}
+	for _, term := range queryTerms {
+		postings, ok := s.termPostings[term]
+		if !ok || len(postings) == 0 {
+			return nil
+		}
+		if basePosting == nil || len(postings) < len(basePosting) {
+			baseTerm = term
+			basePosting = postings
+		}
+	}
+	if basePosting == nil {
+		return nil
+	}
+	candidates := make(map[int64]struct{}, len(basePosting))
+	for postID := range basePosting {
+		candidates[postID] = struct{}{}
+	}
+	for _, term := range queryTerms {
+		if term == baseTerm {
+			continue
+		}
+		postings := s.termPostings[term]
+		for postID := range candidates {
+			if _, ok := postings[postID]; !ok {
+				delete(candidates, postID)
+			}
+		}
+		if len(candidates) == 0 {
+			return nil
+		}
+	}
+	matching := make([]int64, 0, len(candidates))
+	for postID := range candidates {
+		matching = append(matching, postID)
+	}
+	return matching
+}
+
+func (s *searchIndexStats) updateFieldCounts(field map[string]int, tokens []string, delta int) {
+	if len(tokens) == 0 {
+		return
+	}
+	seen := make(map[string]struct{}, len(tokens))
+	for _, token := range tokens {
+		if _, ok := seen[token]; ok {
+			continue
+		}
+		seen[token] = struct{}{}
+		field[token] += delta
+		if field[token] <= 0 {
+			delete(field, token)
+		}
 	}
 }

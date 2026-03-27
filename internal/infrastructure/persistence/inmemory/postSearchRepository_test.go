@@ -165,6 +165,37 @@ func TestPostSearchRepository_UpsertAndDeletePost_UpdatesIndex(t *testing.T) {
 	assert.Empty(t, results)
 }
 
+func TestPostSearchRepository_UpsertPost_ReplacesExistingDocumentInIndex(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	post := testPost("go search", "body", 1, 1)
+	_, err := postRepo.Save(context.Background(), post)
+	require.NoError(t, err)
+	require.NoError(t, searchStore.UpsertPost(context.Background(), post.ID))
+
+	initialResults, err := searchStore.SearchPublishedPosts(context.Background(), "go search", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, initialResults, 1)
+	assert.Equal(t, post.ID, initialResults[0].Post.ID)
+
+	post.Title = "new topic"
+	post.Content = "updated body"
+	require.NoError(t, postRepo.Update(context.Background(), post))
+	require.NoError(t, searchStore.UpsertPost(context.Background(), post.ID))
+
+	oldResults, err := searchStore.SearchPublishedPosts(context.Background(), "go search", 10, nil)
+	require.NoError(t, err)
+	assert.Empty(t, oldResults)
+
+	newResults, err := searchStore.SearchPublishedPosts(context.Background(), "new topic", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, newResults, 1)
+	assert.Equal(t, post.ID, newResults[0].Post.ID)
+}
+
 func TestPostSearchStore_HandlesNilAndMissingInputs(t *testing.T) {
 	var nilStore *PostSearchStore
 
