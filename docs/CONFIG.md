@@ -54,6 +54,9 @@ delivery:
     port: 18577
     maxJSONBodyBytes: 1048576
     defaultPageLimit: 10
+    trustedProxies:
+      - "127.0.0.1"
+      - "10.0.0.0/8"
     rateLimit:
       enabled: true
       windowSeconds: 60
@@ -146,6 +149,12 @@ jobs:
   - `localTime`
 - panic/recover 경계는 HTTP 미들웨어, background job runner, outbox relay worker, process entrypoint에서 구조화 로그를 남긴다.
 
+## 리버스 프록시
+
+- 앱이 프록시 뒤에서 동작하면 `delivery.http.trustedProxies`에 해당 프록시의 IP 또는 CIDR을 지정한다.
+- 기본값은 비워 두며, 이 경우 `X-Forwarded-For` 같은 헤더를 신뢰하지 않는다.
+- `nginx`, `Caddy`, 로드밸런서처럼 TLS 종료를 담당하는 프록시가 있으면 앱 내부 HTTPS 종료는 필요하지 않다.
+
 ## 검증 규칙
 
 - `delivery.http.port`: `1..65535`
@@ -222,7 +231,9 @@ jobs:
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
 - HTTP read/write 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
   - `enabled=true`일 때 `/api/v1` 하위 `GET/HEAD/OPTIONS` 요청은 `readRequests`, `POST/PUT/DELETE/PATCH` 요청은 `writeRequests`를 `method+route+client_ip` 기준으로 적용합니다.
-  - 기본 HTTP 서버는 trusted proxy를 비활성화하므로, 별도 reverse proxy trust 구성이 없으면 `X-Forwarded-For` 같은 전달 헤더를 rate limit key에 사용하지 않습니다.
+- trusted proxies: `cmd/main.go` -> `cfg.Delivery.HTTP.TrustedProxies`
+  - 앱이 reverse proxy 뒤에 있으면 해당 proxy의 IP 또는 CIDR을 지정합니다.
+  - 기본값은 비워 두며, 이 경우 `X-Forwarded-For` 같은 전달 헤더를 신뢰하지 않습니다.
 - login 전용 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.LoginRateLimit.*`
   - `enabled=true`일 때 `POST /api/v1/auth/login`에 `login:client_ip:normalized_username` 기준 제한을 추가 적용합니다.
   - username 존재 여부, 비밀번호 오류, 로그인 성공 여부와 무관하게 동일하게 카운트합니다.
