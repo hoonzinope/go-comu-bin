@@ -33,7 +33,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
-	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
+	cacheRistretto "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/ristretto"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	jobrunner "github.com/hoonzinope/go-comu-bin/internal/infrastructure/job/inprocess"
 	noopmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/noop"
@@ -95,7 +95,17 @@ func main() {
 		slog.Error("failed to ensure bootstrap admin user", "error", err)
 		os.Exit(1)
 	}
-	cache := cacheInMemory.NewInMemoryCache()
+	cache, err := cacheRistretto.NewCache(cacheRistretto.Config{
+		NumCounters: cfg.Cache.NumCounters,
+		MaxCost:     cfg.Cache.MaxCost,
+		BufferItems: cfg.Cache.BufferItems,
+		Metrics:     cfg.Cache.Metrics,
+	})
+	if err != nil {
+		slog.Error("failed to initialize cache", "error", err)
+		os.Exit(1)
+	}
+	defer cache.Close()
 	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)

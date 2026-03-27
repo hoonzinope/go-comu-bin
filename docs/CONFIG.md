@@ -163,6 +163,10 @@ jobs:
 - `admin.bootstrap.password`: placeholder 값 금지 (`admin`)
 - `cache.listTTLSeconds`: `> 0`
 - `cache.detailTTLSeconds`: `> 0`
+- `cache.maxCost`: `> 0`, runtime cache capacity
+- `cache.numCounters`: `> 0`, admission/eviction frequency counters
+- `cache.bufferItems`: `> 0`, buffered write/get size
+- `cache.metrics`: `true | false`, cache metrics on/off
 - `storage.local.rootDir`: 필수(빈 값 불가)
 - `database.path`: SQLite auth DB 파일 경로, 필수
 - `storage.provider`: `local | object`
@@ -222,6 +226,7 @@ jobs:
   - relay는 handler 처리 중 lease를 heartbeat로 갱신해 장시간 처리 중 stale reclaim으로 인한 중복 dispatch를 줄입니다.
 - bootstrap admin: `cmd/main.go` -> `cfg.Admin.Bootstrap.*`
 - 캐시 TTL 정책: `cmd/main.go` -> `cfg.Cache.ListTTLSeconds`, `cfg.Cache.DetailTTLSeconds`
+  - runtime cache capacity: `cfg.Cache.MaxCost`, `cfg.Cache.NumCounters`, `cfg.Cache.BufferItems`, `cfg.Cache.Metrics`
 - 로컬 업로드 루트: `cfg.Storage.Local.RootDir`
 - SQLite auth DB 경로: `cfg.Database.Path`
 - 파일 저장 provider: `cfg.Storage.Provider`

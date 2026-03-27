@@ -19,7 +19,7 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
-	cacheInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/inmemory"
+	cacheRistretto "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/ristretto"
 	eventOutbox "github.com/hoonzinope/go-comu-bin/internal/infrastructure/event/outbox"
 	noopmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/noop"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
@@ -205,7 +205,14 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 	outboxRepository := inmemory.NewOutboxRepository()
 	fileStorage := localfs.NewFileStorage(t.TempDir())
 
-	cache := cacheInMemory.NewInMemoryCache()
+	cache, err := cacheRistretto.NewCache(cacheRistretto.Config{
+		NumCounters: 1000000,
+		MaxCost:     100000,
+		BufferItems: 64,
+		Metrics:     false,
+	})
+	require.NoError(t, err)
+	t.Cleanup(cache.Close)
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	unitOfWork := inmemory.NewUnitOfWork(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, emailVerificationRepository, passwordResetRepository, outboxRepository)
 	appLogger := slog.New(slog.NewJSONHandler(io.Discard, nil))

@@ -1,6 +1,10 @@
 cache:
   listTTLSeconds: 30
   detailTTLSeconds: 30
+  maxCost: 100000
+  numCounters: 1000000
+  bufferItems: 64
+  metrics: false
 
 storage:
   provider: "local"

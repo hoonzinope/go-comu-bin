@@ -18,6 +18,7 @@ GOCACHE=/tmp/go-comu-bin-gocache go test ./...
 go test ./internal/application/service/... -v
 go test ./internal/delivery -v
 go test ./internal/infrastructure/persistence/inmemory -v
+go test ./internal/infrastructure/cache/ristretto -v
 go test ./internal/infrastructure/cache/inmemory -v
 go test ./internal/domain/entity -v
 go test ./internal/integration -v
@@ -81,6 +82,7 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
 ## 테스트 구성
 
 - Unit
+  - `internal/infrastructure/cache/ristretto`
   - `internal/domain/entity`
   - `internal/infrastructure/cache/inmemory`
   - `internal/infrastructure/auth`

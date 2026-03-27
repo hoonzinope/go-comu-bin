@@ -19,8 +19,12 @@ const minRateLimitWriteRequests = 1
 
 type Config struct {
 	Cache struct {
-		ListTTLSeconds   int `yaml:"listTTLSeconds"`
-		DetailTTLSeconds int `yaml:"detailTTLSeconds"`
+		ListTTLSeconds   int   `yaml:"listTTLSeconds"`
+		DetailTTLSeconds int   `yaml:"detailTTLSeconds"`
+		MaxCost          int64 `yaml:"maxCost"`
+		NumCounters      int64 `yaml:"numCounters"`
+		BufferItems      int64 `yaml:"bufferItems"`
+		Metrics          bool  `yaml:"metrics"`
 	} `yaml:"cache"`
 	Database struct {
 		Path string `yaml:"path"`
@@ -157,6 +161,10 @@ func Load() (*Config, error) {
 	bindEnv(v,
 		"cache.listTTLSeconds",
 		"cache.detailTTLSeconds",
+		"cache.maxCost",
+		"cache.numCounters",
+		"cache.bufferItems",
+		"cache.metrics",
 		"database.path",
 		"admin.bootstrap.enabled",
 		"admin.bootstrap.username",
@@ -247,6 +255,10 @@ func bindEnv(v *viper.Viper, keys ...string) {
 func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("cache.listTTLSeconds", 30)
 	v.SetDefault("cache.detailTTLSeconds", 30)
+	v.SetDefault("cache.maxCost", int64(100000))
+	v.SetDefault("cache.numCounters", int64(1000000))
+	v.SetDefault("cache.bufferItems", int64(64))
+	v.SetDefault("cache.metrics", false)
 	v.SetDefault("database.path", "./data/data.db")
 	v.SetDefault("admin.bootstrap.enabled", false)
 	v.SetDefault("storage.provider", "local")
@@ -448,6 +460,15 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Cache.DetailTTLSeconds <= 0 {
 		return fmt.Errorf("invalid cache.detailTTLSeconds: %d (must be > 0)", cfg.Cache.DetailTTLSeconds)
+	}
+	if cfg.Cache.MaxCost <= 0 {
+		return fmt.Errorf("invalid cache.maxCost: %d (must be > 0)", cfg.Cache.MaxCost)
+	}
+	if cfg.Cache.NumCounters <= 0 {
+		return fmt.Errorf("invalid cache.numCounters: %d (must be > 0)", cfg.Cache.NumCounters)
+	}
+	if cfg.Cache.BufferItems <= 0 {
+		return fmt.Errorf("invalid cache.bufferItems: %d (must be > 0)", cfg.Cache.BufferItems)
 	}
 	if strings.TrimSpace(cfg.Database.Path) == "" {
 		return fmt.Errorf("invalid database.path: cannot be empty")

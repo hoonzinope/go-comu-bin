@@ -46,6 +46,46 @@
 - internal/...
 ```
 
+## 2026-03-27 - runtime cache는 Ristretto-backed adapter로 전환하고 in-memory는 test double로 남긴다
+
+상태
+
+- decided
+
+배경
+
+- 현재 runtime cache는 직접 구현한 in-memory adapter를 쓰고 있고, 조회 캐시와 세션 캐시가 같은 port를 공유한다.
+- cache write/read hot path는 요청 경로와 이벤트 무효화 경로 모두에서 쓰이므로, 더 높은 처리량과 bounded memory behavior가 필요했다.
+- prefix 기반 무효화 의미는 그대로 유지해야 해서, 단순 교체가 아니라 prefix index를 보조 구조로 두는 설계가 필요했다.
+
+관찰
+
+- `cmd/main.go`와 integration bootstrap은 현재 `internal/infrastructure/cache/inmemory`를 직접 주입한다.
+- `port.Cache`는 `GetOrSetWithTTL`과 prefix 연산을 포함하고 있어, adapter 내부 구현만 바꾸면 상위 서비스 계약은 유지된다.
+- Ristretto는 write buffering과 admission policy를 가지므로, write 성공 여부를 명시적으로 확인하고 `Wait()`로 flush해야 즉시 조회 가능성을 보장할 수 있다.
+
+결론
+
+- runtime cache는 `internal/infrastructure/cache/ristretto` 어댑터로 전환한다.
+- `DeleteByPrefix`와 `ExistsByPrefix`는 prefix index를 별도로 유지해 정확한 의미를 보장한다.
+- cache write가 reject/drop되면 error로 올리고, application은 기존처럼 cache failure로 처리한다.
+- cache capacity 관련 설정은 `cache` 설정으로 노출한다.
+- 기존 in-memory cache 구현은 테스트 더블과 reference adapter 용도로 유지한다.
+
+후속 작업
+
+- Ristretto adapter 구현 및 runtime bootstrap 전환
+- cache 설정 확장 및 validation/test 갱신
+- architecture/testing 문서에 runtime/test double 경계 반영
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `internal/infrastructure/cache/ristretto`
+- `internal/infrastructure/cache/inmemory`
+- `internal/config/config.go`
+- `docs/ARCHITECTURE.md`
+
 ## 2026-03-25 - ranking v1은 전역 feed API + PublishedAt + outbox 기반 비동기 점수 갱신으로 도입한다
 
 상태
