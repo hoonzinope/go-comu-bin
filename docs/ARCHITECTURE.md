@@ -33,6 +33,7 @@ flowchart LR
   - background delivery는 polling, schedule trigger, retry/ack, graceful shutdown 경계 관리만 담당한다.
   - HTTP handler와 background worker/job/consumer 모두 use case port만 호출하고, repository/DB 구현체를 직접 호출하지 않는다.
   - JSON 요청 바디 제한은 `delivery.http.maxJSONBodyBytes` 설정으로 적용한다.
+  - HTTP panic recovery는 delivery 경계에서 구조화 로그와 함께 처리한다.
 - `application`
   - 유스케이스 orchestration, 권한 판정, 캐시 정책, tx 경계, read model 조립을 담당한다.
   - 단, 하나의 service가 read assembly, policy, workflow, event dispatch를 모두 직접 품지 않는다. 복잡해지는 경로는 내부 handler/coordinator/workflow로 분해하고 service는 facade로 유지한다.
@@ -41,6 +42,9 @@ flowchart LR
   - 로깅이 필요하면 composition root에서 주입한 `*slog.Logger`를 사용한다.
   - `Repository`, `Cache`, `SessionRepository`, `FileStorage` 같은 I/O 성격의 하위 포트 호출에는 동일한 `ctx`를 그대로 전달한다.
   - 순수 값 변환, 해시/토큰 계산, in-process dispatcher 같은 non-I/O 포트는 `ctx`를 생략할 수 있다.
+- `composition root`
+  - `cmd/main.go`에서 `stdout + lumberjack` JSON logger를 조립하고, runtime logger를 모든 delivery/application/infrastructure 경계에 주입한다.
+  - process entrypoint panic은 bootstrap logger로도 구조화 기록한다.
 - `domain`
   - 엔티티 상태와 도메인 규칙을 가진다.
 - `infrastructure`

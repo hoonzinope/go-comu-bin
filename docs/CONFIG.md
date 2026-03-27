@@ -13,6 +13,7 @@
 - 예: `ADMIN_BOOTSTRAP_ENABLED`
 - 예: `ADMIN_BOOTSTRAP_USERNAME`
 - 예: `ADMIN_BOOTSTRAP_PASSWORD`
+- 예: `LOGGING_FILEPATH`
 
 ## 예시
 
@@ -20,6 +21,14 @@
 cache:
   listTTLSeconds: 30
   detailTTLSeconds: 30
+
+logging:
+  filePath: "./logs/app.jsonl"
+  maxSizeMB: 100
+  maxBackups: 10
+  maxAgeDays: 30
+  compress: true
+  localTime: true
 
 database:
   path: "./data/data.db"
@@ -123,6 +132,19 @@ jobs:
     gracePeriodSeconds: 600
     batchSize: 100
 ```
+
+## 로깅
+
+- 기본 로그 포맷은 JSON이다.
+- runtime 로그는 `stdout`과 회전 파일에 동시에 기록한다.
+- 회전 정책은 `logging.*`에서 제어한다.
+  - `filePath`
+  - `maxSizeMB`
+  - `maxBackups`
+  - `maxAgeDays`
+  - `compress`
+  - `localTime`
+- panic/recover 경계는 HTTP 미들웨어, background job runner, outbox relay worker, process entrypoint에서 구조화 로그를 남긴다.
 
 ## 검증 규칙
 

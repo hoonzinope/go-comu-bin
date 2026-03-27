@@ -4270,3 +4270,40 @@
 - `docs/ROADMAP.md`
 - `cmd/main.go`
 - `internal/infrastructure/persistence/sqlite/*`
+
+## 2026-03-27 - Runtime logging uses stdout plus lumberjack rotation with structured panic recovery
+
+상태
+
+- decided
+
+배경
+
+- 운영 런타임 로그를 JSON 구조화 로그로 유지하면서, 장기 실행 시 stdout만으로는 보관/순환이 부족했다.
+- HTTP, background job, outbox relay, process entrypoint에서 panic/recover 경계가 분산되어 있어, 동일한 구조화 로그 포맷으로 수렴시킬 필요가 있었다.
+
+관찰
+
+- `cmd/main.go`는 bootstrap logger 이후 `stdout + lumberjack` logger를 composition root에서 조립한다.
+- `internal/delivery`는 gin recovery middleware를 구조화 로그 버전으로 교체했다.
+- `internal/infrastructure/job/inprocess`와 `internal/infrastructure/event/outbox`는 panic을 recovery하고 stack trace를 포함해 기록한다.
+- `internal/config`는 `logging.*` top-level 설정을 읽고 검증한다.
+
+결론
+
+- runtime logger는 `stdout`과 rotating file을 동시에 쓰는 JSON logger로 고정한다.
+- panic/recover는 HTTP, job, relay, entrypoint에서 구조화 로그를 남기도록 통일한다.
+
+후속 작업
+
+- 운영 기본값이 과도하면 `maxSizeMB`/`maxBackups`를 후속 조정한다.
+- 필요 시 metrics/alerting과 연결되는 log field 규약을 추가한다.
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `cmd/logger.go`
+- `internal/delivery/recovery.go`
+- `internal/infrastructure/job/inprocess/runner.go`
+- `internal/infrastructure/event/outbox/relay.go`
+- `internal/config/config.go`

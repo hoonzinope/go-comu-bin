@@ -90,8 +90,17 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
   - `internal/application/porttest`
   - `internal/application/service/...`
   - `internal/delivery`
+  - `cmd`의 logger wiring 및 panic recovery
+  - `internal/infrastructure/job/inprocess`의 panic recovery
+  - `internal/infrastructure/event/outbox`의 panic recovery
 - Integration
   - `internal/integration`
+
+## 로깅/예외 테스트 기준
+
+- `stdout + lumberjack` logger wiring은 `cmd` 테스트에서 검증한다.
+- HTTP panic recovery는 500 응답과 구조화 로그 모두를 확인한다.
+- background job / outbox relay panic은 worker를 죽이지 않고 다음 tick/loop로 이어지는지 확인한다.
 
 ## 저장소 Contract Test 기준
 
