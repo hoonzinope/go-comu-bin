@@ -217,10 +217,12 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 		MaxAttempts:  5,
 		BaseBackoff:  10 * time.Millisecond,
 	})
+	verificationMailer := newRecordingEmailVerificationMailSender()
 	cacheInvalidationHandler := appevent.NewCacheInvalidationHandler(cache, appLogger)
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
 	postRankingHandler := appevent.NewPostRankingHandler(postRankingRepository)
 	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
+	mailDeliveryHandler := appevent.NewMailDeliveryHandler(verificationMailer, noopmail.NewPasswordResetMailSender(), emailVerificationRepository, passwordResetRepository)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
@@ -232,6 +234,9 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
+	outboxRelay.Subscribe(appevent.EventNameSignupEmailVerificationRequested, mailDeliveryHandler)
+	outboxRelay.Subscribe(appevent.EventNameEmailVerificationResendRequested, mailDeliveryHandler)
+	outboxRelay.Subscribe(appevent.EventNamePasswordResetRequested, mailDeliveryHandler)
 	require.NoError(t, postSearchStore.RebuildAll(context.Background()))
 	relayCtx, relayCancel := context.WithCancel(context.Background())
 	outboxRelay.Start(relayCtx)
@@ -240,14 +245,13 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 		outboxRelay.Wait()
 	})
 	passwordHasher := auth.NewBcryptPasswordHasher(4)
-	verificationMailer := newRecordingEmailVerificationMailSender()
 	hashedAdminPassword, err := passwordHasher.Hash("admin")
 	require.NoError(t, err)
 	admin := entity.NewAdmin("admin", hashedAdminPassword)
 	_, err = userRepository.Save(context.Background(), admin)
 	require.NoError(t, err)
 
-	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), verificationMailer, 30*time.Minute)
+	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), 30*time.Minute)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchStore, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, testCachePolicy(), authorizationPolicy)
@@ -270,11 +274,9 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 		sessionRepository,
 		emailVerificationRepository,
 		auth.NewEmailVerificationTokenIssuer(),
-		verificationMailer,
 		30*time.Minute,
 		passwordResetRepository,
 		auth.NewPasswordResetTokenIssuer(),
-		noopmail.NewPasswordResetMailSender(),
 		30*time.Minute,
 	)
 	httpServer := delivery.NewHTTPServer(":0", delivery.HTTPDependencies{
@@ -354,8 +356,11 @@ func mustUpgradeGuest(t *testing.T, server *integrationServer, token, username, 
 
 func mustConfirmEmailVerification(t *testing.T, server *integrationServer, email string) {
 	t.Helper()
-	token := server.verificationMailer.tokenFor(email)
-	require.NotEmpty(t, token)
+	var token string
+	require.Eventually(t, func() bool {
+		token = server.verificationMailer.tokenFor(email)
+		return token != ""
+	}, time.Second, 10*time.Millisecond)
 	body, status, _ := requestJSON(t, server.URL, "", http.MethodPost, "/auth/email-verification/confirm", map[string]any{
 		"token": token,
 	})

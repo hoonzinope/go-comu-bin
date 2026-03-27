@@ -43,6 +43,12 @@ func (s *JSONEventSerializer) Deserialize(eventName string, payload []byte, occu
 		return deserializeEvent(payload, occurredAt, func(e ReportChanged) time.Time { return e.At }, func(e *ReportChanged, at time.Time) { e.At = at })
 	case EventNameNotificationTriggered:
 		return deserializeEvent(payload, occurredAt, func(e NotificationTriggered) time.Time { return e.At }, func(e *NotificationTriggered, at time.Time) { e.At = at })
+	case EventNameSignupEmailVerificationRequested:
+		return deserializeEvent(payload, occurredAt, func(e SignupEmailVerificationRequested) time.Time { return e.At }, func(e *SignupEmailVerificationRequested, at time.Time) { e.At = at })
+	case EventNameEmailVerificationResendRequested:
+		return deserializeEvent(payload, occurredAt, func(e EmailVerificationResendRequested) time.Time { return e.At }, func(e *EmailVerificationResendRequested, at time.Time) { e.At = at })
+	case EventNamePasswordResetRequested:
+		return deserializeEvent(payload, occurredAt, func(e PasswordResetRequested) time.Time { return e.At }, func(e *PasswordResetRequested, at time.Time) { e.At = at })
 	default:
 		return nil, fmt.Errorf("unsupported event name: %s", eventName)
 	}

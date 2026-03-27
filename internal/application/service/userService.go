@@ -12,6 +12,18 @@ func NewUserService(userRepository port.UserRepository, passwordHasher port.Pass
 	return usersvc.NewUserService(userRepository, passwordHasher, unitOfWork, authorizationPolicies...)
 }
 
-func NewUserServiceWithEmailVerification(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, verificationTokens port.EmailVerificationTokenRepository, verificationIssuer port.EmailVerificationTokenIssuer, verificationMailer port.EmailVerificationMailSender, verificationTokenTTL time.Duration, authorizationPolicies ...policy.AuthorizationPolicy) *usersvc.UserService {
-	return usersvc.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, verificationTokens, verificationIssuer, verificationMailer, verificationTokenTTL, authorizationPolicies...)
+func NewUserServiceWithEmailVerification(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, verificationTokens port.EmailVerificationTokenRepository, verificationIssuer port.EmailVerificationTokenIssuer, args ...any) *usersvc.UserService {
+	var (
+		verificationTokenTTL  time.Duration
+		authorizationPolicies []policy.AuthorizationPolicy
+	)
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case time.Duration:
+			verificationTokenTTL = v
+		case policy.AuthorizationPolicy:
+			authorizationPolicies = append(authorizationPolicies, v)
+		}
+	}
+	return usersvc.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, verificationTokens, verificationIssuer, verificationTokenTTL, authorizationPolicies...)
 }

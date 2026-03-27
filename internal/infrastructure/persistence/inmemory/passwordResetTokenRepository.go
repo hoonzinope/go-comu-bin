@@ -96,14 +96,11 @@ func (r *PasswordResetTokenRepository) InvalidateByUser(ctx context.Context, use
 func (r *PasswordResetTokenRepository) invalidateByUser(userID int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
 	for key, token := range r.tokens {
-		if token.UserID != userID || token.IsConsumed() {
+		if token.UserID != userID {
 			continue
 		}
-		next := clonePasswordResetToken(token)
-		next.Consume(now)
-		r.tokens[key] = next
+		delete(r.tokens, key)
 	}
 	return nil
 }

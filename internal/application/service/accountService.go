@@ -22,14 +22,35 @@ func NewAccountServiceWithGuestUpgrade(
 	sessionRepository port.SessionRepository,
 	verificationTokens port.EmailVerificationTokenRepository,
 	verificationIssuer port.EmailVerificationTokenIssuer,
-	verificationMailer port.EmailVerificationMailSender,
-	verificationTokenTTL time.Duration,
-	resetTokens port.PasswordResetTokenRepository,
-	resetIssuer port.PasswordResetTokenIssuer,
-	resetMailer port.PasswordResetMailSender,
-	resetTokenTTL time.Duration,
-	logger ...*slog.Logger,
+	args ...any,
 ) *accountsvc.AccountService {
+	var (
+		verificationTokenTTL time.Duration
+		resetTokens          port.PasswordResetTokenRepository
+		resetIssuer          port.PasswordResetTokenIssuer
+		resetTokenTTL        time.Duration
+		loggers              []*slog.Logger
+	)
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case port.EmailVerificationMailSender:
+			// ignored; mail delivery moved to outbox relay
+		case port.PasswordResetMailSender:
+			// ignored; mail delivery moved to outbox relay
+		case time.Duration:
+			if verificationTokenTTL == 0 {
+				verificationTokenTTL = v
+			} else {
+				resetTokenTTL = v
+			}
+		case port.PasswordResetTokenRepository:
+			resetTokens = v
+		case port.PasswordResetTokenIssuer:
+			resetIssuer = v
+		case *slog.Logger:
+			loggers = append(loggers, v)
+		}
+	}
 	return accountsvc.NewAccountServiceWithGuestUpgrade(
 		userUseCase,
 		sessionUseCase,
@@ -40,12 +61,10 @@ func NewAccountServiceWithGuestUpgrade(
 		sessionRepository,
 		verificationTokens,
 		verificationIssuer,
-		verificationMailer,
 		verificationTokenTTL,
 		resetTokens,
 		resetIssuer,
-		resetMailer,
 		resetTokenTTL,
-		logger...,
+		loggers...,
 	)
 }

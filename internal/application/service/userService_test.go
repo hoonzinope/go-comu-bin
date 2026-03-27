@@ -28,16 +28,16 @@ func TestUserService_SignUp_Success(t *testing.T) {
 
 func TestUserService_SignUp_SendsEmailVerificationWhenConfigured(t *testing.T) {
 	repositories := newTestRepositories()
-	mailer := newRecordingEmailVerificationMailSender()
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
-	svc := NewUserServiceWithEmailVerification(repositories.user, newTestPasswordHasher(), repositories.unitOfWork, repositories.emailVerification, issuer, mailer, 30*time.Minute)
+	svc := NewUserServiceWithEmailVerification(repositories.user, newTestPasswordHasher(), repositories.unitOfWork, repositories.emailVerification, issuer, 30*time.Minute)
 
 	result, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
-	require.Len(t, mailer.sent, 1)
-	assert.Equal(t, "alice@example.com", mailer.sent[0].email)
-	assert.Equal(t, "verify-token-1", mailer.sent[0].token)
+
+	messages, err := repositories.outbox.FetchReady(10, time.Now())
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
 
 	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
 	require.NoError(t, err)
@@ -47,12 +47,12 @@ func TestUserService_SignUp_SendsEmailVerificationWhenConfigured(t *testing.T) {
 	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
 	require.NoError(t, err)
 	require.NotNil(t, saved)
-	assert.True(t, saved.IsUsable(time.Now()))
+	assert.True(t, saved.IsConsumed())
+	assert.False(t, saved.IsUsable(time.Now()))
 }
 
 func TestUserService_SignUp_DoesNotSendVerificationEmailWhenCommitFails(t *testing.T) {
 	repositories := newTestRepositories()
-	mailer := newRecordingEmailVerificationMailSender()
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
 	svc := NewUserServiceWithEmailVerification(
 		repositories.user,
@@ -66,19 +66,18 @@ func TestUserService_SignUp_DoesNotSendVerificationEmailWhenCommitFails(t *testi
 		},
 		repositories.emailVerification,
 		issuer,
-		mailer,
 		30*time.Minute,
 	)
 
 	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.Error(t, err)
-	require.Empty(t, mailer.sent)
+	messages, fetchErr := repositories.outbox.FetchReady(10, time.Now())
+	require.NoError(t, fetchErr)
+	require.Empty(t, messages)
 }
 
-func TestUserService_SignUp_RollsBackCreatedUserWhenMailSendFails(t *testing.T) {
+func TestUserService_SignUp_LeavesPendingTokenForOutboxRelay(t *testing.T) {
 	repositories := newTestRepositories()
-	mailer := newRecordingEmailVerificationMailSender()
-	mailer.err = errors.New("send failed")
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
 	svc := NewUserServiceWithEmailVerification(
 		repositories.user,
@@ -86,18 +85,15 @@ func TestUserService_SignUp_RollsBackCreatedUserWhenMailSendFails(t *testing.T) 
 		repositories.unitOfWork,
 		repositories.emailVerification,
 		issuer,
-		mailer,
 		30*time.Minute,
 	)
 
 	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
-	require.Len(t, mailer.sent, 1)
+	require.NoError(t, err)
 
 	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
 	require.NoError(t, err)
-	assert.Nil(t, user)
+	require.NotNil(t, user)
 
 	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
 	require.NoError(t, err)
@@ -106,31 +102,27 @@ func TestUserService_SignUp_RollsBackCreatedUserWhenMailSendFails(t *testing.T) 
 	assert.False(t, saved.IsUsable(time.Now()))
 }
 
-func TestUserService_SignUp_DeletesUserWhenVerificationActivationFails(t *testing.T) {
+func TestUserService_SignUp_IgnoresTokenActivationRepositoryFailures(t *testing.T) {
 	repositories := newTestRepositories()
-	mailer := newRecordingEmailVerificationMailSender()
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
 	svc := NewUserServiceWithEmailVerification(
 		repositories.user,
 		newTestPasswordHasher(),
 		repositories.unitOfWork,
 		&failingEmailVerificationTokenRepository{
-			base:          repositories.emailVerification,
-			updateErr:     errors.New("activation failed"),
+			base:      repositories.emailVerification,
+			updateErr: errors.New("activation failed"),
 		},
 		issuer,
-		mailer,
 		30*time.Minute,
 	)
 
 	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, customerror.ErrInternalServerError)
-	assert.Contains(t, err.Error(), "activation failed")
+	require.NoError(t, err)
 
 	user, err := repositories.user.SelectUserByEmail(context.Background(), "alice@example.com")
 	require.NoError(t, err)
-	assert.Nil(t, user)
+	require.NotNil(t, user)
 
 	saved, err := repositories.emailVerification.SelectByTokenHash(context.Background(), testHashEmailVerificationToken("verify-token-1"))
 	require.NoError(t, err)

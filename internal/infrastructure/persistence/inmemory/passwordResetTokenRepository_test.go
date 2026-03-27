@@ -35,8 +35,7 @@ func TestPasswordResetTokenRepository_SaveSelectInvalidateAndUpdate(t *testing.T
 
 	invalidated, err := repo.SelectByTokenHash(context.Background(), "hash-1")
 	require.NoError(t, err)
-	require.NotNil(t, invalidated)
-	assert.True(t, invalidated.IsConsumed())
+	assert.Nil(t, invalidated)
 
 	next.Consume(time.Now())
 	require.NoError(t, repo.Update(context.Background(), next))

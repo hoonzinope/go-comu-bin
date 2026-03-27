@@ -69,6 +69,47 @@ func TestJSONEventSerializer_Deserialize_FillsOccurredAtWhenMissing(t *testing.T
 				assert.Equal(t, occurredAt, got.At)
 			},
 		},
+		{
+			name:      "signup email verification requested",
+			eventName: EventNameSignupEmailVerificationRequested,
+			payload:   SignupEmailVerificationRequested{MailDeliveryRequested: MailDeliveryRequested{UserID: 1, Email: "alice@example.com", RawToken: "raw-signup", TokenHash: "hash-signup"}},
+			assertAt: func(t *testing.T, event any) {
+				got, ok := event.(SignupEmailVerificationRequested)
+				require.True(t, ok)
+				assert.Equal(t, occurredAt, got.At)
+				assert.Equal(t, int64(1), got.UserID)
+				assert.Equal(t, "alice@example.com", got.Email)
+				assert.Equal(t, "raw-signup", got.RawToken)
+				assert.Equal(t, "hash-signup", got.TokenHash)
+			},
+		},
+		{
+			name:      "email verification resend requested",
+			eventName: EventNameEmailVerificationResendRequested,
+			payload:   EmailVerificationResendRequested{MailDeliveryRequested: MailDeliveryRequested{UserID: 2, Email: "alice@example.com", RawToken: "raw-resend", TokenHash: "hash-resend"}},
+			assertAt: func(t *testing.T, event any) {
+				got, ok := event.(EmailVerificationResendRequested)
+				require.True(t, ok)
+				assert.Equal(t, occurredAt, got.At)
+				assert.Equal(t, int64(2), got.UserID)
+				assert.Equal(t, "raw-resend", got.RawToken)
+				assert.Equal(t, "hash-resend", got.TokenHash)
+			},
+		},
+		{
+			name:      "password reset requested",
+			eventName: EventNamePasswordResetRequested,
+			payload:   PasswordResetRequested{MailDeliveryRequested: MailDeliveryRequested{UserID: 3, Email: "bob@example.com", RawToken: "raw-reset", TokenHash: "hash-reset"}},
+			assertAt: func(t *testing.T, event any) {
+				got, ok := event.(PasswordResetRequested)
+				require.True(t, ok)
+				assert.Equal(t, occurredAt, got.At)
+				assert.Equal(t, int64(3), got.UserID)
+				assert.Equal(t, "bob@example.com", got.Email)
+				assert.Equal(t, "raw-reset", got.RawToken)
+				assert.Equal(t, "hash-reset", got.TokenHash)
+			},
+		},
 	}
 
 	for _, tc := range tests {

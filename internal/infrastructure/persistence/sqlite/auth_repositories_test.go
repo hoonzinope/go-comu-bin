@@ -48,12 +48,11 @@ func TestEmailVerificationTokenRepository_SaveInvalidateAndCleanup(t *testing.T)
 	require.NoError(t, repo.InvalidateByUser(context.Background(), 1))
 	loaded, err = repo.SelectByTokenHash(context.Background(), "hash-1")
 	require.NoError(t, err)
-	require.NotNil(t, loaded)
-	assert.NotNil(t, loaded.ConsumedAt)
+	assert.Nil(t, loaded)
 
 	deleted, err := repo.DeleteExpiredOrConsumedBefore(context.Background(), now.Add(time.Minute), 10)
 	require.NoError(t, err)
-	assert.Equal(t, 2, deleted)
+	assert.Equal(t, 0, deleted)
 }
 
 func TestPasswordResetTokenRepository_SaveInvalidateAndCleanup(t *testing.T) {
@@ -82,12 +81,11 @@ func TestPasswordResetTokenRepository_SaveInvalidateAndCleanup(t *testing.T) {
 	require.NoError(t, repo.InvalidateByUser(context.Background(), 1))
 	loaded, err = repo.SelectByTokenHash(context.Background(), "hash-1")
 	require.NoError(t, err)
-	require.NotNil(t, loaded)
-	assert.NotNil(t, loaded.ConsumedAt)
+	assert.Nil(t, loaded)
 
 	deleted, err := repo.DeleteExpiredOrConsumedBefore(context.Background(), now.Add(time.Minute), 10)
 	require.NoError(t, err)
-	assert.Equal(t, 2, deleted)
+	assert.Equal(t, 0, deleted)
 }
 
 func TestUnitOfWork_CommitsAndRollsBackAuthChanges(t *testing.T) {

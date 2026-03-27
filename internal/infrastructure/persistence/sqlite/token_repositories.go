@@ -108,10 +108,9 @@ func invalidateTokensByUser(ctx context.Context, exec sqlExecutor, table string,
 		return fmt.Errorf("sqlite token repository is not initialized")
 	}
 	_, err := exec.ExecContext(ctx, fmt.Sprintf(`
-UPDATE %s
-SET consumed_at = COALESCE(consumed_at, ?)
-WHERE user_id = ? AND consumed_at IS NULL
-`, table), time.Now().UnixNano(), userID)
+DELETE FROM %s
+WHERE user_id = ?
+`, table), userID)
 	if err != nil {
 		return fmt.Errorf("invalidate tokens in %s: %w", table, err)
 	}

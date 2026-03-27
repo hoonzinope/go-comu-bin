@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -30,7 +31,6 @@ type UserService struct {
 	authorizationPolicy  policy.AuthorizationPolicy
 	verificationTokens   port.EmailVerificationTokenRepository
 	verificationIssuer   port.EmailVerificationTokenIssuer
-	verificationMailer   port.EmailVerificationMailSender
 	verificationTokenTTL time.Duration
 }
 
@@ -47,11 +47,10 @@ func NewUserService(userRepository port.UserRepository, passwordHasher port.Pass
 	}
 }
 
-func NewUserServiceWithEmailVerification(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, verificationTokens port.EmailVerificationTokenRepository, verificationIssuer port.EmailVerificationTokenIssuer, verificationMailer port.EmailVerificationMailSender, verificationTokenTTL time.Duration, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {
+func NewUserServiceWithEmailVerification(userRepository port.UserRepository, passwordHasher port.PasswordHasher, unitOfWork port.UnitOfWork, verificationTokens port.EmailVerificationTokenRepository, verificationIssuer port.EmailVerificationTokenIssuer, verificationTokenTTL time.Duration, authorizationPolicies ...policy.AuthorizationPolicy) *UserService {
 	svc := NewUserService(userRepository, passwordHasher, unitOfWork, authorizationPolicies...)
 	svc.verificationTokens = verificationTokens
 	svc.verificationIssuer = verificationIssuer
-	svc.verificationMailer = verificationMailer
 	svc.verificationTokenTTL = verificationTokenTTL
 	return svc
 }
@@ -94,32 +93,29 @@ func (s *UserService) SignUp(ctx context.Context, username, email, password stri
 			}
 			return customerror.WrapRepository("save user for signup", repoErr)
 		}
-		if err := s.issueAndSendEmailVerification(txCtx, tx, newUser); err != nil {
+		rawToken, tokenHash, expiresAt, ok, err := s.issueEmailVerificationToken(txCtx, tx, newUser)
+		if err != nil {
 			return err
+		}
+		if ok {
+			if err := svccommon.DispatchDomainActions(tx, nil, appevent.NewSignupEmailVerificationRequested(newUser.ID, newUser.Email, rawToken, tokenHash, expiresAt)); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "send email verification mail") {
-			rollbackErrs := []error{err}
-			if deleteErr := s.deleteSignupUserAfterMailFailure(context.Background(), newUser.ID); deleteErr != nil {
-				rollbackErrs = append(rollbackErrs, deleteErr)
-			}
-			if len(rollbackErrs) > 1 {
-				return "", errors.Join(rollbackErrs...)
-			}
-		}
 		return "", err
 	}
 	return "ok", nil
 }
 
-func (s *UserService) issueAndSendEmailVerification(ctx context.Context, tx port.TxScope, user *entity.User) error {
-	if tx == nil || s.verificationTokens == nil || s.verificationIssuer == nil || s.verificationMailer == nil || user == nil {
-		return nil
+func (s *UserService) issueEmailVerificationToken(ctx context.Context, tx port.TxScope, user *entity.User) (string, string, time.Time, bool, error) {
+	if tx == nil || s.verificationTokens == nil || s.verificationIssuer == nil || user == nil {
+		return "", "", time.Time{}, false, nil
 	}
 	if user.Email == "" || user.IsEmailVerified() {
-		return nil
+		return "", "", time.Time{}, false, nil
 	}
 	tokenTTL := s.verificationTokenTTL
 	if tokenTTL <= 0 {
@@ -127,28 +123,19 @@ func (s *UserService) issueAndSendEmailVerification(ctx context.Context, tx port
 	}
 	rawToken, err := s.verificationIssuer.Issue()
 	if err != nil {
-		return customerror.Wrap(customerror.ErrInternalServerError, "issue email verification token", err)
+		return "", "", time.Time{}, false, customerror.Wrap(customerror.ErrInternalServerError, "issue email verification token", err)
 	}
 	expiresAt := time.Now().Add(tokenTTL)
 	tokenHash := hashEmailVerificationToken(rawToken)
 	verificationToken := entity.NewEmailVerificationToken(user.ID, tokenHash, expiresAt)
 	verificationToken.Consume(time.Now())
 	if err := tx.EmailVerificationTokenRepository().InvalidateByUser(ctx, user.ID); err != nil {
-		return customerror.WrapRepository("invalidate previous email verification tokens", err)
+		return "", "", time.Time{}, false, customerror.WrapRepository("invalidate previous email verification tokens", err)
 	}
 	if err := tx.EmailVerificationTokenRepository().Save(ctx, verificationToken); err != nil {
-		return customerror.WrapRepository("save email verification token", err)
+		return "", "", time.Time{}, false, customerror.WrapRepository("save email verification token", err)
 	}
-	tx.AfterCommit(func() error {
-		if err := s.verificationMailer.SendEmailVerification(ctx, user.Email, rawToken, expiresAt); err != nil {
-			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
-		}
-		if err := s.activateEmailVerificationToken(context.Background(), user.ID, tokenHash); err != nil {
-			return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
-		}
-		return nil
-	})
-	return nil
+	return rawToken, tokenHash, expiresAt, true, nil
 }
 
 func (s *UserService) deleteSignupUserAfterMailFailure(ctx context.Context, userID int64) error {
@@ -162,27 +149,6 @@ func (s *UserService) deleteSignupUserAfterMailFailure(ctx context.Context, user
 		}
 		return nil
 	})
-}
-
-func (s *UserService) activateEmailVerificationToken(ctx context.Context, userID int64, tokenHash string) error {
-	if s == nil || s.verificationTokens == nil || userID <= 0 || tokenHash == "" {
-		return nil
-	}
-	latestToken, err := s.verificationTokens.SelectLatestByUser(ctx, userID)
-	if err != nil {
-		return customerror.WrapRepository("select latest email verification token after send", err)
-	}
-	if latestToken == nil {
-		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", errors.New("latest email verification token not found"))
-	}
-	if latestToken.TokenHash != tokenHash || !latestToken.IsConsumed() {
-		return nil
-	}
-	latestToken.ConsumedAt = nil
-	if err := s.verificationTokens.Update(ctx, latestToken); err != nil {
-		return customerror.WrapRepository("send email verification mail", err)
-	}
-	return nil
 }
 
 func (s *UserService) IssueGuestAccount(ctx context.Context) (int64, error) {

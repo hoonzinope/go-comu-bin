@@ -375,6 +375,45 @@
 - `internal/application/service/post/query_handler.go`
 - `internal/application/service/account/service.go`
 
+## 2026-03-27 - signup/email verification/password reset mail delivery는 outbox relay로 비동기화한다
+
+상태
+
+- decided
+
+배경
+
+- signup, email verification request, password reset request가 메일 발송 실패를 사용자-facing 요청 실패로 돌려주면, 외부 SMTP 장애가 핵심 write path를 불필요하게 흔든다.
+- 요청 성공 시점에 토큰이 바로 usable 상태가 되면, outbox retry 또는 resend 경쟁에서 오래된 token이 다시 살아나는 경계가 생긴다.
+- 이미 outbox relay 인프라가 있으므로, 메일 발송은 same-tx outbox 적재 + relay 소비로 넘기는 편이 기존 구조와 맞다.
+
+관찰
+
+- verification/reset token은 저장소에 해시로 저장되고, 신규 요청이 오면 이전 token row를 삭제해 최신 발급만 유효하게 만드는 것이 안전하다.
+- relay는 at-least-once 전달이므로, 같은 token에 대한 메일이 중복 발송될 수 있다.
+
+결론
+
+- signup, email verification request, password reset request는 `pending token + outbox append`를 같은 transaction 안에서 처리한다.
+- relay handler는 메일 발송 후 `token_hash`로 정확한 token만 활성화한다.
+- token 저장소의 `InvalidateByUser`는 기존 row를 consume 표시하는 대신 삭제로 동작한다.
+- 같은 사용자의 resend는 새 token을 발급하고 이전 token을 무효화하는 방식으로만 처리한다.
+
+후속 작업
+
+- `internal/application/event/*`
+- `internal/application/service/user/service.go`
+- `internal/application/service/account/service.go`
+- `internal/infrastructure/persistence/{sqlite,inmemory}/*token*`
+- `cmd/main.go`
+
+관련 문서/코드
+
+- `docs/ARCHITECTURE.md`
+- `docs/API.md`
+- `internal/application/event/mail_delivery_handler.go`
+- `internal/infrastructure/event/outbox/relay.go`
+
 ## 2026-03-26 - ranked cache invalidation과 ctx-aware 외부 I/O는 boundary별로 명시적으로 처리한다
 
 상태

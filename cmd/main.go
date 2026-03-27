@@ -100,6 +100,7 @@ func main() {
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
 	appLogger := logger
+	mailers := newMailSenders(cfg)
 	emailVerificationRepository := sqlitepersist.NewEmailVerificationTokenRepository(authDB)
 	passwordResetRepository := sqlitepersist.NewPasswordResetTokenRepository(authDB)
 	unitOfWork := sqlitepersist.NewUnitOfWork(authDB, boardRepository, postRepository, tagRepository, postTagRepository, commentRepository, reactionRepository, attachmentRepository, reportRepository, notificationRepository, emailVerificationRepository, passwordResetRepository, outboxRepository)
@@ -122,6 +123,7 @@ func main() {
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchRepository)
 	postRankingHandler := appevent.NewPostRankingHandler(postRankingRepository)
 	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
+	mailDeliveryHandler := appevent.NewMailDeliveryHandler(mailers.EmailVerificationMailSender, mailers.PasswordResetMailSender, emailVerificationRepository, passwordResetRepository)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
@@ -133,14 +135,15 @@ func main() {
 	outboxRelay.Subscribe(appevent.EventNameAttachmentChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameReportChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNameNotificationTriggered, notificationHandler)
+	outboxRelay.Subscribe(appevent.EventNameSignupEmailVerificationRequested, mailDeliveryHandler)
+	outboxRelay.Subscribe(appevent.EventNameEmailVerificationResendRequested, mailDeliveryHandler)
+	outboxRelay.Subscribe(appevent.EventNamePasswordResetRequested, mailDeliveryHandler)
 	if err := postSearchRepository.RebuildAll(appCtx); err != nil {
 		slog.Error("failed to build post search index", "error", err)
 		os.Exit(1)
 	}
 	outboxRelay.Start(appCtx)
-
-	mailers := newMailSenders(cfg)
-	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), mailers, 30*time.Minute)
+	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), 30*time.Minute)
 	boardUseCase := service.NewBoardServiceWithActionDispatcher(userRepository, boardRepository, postRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	postUseCase := service.NewPostServiceWithActionDispatcher(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
 	commentUseCase := service.NewCommentServiceWithActionDispatcher(userRepository, boardRepository, postRepository, commentRepository, reactionRepository, unitOfWork, cache, nil, cachePolicy(cfg), authorizationPolicy, appLogger)
@@ -186,11 +189,9 @@ func main() {
 		sessionRepository,
 		emailVerificationRepository,
 		auth.NewEmailVerificationTokenIssuer(),
-		mailers,
 		30*time.Minute,
 		passwordResetRepository,
 		passwordResetIssuer,
-		mailers,
 		30*time.Minute,
 		appLogger,
 	)
