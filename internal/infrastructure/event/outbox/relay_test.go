@@ -1,6 +1,7 @@
 package outbox
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -275,4 +276,40 @@ func TestRelay_Start_DoesNotRedispatchWhileHandlerStillRunning(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, 1, callCount)
+}
+
+func TestRelay_PollOnce_RecoversFromHandlerPanic(t *testing.T) {
+	serializer := appevent.NewJSONEventSerializer()
+	name, payload, at, err := serializer.Serialize(appevent.NewBoardChanged("created", 1))
+	require.NoError(t, err)
+
+	store := &fakeOutboxStore{
+		ready: []port.OutboxMessage{{
+			ID:           "m1",
+			EventName:    name,
+			Payload:      payload,
+			OccurredAt:   at,
+			AttemptCount: 1,
+		}},
+	}
+	var logBuf bytes.Buffer
+	relay := NewRelay(store, serializer, slog.New(slog.NewJSONHandler(&logBuf, nil)), RelayConfig{
+		WorkerCount:  1,
+		BatchSize:    10,
+		PollInterval: time.Millisecond,
+		MaxAttempts:  3,
+		BaseBackoff:  time.Millisecond,
+	})
+	relay.Subscribe(appevent.EventNameBoardChanged, testHandler{fn: func(ctx context.Context, event port.DomainEvent) error {
+		_ = ctx
+		_ = event
+		panic("boom")
+	}})
+
+	processed := relay.pollOnce(context.Background(), time.Now())
+	assert.True(t, processed)
+	assert.Equal(t, []string{"m1"}, store.retryCalls)
+	assert.Contains(t, logBuf.String(), "dispatch outbox event failed")
+	assert.Contains(t, logBuf.String(), "\"panic\":\"boom\"")
+	assert.Contains(t, logBuf.String(), "\"stack\"")
 }

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
@@ -3039,4 +3040,23 @@ func TestHTTP_NotFound_UsesInjectedLogger(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 	assert.Equal(t, 1, logger.warns)
 	assert.Equal(t, 0, logger.errors)
+}
+
+func TestHTTP_RecoveryMiddleware_LogsPanicAndReturns500(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	r := gin.New()
+	r.Use(recoveryWithLogger(logger))
+	r.GET("/panic", func(c *gin.Context) {
+		panic("boom")
+	})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, logBuf.String(), "http handler panicked")
+	assert.Contains(t, logBuf.String(), "\"panic\":\"boom\"")
+	assert.Contains(t, logBuf.String(), "\"stack\"")
 }

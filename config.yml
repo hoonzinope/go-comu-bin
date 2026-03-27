@@ -6,6 +6,14 @@ cache:
   bufferItems: 64
   metrics: false
 
+logging:
+  filePath: "./logs/app.jsonl"
+  maxSizeMB: 100
+  maxBackups: 10
+  maxAgeDays: 30
+  compress: true
+  localTime: true
+
 storage:
   provider: "local"
   local:

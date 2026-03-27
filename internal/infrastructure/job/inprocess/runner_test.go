@@ -1,6 +1,7 @@
 package inprocess
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -122,4 +123,44 @@ func TestRunner_Register_InvalidJobReturnsError(t *testing.T) {
 
 	err := runner.Register(Job{Name: "", Interval: time.Second, Run: func(context.Context) error { return errors.New("x") }})
 	require.Error(t, err)
+}
+
+func TestRunner_Start_RecoversFromJobPanic(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	factory := &stubTickerFactory{}
+	runner := NewRunner(logger, WithTickerFactory(factory.New))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runCh := make(chan struct{}, 1)
+	callCount := 0
+	require.NoError(t, runner.Register(Job{
+		Name:     "panic-job",
+		Interval: time.Second,
+		Run: func(context.Context) error {
+			callCount++
+			if callCount == 1 {
+				panic("boom")
+			}
+			runCh <- struct{}{}
+			return nil
+		},
+	}))
+
+	runner.Start(ctx)
+	require.Eventually(t, func() bool {
+		return factory.Len() == 1
+	}, time.Second, 10*time.Millisecond)
+	ticker := factory.At(0)
+	require.NotNil(t, ticker)
+	ticker.ch <- time.Now()
+	ticker.ch <- time.Now()
+
+	select {
+	case <-runCh:
+	case <-time.After(time.Second):
+		t.Fatal("job did not recover after panic")
+	}
+	assert.Contains(t, logBuf.String(), "background job panicked")
+	assert.Contains(t, logBuf.String(), "\"panic\":\"boom\"")
 }

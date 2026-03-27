@@ -303,13 +303,13 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 }
 
 func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
+	handler := NewHTTPHandler(deps)
 	r := gin.New()
 	_ = r.SetTrustedProxies(nil)
-	r.Use(gin.Recovery())
+	r.Use(recoveryWithLogger(handler.logger))
 	if deps.AttachmentUploadMaxBytes > 0 {
 		r.MaxMultipartMemory = deps.AttachmentUploadMaxBytes + multipartRequestOverheadBytes
 	}
-	handler := NewHTTPHandler(deps)
 	handler.RegisterRoutes(r)
 	return &http.Server{Addr: addr, Handler: r}
 }

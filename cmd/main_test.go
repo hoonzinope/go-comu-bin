@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -246,6 +250,57 @@ func TestNewFileStorage(t *testing.T) {
 	cfg.Storage.Provider = "unknown"
 	_, err = newFileStorage(cfg)
 	require.Error(t, err)
+}
+
+func TestNewAppLogger_WritesToStdoutAndFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{}
+	cfg.Logging.FilePath = filepath.Join(tempDir, "app.jsonl")
+	cfg.Logging.MaxSizeMB = 1
+	cfg.Logging.MaxBackups = 1
+	cfg.Logging.MaxAgeDays = 1
+	cfg.Logging.Compress = false
+	cfg.Logging.LocalTime = true
+
+	var stdout bytes.Buffer
+	logger, closer, err := newAppLogger(&stdout, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+	require.NotNil(t, closer)
+
+	logger.Info("hello", "k", "v")
+	require.NoError(t, closer.Close())
+
+	fileContent, err := os.ReadFile(cfg.Logging.FilePath)
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), `"msg":"hello"`)
+	assert.Contains(t, stdout.String(), `"k":"v"`)
+	assert.Contains(t, string(fileContent), `"msg":"hello"`)
+	assert.Contains(t, string(fileContent), `"k":"v"`)
+}
+
+func TestNewAppLogger_RotatesFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{}
+	cfg.Logging.FilePath = filepath.Join(tempDir, "app.jsonl")
+	cfg.Logging.MaxSizeMB = 1
+	cfg.Logging.MaxBackups = 2
+	cfg.Logging.MaxAgeDays = 1
+	cfg.Logging.Compress = false
+	cfg.Logging.LocalTime = true
+
+	logger, closer, err := newAppLogger(io.Discard, cfg)
+	require.NoError(t, err)
+
+	payload := strings.Repeat("x", 20_000)
+	for i := 0; i < 80; i++ {
+		logger.Info("rotation-test", "payload", payload, "seq", i)
+	}
+	require.NoError(t, closer.Close())
+
+	matches, err := filepath.Glob(filepath.Join(tempDir, "app*"))
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(matches), 2)
 }
 
 func TestStartBackgroundJobs_ReturnsNilWhenDisabled(t *testing.T) {

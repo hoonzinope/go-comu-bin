@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"time"
 )
 
@@ -78,13 +79,25 @@ func (r *Runner) runJob(ctx context.Context, job Job) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C():
-			if err := job.Run(ctx); err != nil && r.logger != nil {
-				r.logger.Error("background job failed", "job", job.Name, "error", err)
-				continue
-			}
-			if r.logger != nil {
-				r.logger.Info("background job completed", "job", job.Name)
-			}
+			func() {
+				defer func() {
+					if recovered := recover(); recovered != nil && r.logger != nil {
+						r.logger.Error(
+							"background job panicked",
+							"job", job.Name,
+							"panic", recovered,
+							"stack", string(debug.Stack()),
+						)
+					}
+				}()
+				if err := job.Run(ctx); err != nil && r.logger != nil {
+					r.logger.Error("background job failed", "job", job.Name, "error", err)
+					return
+				}
+				if r.logger != nil {
+					r.logger.Info("background job completed", "job", job.Name)
+				}
+			}()
 		}
 	}
 }

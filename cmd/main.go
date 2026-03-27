@@ -15,10 +15,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -46,22 +48,52 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	bootstrapLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(bootstrapLogger)
+	exitCode := 0
+	var logCloser io.Closer
+	defer func() {
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+	}()
+	defer func() {
+		if logCloser != nil {
+			if closeErr := logCloser.Close(); closeErr != nil {
+				bootstrapLogger.Warn("failed to close log file", "error", closeErr)
+			}
+		}
+	}()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			slog.Error("application panicked", "panic", recovered, "stack", string(debug.Stack()))
+			exitCode = 1
+		}
+	}()
 
 	// load config
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
+	appLogger, closer, err := newAppLogger(os.Stdout, cfg)
+	if err != nil {
+		slog.Error("failed to initialize logger", "error", err)
+		exitCode = 1
+		return
+	}
+	logCloser = closer
+	slog.SetDefault(appLogger)
 	appCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	authDB, err := sqlitepersist.Open(appCtx, sqlitepersist.Options{Path: cfg.Database.Path})
 	if err != nil {
 		slog.Error("failed to initialize sqlite auth database", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 	defer func() {
 		if closeErr := authDB.Close(); closeErr != nil {
@@ -88,12 +120,14 @@ func main() {
 	fileStorage, err := newFileStorage(cfg)
 	if err != nil {
 		slog.Error("failed to initialize file storage", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 
 	if err := ensureBootstrapAdmin(cfg, userRepository); err != nil {
 		slog.Error("failed to ensure bootstrap admin user", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 	cache, err := cacheRistretto.NewCache(cacheRistretto.Config{
 		NumCounters: cfg.Cache.NumCounters,
@@ -103,13 +137,13 @@ func main() {
 	})
 	if err != nil {
 		slog.Error("failed to initialize cache", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 	defer cache.Close()
 	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
 	authorizationPolicy := policy.NewRoleAuthorizationPolicy()
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
-	appLogger := logger
 	mailers := newMailSenders(cfg)
 	emailVerificationRepository := sqlitepersist.NewEmailVerificationTokenRepository(authDB)
 	passwordResetRepository := sqlitepersist.NewPasswordResetTokenRepository(authDB)
@@ -150,7 +184,8 @@ func main() {
 	outboxRelay.Subscribe(appevent.EventNamePasswordResetRequested, mailDeliveryHandler)
 	if err := postSearchRepository.RebuildAll(appCtx); err != nil {
 		slog.Error("failed to build post search index", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 	outboxRelay.Start(appCtx)
 	userUseCase := service.NewUserServiceWithEmailVerification(userRepository, passwordHasher, unitOfWork, emailVerificationRepository, auth.NewEmailVerificationTokenIssuer(), 30*time.Minute)
@@ -186,7 +221,8 @@ func main() {
 	passwordResetCleanupUseCase := service.NewPasswordResetCleanupService(passwordResetRepository)
 	if err := startBackgroundJobs(appCtx, slog.Default(), cfg, attachmentUseCase, guestCleanupUseCase, emailVerificationCleanupUseCase, passwordResetCleanupUseCase); err != nil {
 		slog.Error("failed to start background jobs", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 	sessionUseCase := service.NewSessionService(userUseCase, userUseCase, userRepository, tokenProvider, sessionRepository, appLogger)
 	accountUseCase := service.NewAccountServiceWithGuestUpgrade(
@@ -253,11 +289,12 @@ func main() {
 		outboxRelay.Wait()
 	case <-signalCtx.Done():
 		slog.Info("shutdown signal received")
-		err = gracefulShutdown(server, serverErrCh, outboxRelay, cancel, 5*time.Second, logger)
+		err = gracefulShutdown(server, serverErrCh, outboxRelay, cancel, 5*time.Second, appLogger)
 	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped with error", "error", err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 }
 

@@ -26,6 +26,14 @@ type Config struct {
 		BufferItems      int64 `yaml:"bufferItems"`
 		Metrics          bool  `yaml:"metrics"`
 	} `yaml:"cache"`
+	Logging struct {
+		FilePath   string `yaml:"filePath"`
+		MaxSizeMB  int    `yaml:"maxSizeMB"`
+		MaxBackups int    `yaml:"maxBackups"`
+		MaxAgeDays int    `yaml:"maxAgeDays"`
+		Compress   bool   `yaml:"compress"`
+		LocalTime  bool   `yaml:"localTime"`
+	} `yaml:"logging"`
 	Database struct {
 		Path string `yaml:"path"`
 	} `yaml:"database"`
@@ -165,6 +173,12 @@ func Load() (*Config, error) {
 		"cache.numCounters",
 		"cache.bufferItems",
 		"cache.metrics",
+		"logging.filePath",
+		"logging.maxSizeMB",
+		"logging.maxBackups",
+		"logging.maxAgeDays",
+		"logging.compress",
+		"logging.localTime",
 		"database.path",
 		"admin.bootstrap.enabled",
 		"admin.bootstrap.username",
@@ -259,6 +273,12 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("cache.numCounters", int64(1000000))
 	v.SetDefault("cache.bufferItems", int64(64))
 	v.SetDefault("cache.metrics", false)
+	v.SetDefault("logging.filePath", "./logs/app.jsonl")
+	v.SetDefault("logging.maxSizeMB", 100)
+	v.SetDefault("logging.maxBackups", 10)
+	v.SetDefault("logging.maxAgeDays", 30)
+	v.SetDefault("logging.compress", true)
+	v.SetDefault("logging.localTime", true)
 	v.SetDefault("database.path", "./data/data.db")
 	v.SetDefault("admin.bootstrap.enabled", false)
 	v.SetDefault("storage.provider", "local")
@@ -469,6 +489,18 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Cache.BufferItems <= 0 {
 		return fmt.Errorf("invalid cache.bufferItems: %d (must be > 0)", cfg.Cache.BufferItems)
+	}
+	if strings.TrimSpace(cfg.Logging.FilePath) == "" {
+		return fmt.Errorf("invalid logging.filePath: cannot be empty")
+	}
+	if cfg.Logging.MaxSizeMB <= 0 {
+		return fmt.Errorf("invalid logging.maxSizeMB: %d (must be > 0)", cfg.Logging.MaxSizeMB)
+	}
+	if cfg.Logging.MaxBackups < 0 {
+		return fmt.Errorf("invalid logging.maxBackups: %d (must be >= 0)", cfg.Logging.MaxBackups)
+	}
+	if cfg.Logging.MaxAgeDays < 0 {
+		return fmt.Errorf("invalid logging.maxAgeDays: %d (must be >= 0)", cfg.Logging.MaxAgeDays)
 	}
 	if strings.TrimSpace(cfg.Database.Path) == "" {
 		return fmt.Errorf("invalid database.path: cannot be empty")

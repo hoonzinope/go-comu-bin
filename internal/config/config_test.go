@@ -32,6 +32,12 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v.Set("cache.numCounters", int64(1000000))
 	v.Set("cache.bufferItems", int64(64))
 	v.Set("cache.metrics", false)
+	v.Set("logging.filePath", "./logs/app.jsonl")
+	v.Set("logging.maxSizeMB", 100)
+	v.Set("logging.maxBackups", 10)
+	v.Set("logging.maxAgeDays", 30)
+	v.Set("logging.compress", true)
+	v.Set("logging.localTime", true)
 	v.Set("database.path", "./data/data.db")
 	v.Set("storage.provider", "local")
 	v.Set("storage.local.rootDir", "./data/uploads")
@@ -71,6 +77,12 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.Equal(t, int64(1000000), cfg.Cache.NumCounters)
 	assert.Equal(t, int64(64), cfg.Cache.BufferItems)
 	assert.False(t, cfg.Cache.Metrics)
+	assert.Equal(t, "./logs/app.jsonl", cfg.Logging.FilePath)
+	assert.Equal(t, 100, cfg.Logging.MaxSizeMB)
+	assert.Equal(t, 10, cfg.Logging.MaxBackups)
+	assert.Equal(t, 30, cfg.Logging.MaxAgeDays)
+	assert.True(t, cfg.Logging.Compress)
+	assert.True(t, cfg.Logging.LocalTime)
 	assert.Equal(t, "./data/data.db", cfg.Database.Path)
 	assert.True(t, cfg.Admin.Bootstrap.Enabled)
 	assert.Equal(t, "admin", cfg.Admin.Bootstrap.Username)
@@ -94,6 +106,14 @@ func TestLoad_LoadsConfigFileFromWorkingDirectory(t *testing.T) {
 	configBody := []byte(`cache:
   listTTLSeconds: 30
   detailTTLSeconds: 60
+
+logging:
+  filePath: "./logs/app.jsonl"
+  maxSizeMB: 100
+  maxBackups: 10
+  maxAgeDays: 30
+  compress: true
+  localTime: true
 
 storage:
   provider: "local"
@@ -164,6 +184,7 @@ func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
 	t.Setenv("STORAGE_LOCAL_ROOTDIR", "./data/uploads")
 	t.Setenv("STORAGE_ATTACHMENT_MAXUPLOADSIZEBYTES", "10485760")
 	t.Setenv("STORAGE_ATTACHMENT_IMAGEOPTIMIZATION_JPEGQUALITY", "82")
+	t.Setenv("LOGGING_FILEPATH", "./logs/app.jsonl")
 	t.Setenv("JOBS_ATTACHMENTCLEANUP_INTERVALSECONDS", "600")
 	t.Setenv("JOBS_ATTACHMENTCLEANUP_GRACEPERIODSECONDS", "600")
 	t.Setenv("JOBS_ATTACHMENTCLEANUP_BATCHSIZE", "50")
@@ -173,6 +194,7 @@ func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
 	require.NotNil(t, cfg)
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
 	assert.Equal(t, "env-secret-1234567890-abcdef-1234", cfg.Delivery.HTTP.Auth.Secret)
+	assert.Equal(t, "./logs/app.jsonl", cfg.Logging.FilePath)
 }
 
 func TestLoadFromViper_InvalidPort(t *testing.T) {
@@ -213,6 +235,26 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, cfg)
 	})
+}
+
+func TestLoadFromViper_InvalidLoggingFilePath(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("logging.filePath", "   ")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.Set("jobs.attachmentCleanup.batchSize", 50)
+
+	cfg, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
 }
 
 func TestLoadFromViper_UnknownField(t *testing.T) {

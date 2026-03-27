@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -101,12 +102,28 @@ func (r *Relay) worker(ctx context.Context) {
 	defer ticker.Stop()
 
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
-		if processed := r.pollOnce(ctx, time.Now()); processed {
+		shouldWait := true
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					r.warn(
+						"outbox relay panicked",
+						"panic", recovered,
+						"stack", string(debug.Stack()),
+					)
+				}
+			}()
+			if processed := r.pollOnce(ctx, time.Now()); processed {
+				shouldWait = false
+			}
+		}()
+		if ctx.Err() != nil {
+			return
+		}
+		if !shouldWait {
 			continue
 		}
 		select {
@@ -206,11 +223,15 @@ func (r *Relay) handlersFor(eventName string) []port.EventHandler {
 
 func (r *Relay) markFailure(message port.OutboxMessage, now time.Time, msg string, err error) {
 	attempt := message.AttemptCount
+	args := []any{"id", message.ID, "event", message.EventName, "attempt", attempt, "error", err}
+	if panicErr, ok := err.(panicError); ok {
+		args = append(args, "panic", panicErr.value, "stack", panicErr.Stack())
+	}
 	if attempt >= r.cfg.MaxAttempts {
 		if markErr := r.store.MarkDead(message.ID, err.Error()); markErr != nil {
 			r.warn("mark outbox message dead failed", "id", message.ID, "error", markErr)
 		}
-		r.warn(msg, "id", message.ID, "event", message.EventName, "attempt", attempt, "status", "dead", "error", err)
+		r.warn(msg, append(args, "status", "dead")...)
 		return
 	}
 	nextAttemptAt := now.Add(backoffDuration(r.cfg.BaseBackoff, attempt, r.cfg.MaxBackoffFactor))
@@ -218,7 +239,7 @@ func (r *Relay) markFailure(message port.OutboxMessage, now time.Time, msg strin
 		r.warn("mark outbox message retry failed", "id", message.ID, "error", markErr)
 		return
 	}
-	r.warn(msg, "id", message.ID, "event", message.EventName, "attempt", attempt, "status", "retry", "error", err)
+	r.warn(msg, append(args, "status", "retry")...)
 }
 
 func backoffDuration(base time.Duration, attempt int, maxFactor int) time.Duration {
@@ -235,7 +256,7 @@ func backoffDuration(base time.Duration, attempt int, maxFactor int) time.Durati
 func callHandler(ctx context.Context, handler port.EventHandler, event port.DomainEvent) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = panicError{value: recovered}
+			err = panicError{value: recovered, stack: debug.Stack()}
 		}
 	}()
 	return handler.Handle(ctx, event)
@@ -243,10 +264,15 @@ func callHandler(ctx context.Context, handler port.EventHandler, event port.Doma
 
 type panicError struct {
 	value any
+	stack []byte
 }
 
 func (e panicError) Error() string {
 	return "event handler panic"
+}
+
+func (e panicError) Stack() string {
+	return string(e.stack)
 }
 
 func (r *Relay) warn(msg string, args ...any) {
