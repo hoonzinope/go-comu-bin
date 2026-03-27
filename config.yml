@@ -35,6 +35,7 @@ delivery:
     port: 18577
     maxJSONBodyBytes: 1048576
     defaultPageLimit: 10
+    trustedProxies: []
     rateLimit:
       enabled: true
       windowSeconds: 60

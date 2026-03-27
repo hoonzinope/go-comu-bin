@@ -44,6 +44,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
 	v.Set("storage.attachment.imageOptimization.enabled", true)
 	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("delivery.http.trustedProxies", []string{"127.0.0.1", "10.0.0.0/8"})
 	v.Set("jobs.enabled", true)
 	v.Set("jobs.attachmentCleanup.enabled", true)
 	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
@@ -60,6 +61,7 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	require.NotNil(t, cfg)
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
 	assert.Equal(t, int64(1<<20), cfg.Delivery.HTTP.MaxJSONBodyBytes)
+	assert.Equal(t, []string{"127.0.0.1", "10.0.0.0/8"}, cfg.Delivery.HTTP.TrustedProxies)
 	assert.True(t, cfg.Delivery.HTTP.RateLimit.Enabled)
 	assert.Equal(t, 60, cfg.Delivery.HTTP.RateLimit.WindowSeconds)
 	assert.Equal(t, 300, cfg.Delivery.HTTP.RateLimit.ReadRequests)
@@ -134,6 +136,9 @@ storage:
 delivery:
   http:
     port: 18577
+    trustedProxies:
+      - "127.0.0.1"
+      - "10.0.0.0/8"
     auth:
       secret: "test-secret-1234567890-abcdef-1234"
 
@@ -185,6 +190,7 @@ func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
 	t.Setenv("STORAGE_ATTACHMENT_MAXUPLOADSIZEBYTES", "10485760")
 	t.Setenv("STORAGE_ATTACHMENT_IMAGEOPTIMIZATION_JPEGQUALITY", "82")
 	t.Setenv("LOGGING_FILEPATH", "./logs/app.jsonl")
+	t.Setenv("DELIVERY_HTTP_TRUSTEDPROXIES", "127.0.0.1,10.0.0.0/8")
 	t.Setenv("JOBS_ATTACHMENTCLEANUP_INTERVALSECONDS", "600")
 	t.Setenv("JOBS_ATTACHMENTCLEANUP_GRACEPERIODSECONDS", "600")
 	t.Setenv("JOBS_ATTACHMENTCLEANUP_BATCHSIZE", "50")
@@ -195,6 +201,7 @@ func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
 	assert.Equal(t, 18577, cfg.Delivery.HTTP.Port)
 	assert.Equal(t, "env-secret-1234567890-abcdef-1234", cfg.Delivery.HTTP.Auth.Secret)
 	assert.Equal(t, "./logs/app.jsonl", cfg.Logging.FilePath)
+	assert.Equal(t, []string{"127.0.0.1", "10.0.0.0/8"}, cfg.Delivery.HTTP.TrustedProxies)
 }
 
 func TestLoadFromViper_InvalidPort(t *testing.T) {
@@ -235,6 +242,26 @@ func TestLoadFromViper_InvalidPort(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, cfg)
 	})
+}
+
+func TestLoadFromViper_InvalidTrustedProxies(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("delivery.http.trustedProxies", []string{"invalid-proxy"})
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.Set("jobs.attachmentCleanup.batchSize", 50)
+
+	cfg, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Nil(t, cfg)
 }
 
 func TestLoadFromViper_InvalidLoggingFilePath(t *testing.T) {

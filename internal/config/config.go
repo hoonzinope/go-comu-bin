@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -66,9 +67,10 @@ type Config struct {
 	} `yaml:"storage"`
 	Delivery struct {
 		HTTP struct {
-			Port             int   `yaml:"port"`
-			MaxJSONBodyBytes int64 `yaml:"maxJSONBodyBytes"`
-			DefaultPageLimit int   `yaml:"defaultPageLimit"`
+			Port             int      `yaml:"port"`
+			MaxJSONBodyBytes int64    `yaml:"maxJSONBodyBytes"`
+			DefaultPageLimit int      `yaml:"defaultPageLimit"`
+			TrustedProxies   []string `yaml:"trustedProxies"`
 			RateLimit        struct {
 				Enabled       bool `yaml:"enabled"`
 				WindowSeconds int  `yaml:"windowSeconds"`
@@ -196,6 +198,7 @@ func Load() (*Config, error) {
 		"delivery.http.port",
 		"delivery.http.maxJSONBodyBytes",
 		"delivery.http.defaultPageLimit",
+		"delivery.http.trustedProxies",
 		"delivery.http.rateLimit.enabled",
 		"delivery.http.rateLimit.windowSeconds",
 		"delivery.http.rateLimit.readRequests",
@@ -336,6 +339,11 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	if err := v.UnmarshalExact(cfg); err != nil {
 		return nil, err
 	}
+	if trustedProxies, err := loadTrustedProxies(v); err != nil {
+		return nil, err
+	} else if trustedProxies != nil {
+		cfg.Delivery.HTTP.TrustedProxies = trustedProxies
+	}
 
 	if err := validate(cfg); err != nil {
 		return nil, err
@@ -359,6 +367,18 @@ func validate(cfg *Config) error {
 			minDefaultPageLimit,
 			maxDefaultPageLimit,
 		)
+	}
+	for _, trustedProxy := range cfg.Delivery.HTTP.TrustedProxies {
+		if trustedProxy == "" {
+			return fmt.Errorf("invalid delivery.http.trustedProxies: cannot contain empty entries")
+		}
+		if _, _, err := net.ParseCIDR(trustedProxy); err == nil {
+			continue
+		}
+		if ip := net.ParseIP(trustedProxy); ip != nil {
+			continue
+		}
+		return fmt.Errorf("invalid delivery.http.trustedProxies: %q must be an IP or CIDR", trustedProxy)
 	}
 	if cfg.Delivery.HTTP.RateLimit.WindowSeconds < minRateLimitWindowSeconds {
 		return fmt.Errorf(
@@ -619,4 +639,42 @@ func validate(cfg *Config) error {
 		}
 	}
 	return nil
+}
+
+func loadTrustedProxies(v *viper.Viper) ([]string, error) {
+	if v == nil || !v.IsSet("delivery.http.trustedProxies") {
+		return nil, nil
+	}
+	raw := v.Get("delivery.http.trustedProxies")
+	switch value := raw.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		if strings.TrimSpace(value) == "" {
+			return nil, fmt.Errorf("invalid delivery.http.trustedProxies: cannot contain empty entries")
+		}
+		return normalizeTrustedProxyItems(strings.Split(value, ","))
+	case []string:
+		return normalizeTrustedProxyItems(value)
+	case []any:
+		items := make([]string, 0, len(value))
+		for _, item := range value {
+			items = append(items, fmt.Sprint(item))
+		}
+		return normalizeTrustedProxyItems(items)
+	default:
+		return nil, fmt.Errorf("invalid delivery.http.trustedProxies: unsupported type %T", raw)
+	}
+}
+
+func normalizeTrustedProxyItems(items []string) ([]string, error) {
+	cleaned := make([]string, 0, len(items))
+	for _, item := range items {
+		value := strings.TrimSpace(item)
+		if value == "" {
+			return nil, fmt.Errorf("invalid delivery.http.trustedProxies: cannot contain empty entries")
+		}
+		cleaned = append(cleaned, value)
+	}
+	return cleaned, nil
 }

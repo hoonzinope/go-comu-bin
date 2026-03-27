@@ -255,6 +255,7 @@ func main() {
 		ReportUseCase:                          reportUseCase,
 		OutboxAdminUseCase:                     outboxAdminUseCase,
 		RateLimiter:                            rateLimiter,
+		TrustedProxies:                         cfg.Delivery.HTTP.TrustedProxies,
 		AttachmentUploadMaxBytes:               cfg.Storage.Attachment.MaxUploadSizeBytes,
 		MaxJSONBodyBytes:                       cfg.Delivery.HTTP.MaxJSONBodyBytes,
 		DefaultPageLimit:                       cfg.Delivery.HTTP.DefaultPageLimit,

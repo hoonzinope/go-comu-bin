@@ -90,6 +90,7 @@ type HTTPDependencies struct {
 	ReportUseCase                          port.ReportUseCase
 	OutboxAdminUseCase                     port.OutboxAdminUseCase
 	RateLimiter                            port.RateLimiter
+	TrustedProxies                         []string
 	AttachmentUploadMaxBytes               int64
 	MaxJSONBodyBytes                       int64
 	DefaultPageLimit                       int
@@ -305,7 +306,9 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 func NewHTTPServer(addr string, deps HTTPDependencies) *http.Server {
 	handler := NewHTTPHandler(deps)
 	r := gin.New()
-	_ = r.SetTrustedProxies(nil)
+	if err := r.SetTrustedProxies(deps.TrustedProxies); err != nil {
+		panic(fmt.Errorf("invalid trusted proxies configuration: %w", err))
+	}
 	r.Use(recoveryWithLogger(handler.logger))
 	if deps.AttachmentUploadMaxBytes > 0 {
 		r.MaxMultipartMemory = deps.AttachmentUploadMaxBytes + multipartRequestOverheadBytes

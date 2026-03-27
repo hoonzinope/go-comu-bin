@@ -1,0 +1,10 @@
+.git
+.gitignore
+.documents
+.agents
+data
+logs
+tmp
+*.log
+coverage.out
+bin

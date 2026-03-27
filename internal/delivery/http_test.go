@@ -787,6 +787,59 @@ func newTestHandlerWithRateLimit(
 	}).Handler
 }
 
+func newTestHandlerWithRateLimitAndTrustedProxies(
+	user authUserPort,
+	account port.AccountUseCase,
+	board port.BoardUseCase,
+	post port.PostUseCase,
+	comment port.CommentUseCase,
+	reaction port.ReactionUseCase,
+	attachment port.AttachmentUseCase,
+	enabled bool,
+	windowSeconds int,
+	readRequests int,
+	writeRequests int,
+	trustedProxies []string,
+) http.Handler {
+	tokenProvider := auth.NewJwtTokenProvider("test-secret")
+	testSessionRepository = auth.NewCacheSessionRepository(cacheInMemory.NewInMemoryCache())
+	sessionUseCase := service.NewSessionService(user, user, user, tokenProvider, testSessionRepository)
+	reportUseCase := &fakeReportUseCase{}
+	outboxAdminUseCase := &fakeOutboxAdminUseCase{}
+	rateLimiter := rateLimitInMemory.NewInMemoryRateLimiter()
+	notificationUseCase := &fakeNotificationUseCase{}
+	return NewHTTPServer(":0", HTTPDependencies{
+		SessionUseCase:                     sessionUseCase,
+		AdminAuthorizer:                    user,
+		UserUseCase:                        user,
+		AccountUseCase:                     account,
+		BoardUseCase:                       board,
+		PostUseCase:                        post,
+		CommentUseCase:                     comment,
+		NotificationUseCase:                notificationUseCase,
+		ReactionUseCase:                    reaction,
+		AttachmentUseCase:                  attachment,
+		ReportUseCase:                      reportUseCase,
+		OutboxAdminUseCase:                 outboxAdminUseCase,
+		RateLimiter:                        rateLimiter,
+		TrustedProxies:                     trustedProxies,
+		MaxJSONBodyBytes:                   defaultMaxJSONBodyBytes,
+		RateLimitEnabled:                   enabled,
+		RateLimitWindowSecond:              windowSeconds,
+		RateLimitReadRequest:               readRequests,
+		RateLimitWriteRequest:              writeRequests,
+		LoginRateLimitEnabled:              true,
+		LoginRateLimitWindowSecond:         windowSeconds,
+		LoginRateLimitMaxRequests:          1,
+		GuestUpgradeRateLimitEnabled:       true,
+		GuestUpgradeRateLimitWindowSecond:  windowSeconds,
+		GuestUpgradeRateLimitMaxRequests:   1,
+		PasswordResetRateLimitEnabled:      true,
+		PasswordResetRateLimitWindowSecond: windowSeconds,
+		PasswordResetRateLimitMaxRequests:  1,
+	}).Handler
+}
+
 func newTestHandlerWithAdminUseCases(
 	user authUserPort,
 	account port.AccountUseCase,
@@ -2406,6 +2459,37 @@ func TestHTTP_RateLimit_DoesNotTrustForwardedHeaderByDefault(t *testing.T) {
 	handler.ServeHTTP(secondRec, second)
 	assert.Equal(t, http.StatusTooManyRequests, secondRec.Code)
 	assert.JSONEq(t, `{"error":"too many requests"}`, secondRec.Body.String())
+}
+
+func TestHTTP_RateLimit_UsesForwardedHeaderWhenTrustedProxyIsConfigured(t *testing.T) {
+	handler := newTestHandlerWithRateLimitAndTrustedProxies(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		true,
+		60,
+		1,
+		10,
+		[]string{"198.51.100.10"},
+	)
+
+	first := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/boards", nil)
+	first.RemoteAddr = "198.51.100.10:1234"
+	first.Header.Set("X-Forwarded-For", "203.0.113.1")
+	firstRec := httptest.NewRecorder()
+	handler.ServeHTTP(firstRec, first)
+	assert.Equal(t, http.StatusOK, firstRec.Code)
+
+	second := httptest.NewRequest(http.MethodGet, apiV1Prefix+"/boards", nil)
+	second.RemoteAddr = "198.51.100.10:9999"
+	second.Header.Set("X-Forwarded-For", "203.0.113.99")
+	secondRec := httptest.NewRecorder()
+	handler.ServeHTTP(secondRec, second)
+	assert.Equal(t, http.StatusOK, secondRec.Code)
 }
 
 func TestHTTP_BoardPostsPost_PreservesRawMarkdownInput(t *testing.T) {
