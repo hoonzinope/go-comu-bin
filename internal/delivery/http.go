@@ -239,8 +239,8 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	r.Use(h.rateLimitGinMiddleware())
 	v1 := r.Group("/api/v1")
-	v1.Use(h.rateLimitGinMiddleware())
 	v1.POST("/signup", h.handleUserSignUp)
 	v1.POST("/auth/login", h.handleUserLogin)
 	v1.POST("/auth/guest", h.handleGuestIssue)
@@ -2355,13 +2355,17 @@ func (h *HTTPHandler) rateLimitGinMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		if !strings.HasPrefix(c.Request.URL.Path, "/api/v1") {
+			c.Next()
+			return
+		}
 		if !isWriteMethod(c.Request.Method) && !isReadMethod(c.Request.Method) {
 			c.Next()
 			return
 		}
 		path := c.FullPath()
 		if path == "" {
-			path = c.Request.URL.Path
+			path = "__unknown__"
 		}
 		key := c.Request.Method + ":" + path + ":" + c.ClientIP()
 		limit := h.rateLimitWriteRequests

@@ -2430,6 +2430,28 @@ func TestHTTP_ReadRateLimit_ReturnsTooManyRequests(t *testing.T) {
 	assert.JSONEq(t, `{"error":"too many requests"}`, third.Body.String())
 }
 
+func TestHTTP_RateLimit_UnmatchedRoutesShareBucket(t *testing.T) {
+	handler := newTestHandlerWithRateLimit(
+		&fakeUserUseCase{},
+		&fakeAccountUseCase{},
+		&fakeBoardUseCase{},
+		&fakePostUseCase{},
+		&fakeCommentUseCase{},
+		&fakeReactionUseCase{},
+		&fakeAttachmentUseCase{},
+		true,
+		60,
+		1,
+		1,
+	)
+
+	first := doJSONRequest(t, handler, http.MethodGet, apiV1Prefix+"/missing-one", nil)
+	assert.Equal(t, http.StatusNotFound, first.Code)
+	second := doJSONRequest(t, handler, http.MethodGet, apiV1Prefix+"/missing-two", nil)
+	assert.Equal(t, http.StatusTooManyRequests, second.Code)
+	assert.JSONEq(t, `{"error":"too many requests"}`, second.Body.String())
+}
+
 func TestHTTP_RateLimit_DoesNotTrustForwardedHeaderByDefault(t *testing.T) {
 	handler := newTestHandlerWithRateLimit(
 		&fakeUserUseCase{},
