@@ -39,7 +39,7 @@ func (s *OutboxAdminService) GetDeadMessages(ctx context.Context, adminID int64,
 		return nil, err
 	}
 	lastID = strings.TrimSpace(lastID)
-	messages, err := s.outboxStore.SelectDead(limit+1, lastID)
+	messages, err := s.outboxStore.SelectDead(ctx, limit+1, lastID)
 	if err != nil {
 		return nil, customerror.WrapRepository("select dead outbox list", err)
 	}
@@ -81,10 +81,10 @@ func (s *OutboxAdminService) RequeueDeadMessage(ctx context.Context, adminID int
 	if messageID == "" {
 		return customerror.ErrInvalidInput
 	}
-	if err := s.ensureDeadMessage(messageID); err != nil {
+	if err := s.ensureDeadMessage(ctx, messageID); err != nil {
 		return err
 	}
-	if err := s.outboxStore.MarkRetry(messageID, time.Now(), "manual requeue by admin"); err != nil {
+	if err := s.outboxStore.MarkRetry(ctx, messageID, time.Now(), "manual requeue by admin"); err != nil {
 		return customerror.WrapRepository("requeue dead outbox message", err)
 	}
 	s.logger.Info("admin requeued dead outbox message", "message_id", messageID, "admin_id", adminID)
@@ -99,10 +99,10 @@ func (s *OutboxAdminService) DiscardDeadMessage(ctx context.Context, adminID int
 	if messageID == "" {
 		return customerror.ErrInvalidInput
 	}
-	if err := s.ensureDeadMessage(messageID); err != nil {
+	if err := s.ensureDeadMessage(ctx, messageID); err != nil {
 		return err
 	}
-	if err := s.outboxStore.MarkSucceeded(messageID); err != nil {
+	if err := s.outboxStore.MarkSucceeded(ctx, messageID); err != nil {
 		return customerror.WrapRepository("discard dead outbox message", err)
 	}
 	s.logger.Info("admin discarded dead outbox message", "message_id", messageID, "admin_id", adminID)
@@ -114,8 +114,8 @@ func (s *OutboxAdminService) ensureAdmin(ctx context.Context, adminID int64) err
 	return err
 }
 
-func (s *OutboxAdminService) ensureDeadMessage(messageID string) error {
-	message, err := s.outboxStore.SelectByID(messageID)
+func (s *OutboxAdminService) ensureDeadMessage(ctx context.Context, messageID string) error {
+	message, err := s.outboxStore.SelectByID(ctx, messageID)
 	if err != nil {
 		return customerror.WrapRepository("select outbox message by id for dead operation", err)
 	}

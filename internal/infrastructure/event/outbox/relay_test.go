@@ -26,14 +26,16 @@ type fakeOutboxStore struct {
 	markRetryErrs []string
 }
 
-func (s *fakeOutboxStore) Append(messages ...port.OutboxMessage) error {
+func (s *fakeOutboxStore) Append(ctx context.Context, messages ...port.OutboxMessage) error {
+	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ready = append(s.ready, messages...)
 	return nil
 }
 
-func (s *fakeOutboxStore) FetchReady(limit int, _ time.Time) ([]port.OutboxMessage, error) {
+func (s *fakeOutboxStore) FetchReady(ctx context.Context, limit int, _ time.Time) ([]port.OutboxMessage, error) {
+	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if limit <= 0 || len(s.ready) == 0 {
@@ -48,7 +50,8 @@ func (s *fakeOutboxStore) FetchReady(limit int, _ time.Time) ([]port.OutboxMessa
 	return out, nil
 }
 
-func (s *fakeOutboxStore) SelectByID(id string) (*port.OutboxMessage, error) {
+func (s *fakeOutboxStore) SelectByID(ctx context.Context, id string) (*port.OutboxMessage, error) {
+	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, message := range s.ready {
@@ -61,12 +64,14 @@ func (s *fakeOutboxStore) SelectByID(id string) (*port.OutboxMessage, error) {
 	return nil, nil
 }
 
-func (s *fakeOutboxStore) SelectDead(limit int, _ string) ([]port.OutboxMessage, error) {
+func (s *fakeOutboxStore) SelectDead(ctx context.Context, limit int, _ string) ([]port.OutboxMessage, error) {
+	_ = ctx
 	_ = limit
 	return nil, nil
 }
 
-func (s *fakeOutboxStore) RenewProcessing(id string, _ time.Time) error {
+func (s *fakeOutboxStore) RenewProcessing(ctx context.Context, id string, _ time.Time) error {
+	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for idx := range s.ready {
@@ -77,14 +82,16 @@ func (s *fakeOutboxStore) RenewProcessing(id string, _ time.Time) error {
 	return nil
 }
 
-func (s *fakeOutboxStore) MarkSucceeded(ids ...string) error {
+func (s *fakeOutboxStore) MarkSucceeded(ctx context.Context, ids ...string) error {
+	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.succeededIDs = append(s.succeededIDs, ids...)
 	return nil
 }
 
-func (s *fakeOutboxStore) MarkRetry(id string, _ time.Time, err string) error {
+func (s *fakeOutboxStore) MarkRetry(ctx context.Context, id string, _ time.Time, err string) error {
+	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.retryCalls = append(s.retryCalls, id)
@@ -92,7 +99,8 @@ func (s *fakeOutboxStore) MarkRetry(id string, _ time.Time, err string) error {
 	return nil
 }
 
-func (s *fakeOutboxStore) MarkDead(id string, _ string) error {
+func (s *fakeOutboxStore) MarkDead(ctx context.Context, id string, _ string) error {
+	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.deadCalls = append(s.deadCalls, id)
@@ -226,7 +234,7 @@ func TestRelay_Start_DoesNotRedispatchWhileHandlerStillRunning(t *testing.T) {
 	store := inmemory.NewOutboxRepository(inmemory.WithProcessingTimeout(20 * time.Millisecond))
 	name, payload, at, err := serializer.Serialize(appevent.NewBoardChanged("created", 1))
 	require.NoError(t, err)
-	require.NoError(t, store.Append(port.OutboxMessage{
+	require.NoError(t, store.Append(context.Background(), port.OutboxMessage{
 		ID:            "m1",
 		EventName:     name,
 		Payload:       payload,

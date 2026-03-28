@@ -1,6 +1,9 @@
 package port
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type OutboxStatus string
 
@@ -22,18 +25,18 @@ type OutboxMessage struct {
 }
 
 type OutboxAppender interface {
-	Append(messages ...OutboxMessage) error
+	Append(ctx context.Context, messages ...OutboxMessage) error
 }
 
 type OutboxStore interface {
 	OutboxAppender
-	FetchReady(limit int, now time.Time) ([]OutboxMessage, error)
-	SelectByID(id string) (*OutboxMessage, error)
-	SelectDead(limit int, lastID string) ([]OutboxMessage, error)
-	RenewProcessing(id string, nextAttemptAt time.Time) error
-	MarkSucceeded(ids ...string) error
-	MarkRetry(id string, nextAttemptAt time.Time, err string) error
-	MarkDead(id string, err string) error
+	FetchReady(ctx context.Context, limit int, now time.Time) ([]OutboxMessage, error)
+	SelectByID(ctx context.Context, id string) (*OutboxMessage, error)
+	SelectDead(ctx context.Context, limit int, lastID string) ([]OutboxMessage, error)
+	RenewProcessing(ctx context.Context, id string, nextAttemptAt time.Time) error
+	MarkSucceeded(ctx context.Context, ids ...string) error
+	MarkRetry(ctx context.Context, id string, nextAttemptAt time.Time, err string) error
+	MarkDead(ctx context.Context, id string, err string) error
 }
 
 type EventSerializer interface {

@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"sync"
@@ -60,13 +61,26 @@ func (r *OutboxRepository) attachCoordinator(coordinator *txCoordinator) {
 	r.coordinator = coordinator
 }
 
-func (r *OutboxRepository) Append(messages ...port.OutboxMessage) error {
-	r.coordinator.enter()
-	defer r.coordinator.exit()
-	return r.append(messages...)
+func outboxContextErr(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
 }
 
-func (r *OutboxRepository) append(messages ...port.OutboxMessage) error {
+func (r *OutboxRepository) Append(ctx context.Context, messages ...port.OutboxMessage) error {
+	if err := outboxContextErr(ctx); err != nil {
+		return err
+	}
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.append(ctx, messages...)
+}
+
+func (r *OutboxRepository) append(ctx context.Context, messages ...port.OutboxMessage) error {
+	if err := outboxContextErr(ctx); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -94,7 +108,10 @@ func (r *OutboxRepository) append(messages ...port.OutboxMessage) error {
 	return nil
 }
 
-func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMessage, error) {
+func (r *OutboxRepository) FetchReady(ctx context.Context, limit int, now time.Time) ([]port.OutboxMessage, error) {
+	if err := outboxContextErr(ctx); err != nil {
+		return nil, err
+	}
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 
@@ -139,7 +156,10 @@ func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMe
 	return ready, nil
 }
 
-func (r *OutboxRepository) SelectByID(id string) (*port.OutboxMessage, error) {
+func (r *OutboxRepository) SelectByID(ctx context.Context, id string) (*port.OutboxMessage, error) {
+	if err := outboxContextErr(ctx); err != nil {
+		return nil, err
+	}
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 
@@ -153,7 +173,10 @@ func (r *OutboxRepository) SelectByID(id string) (*port.OutboxMessage, error) {
 	return &cloned, nil
 }
 
-func (r *OutboxRepository) SelectDead(limit int, lastID string) ([]port.OutboxMessage, error) {
+func (r *OutboxRepository) SelectDead(ctx context.Context, limit int, lastID string) ([]port.OutboxMessage, error) {
+	if err := outboxContextErr(ctx); err != nil {
+		return nil, err
+	}
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 
@@ -197,7 +220,10 @@ func (r *OutboxRepository) SelectDead(limit int, lastID string) ([]port.OutboxMe
 	return dead[start:end], nil
 }
 
-func (r *OutboxRepository) RenewProcessing(id string, nextAttemptAt time.Time) error {
+func (r *OutboxRepository) RenewProcessing(ctx context.Context, id string, nextAttemptAt time.Time) error {
+	if err := outboxContextErr(ctx); err != nil {
+		return err
+	}
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 
@@ -217,7 +243,10 @@ func (r *OutboxRepository) RenewProcessing(id string, nextAttemptAt time.Time) e
 	return nil
 }
 
-func (r *OutboxRepository) MarkSucceeded(ids ...string) error {
+func (r *OutboxRepository) MarkSucceeded(ctx context.Context, ids ...string) error {
+	if err := outboxContextErr(ctx); err != nil {
+		return err
+	}
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 
@@ -249,7 +278,10 @@ func (r *OutboxRepository) MarkSucceeded(ids ...string) error {
 	return nil
 }
 
-func (r *OutboxRepository) MarkRetry(id string, nextAttemptAt time.Time, err string) error {
+func (r *OutboxRepository) MarkRetry(ctx context.Context, id string, nextAttemptAt time.Time, err string) error {
+	if err := outboxContextErr(ctx); err != nil {
+		return err
+	}
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 
@@ -270,7 +302,10 @@ func (r *OutboxRepository) MarkRetry(id string, nextAttemptAt time.Time, err str
 	return nil
 }
 
-func (r *OutboxRepository) MarkDead(id string, err string) error {
+func (r *OutboxRepository) MarkDead(ctx context.Context, id string, err string) error {
+	if err := outboxContextErr(ctx); err != nil {
+		return err
+	}
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 

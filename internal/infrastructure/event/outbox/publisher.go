@@ -1,6 +1,7 @@
 package outbox
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
@@ -56,7 +57,7 @@ func (p *Publisher) Publish(events ...port.DomainEvent) {
 	if len(messages) == 0 {
 		return
 	}
-	if err := p.store.Append(messages...); err != nil {
+	if err := p.store.Append(context.Background(), messages...); err != nil {
 		p.warn("append outbox messages failed", "error", err, "count", len(messages))
 	}
 }

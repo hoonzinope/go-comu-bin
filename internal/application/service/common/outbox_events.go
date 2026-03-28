@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -45,7 +46,11 @@ func DispatchDomainActions(tx port.TxScope, dispatcher port.ActionHookDispatcher
 		}
 		messages = append(messages, port.OutboxMessage{ID: id, EventName: eventName, Payload: payload, OccurredAt: occurredAt, NextAttemptAt: occurredAt, Status: port.OutboxStatusPending})
 	}
-	if err := outbox.Append(messages...); err != nil {
+	ctx := tx.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := outbox.Append(ctx, messages...); err != nil {
 		return customerror.WrapRepository("append outbox messages", err)
 	}
 	return nil

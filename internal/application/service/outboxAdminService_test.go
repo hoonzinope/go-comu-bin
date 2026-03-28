@@ -28,7 +28,7 @@ func TestOutboxAdminService_GetDeadMessages_Requeue_Discard(t *testing.T) {
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 
 	now := time.Now()
-	require.NoError(t, repositories.outbox.Append(
+	require.NoError(t, repositories.outbox.Append(context.Background(),
 		port.OutboxMessage{ID: "dead-1", EventName: "post.changed", Status: port.OutboxStatusDead, OccurredAt: now, NextAttemptAt: now, AttemptCount: 5, LastError: "failed"},
 		port.OutboxMessage{ID: "dead-2", EventName: "comment.changed", Status: port.OutboxStatusDead, OccurredAt: now.Add(time.Second), NextAttemptAt: now, AttemptCount: 5, LastError: "failed"},
 	))
@@ -55,7 +55,7 @@ func TestOutboxAdminService_RequeueDiscard_RejectsNonDeadMessage(t *testing.T) {
 	svc := NewOutboxAdminService(repositories.user, repositories.outbox, newTestAuthorizationPolicy())
 	adminID := seedUser(repositories.user, "admin", "pw", "admin")
 	now := time.Now()
-	require.NoError(t, repositories.outbox.Append(
+	require.NoError(t, repositories.outbox.Append(context.Background(),
 		port.OutboxMessage{ID: "pending-1", EventName: "post.changed", Status: port.OutboxStatusPending, OccurredAt: now, NextAttemptAt: now},
 	))
 

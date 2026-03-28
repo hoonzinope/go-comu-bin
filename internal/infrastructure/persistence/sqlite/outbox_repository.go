@@ -55,21 +55,29 @@ func NewOutboxAppender(exec sqlExecutor) port.OutboxAppender {
 	return &outboxAppender{exec: exec}
 }
 
-func (r *OutboxRepository) Append(messages ...port.OutboxMessage) error {
+func normalizeOutboxContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func (r *OutboxRepository) Append(ctx context.Context, messages ...port.OutboxMessage) error {
 	if r == nil || r.db == nil {
 		return errors.New("sqlite outbox repository is not initialized")
 	}
-	return appendOutboxMessages(r.db, messages...)
+	return appendOutboxMessages(normalizeOutboxContext(ctx), r.db, messages...)
 }
 
-func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMessage, error) {
+func (r *OutboxRepository) FetchReady(ctx context.Context, limit int, now time.Time) ([]port.OutboxMessage, error) {
 	if r == nil || r.db == nil {
 		return nil, errors.New("sqlite outbox repository is not initialized")
 	}
 	if limit <= 0 {
 		return []port.OutboxMessage{}, nil
 	}
-	tx, err := r.db.BeginTx(context.Background(), nil)
+	ctx = normalizeOutboxContext(ctx)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin sqlite outbox fetch transaction: %w", err)
 	}
@@ -77,7 +85,7 @@ func (r *OutboxRepository) FetchReady(limit int, now time.Time) ([]port.OutboxMe
 		_ = tx.Rollback()
 	}()
 
-	rows, err := tx.QueryContext(context.Background(), `
+	rows, err := tx.QueryContext(ctx, `
 SELECT sequence, id, event_name, payload, occurred_at, attempt_count, next_attempt_at, status, last_error
 FROM outbox_messages
 WHERE status IN ('pending', 'processing') AND next_attempt_at <= ?
@@ -98,7 +106,7 @@ LIMIT ?
 		item.Status = port.OutboxStatusProcessing
 		item.AttemptCount++
 		item.NextAttemptAt = now.Add(r.processingTimeout)
-		if _, err := tx.ExecContext(context.Background(), `
+		if _, err := tx.ExecContext(ctx, `
 UPDATE outbox_messages
 SET status = 'processing', attempt_count = ?, next_attempt_at = ?
 WHERE sequence = ?
@@ -116,11 +124,11 @@ WHERE sequence = ?
 	return messages, nil
 }
 
-func (r *OutboxRepository) SelectByID(id string) (*port.OutboxMessage, error) {
+func (r *OutboxRepository) SelectByID(ctx context.Context, id string) (*port.OutboxMessage, error) {
 	if r == nil || r.db == nil {
 		return nil, errors.New("sqlite outbox repository is not initialized")
 	}
-	row := r.db.QueryRowContext(context.Background(), `
+	row := r.db.QueryRowContext(normalizeOutboxContext(ctx), `
 SELECT sequence, id, event_name, payload, occurred_at, attempt_count, next_attempt_at, status, last_error
 FROM outbox_messages
 WHERE id = ?
@@ -137,14 +145,14 @@ LIMIT 1
 	return &out, nil
 }
 
-func (r *OutboxRepository) SelectDead(limit int, lastID string) ([]port.OutboxMessage, error) {
+func (r *OutboxRepository) SelectDead(ctx context.Context, limit int, lastID string) ([]port.OutboxMessage, error) {
 	if r == nil || r.db == nil {
 		return nil, errors.New("sqlite outbox repository is not initialized")
 	}
 	if limit <= 0 {
 		return []port.OutboxMessage{}, nil
 	}
-	rows, err := r.db.QueryContext(context.Background(), `
+	rows, err := r.db.QueryContext(normalizeOutboxContext(ctx), `
 SELECT sequence, id, event_name, payload, occurred_at, attempt_count, next_attempt_at, status, last_error
 FROM outbox_messages
 WHERE status = 'dead'
@@ -178,11 +186,11 @@ ORDER BY occurred_at DESC, id DESC
 	return items, nil
 }
 
-func (r *OutboxRepository) RenewProcessing(id string, nextAttemptAt time.Time) error {
+func (r *OutboxRepository) RenewProcessing(ctx context.Context, id string, nextAttemptAt time.Time) error {
 	if r == nil || r.db == nil {
 		return errors.New("sqlite outbox repository is not initialized")
 	}
-	_, err := r.db.ExecContext(context.Background(), `
+	_, err := r.db.ExecContext(normalizeOutboxContext(ctx), `
 UPDATE outbox_messages
 SET next_attempt_at = ?
 WHERE id = ? AND status = 'processing'
@@ -190,14 +198,15 @@ WHERE id = ? AND status = 'processing'
 	return err
 }
 
-func (r *OutboxRepository) MarkSucceeded(ids ...string) error {
+func (r *OutboxRepository) MarkSucceeded(ctx context.Context, ids ...string) error {
 	if r == nil || r.db == nil {
 		return errors.New("sqlite outbox repository is not initialized")
 	}
 	if len(ids) == 0 {
 		return nil
 	}
-	tx, err := r.db.BeginTx(context.Background(), nil)
+	ctx = normalizeOutboxContext(ctx)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin sqlite outbox success transaction: %w", err)
 	}
@@ -208,7 +217,7 @@ func (r *OutboxRepository) MarkSucceeded(ids ...string) error {
 		if strings.TrimSpace(id) == "" {
 			continue
 		}
-		if _, err := tx.ExecContext(context.Background(), `DELETE FROM outbox_messages WHERE id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM outbox_messages WHERE id = ?`, id); err != nil {
 			return err
 		}
 	}
@@ -218,11 +227,11 @@ func (r *OutboxRepository) MarkSucceeded(ids ...string) error {
 	return nil
 }
 
-func (r *OutboxRepository) MarkRetry(id string, nextAttemptAt time.Time, errMessage string) error {
+func (r *OutboxRepository) MarkRetry(ctx context.Context, id string, nextAttemptAt time.Time, errMessage string) error {
 	if r == nil || r.db == nil {
 		return errors.New("sqlite outbox repository is not initialized")
 	}
-	_, err := r.db.ExecContext(context.Background(), `
+	_, err := r.db.ExecContext(normalizeOutboxContext(ctx), `
 UPDATE outbox_messages
 SET status = 'pending', next_attempt_at = ?, last_error = ?
 WHERE id = ?
@@ -230,11 +239,11 @@ WHERE id = ?
 	return err
 }
 
-func (r *OutboxRepository) MarkDead(id string, errMessage string) error {
+func (r *OutboxRepository) MarkDead(ctx context.Context, id string, errMessage string) error {
 	if r == nil || r.db == nil {
 		return errors.New("sqlite outbox repository is not initialized")
 	}
-	_, err := r.db.ExecContext(context.Background(), `
+	_, err := r.db.ExecContext(normalizeOutboxContext(ctx), `
 UPDATE outbox_messages
 SET status = 'dead', last_error = ?
 WHERE id = ?
@@ -242,14 +251,14 @@ WHERE id = ?
 	return err
 }
 
-func (a *outboxAppender) Append(messages ...port.OutboxMessage) error {
+func (a *outboxAppender) Append(ctx context.Context, messages ...port.OutboxMessage) error {
 	if a == nil || a.exec == nil {
 		return errors.New("sqlite outbox appender is not initialized")
 	}
-	return appendOutboxMessages(a.exec, messages...)
+	return appendOutboxMessages(normalizeOutboxContext(ctx), a.exec, messages...)
 }
 
-func appendOutboxMessages(exec sqlExecutor, messages ...port.OutboxMessage) error {
+func appendOutboxMessages(ctx context.Context, exec sqlExecutor, messages ...port.OutboxMessage) error {
 	now := time.Now().UTC()
 	for _, message := range messages {
 		if strings.TrimSpace(message.ID) == "" {
@@ -271,7 +280,7 @@ func appendOutboxMessages(exec sqlExecutor, messages ...port.OutboxMessage) erro
 		if payload == nil {
 			payload = []byte{}
 		}
-		if _, err := exec.ExecContext(context.Background(), `
+		if _, err := exec.ExecContext(ctx, `
 INSERT OR IGNORE INTO outbox_messages (
     id, event_name, payload, occurred_at, attempt_count, next_attempt_at, status, last_error
 )

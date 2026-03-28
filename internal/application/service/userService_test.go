@@ -35,7 +35,7 @@ func TestUserService_SignUp_SendsEmailVerificationWhenConfigured(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result)
 
-	messages, err := repositories.outbox.FetchReady(10, time.Now())
+	messages, err := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, err)
 	require.Len(t, messages, 1)
 
@@ -71,7 +71,7 @@ func TestUserService_SignUp_DoesNotSendVerificationEmailWhenCommitFails(t *testi
 
 	_, err := svc.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.Error(t, err)
-	messages, fetchErr := repositories.outbox.FetchReady(10, time.Now())
+	messages, fetchErr := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, fetchErr)
 	require.Empty(t, messages)
 }

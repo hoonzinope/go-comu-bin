@@ -1044,9 +1044,9 @@ func (r passwordResetTokenTxRepository) DeleteExpiredOrConsumedBefore(ctx contex
 	return r.repo.deleteExpiredOrConsumedBefore(cutoff, limit), nil
 }
 
-func (r outboxTxAppender) Append(messages ...port.OutboxMessage) error {
+func (r outboxTxAppender) Append(ctx context.Context, messages ...port.OutboxMessage) error {
 	if r.beforeWrite != nil {
 		r.beforeWrite()
 	}
-	return r.repo.append(messages...)
+	return r.repo.append(ctx, messages...)
 }

@@ -938,7 +938,7 @@ func TestAccountService_RequestPasswordReset_CreatesTokenAndSendsMail(t *testing
 	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
 	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 
 	issuer := &fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}}
 	svc := NewAccountServiceWithGuestUpgrade(
@@ -959,7 +959,7 @@ func TestAccountService_RequestPasswordReset_CreatesTokenAndSendsMail(t *testing
 	)
 
 	require.NoError(t, svc.RequestPasswordReset(context.Background(), "alice@example.com"))
-	messages, err := repositories.outbox.FetchReady(10, time.Now())
+	messages, err := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, err)
 	require.Len(t, messages, 1)
 
@@ -976,7 +976,7 @@ func TestAccountService_RequestPasswordReset_DoesNotSendMailWhenCommitFails(t *t
 	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
 	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 
 	issuer := &fixedPasswordResetTokenIssuer{tokens: []string{"reset-token-1"}}
 	svc := NewAccountServiceWithGuestUpgrade(
@@ -1004,7 +1004,7 @@ func TestAccountService_RequestPasswordReset_DoesNotSendMailWhenCommitFails(t *t
 
 	err = svc.RequestPasswordReset(context.Background(), "alice@example.com")
 	require.Error(t, err)
-	messages, fetchErr := repositories.outbox.FetchReady(10, time.Now())
+	messages, fetchErr := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, fetchErr)
 	require.Empty(t, messages)
 }
@@ -1018,7 +1018,7 @@ func TestAccountService_RequestEmailVerification_CreatesTokenAndSendsMail(t *tes
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
 	svc := NewAccountServiceWithGuestUpgrade(
@@ -1038,7 +1038,7 @@ func TestAccountService_RequestEmailVerification_CreatesTokenAndSendsMail(t *tes
 	)
 
 	require.NoError(t, svc.RequestEmailVerification(context.Background(), user.ID))
-	messages, err := repositories.outbox.FetchReady(10, time.Now())
+	messages, err := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, err)
 	require.Len(t, messages, 1)
 
@@ -1058,7 +1058,7 @@ func TestAccountService_RequestEmailVerification_DoesNotSendMailWhenCommitFails(
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
 	svc := NewAccountServiceWithGuestUpgrade(
@@ -1085,7 +1085,7 @@ func TestAccountService_RequestEmailVerification_DoesNotSendMailWhenCommitFails(
 
 	err = svc.RequestEmailVerification(context.Background(), user.ID)
 	require.Error(t, err)
-	messages, fetchErr := repositories.outbox.FetchReady(10, time.Now())
+	messages, fetchErr := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, fetchErr)
 	require.Empty(t, messages)
 }
@@ -1099,7 +1099,7 @@ func TestAccountService_RequestEmailVerification_RollsBackWhenMailSendFails(t *t
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 
 	issuer := &fixedEmailVerificationTokenIssuer{tokens: []string{"verify-token-1"}}
 	svc := NewAccountServiceWithGuestUpgrade(
@@ -1120,7 +1120,7 @@ func TestAccountService_RequestEmailVerification_RollsBackWhenMailSendFails(t *t
 
 	err = svc.RequestEmailVerification(context.Background(), user.ID)
 	require.NoError(t, err)
-	messages, fetchErr := repositories.outbox.FetchReady(10, time.Now())
+	messages, fetchErr := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, fetchErr)
 	require.Len(t, messages, 1)
 
@@ -1137,7 +1137,7 @@ func TestAccountService_ConfirmEmailVerification_VerifiesUserAndConsumesTokens(t
 	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
 	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	user, err := repositories.user.SelectUserByUsername(context.Background(), "alice")
 	require.NoError(t, err)
 	require.NotNil(t, user)
@@ -1181,7 +1181,7 @@ func TestAccountService_RequestPasswordReset_InvalidatesPreviousToken(t *testing
 	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
 	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 
 	svc := NewAccountServiceWithGuestUpgrade(
 		userService,
@@ -1220,7 +1220,7 @@ func TestAccountService_RequestPasswordReset_RollsBackWhenMailSendFails(t *testi
 	userService := NewUserService(repositories.user, passwordHasher, repositories.unitOfWork)
 	_, err := userService.SignUp(context.Background(), "alice", "alice@example.com", "pw")
 	require.NoError(t, err)
-	_, _ = repositories.outbox.FetchReady(10, time.Now())
+	_, _ = repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 
 	svc := NewAccountServiceWithGuestUpgrade(
 		userService,
@@ -1241,7 +1241,7 @@ func TestAccountService_RequestPasswordReset_RollsBackWhenMailSendFails(t *testi
 
 	err = svc.RequestPasswordReset(context.Background(), "alice@example.com")
 	require.NoError(t, err)
-	messages, fetchErr := repositories.outbox.FetchReady(10, time.Now())
+	messages, fetchErr := repositories.outbox.FetchReady(context.Background(), 10, time.Now())
 	require.NoError(t, fetchErr)
 	require.Len(t, messages, 1)
 

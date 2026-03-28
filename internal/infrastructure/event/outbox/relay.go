@@ -135,7 +135,7 @@ func (r *Relay) worker(ctx context.Context) {
 }
 
 func (r *Relay) pollOnce(ctx context.Context, now time.Time) bool {
-	messages, err := r.store.FetchReady(r.cfg.BatchSize, now)
+	messages, err := r.store.FetchReady(ctx, r.cfg.BatchSize, now)
 	if err != nil {
 		r.warn("fetch outbox ready messages failed", "error", err)
 		return false
@@ -152,16 +152,16 @@ func (r *Relay) pollOnce(ctx context.Context, now time.Time) bool {
 func (r *Relay) handleMessage(ctx context.Context, message port.OutboxMessage, now time.Time) {
 	event, err := r.serializer.Deserialize(message.EventName, message.Payload, message.OccurredAt)
 	if err != nil {
-		r.markFailure(message, now, "deserialize outbox event failed", err)
+		r.markFailure(ctx, message, now, "deserialize outbox event failed", err)
 		return
 	}
 	stopRenew := r.startLeaseRenewal(ctx, message.ID)
 	defer stopRenew()
 	if err := r.dispatch(ctx, event); err != nil {
-		r.markFailure(message, now, "dispatch outbox event failed", err)
+		r.markFailure(ctx, message, now, "dispatch outbox event failed", err)
 		return
 	}
-	if err := r.store.MarkSucceeded(message.ID); err != nil {
+	if err := r.store.MarkSucceeded(ctx, message.ID); err != nil {
 		r.warn("mark outbox message succeeded failed", "id", message.ID, "error", err)
 	}
 }
@@ -182,7 +182,7 @@ func (r *Relay) startLeaseRenewal(ctx context.Context, messageID string) func() 
 				return
 			case <-ticker.C:
 				nextAttemptAt := time.Now().Add(r.cfg.ProcessingLease)
-				if err := r.store.RenewProcessing(messageID, nextAttemptAt); err != nil {
+				if err := r.store.RenewProcessing(ctx, messageID, nextAttemptAt); err != nil {
 					r.warn("renew outbox message lease failed", "id", messageID, "error", err)
 				}
 			}
@@ -221,21 +221,21 @@ func (r *Relay) handlersFor(eventName string) []port.EventHandler {
 	return out
 }
 
-func (r *Relay) markFailure(message port.OutboxMessage, now time.Time, msg string, err error) {
+func (r *Relay) markFailure(ctx context.Context, message port.OutboxMessage, now time.Time, msg string, err error) {
 	attempt := message.AttemptCount
 	args := []any{"id", message.ID, "event", message.EventName, "attempt", attempt, "error", err}
 	if panicErr, ok := err.(panicError); ok {
 		args = append(args, "panic", panicErr.value, "stack", panicErr.Stack())
 	}
 	if attempt >= r.cfg.MaxAttempts {
-		if markErr := r.store.MarkDead(message.ID, err.Error()); markErr != nil {
+		if markErr := r.store.MarkDead(ctx, message.ID, err.Error()); markErr != nil {
 			r.warn("mark outbox message dead failed", "id", message.ID, "error", markErr)
 		}
 		r.warn(msg, append(args, "status", "dead")...)
 		return
 	}
 	nextAttemptAt := now.Add(backoffDuration(r.cfg.BaseBackoff, attempt, r.cfg.MaxBackoffFactor))
-	if markErr := r.store.MarkRetry(message.ID, nextAttemptAt, err.Error()); markErr != nil {
+	if markErr := r.store.MarkRetry(ctx, message.ID, nextAttemptAt, err.Error()); markErr != nil {
 		r.warn("mark outbox message retry failed", "id", message.ID, "error", markErr)
 		return
 	}

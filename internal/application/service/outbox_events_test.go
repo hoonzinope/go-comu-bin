@@ -16,7 +16,8 @@ type spyOutboxAppender struct {
 	messages []port.OutboxMessage
 }
 
-func (s *spyOutboxAppender) Append(messages ...port.OutboxMessage) error {
+func (s *spyOutboxAppender) Append(ctx context.Context, messages ...port.OutboxMessage) error {
+	_ = ctx
 	s.messages = append(s.messages, messages...)
 	return nil
 }
