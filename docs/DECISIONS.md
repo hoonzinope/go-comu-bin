@@ -4398,6 +4398,36 @@
 - ROADMAP current state memo를 완료 기준으로 정리한다.
 - generic soft delete 확장 요구가 생기면 복구/보존 정책을 함께 다시 결정한다.
 
+## 2026-03-28 - Step 8 adds an HTML-first Web UI/Admin Console and requires current-user plus draft-resume contracts
+
+상태
+
+- decided
+
+배경
+
+- 단일 바이너리 배포와 관리자 운영을 실제로 쓰려면 API만으로는 부족하고, 브라우저에서 바로 쓰는 UI shell과 admin console이 필요하다.
+- 현재 API는 대부분의 public/read/write 흐름을 제공하지만, UI가 안정적으로 로그인 상태와 관리자 권한을 판별할 current-user summary와, 작성 중 초안을 다시 여는 draft recovery/resume 계약은 없다.
+
+관찰
+
+- `users/me` 계열은 notification/delete만 있고, 현재 사용자 상태를 반환하는 endpoint는 없다.
+- post draft는 생성과 publish는 있지만, draft list/resume용 read contract는 없다.
+- 브라우저 UI는 auth transport와 정적 자산/템플릿 서빙 방식을 먼저 정해야 한다.
+
+결론
+
+- ROADMAP에 Step 8 `Web UI / Admin Console`을 추가한다.
+- Step 8은 HTML-first, Alpine.js 기반 UI shell로 둔다.
+- UI를 위해 `GET /api/v1/users/me` 같은 current-user summary 계약과 draft list/detail 계약을 별도 작업으로 추가한다.
+- draft recovery/resume 계약은 owner/admin 범위로 제한하고, publish-only detail과 분리한다.
+- 이 작업들은 아직 구현되지 않았으므로 Step 8은 미착수로 유지한다.
+
+후속 작업
+
+- ROADMAP current state memo에 Step 8 미착수 반영
+- current-user summary API와 draft recovery/resume API의 구체 route/response shape를 다음 단계에서 확정
+
 ## 2026-03-28 - Step 4 roadmap drops the generic hook system and keeps only the narrow action dispatcher boundary
 
 상태
