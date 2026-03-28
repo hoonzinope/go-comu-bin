@@ -24,7 +24,8 @@ const (
 )
 
 type PostSearchRepository struct {
-	db sqlExecutor
+	db               sqlExecutor
+	afterRebuildLoad func()
 }
 
 func NewPostSearchRepository(db sqlExecutor) *PostSearchRepository {
@@ -50,7 +51,7 @@ func (r *PostSearchRepository) SearchPublishedPosts(ctx context.Context, query s
 	if len(matchingIDs) == 0 {
 		return []port.PostSearchResult{}, nil
 	}
-	documents, err := r.loadSearchDocuments(ctx)
+	documents, err := r.loadSearchDocuments(ctx, r.db)
 	if err != nil {
 		return nil, err
 	}
@@ -100,11 +101,14 @@ func (r *PostSearchRepository) RebuildAll(ctx context.Context) error {
 	if r == nil || r.db == nil {
 		return nil
 	}
-	documents, err := r.loadSearchDocuments(ctx)
-	if err != nil {
-		return err
-	}
 	return r.withTransaction(ctx, func(exec sqlExecutor) error {
+		documents, err := r.loadSearchDocuments(ctx, exec)
+		if err != nil {
+			return err
+		}
+		if r.afterRebuildLoad != nil {
+			r.afterRebuildLoad()
+		}
 		if _, err := exec.ExecContext(ctx, `DELETE FROM post_search_fts`); err != nil {
 			return err
 		}
@@ -219,7 +223,7 @@ ORDER BY rowid ASC
 }
 
 func (r *PostSearchRepository) loadSearchDocumentByPostID(ctx context.Context, postID int64) (searchDocument, bool, error) {
-	documents, err := r.querySearchDocuments(ctx, `
+	documents, err := r.querySearchDocuments(ctx, r.db, `
 WHERE p.id = ?
 AND p.status = 'published'
 `, postID)
@@ -243,11 +247,11 @@ type searchDocument struct {
 	allTerms      map[string]struct{}
 }
 
-func (r *PostSearchRepository) loadSearchDocuments(ctx context.Context) ([]searchDocument, error) {
-	return r.querySearchDocuments(ctx, `WHERE p.status = 'published'`)
+func (r *PostSearchRepository) loadSearchDocuments(ctx context.Context, exec sqlExecutor) ([]searchDocument, error) {
+	return r.querySearchDocuments(ctx, exec, `WHERE p.status = 'published'`)
 }
 
-func (r *PostSearchRepository) querySearchDocuments(ctx context.Context, filter string, args ...any) ([]searchDocument, error) {
+func (r *PostSearchRepository) querySearchDocuments(ctx context.Context, exec sqlExecutor, filter string, args ...any) ([]searchDocument, error) {
 	query := `
 SELECT
     p.id,
@@ -272,7 +276,7 @@ LEFT JOIN tags t ON t.id = pt.tag_id
 	}
 	query += `ORDER BY p.id ASC, t.id ASC
 `
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := exec.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
