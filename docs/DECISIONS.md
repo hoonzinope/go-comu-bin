@@ -4371,3 +4371,31 @@
 
 - write-heavy workload가 늘어나면 `MaxOpenConns`를 재측정한다.
 - read-only benchmark가 분리되면 read/write pool 분리 가능성을 다시 검토한다.
+
+## 2026-03-28 - Step 4 roadmap drops the generic hook system and keeps only the narrow action dispatcher boundary
+
+상태
+
+- decided
+
+배경
+
+- Step 4의 실제 구현은 outbox relay, mention 이벤트, notification, ranking read-side까지 완료됐고, 범용 hook system은 별도 요구 없이 남아 있었다.
+- 코드베이스에는 `ActionHookDispatcher`가 outbox 기반 액션 전달 경계로 이미 자리잡았지만, `FilterHook` 같은 범용 hook placeholder는 실제 사용처가 없었다.
+
+관찰
+
+- `ActionHookDispatcher`는 서비스 계층에서 outbox 우선 전달과 fallback dispatch를 담당한다.
+- `FilterHook`는 참조되지 않는 placeholder였다.
+- ROADMAP의 hook system 항목은 현재 구현과 필요성에 비해 과했다.
+
+결론
+
+- ROADMAP에서 범용 hook system 항목을 제거한다.
+- 코드에서는 `ActionHookDispatcher`만 좁은 액션 전달 경계로 유지하고, `FilterHook` placeholder는 제거한다.
+- 향후 별도 플러그인/필터 확장이 실제 요구가 생기면 그때 다시 결정한다.
+
+후속 작업
+
+- `docs/ROADMAP.md`의 Step 4 완료 상태와 정합성 맞추기
+- `internal/application/port/hook.go`의 미사용 placeholder 정리
