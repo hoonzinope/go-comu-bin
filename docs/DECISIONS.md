@@ -4428,6 +4428,36 @@
 - ROADMAP current state memo에 Step 8 미착수 반영
 - current-user summary API와 draft recovery/resume API의 구체 route/response shape를 다음 단계에서 확정
 
+## 2026-03-28 - Step 8 browser auth uses SameSite cookie-first transport with header compatibility for non-browser clients
+
+상태
+
+- decided
+
+배경
+
+- Step 8의 Alpine.js UI는 same-origin 브라우저에서 동작하므로, 토큰을 localStorage에 두고 JS 헤더로 반복 전송하는 방식은 XSS 리스크가 크다.
+- 기존 JSON API는 `Authorization: Bearer <token>` header 계약을 이미 갖고 있어, 브라우저 UI와 비브라우저 API 클라이언트의 전송 수단을 분리하는 편이 자연스럽다.
+
+관찰
+
+- 로그인 응답은 현재 Authorization header를 반환한다.
+- same-origin 배포와 HttpOnly cookie는 브라우저 UI에 더 안전한 transport다.
+- public HTML 페이지는 직접 진입 가능하므로 SEO/소셜 미리보기용 `<head>` 메타 주입 규칙도 함께 필요하다.
+
+결론
+
+- Step 8 브라우저 auth transport는 `HttpOnly + Secure + SameSite=Lax` cookie 우선으로 둔다.
+- 로그인/guest upgrade/logout 계열 응답은 브라우저 UI에서 `Set-Cookie`를 갱신/폐기하는 경계를 함께 가진다.
+- JSON API의 Authorization header 계약은 비브라우저 클라이언트 호환용으로 유지한다.
+- UI 직접 진입 라우트는 `html/template` 기반 SSR fallback으로 `Title`과 Open Graph 메타를 주입한다.
+- draft recovery/resume는 `GET /api/v1/users/me/drafts`와 `GET /api/v1/posts/{postUUID}/draft`로 분리한다.
+
+후속 작업
+
+- ROADMAP Step 8 문구를 cookie-first transport와 SSR fallback 규칙으로 구체화
+- auth transport와 SSR fallback 규칙이 실제 구현 순서를 바꾸지 않는지 확인
+
 ## 2026-03-28 - Step 4 roadmap drops the generic hook system and keeps only the narrow action dispatcher boundary
 
 상태
