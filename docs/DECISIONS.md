@@ -4372,6 +4372,32 @@
 - write-heavy workload가 늘어나면 `MaxOpenConns`를 재측정한다.
 - read-only benchmark가 분리되면 read/write pool 분리 가능성을 다시 검토한다.
 
+## 2026-03-28 - Step 2 domain expansion is complete; cross-domain soft delete remains separate
+
+상태
+
+- decided
+
+배경
+
+- ROADMAP의 Step 2에는 attachment, report, notification, tag, user lifecycle, ranking-adjacent read paths까지 포함돼 있었고, 현재 구현 기준으로 해당 범위는 모두 닫혔다.
+- 다만 soft delete를 post/comment 등 다른 도메인으로 확장할지 여부는 제품 정책과 복구/보존 정책을 다시 봐야 하는 별도 판단이다.
+
+관찰
+
+- user account soft delete + 익명화는 이미 반영돼 있다.
+- post/comment는 delete/tombstone 정책이 있지만, generic soft delete를 다른 도메인까지 일괄 확장하는 별도 규약은 없다.
+
+결론
+
+- ROADMAP의 Step 2는 완료 상태로 본다.
+- soft delete의 다른 도메인 확장은 현재 범위에서 제외하고, 필요 시 별도 decision으로 다시 연다.
+
+후속 작업
+
+- ROADMAP current state memo를 완료 기준으로 정리한다.
+- generic soft delete 확장 요구가 생기면 복구/보존 정책을 함께 다시 결정한다.
+
 ## 2026-03-28 - Step 4 roadmap drops the generic hook system and keeps only the narrow action dispatcher boundary
 
 상태
