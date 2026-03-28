@@ -6,6 +6,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -15,6 +17,9 @@ var _ port.PostSearchRepository = (*PostSearchRepository)(nil)
 var _ port.PostSearchIndexer = (*PostSearchRepository)(nil)
 
 const (
+	liveSearchTableName   = "post_search_fts"
+	shadowSearchTableName = "post_search_fts_shadow"
+
 	searchTitleWeight   = 3.0
 	searchTagWeight     = 2.0
 	searchContentWeight = 1.0
@@ -26,6 +31,7 @@ const (
 type PostSearchRepository struct {
 	db               sqlExecutor
 	afterRebuildLoad func()
+	writerGate       sync.RWMutex
 }
 
 func NewPostSearchRepository(db sqlExecutor) *PostSearchRepository {
@@ -101,18 +107,36 @@ func (r *PostSearchRepository) RebuildAll(ctx context.Context) error {
 	if r == nil || r.db == nil {
 		return nil
 	}
+	rebuildStartedAt := time.Now().UTC()
+	documents, err := r.loadSearchDocuments(ctx, r.db)
+	if err != nil {
+		return err
+	}
+	documentByID := make(map[int64]searchDocument, len(documents))
+	for _, document := range documents {
+		documentByID[document.post.ID] = document
+	}
+	if r.afterRebuildLoad != nil {
+		r.afterRebuildLoad()
+	}
+	r.writerGate.Lock()
+	defer r.writerGate.Unlock()
 	return r.withTransaction(ctx, func(exec sqlExecutor) error {
-		documents, err := r.loadSearchDocuments(ctx, exec)
+		changedDocuments, err := r.loadSearchDocumentsSince(ctx, exec, rebuildStartedAt)
 		if err != nil {
 			return err
 		}
-		if r.afterRebuildLoad != nil {
-			r.afterRebuildLoad()
+		for _, document := range changedDocuments {
+			if document.post.Status == entity.PostStatusPublished {
+				documentByID[document.post.ID] = document
+				continue
+			}
+			delete(documentByID, document.post.ID)
 		}
-		if _, err := exec.ExecContext(ctx, `DELETE FROM post_search_fts`); err != nil {
+		if err := r.replaceSearchDocuments(ctx, exec, shadowSearchTableName, sortedSearchDocuments(documentByID)); err != nil {
 			return err
 		}
-		return r.replaceSearchDocuments(ctx, exec, documents)
+		return r.swapSearchTables(ctx, exec)
 	})
 }
 
@@ -120,18 +144,20 @@ func (r *PostSearchRepository) UpsertPost(ctx context.Context, postID int64) err
 	if r == nil || r.db == nil {
 		return nil
 	}
+	r.writerGate.RLock()
+	defer r.writerGate.RUnlock()
 	document, ok, err := r.loadSearchDocumentByPostID(ctx, postID)
 	if err != nil {
 		return err
 	}
 	return r.withTransaction(ctx, func(exec sqlExecutor) error {
-		if err := r.deleteSearchDocument(ctx, exec, postID); err != nil {
+		if err := r.deleteSearchDocument(ctx, exec, liveSearchTableName, postID); err != nil {
 			return err
 		}
 		if !ok {
 			return nil
 		}
-		return r.upsertSearchDocument(ctx, exec, document)
+		return r.upsertSearchDocument(ctx, exec, liveSearchTableName, document)
 	})
 }
 
@@ -139,8 +165,10 @@ func (r *PostSearchRepository) DeletePost(ctx context.Context, postID int64) err
 	if r == nil || r.db == nil {
 		return nil
 	}
+	r.writerGate.RLock()
+	defer r.writerGate.RUnlock()
 	return r.withTransaction(ctx, func(exec sqlExecutor) error {
-		return r.deleteSearchDocument(ctx, exec, postID)
+		return r.deleteSearchDocument(ctx, exec, liveSearchTableName, postID)
 	})
 }
 
@@ -161,33 +189,76 @@ func (r *PostSearchRepository) withTransaction(ctx context.Context, fn func(exec
 	return fn(r.db)
 }
 
-func (r *PostSearchRepository) replaceSearchDocuments(ctx context.Context, exec sqlExecutor, documents []searchDocument) error {
+func (r *PostSearchRepository) replaceSearchDocuments(ctx context.Context, exec sqlExecutor, tableName string, documents []searchDocument) error {
+	if _, err := exec.ExecContext(ctx, `DELETE FROM `+tableName); err != nil {
+		return err
+	}
 	for _, document := range documents {
-		if err := r.upsertSearchDocument(ctx, exec, document); err != nil {
+		if err := r.upsertSearchDocument(ctx, exec, tableName, document); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (r *PostSearchRepository) upsertSearchDocument(ctx context.Context, exec sqlExecutor, document searchDocument) error {
-	if _, err := exec.ExecContext(ctx, `
-INSERT INTO post_search_fts (rowid, title, content, tags)
+func (r *PostSearchRepository) upsertSearchDocument(ctx context.Context, exec sqlExecutor, tableName string, document searchDocument) error {
+	query := `
+INSERT INTO ` + tableName + ` (rowid, title, content, tags)
 VALUES (?, ?, ?, ?)
-`, document.post.ID, document.titleText, document.contentText, document.tagText); err != nil {
+`
+	if _, err := exec.ExecContext(ctx, query, document.post.ID, document.titleText, document.contentText, document.tagText); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *PostSearchRepository) deleteSearchDocument(ctx context.Context, exec sqlExecutor, postID int64) error {
-	if _, err := exec.ExecContext(ctx, `
-DELETE FROM post_search_fts
+func (r *PostSearchRepository) deleteSearchDocument(ctx context.Context, exec sqlExecutor, tableName string, postID int64) error {
+	query := `
+DELETE FROM ` + tableName + `
 WHERE rowid = ?
-`, postID); err != nil {
+`
+	if _, err := exec.ExecContext(ctx, query, postID); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (r *PostSearchRepository) loadSearchDocumentsSince(ctx context.Context, exec sqlExecutor, updatedAfter time.Time) ([]searchDocument, error) {
+	return r.querySearchDocuments(ctx, exec, `WHERE p.updated_at >= ?`, updatedAfter.UnixNano())
+}
+
+func (r *PostSearchRepository) swapSearchTables(ctx context.Context, exec sqlExecutor) error {
+	if _, err := exec.ExecContext(ctx, `DELETE FROM `+liveSearchTableName); err != nil {
+		return err
+	}
+	query := `
+INSERT INTO ` + liveSearchTableName + ` (rowid, title, content, tags)
+SELECT rowid, title, content, tags
+FROM ` + shadowSearchTableName + `
+`
+	if _, err := exec.ExecContext(ctx, query); err != nil {
+		return err
+	}
+	if _, err := exec.ExecContext(ctx, `DELETE FROM `+shadowSearchTableName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func sortedSearchDocuments(documentsByID map[int64]searchDocument) []searchDocument {
+	if len(documentsByID) == 0 {
+		return []searchDocument{}
+	}
+	ids := make([]int64, 0, len(documentsByID))
+	for id := range documentsByID {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	documents := make([]searchDocument, 0, len(ids))
+	for _, id := range ids {
+		documents = append(documents, cloneSearchDocument(documentsByID[id]))
+	}
+	return documents
 }
 
 func (r *PostSearchRepository) loadMatchingPostIDs(ctx context.Context, queryTerms []string) (map[int64]struct{}, error) {

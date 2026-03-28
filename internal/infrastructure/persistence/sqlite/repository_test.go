@@ -201,7 +201,7 @@ func TestPostSearchRepository_FTSIndexMaintenance(t *testing.T) {
 }
 
 func TestPostSearchRepository_RebuildAll_PreservesConcurrentUpserts(t *testing.T) {
-	db := openTestSQLiteDB(t)
+	db := openTestSQLiteDBWithMaxOpenConns(t, 2)
 	boardRepo := NewBoardRepository(db)
 	postRepo := NewPostRepository(db)
 	searchRepo := NewPostSearchRepository(db)
@@ -226,23 +226,25 @@ func TestPostSearchRepository_RebuildAll_PreservesConcurrentUpserts(t *testing.T
 
 	<-loaded
 
-	post.Title = "new title"
+	post.Update("new title", "body")
 	updateDone := make(chan error, 1)
 	go func() {
-		updateDone <- postRepo.Update(context.Background(), post)
+		if err := postRepo.Update(context.Background(), post); err != nil {
+			updateDone <- err
+			return
+		}
+		updateDone <- searchRepo.UpsertPost(context.Background(), postID)
 	}()
 
 	select {
-	case err := <-updateDone:
-		require.NoError(t, err)
-		t.Fatal("update completed before rebuild released the transaction")
-	case <-time.After(50 * time.Millisecond):
+	case updateErr := <-updateDone:
+		require.NoError(t, updateErr)
+	case <-time.After(time.Second):
+		t.Fatal("update did not finish while rebuild was paused")
 	}
 
 	close(resume)
 	require.NoError(t, <-rebuildDone)
-	require.NoError(t, <-updateDone)
-	require.NoError(t, searchRepo.UpsertPost(context.Background(), postID))
 
 	title, _, _ := mustLoadSearchFTSRow(t, db, postID)
 	assert.Equal(t, "new title", title)
@@ -250,6 +252,92 @@ func TestPostSearchRepository_RebuildAll_PreservesConcurrentUpserts(t *testing.T
 	results, err := searchRepo.SearchPublishedPosts(context.Background(), "old title", 10, nil)
 	require.NoError(t, err)
 	assert.Empty(t, results)
+	results, err = searchRepo.SearchPublishedPosts(context.Background(), "new title", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, postID, results[0].Post.ID)
+}
+
+func TestPostSearchRepository_RebuildAll_PreservesConcurrentDeletes(t *testing.T) {
+	db := openTestSQLiteDBWithMaxOpenConns(t, 2)
+	boardRepo := NewBoardRepository(db)
+	postRepo := NewPostRepository(db)
+	searchRepo := NewPostSearchRepository(db)
+
+	boardID := mustSaveBoard(t, boardRepo, entity.NewBoard("free", "desc"))
+	authorID := int64(1)
+	post := entity.NewPost("delete title", "body", authorID, boardID)
+	postID := mustSavePost(t, postRepo, post)
+	require.NoError(t, searchRepo.UpsertPost(context.Background(), postID))
+
+	loaded := make(chan struct{})
+	resume := make(chan struct{})
+	searchRepo.afterRebuildLoad = func() {
+		close(loaded)
+		<-resume
+	}
+
+	rebuildDone := make(chan error, 1)
+	go func() {
+		rebuildDone <- searchRepo.RebuildAll(context.Background())
+	}()
+
+	<-loaded
+
+	deleteDone := make(chan error, 1)
+	go func() {
+		if err := postRepo.Delete(context.Background(), postID); err != nil {
+			deleteDone <- err
+			return
+		}
+		deleteDone <- searchRepo.DeletePost(context.Background(), postID)
+	}()
+
+	select {
+	case deleteErr := <-deleteDone:
+		require.NoError(t, deleteErr)
+	case <-time.After(time.Second):
+		t.Fatal("delete did not finish while rebuild was paused")
+	}
+
+	close(resume)
+	require.NoError(t, <-rebuildDone)
+
+	assertSearchFTSRowMissing(t, db, postID)
+}
+
+func TestPostSearchRepository_RebuildAll_PreservesReadConsistency(t *testing.T) {
+	db := openTestSQLiteDBWithMaxOpenConns(t, 2)
+	boardRepo := NewBoardRepository(db)
+	postRepo := NewPostRepository(db)
+	searchRepo := NewPostSearchRepository(db)
+
+	boardID := mustSaveBoard(t, boardRepo, entity.NewBoard("free", "desc"))
+	authorID := int64(1)
+	postID := mustSavePost(t, postRepo, entity.NewPost("read title", "body", authorID, boardID))
+	require.NoError(t, searchRepo.UpsertPost(context.Background(), postID))
+
+	loaded := make(chan struct{})
+	resume := make(chan struct{})
+	searchRepo.afterRebuildLoad = func() {
+		close(loaded)
+		<-resume
+	}
+
+	rebuildDone := make(chan error, 1)
+	go func() {
+		rebuildDone <- searchRepo.RebuildAll(context.Background())
+	}()
+
+	<-loaded
+
+	results, err := searchRepo.SearchPublishedPosts(context.Background(), "read title", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, postID, results[0].Post.ID)
+
+	close(resume)
+	require.NoError(t, <-rebuildDone)
 }
 
 func TestPostSearchRepository_SearchPublishedPosts_RequiresFTSIndex(t *testing.T) {

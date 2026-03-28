@@ -4196,6 +4196,27 @@
 - `internal/infrastructure/persistence/sqlite/post_search_repository.go`
 - `internal/application/port/post_search_repository.go`
 
+## 2026-03-28 - SQLite search rebuild uses shadow replay with updated_at freshness
+
+상태
+
+- decided
+
+배경
+
+- SQLite search rebuild이 live FTS 테이블을 직접 덮으면, rebuild 중 발생한 최신 update/delete를 잃을 수 있다.
+- 별도 version 컬럼 없이도 `posts.updated_at`은 projection freshness 기준으로 재사용할 수 있다.
+
+결론
+
+- `RebuildAll`은 shadow projection을 먼저 만들고, `posts.updated_at` 기준 delta를 replay한 뒤 live FTS와 교체한다.
+- `UpsertPost`와 `DeletePost`는 rebuild의 replay/swap 구간과 충돌하지 않도록 repository 내부 writer gate를 공유한다.
+
+후속 작업
+
+- search rebuild race regression test를 유지한다.
+- 다중 프로세스 구성이 필요해지면 DB-backed lock 또는 version cursor로 다시 올린다.
+
 ## 2026-03-26 - Step 5 remaining SQLite slices are comment -> reaction -> attachment -> report -> notification
 
 상태

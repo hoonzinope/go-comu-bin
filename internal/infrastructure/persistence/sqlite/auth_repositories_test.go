@@ -122,12 +122,16 @@ func TestUnitOfWork_CommitsAndRollsBackAuthChanges(t *testing.T) {
 }
 
 func openTestSQLiteDB(t *testing.T) *sql.DB {
+	return openTestSQLiteDBWithMaxOpenConns(t, 1)
+}
+
+func openTestSQLiteDBWithMaxOpenConns(t *testing.T, maxOpenConns int) *sql.DB {
 	t.Helper()
 
 	tempDir := t.TempDir()
 	db, err := Open(context.Background(), Options{
 		Path:         tempDir + "/auth.db",
-		MaxOpenConns: 1,
+		MaxOpenConns: maxOpenConns,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
