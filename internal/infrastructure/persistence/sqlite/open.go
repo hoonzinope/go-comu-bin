@@ -46,7 +46,7 @@ func Open(ctx context.Context, opts Options) (*sql.DB, error) {
 	}
 	maxOpenConns := opts.MaxOpenConns
 	if maxOpenConns <= 0 {
-		maxOpenConns = 1
+		maxOpenConns = 2
 	}
 	db.SetMaxOpenConns(maxOpenConns)
 	db.SetMaxIdleConns(maxOpenConns)

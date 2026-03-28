@@ -125,7 +125,10 @@ func openTestSQLiteDB(t *testing.T) *sql.DB {
 	t.Helper()
 
 	tempDir := t.TempDir()
-	db, err := Open(context.Background(), Options{Path: tempDir + "/auth.db"})
+	db, err := Open(context.Background(), Options{
+		Path:         tempDir + "/auth.db",
+		MaxOpenConns: 1,
+	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, db.Close())

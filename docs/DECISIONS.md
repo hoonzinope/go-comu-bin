@@ -4307,3 +4307,46 @@
 - `internal/infrastructure/job/inprocess/runner.go`
 - `internal/infrastructure/event/outbox/relay.go`
 - `internal/config/config.go`
+
+## 2026-03-28 - SQLite bottleneck checks should use Go benchmarks plus db wait metrics
+
+상태
+
+- decided
+
+배경
+
+- `MaxOpenConns=1`은 정합성에는 안전하지만, 실제로 병목인지 여부는 측정 없이 단정하기 어렵다.
+- SQLite read/write 경로마다 커넥션 대기와 실행 시간의 영향을 분리해서 봐야 한다.
+
+결론
+
+- SQLite 병목 여부는 Go benchmark로 확인한다.
+- benchmark는 `MaxOpenConns`를 1, 2, 4처럼 바꿔가며 비교한다.
+- `database/sql`의 `WaitCount`와 `WaitDuration` 증분을 함께 본다.
+
+후속 작업
+
+- search와 outbox처럼 DB를 많이 타는 path별 benchmark를 유지한다.
+- 대기 지표가 거의 없고 p95도 변하지 않으면 `MaxOpenConns=1`은 병목이 아니다.
+- 대기 지표가 늘고 latency도 같이 늘면 connection pool 또는 SQLite write serialization이 병목이다.
+
+## 2026-03-28 - SQLite default MaxOpenConns is 2
+
+상태
+
+- decided
+
+배경
+
+- 1, 2, 4, 10 conn benchmark를 비교한 결과, 읽기 경로는 10에서 가장 빠르지만 쓰기 경로의 busy contention이 너무 커서 기본값으로는 과하다.
+- 2는 read latency를 유의미하게 낮추면서도 write path의 busy/error 증가를 가장 억제하는 균형점이었다.
+
+결론
+
+- `internal/infrastructure/persistence/sqlite.Open`의 기본 `MaxOpenConns`는 2로 둔다.
+
+후속 작업
+
+- write-heavy workload가 늘어나면 `MaxOpenConns`를 재측정한다.
+- read-only benchmark가 분리되면 read/write pool 분리 가능성을 다시 검토한다.

@@ -62,6 +62,21 @@ func TestOpenRejectsEmptyPath(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestOpenUsesDefaultConnectionPoolSize(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dbPath := tempDir + "/app.db"
+
+	db, err := Open(context.Background(), Options{Path: dbPath})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, db.Close())
+	})
+
+	require.Equal(t, 2, db.Stats().MaxOpenConnections)
+}
+
 func requireMigrationCount(t *testing.T, db *sql.DB, expected int) {
 	t.Helper()
 
