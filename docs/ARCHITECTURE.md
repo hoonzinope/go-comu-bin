@@ -14,7 +14,7 @@
 
 ```mermaid
 flowchart LR
-    DELIVERY["Delivery (HTTP / Background Worker / Consumer / Job)"]
+    DELIVERY["Delivery (HTTP API / Web UI / Background Worker / Consumer / Job)"]
     UC["UseCase Port"]
     APP["Application Service / Policy / Cache Rule / Read Assembly"]
     PORT["Repository / External Port"]
@@ -29,7 +29,8 @@ flowchart LR
 ```
 
 - `delivery`
-  - HTTP parsing, 인증 미들웨어 연결, status/header/response 직렬화, request body와 multipart 같은 transport 경계 제한을 담당한다.
+  - `internal/delivery/api`는 `/api/v1` JSON API의 HTTP parsing, 인증 미들웨어 연결, status/header/response 직렬화, request body와 multipart 같은 transport 경계 제한을 담당한다.
+  - `internal/delivery/web`는 SSR HTML shell, embedded static assets/templates, browser-only route space를 담당한다.
   - JSON API와 browser UI는 route space를 분리한다. `/api/v1`은 JSON API 전용이고, `/`, `/login`, `/me`, `/admin/...` 같은 브라우저 경로는 SSR UI 전용이다.
   - background delivery는 polling, schedule trigger, retry/ack, graceful shutdown 경계 관리만 담당한다.
   - HTTP handler와 background worker/job/consumer 모두 use case port만 호출하고, repository/DB 구현체를 직접 호출하지 않는다.
@@ -44,7 +45,7 @@ flowchart LR
   - `Repository`, `Cache`, `SessionRepository`, `FileStorage` 같은 I/O 성격의 하위 포트 호출에는 동일한 `ctx`를 그대로 전달한다.
   - 순수 값 변환, 해시/토큰 계산, in-process dispatcher 같은 non-I/O 포트는 `ctx`를 생략할 수 있다.
 - `composition root`
-  - `cmd/main.go`에서 `stdout + lumberjack` JSON logger를 조립하고, runtime logger를 모든 delivery/application/infrastructure 경계에 주입한다.
+  - `cmd/main.go`에서 `stdout + lumberjack` JSON logger를 조립하고, `internal/delivery/api`와 `internal/delivery/web`를 포함한 모든 delivery/application/infrastructure 경계에 runtime logger를 주입한다.
   - process entrypoint panic은 bootstrap logger로도 구조화 기록한다.
 - `domain`
   - 엔티티 상태와 도메인 규칙을 가진다.

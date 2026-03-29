@@ -17,6 +17,7 @@ GOCACHE=/tmp/go-comu-bin-gocache go test ./...
 ```bash
 go test ./internal/application/service/... -v
 go test ./internal/delivery -v
+go test ./internal/delivery/web -v
 go test ./internal/infrastructure/persistence/inmemory -v
 go test ./internal/infrastructure/cache/ristretto -v
 go test ./internal/infrastructure/cache/inmemory -v
@@ -90,11 +91,24 @@ func TestPostService_UpdatePost_ForbiddenForNonOwnerNonAdmin(t *testing.T) {
   - `internal/application/porttest`
   - `internal/application/service/...`
   - `internal/delivery`
+  - `internal/delivery/web`
   - `cmd`의 logger wiring 및 panic recovery
   - `internal/infrastructure/job/inprocess`의 panic recovery
   - `internal/infrastructure/event/outbox`의 panic recovery
 - Integration
   - `internal/integration`
+
+## Browser E2E / Visual Regression
+
+- Playwright 설정: `playwright.config.ts`
+- 테스트 위치: `tests/e2e/*.spec.ts`
+- 전체 실행: `npm run test:e2e`
+- Chromium 시나리오: `npm run test:e2e:chromium`
+- 시각 회귀: `npm run test:e2e:visual`
+- 시각 기준 갱신: `npm run test:e2e:visual:update`
+
+Visual snapshot baselines are stored under `tests/e2e/visual.spec.ts-snapshots/`.
+Intentional UI changes가 아니면 visual baselines는 갱신하지 않는다.
 
 ## 로깅/예외 테스트 기준
 

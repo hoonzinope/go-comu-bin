@@ -4487,6 +4487,34 @@
 - ROADMAP Step 8의 guest bootstrap / login redirect 문구를 이 결정과 동일하게 유지
 - UI 구현 시 current-user revalidation, guest bootstrap, login redirect의 순서를 regression test로 고정
 
+## 2026-03-29 - Step 8 Web UI/Admin Console is implemented with separate web delivery and Playwright visual coverage
+
+상태
+
+- decided
+
+배경
+
+- Step 8에서 정의했던 HTML-first Web UI/Admin Console이 실제 코드베이스에 반영됐다.
+- 브라우저 UI와 JSON API는 같은 바이너리 안에 있으면서도 route space와 delivery 패키지가 분리돼야 문서/테스트/운영 관점이 일관된다.
+
+관찰
+
+- `internal/delivery/web`가 SSR HTML shell, embedded static assets, public/auth/personal/admin UI routes를 담당한다.
+- `/api/v1`는 JSON API 전용으로 유지되고, current-user summary와 draft recovery/resume 계약이 API 쪽에 구현돼 있다.
+- Playwright 테스트는 `chromium` smoke와 `visual` snapshot 프로젝트로 분리돼 있고, 주요 화면 회귀가 자동화돼 있다.
+
+결론
+
+- ROADMAP current state memo에서 Step 8을 완료로 표기한다.
+- README/TESTING 문서에는 web UI route space와 Playwright 실행 명령을 함께 노출한다.
+- API 문서에는 `users/me`, `users/me/drafts`, `posts/{postUUID}/draft` current-user/draft 계약을 유지한다.
+
+후속 작업
+
+- 브라우저 UI가 추가되면 `internal/delivery/web`와 Playwright snapshot baselines를 함께 갱신한다.
+- UI 전용 정책 변경이 생기면 ROADMAP/README/API/TESTING 문서를 같은 커밋에서 다시 맞춘다.
+
 ## 2026-03-28 - Step 4 roadmap drops the generic hook system and keeps only the narrow action dispatcher boundary
 
 상태

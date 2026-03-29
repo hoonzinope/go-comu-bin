@@ -13,6 +13,8 @@ Single-binary community backend written in Go.
 - Dead outbox operations (`list`, `requeue`, `discard`)
 - Hidden board visibility policy (non-admin 완전 비노출)
 - Public cursor pagination (`limit`, `cursor`) with max page limit guard (`1..1000`)
+- HTML-first Web UI / Admin Console with SSR fallback
+- Playwright e2e + visual regression coverage
 - OpenAPI/Swagger generation and verification pipeline
 
 ## Architecture
@@ -87,6 +89,13 @@ go run ./cmd
 - Attachment
 - Report/Admin Operations
 
+## Web UI
+
+- Browser UI routes live outside `/api/v1`.
+- SSR HTML + Alpine.js shell is served from the web delivery layer.
+- Browser routes cover feed, post detail, composer, auth/account, notifications, my page, and admin console flows.
+- The implementation lives in `internal/delivery/web`.
+
 ## Project Structure
 
 ```text
@@ -94,7 +103,9 @@ cmd/                      # composition root (wiring)
 internal/
   application/            # use case, service, policy, ports
   domain/                 # entities and domain rules
-  delivery/               # HTTP adapters
+  delivery/               # transport adapters
+    api/                  # JSON API delivery
+    web/                  # SSR HTML UI/admin console
   infrastructure/         # adapters (inmemory/cache/auth/storage/event)
 docs/                     # architecture, API, config, roadmap, decisions
 ```
@@ -108,16 +119,24 @@ make run
 make test
 make swagger
 make verify
+npm run test:e2e:chromium
+npm run test:e2e:visual
 ```
 
 - `make verify` runs tests, `go vet`, and swagger sync verification.
+- Playwright visual baselines can be refreshed with `npm run test:e2e:visual:update` after intentional UI changes.
 - 필요 시 로컬 훅 설치: `./scripts/install-githooks.sh`
 
 ## Testing
 
 ```bash
 go test ./...
+npm run test:e2e
+npm run test:e2e:chromium
+npm run test:e2e:visual
 ```
+
+Browser E2E/visual tests require Node.js/npm and the Playwright browsers installed.
 
 패키지별/스타일 가이드는 [docs/TESTING.md](docs/TESTING.md) 참고.
 

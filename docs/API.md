@@ -81,6 +81,13 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - token이 유효하면 비밀번호를 변경하고 기존 활성 세션을 모두 무효화합니다.
   - 유효하지 않거나 만료되었거나 이미 사용된 token은 동일한 공개 에러로 처리합니다.
 - `POST /api/v1/auth/logout` (인증 필요)
+- `GET /api/v1/users/me` (인증 필요)
+  - 현재 로그인 사용자의 프로필 요약을 반환합니다.
+  - Web UI shell의 current-user source of truth로 사용합니다.
+  - 응답 필드: `id`, `uuid`, `name`, `email`, `guest`, `guest_status`, `email_verified_at`, `role`, `status`, `created_at`, `updated_at`
+- `GET /api/v1/users/me/drafts` (인증 필요)
+  - 자신의 draft post 목록을 조회합니다.
+  - `limit`/`cursor` pagination을 사용하며 응답 shape는 `PostList`입니다.
 - `DELETE /api/v1/users/me` (인증 필요)
   - 계정은 soft delete 처리되고, 식별 정보는 익명화됩니다.
   - 탈퇴 성공 시 해당 사용자의 활성 세션 무효화를 시도합니다.
@@ -262,6 +269,9 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentUUID})` 형식을 사용합니다.
   - 각 attachment는 실제 파일 조회용 `file_url`과 draft 미리보기용 `preview_url`을 포함합니다.
   - `reactions[]`는 `target_uuid`, `user_uuid`, `type`을 기준으로 해석합니다.
+- `GET /api/v1/posts/{postUUID}/draft` (인증 필요, 작성자 또는 admin)
+  - draft post detail을 반환합니다.
+  - published detail과 분리된 editor resume/edit contract입니다.
 - `POST /api/v1/posts/{postUUID}/publish` (인증 필요, 작성자 또는 admin)
   - `draft -> published` 상태 전이를 수행합니다.
   - guest 계정은 사용할 수 없습니다(`403 Forbidden`).
