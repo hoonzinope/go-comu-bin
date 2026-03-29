@@ -11,6 +11,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/hoonzinope/go-comu-bin/internal/searchtext"
 )
 
 var _ port.PostSearchRepository = (*PostSearchRepository)(nil)
@@ -45,11 +46,11 @@ func (r *PostSearchRepository) SearchPublishedPosts(ctx context.Context, query s
 	if limit <= 0 {
 		return []port.PostSearchResult{}, nil
 	}
-	queryTerms := tokenizeSearchText(query)
+	queryTerms := searchtext.Tokenize(query)
 	if len(queryTerms) == 0 {
 		return []port.PostSearchResult{}, nil
 	}
-	normalizedPhrase := normalizeSearchText(query)
+	normalizedPhrase := searchtext.Normalize(query)
 	matchingIDs, err := r.loadMatchingPostIDs(ctx, queryTerms)
 	if err != nil {
 		return nil, err
@@ -369,11 +370,11 @@ func collectSearchDocuments(rows *sql.Rows) ([]searchDocument, error) {
 				post:        clonePost(post),
 				tagText:     "",
 				allTerms:    make(map[string]struct{}),
-				titleText:   normalizeSearchText(post.Title),
-				contentText: normalizeSearchText(post.Content),
+				titleText:   searchtext.Normalize(post.Title),
+				contentText: searchtext.Normalize(post.Content),
 			}
-			document.titleTokens = tokenizeSearchText(document.titleText)
-			document.contentTokens = tokenizeSearchText(document.contentText)
+			document.titleTokens = searchtext.Tokenize(document.titleText)
+			document.contentTokens = searchtext.Tokenize(document.contentText)
 			for _, token := range document.titleTokens {
 				document.allTerms[token] = struct{}{}
 			}
@@ -384,7 +385,7 @@ func collectSearchDocuments(rows *sql.Rows) ([]searchDocument, error) {
 			order = append(order, post.ID)
 		}
 		if tagName != "" {
-			normalizedTag := normalizeSearchText(tagName)
+			normalizedTag := searchtext.Normalize(tagName)
 			if normalizedTag == "" {
 				continue
 			}
@@ -447,18 +448,6 @@ func scanSearchRow(scanner rowScanner) (*entity.Post, string, error) {
 	post.PublishedAt = unixNanoToTimePtr(publishedAt)
 	post.DeletedAt = unixNanoToTimePtr(deletedAt)
 	return post, tagName, nil
-}
-
-func tokenizeSearchText(text string) []string {
-	normalized := normalizeSearchText(text)
-	if normalized == "" {
-		return nil
-	}
-	return strings.Fields(normalized)
-}
-
-func normalizeSearchText(text string) string {
-	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(text))), " ")
 }
 
 func containsAllTerms(termSet map[string]struct{}, queryTerms []string) bool {

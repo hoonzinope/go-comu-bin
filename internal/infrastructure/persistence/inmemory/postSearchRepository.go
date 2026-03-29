@@ -10,6 +10,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/hoonzinope/go-comu-bin/internal/searchtext"
 )
 
 var _ port.PostSearchRepository = (*PostSearchStore)(nil)
@@ -86,11 +87,11 @@ func (r *PostSearchStore) SearchPublishedPosts(ctx context.Context, query string
 		return []port.PostSearchResult{}, nil
 	}
 
-	queryTerms := tokenizeSearchText(query)
+	queryTerms := searchtext.Tokenize(query)
 	if len(queryTerms) == 0 {
 		return []port.PostSearchResult{}, nil
 	}
-	normalizedPhrase := normalizeSearchText(query)
+	normalizedPhrase := searchtext.Normalize(query)
 	uniqueQueryTerms := uniqueSearchTerms(queryTerms)
 
 	r.mu.RLock()
@@ -345,12 +346,12 @@ func buildSearchDocument(post *entity.Post, tagNames []string) (searchDocument, 
 	if post == nil || post.Status != entity.PostStatusPublished {
 		return searchDocument{}, false
 	}
-	titleText := normalizeSearchText(post.Title)
-	contentText := normalizeSearchText(post.Content)
-	tagText := normalizeSearchText(strings.Join(tagNames, " "))
-	titleTokens := tokenizeSearchText(titleText)
-	contentTokens := tokenizeSearchText(contentText)
-	tagTokens := tokenizeSearchText(tagText)
+	titleText := searchtext.Normalize(post.Title)
+	contentText := searchtext.Normalize(post.Content)
+	tagText := searchtext.Normalize(strings.Join(tagNames, " "))
+	titleTokens := searchtext.Tokenize(titleText)
+	contentTokens := searchtext.Tokenize(contentText)
+	tagTokens := searchtext.Tokenize(tagText)
 	allTerms := make(map[string]struct{}, len(titleTokens)+len(contentTokens)+len(tagTokens))
 	for _, token := range titleTokens {
 		allTerms[token] = struct{}{}
@@ -373,14 +374,6 @@ func buildSearchDocument(post *entity.Post, tagNames []string) (searchDocument, 
 	}, true
 }
 
-func tokenizeSearchText(text string) []string {
-	normalized := normalizeSearchText(text)
-	if normalized == "" {
-		return nil
-	}
-	return strings.Fields(normalized)
-}
-
 func uniqueSearchTerms(tokens []string) []string {
 	if len(tokens) == 0 {
 		return nil
@@ -395,10 +388,6 @@ func uniqueSearchTerms(tokens []string) []string {
 		unique = append(unique, token)
 	}
 	return unique
-}
-
-func normalizeSearchText(text string) string {
-	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(text))), " ")
 }
 
 func averageFieldLengthFromTotals(totalTokens, documentCount int) float64 {

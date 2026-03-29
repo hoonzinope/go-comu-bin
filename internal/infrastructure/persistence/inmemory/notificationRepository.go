@@ -2,7 +2,7 @@ package inmemory
 
 import (
 	"context"
-	"sort"
+	"container/heap"
 	"sync"
 	"time"
 
@@ -118,7 +118,10 @@ func (r *NotificationRepository) SelectByRecipientUserID(ctx context.Context, re
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	items := make([]*entity.Notification, 0, len(r.db.Data))
+	if limit <= 0 {
+		return []*entity.Notification{}, nil
+	}
+	items := &notificationHeap{}
 	for _, item := range r.db.Data {
 		if item.RecipientUserID != recipientUserID {
 			continue
@@ -126,15 +129,22 @@ func (r *NotificationRepository) SelectByRecipientUserID(ctx context.Context, re
 		if lastID > 0 && item.ID >= lastID {
 			continue
 		}
-		items = append(items, cloneNotification(item))
+		cloned := cloneNotification(item)
+		if items.Len() < limit {
+			heap.Push(items, cloned)
+			continue
+		}
+		if cloned.ID <= (*items)[0].ID {
+			continue
+		}
+		heap.Pop(items)
+		heap.Push(items, cloned)
 	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].ID > items[j].ID
-	})
-	if limit > 0 && len(items) > limit {
-		items = items[:limit]
+	out := make([]*entity.Notification, items.Len())
+	for i := len(out) - 1; i >= 0; i-- {
+		out[i] = heap.Pop(items).(*entity.Notification)
 	}
-	return items, nil
+	return out, nil
 }
 
 func (r *NotificationRepository) CountUnreadByRecipientUserID(ctx context.Context, recipientUserID int64) (int, error) {
@@ -245,4 +255,22 @@ func sameNotificationDedup(left, right *entity.Notification) bool {
 		left.PostTitleSnapshot == right.PostTitleSnapshot &&
 		left.CommentPreviewSnapshot == right.CommentPreviewSnapshot &&
 		left.CreatedAt.Equal(right.CreatedAt)
+}
+
+type notificationHeap []*entity.Notification
+
+func (h notificationHeap) Len() int { return len(h) }
+
+func (h notificationHeap) Less(i, j int) bool { return h[i].ID < h[j].ID }
+
+func (h notificationHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h *notificationHeap) Push(x any) { *h = append(*h, x.(*entity.Notification)) }
+
+func (h *notificationHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	*h = old[:n-1]
+	return item
 }

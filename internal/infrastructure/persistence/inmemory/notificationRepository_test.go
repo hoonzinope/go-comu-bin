@@ -41,6 +41,26 @@ func TestNotificationRepository_SelectByRecipientUnreadAndMarkRead(t *testing.T)
 	assert.Equal(t, 1, count)
 }
 
+func TestNotificationRepository_SelectByRecipientUserID_RespectsLimit(t *testing.T) {
+	repo := NewNotificationRepository()
+
+	first := entity.NewNotification(100, 200, entity.NotificationTypePostCommented, 300, 0, "bob", "post-a", "comment-a")
+	second := entity.NewNotification(100, 201, entity.NotificationTypeMentioned, 301, 401, "carol", "post-b", "comment-b")
+	third := entity.NewNotification(100, 202, entity.NotificationTypeMentioned, 302, 402, "dave", "post-c", "comment-c")
+
+	_, err := repo.Save(context.Background(), first)
+	require.NoError(t, err)
+	_, err = repo.Save(context.Background(), second)
+	require.NoError(t, err)
+	_, err = repo.Save(context.Background(), third)
+	require.NoError(t, err)
+
+	items, err := repo.SelectByRecipientUserID(context.Background(), 100, 1, 0)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, third.ID, items[0].ID)
+}
+
 func TestNotificationRepository_Save_DeduplicatesByEventID(t *testing.T) {
 	repo := NewNotificationRepository()
 

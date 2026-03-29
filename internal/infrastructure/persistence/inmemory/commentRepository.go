@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"context"
+	"container/heap"
 	"sort"
 	"sync"
 
@@ -132,21 +133,27 @@ func (r *CommentRepository) selectComments(postID int64, limit int, lastID int64
 		return []*entity.Comment{}, nil
 	}
 
-	var comments []*entity.Comment
+	top := &commentHeap{}
 	for _, comment := range r.commentDB.Data {
 		if comment.PostID == postID && comment.Status == entity.CommentStatusActive {
 			if lastID > 0 && comment.ID >= lastID {
 				continue
 			}
-			comments = append(comments, cloneComment(comment))
+			cloned := cloneComment(comment)
+			if top.Len() < limit {
+				heap.Push(top, cloned)
+				continue
+			}
+			if cloned.ID <= (*top)[0].ID {
+				continue
+			}
+			heap.Pop(top)
+			heap.Push(top, cloned)
 		}
 	}
-	sort.Slice(comments, func(i, j int) bool {
-		return comments[i].ID > comments[j].ID
-	})
-
-	if len(comments) > limit {
-		comments = comments[:limit]
+	comments := make([]*entity.Comment, top.Len())
+	for i := len(comments) - 1; i >= 0; i-- {
+		comments[i] = heap.Pop(top).(*entity.Comment)
 	}
 	return comments, nil
 }
@@ -303,6 +310,24 @@ func cloneComment(comment *entity.Comment) *entity.Comment {
 	return &out
 }
 
+type commentHeap []*entity.Comment
+
+func (h commentHeap) Len() int { return len(h) }
+
+func (h commentHeap) Less(i, j int) bool { return h[i].ID < h[j].ID }
+
+func (h commentHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h *commentHeap) Push(x any) { *h = append(*h, x.(*entity.Comment)) }
+
+func (h *commentHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	*h = old[:n-1]
+	return item
+}
+
 func filterVisibleCommentsForRepository(comments []*entity.Comment, lastID int64) []*entity.Comment {
 	activeChildParentIDs := make(map[int64]struct{})
 	for _, comment := range comments {
@@ -324,5 +349,8 @@ func filterVisibleCommentsForRepository(comments []*entity.Comment, lastID int64
 			filtered = append(filtered, comment)
 		}
 	}
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].ID > filtered[j].ID
+	})
 	return filtered
 }

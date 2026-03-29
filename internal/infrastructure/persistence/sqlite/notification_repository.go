@@ -86,26 +86,32 @@ LIMIT 1
 }
 
 func (r *NotificationRepository) SelectByRecipientUserID(ctx context.Context, recipientUserID int64, limit int, lastID int64) ([]*entity.Notification, error) {
-	items, err := r.selectNotifications(ctx, `
+	if r == nil || r.exec == nil {
+		return nil, errors.New("sqlite notification repository is not initialized")
+	}
+	if limit <= 0 {
+		return []*entity.Notification{}, nil
+	}
+	query := `
 SELECT id, uuid, recipient_user_id, actor_user_id, type, post_id, comment_id, actor_name_snapshot, post_title_snapshot, comment_preview_snapshot, read_at, created_at, dedup_key
 FROM notifications
 WHERE recipient_user_id = ?
+`
+	args := []any{recipientUserID}
+	if lastID > 0 {
+		query += "  AND id < ?\n"
+		args = append(args, lastID)
+	}
+	query += `
 ORDER BY id DESC
-`, recipientUserID)
+LIMIT ?
+`
+	args = append(args, limit)
+	items, err := r.selectNotifications(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
-	filtered := make([]*entity.Notification, 0, len(items))
-	for _, item := range items {
-		if lastID > 0 && item.ID >= lastID {
-			continue
-		}
-		filtered = append(filtered, item)
-	}
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
-	}
-	return filtered, nil
+	return items, nil
 }
 
 func (r *NotificationRepository) CountUnreadByRecipientUserID(ctx context.Context, recipientUserID int64) (int, error) {

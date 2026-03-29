@@ -93,6 +93,18 @@ func TestCommentRepository_PaginationWithCursor_ReturnsNextChunk(t *testing.T) {
 	assert.Equal(t, int64(1), comments[1].ID)
 }
 
+func TestCommentRepository_PaginationRespectsLimit(t *testing.T) {
+	repo := NewCommentRepository()
+	_, _ = repo.Save(context.Background(), testComment("c1", 1, 1))
+	_, _ = repo.Save(context.Background(), testComment("c2", 2, 1))
+	_, _ = repo.Save(context.Background(), testComment("c3", 3, 1))
+
+	comments, err := repo.SelectComments(context.Background(), 1, 1, 0)
+	require.NoError(t, err)
+	require.Len(t, comments, 1)
+	assert.Equal(t, int64(3), comments[0].ID)
+}
+
 func TestCommentRepository_UpdateDelete_NonExistingID_NoError(t *testing.T) {
 	repo := NewCommentRepository()
 	c := testComment("x", 1, 1)

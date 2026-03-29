@@ -166,6 +166,25 @@ func TestPostSearchRepository_SearchPublishedPosts(t *testing.T) {
 	assert.Equal(t, sameScorePost1, nextResults[0].Post.ID)
 }
 
+func TestPostSearchRepository_SearchPublishedPosts_StripsDiacritics(t *testing.T) {
+	t.Parallel()
+
+	db := openTestSQLiteDB(t)
+	boardRepo := NewBoardRepository(db)
+	postRepo := NewPostRepository(db)
+	searchRepo := NewPostSearchRepository(db)
+
+	boardID := mustSaveBoard(t, boardRepo, entity.NewBoard("free", "desc"))
+	authorID := int64(1)
+	postID := mustSavePost(t, postRepo, entity.NewPost("Café search", "body", authorID, boardID))
+	require.NoError(t, searchRepo.RebuildAll(context.Background()))
+
+	results, err := searchRepo.SearchPublishedPosts(context.Background(), "cafe", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, postID, results[0].Post.ID)
+}
+
 func TestPostSearchRepository_FTSIndexMaintenance(t *testing.T) {
 	t.Parallel()
 
@@ -486,6 +505,68 @@ func TestNotificationRepository_SaveDedupAndReadFlow(t *testing.T) {
 	unread, err = repo.CountUnreadByRecipientUserID(context.Background(), 1)
 	require.NoError(t, err)
 	assert.Equal(t, 0, unread)
+}
+
+func TestCommentRepository_SelectComments_AppliesCursorAndLimit(t *testing.T) {
+	t.Parallel()
+
+	db := openTestSQLiteDB(t)
+	userRepo := NewUserRepository(db)
+	boardRepo := NewBoardRepository(db)
+	postRepo := NewPostRepository(db)
+	commentRepo := NewCommentRepository(db)
+
+	user := entity.NewUser("alice", "pw")
+	user.Email = "alice@example.com"
+	user.MarkEmailVerified(time.Now())
+	userID, err := userRepo.Save(context.Background(), user)
+	require.NoError(t, err)
+	boardID := mustSaveBoard(t, boardRepo, entity.NewBoard("board", "desc"))
+	postID := mustSavePost(t, postRepo, entity.NewPost("post", "body", userID, boardID))
+	first := entity.NewComment("c1", userID, postID, nil)
+	second := entity.NewComment("c2", userID, postID, nil)
+	third := entity.NewComment("c3", userID, postID, nil)
+	_, err = commentRepo.Save(context.Background(), first)
+	require.NoError(t, err)
+	_, err = commentRepo.Save(context.Background(), second)
+	require.NoError(t, err)
+	_, err = commentRepo.Save(context.Background(), third)
+	require.NoError(t, err)
+
+	comments, err := commentRepo.SelectComments(context.Background(), postID, 1, 0)
+	require.NoError(t, err)
+	require.Len(t, comments, 1)
+	assert.Equal(t, third.ID, comments[0].ID)
+
+	comments, err = commentRepo.SelectComments(context.Background(), postID, 1, third.ID)
+	require.NoError(t, err)
+	require.Len(t, comments, 1)
+	assert.Equal(t, second.ID, comments[0].ID)
+}
+
+func TestNotificationRepository_SelectByRecipientUserID_AppliesCursorAndLimit(t *testing.T) {
+	t.Parallel()
+
+	repo := NewNotificationRepository(openTestSQLiteDB(t))
+	first := entity.NewNotification(1, 2, entity.NotificationTypeMentioned, 10, 20, "actor", "post", "comment")
+	second := entity.NewNotification(1, 3, entity.NotificationTypeMentioned, 11, 21, "actor-2", "post-2", "comment-2")
+	third := entity.NewNotification(1, 4, entity.NotificationTypeMentioned, 12, 22, "actor-3", "post-3", "comment-3")
+	_, err := repo.Save(context.Background(), first)
+	require.NoError(t, err)
+	_, err = repo.Save(context.Background(), second)
+	require.NoError(t, err)
+	_, err = repo.Save(context.Background(), third)
+	require.NoError(t, err)
+
+	items, err := repo.SelectByRecipientUserID(context.Background(), 1, 1, 0)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, third.ID, items[0].ID)
+
+	items, err = repo.SelectByRecipientUserID(context.Background(), 1, 1, third.ID)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, second.ID, items[0].ID)
 }
 
 func TestUnitOfWork_CommitsAndRollsBackRemainingRepositories(t *testing.T) {

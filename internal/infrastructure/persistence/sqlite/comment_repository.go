@@ -109,24 +109,11 @@ WHERE id IN (%s)
 }
 
 func (r *CommentRepository) SelectComments(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
-	comments, err := r.selectCommentsByPost(ctx, postID)
+	comments, err := r.selectActiveCommentsByPost(ctx, postID, limit, lastID)
 	if err != nil {
 		return nil, err
 	}
-	filtered := make([]*entity.Comment, 0, len(comments))
-	for _, comment := range comments {
-		if comment.Status != entity.CommentStatusActive {
-			continue
-		}
-		if lastID > 0 && comment.ID >= lastID {
-			continue
-		}
-		filtered = append(filtered, comment)
-	}
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
-	}
-	return filtered, nil
+	return comments, nil
 }
 
 func (r *CommentRepository) SelectCommentsIncludingDeleted(ctx context.Context, postID int64) ([]*entity.Comment, error) {
@@ -239,6 +226,48 @@ ORDER BY id DESC
 	}
 	defer rows.Close()
 	comments := make([]*entity.Comment, 0)
+	for rows.Next() {
+		comment, scanErr := scanComment(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("select comments by post: %w", scanErr)
+		}
+		comments = append(comments, comment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("select comments by post: %w", err)
+	}
+	return comments, nil
+}
+
+func (r *CommentRepository) selectActiveCommentsByPost(ctx context.Context, postID int64, limit int, lastID int64) ([]*entity.Comment, error) {
+	if r == nil || r.exec == nil {
+		return nil, errors.New("sqlite comment repository is not initialized")
+	}
+	if limit <= 0 {
+		return []*entity.Comment{}, nil
+	}
+	query := `
+SELECT id, uuid, content, author_id, post_id, parent_id, status, created_at, updated_at, deleted_at
+FROM comments
+WHERE post_id = ?
+  AND status = 'active'
+`
+	args := []any{postID}
+	if lastID > 0 {
+		query += "  AND id < ?\n"
+		args = append(args, lastID)
+	}
+	query += `
+ORDER BY id DESC
+LIMIT ?
+`
+	args = append(args, limit)
+	rows, err := r.exec.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("select comments by post: %w", err)
+	}
+	defer rows.Close()
+	comments := make([]*entity.Comment, 0, limit)
 	for rows.Next() {
 		comment, scanErr := scanComment(rows)
 		if scanErr != nil {

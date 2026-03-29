@@ -92,6 +92,23 @@ func TestPostSearchRepository_SearchPublishedPosts_RanksByFieldWeightAndPhraseBo
 	assert.Greater(t, results[1].Score, results[2].Score)
 }
 
+func TestPostSearchRepository_SearchPublishedPosts_StripsDiacritics(t *testing.T) {
+	tagRepo := NewTagRepository()
+	postTagRepo := NewPostTagRepository()
+	postRepo := NewPostRepository(tagRepo, postTagRepo)
+	searchStore := NewPostSearchStore(postRepo, tagRepo, postTagRepo)
+
+	post := testPost("Café search", "body", 1, 1)
+	_, err := postRepo.Save(context.Background(), post)
+	require.NoError(t, err)
+	require.NoError(t, searchStore.RebuildAll(context.Background()))
+
+	results, err := searchStore.SearchPublishedPosts(context.Background(), "cafe", 10, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, post.ID, results[0].Post.ID)
+}
+
 func TestPostSearchStore_ConstructorsAndAttachBoardRepository(t *testing.T) {
 	tagRepo := NewTagRepository()
 	postTagRepo := NewPostTagRepository()
