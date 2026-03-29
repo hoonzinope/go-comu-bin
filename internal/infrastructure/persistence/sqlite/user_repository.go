@@ -26,7 +26,7 @@ func NewUserRepository(exec sqlExecutor) *UserRepository {
 
 func (r *UserRepository) Save(ctx context.Context, user *entity.User) (int64, error) {
 	if r == nil || r.exec == nil {
-		return 0, customerror.ErrInternalServerError
+		return 0, sqliteRepositoryUnavailableError("save user")
 	}
 	res, err := r.exec.ExecContext(ctx, `
 INSERT INTO users (
@@ -93,7 +93,7 @@ func (r *UserRepository) SelectUserByIDIncludingDeleted(ctx context.Context, id 
 
 func (r *UserRepository) SelectUsersByIDsIncludingDeleted(ctx context.Context, ids []int64) (map[int64]*entity.User, error) {
 	if r == nil || r.exec == nil {
-		return nil, customerror.ErrInternalServerError
+		return nil, sqliteRepositoryUnavailableError("select users by ids including deleted")
 	}
 	if len(ids) == 0 {
 		return map[int64]*entity.User{}, nil
@@ -127,7 +127,7 @@ func (r *UserRepository) SelectUsersByIDsIncludingDeleted(ctx context.Context, i
 
 func (r *UserRepository) SelectGuestCleanupCandidates(ctx context.Context, now time.Time, pendingGrace, activeUnusedGrace time.Duration, limit int) ([]*entity.User, error) {
 	if r == nil || r.exec == nil {
-		return nil, customerror.ErrInternalServerError
+		return nil, sqliteRepositoryUnavailableError("select guest cleanup candidates")
 	}
 	if limit <= 0 {
 		return []*entity.User{}, nil
@@ -162,7 +162,7 @@ func (r *UserRepository) SelectGuestCleanupCandidates(ctx context.Context, now t
 
 func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
 	if r == nil || r.exec == nil {
-		return customerror.ErrInternalServerError
+		return sqliteRepositoryUnavailableError("update user")
 	}
 	res, err := r.exec.ExecContext(ctx, `
 UPDATE users SET
@@ -222,7 +222,7 @@ WHERE id = ?
 
 func (r *UserRepository) Delete(ctx context.Context, id int64) error {
 	if r == nil || r.exec == nil {
-		return customerror.ErrInternalServerError
+		return sqliteRepositoryUnavailableError("delete user")
 	}
 	if _, err := r.exec.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("delete user: %w", err)
@@ -232,7 +232,7 @@ func (r *UserRepository) Delete(ctx context.Context, id int64) error {
 
 func (r *UserRepository) selectUser(ctx context.Context, query string, args ...any) (*entity.User, error) {
 	if r == nil || r.exec == nil {
-		return nil, customerror.ErrInternalServerError
+		return nil, sqliteRepositoryUnavailableError("select user")
 	}
 	row := r.exec.QueryRowContext(ctx, query, args...)
 	user, err := scanUserRow(row)
@@ -243,6 +243,10 @@ func (r *UserRepository) selectUser(ctx context.Context, query string, args ...a
 		return nil, err
 	}
 	return user, nil
+}
+
+func sqliteRepositoryUnavailableError(op string) error {
+	return customerror.WrapRepository(op, errors.New("sqlite user repository is not initialized"))
 }
 
 func scanUserRow(row scanner) (*entity.User, error) {

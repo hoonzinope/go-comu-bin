@@ -3,6 +3,8 @@ package customerror
 import (
 	"errors"
 	"fmt"
+
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 var (
@@ -35,9 +37,14 @@ var (
 	ErrReportAlreadyExists  = errors.New("report already exists")
 
 	// Internal categories
-	ErrRepositoryFailure = errors.New("repository failure")
-	ErrCacheFailure      = errors.New("cache failure")
-	ErrTokenFailure      = errors.New("token failure")
+	ErrRepositoryFailure   = errors.New("repository failure")
+	ErrCacheFailure        = errors.New("cache failure")
+	ErrTokenFailure        = errors.New("token failure")
+	ErrSQLiteBusy          = errors.New("sqlite busy")
+	ErrSQLiteConstraint    = errors.New("sqlite constraint")
+	ErrSQLiteForeignKey    = errors.New("sqlite foreign key")
+	ErrMailDeliveryFailure = errors.New("mail delivery failure")
+	ErrStorageFailure      = errors.New("storage failure")
 )
 
 func Mark(kind error, op string) error {
@@ -52,7 +59,13 @@ func Wrap(kind error, op string, err error) error {
 }
 
 func WrapRepository(op string, err error) error {
-	return Wrap(ErrRepositoryFailure, op, err)
+	if err == nil {
+		return Mark(ErrRepositoryFailure, op)
+	}
+	if kind := classifySQLiteFailure(err); kind != nil {
+		return fmt.Errorf("%s: %w: %w: %w", op, ErrRepositoryFailure, kind, err)
+	}
+	return fmt.Errorf("%s: %w: %w", op, ErrRepositoryFailure, err)
 }
 
 func WrapCache(op string, err error) error {
@@ -61,6 +74,47 @@ func WrapCache(op string, err error) error {
 
 func WrapToken(op string, err error) error {
 	return Wrap(ErrTokenFailure, op, err)
+}
+
+func WrapSQLiteBusy(op string, err error) error {
+	return Wrap(ErrSQLiteBusy, op, err)
+}
+
+func WrapSQLiteConstraint(op string, err error) error {
+	return Wrap(ErrSQLiteConstraint, op, err)
+}
+
+func WrapSQLiteForeignKey(op string, err error) error {
+	return Wrap(ErrSQLiteForeignKey, op, err)
+}
+
+func WrapMailDelivery(op string, err error) error {
+	return Wrap(ErrMailDeliveryFailure, op, err)
+}
+
+func WrapStorage(op string, err error) error {
+	return Wrap(ErrStorageFailure, op, err)
+}
+
+type sqliteCoder interface {
+	Code() int
+}
+
+func classifySQLiteFailure(err error) error {
+	var coded sqliteCoder
+	if !errors.As(err, &coded) {
+		return nil
+	}
+	switch code := coded.Code(); {
+	case code&0xff == sqlite3.SQLITE_BUSY || code&0xff == sqlite3.SQLITE_LOCKED:
+		return ErrSQLiteBusy
+	case code == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
+		return ErrSQLiteForeignKey
+	case code&0xff == sqlite3.SQLITE_CONSTRAINT:
+		return ErrSQLiteConstraint
+	default:
+		return nil
+	}
 }
 
 func Public(err error) error {

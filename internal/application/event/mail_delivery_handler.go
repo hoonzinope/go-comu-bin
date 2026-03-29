@@ -49,7 +49,7 @@ func (h *MailDeliveryHandler) sendEmailVerification(ctx context.Context, userID 
 		return nil
 	}
 	if err := h.emailVerificationMailer.SendEmailVerification(ctx, email, rawToken, expiresAt); err != nil {
-		return customerror.Wrap(customerror.ErrInternalServerError, "send email verification mail", err)
+		return customerror.WrapMailDelivery("send email verification mail", err)
 	}
 	if err := h.activateEmailVerificationToken(ctx, tokenHash); err != nil {
 		return err
@@ -62,7 +62,7 @@ func (h *MailDeliveryHandler) sendPasswordReset(ctx context.Context, userID int6
 		return nil
 	}
 	if err := h.passwordResetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
-		return customerror.Wrap(customerror.ErrInternalServerError, "send password reset mail", err)
+		return customerror.WrapMailDelivery("send password reset mail", err)
 	}
 	if err := h.activatePasswordResetToken(ctx, tokenHash); err != nil {
 		return err

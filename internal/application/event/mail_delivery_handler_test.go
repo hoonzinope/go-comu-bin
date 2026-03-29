@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	inmemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
 	"github.com/stretchr/testify/assert"
@@ -175,6 +176,7 @@ func TestMailDeliveryHandler_Handle_ReturnsRepositoryFailure(t *testing.T) {
 
 	err := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(13, "alice@example.com", "raw-fail", "hash-fail", time.Now().Add(time.Hour)))
 	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
 	assert.Contains(t, err.Error(), "activate email verification token after mail send")
 	require.Len(t, mailer.calls, 1)
 }
@@ -185,6 +187,7 @@ func TestMailDeliveryHandler_Handle_ReturnsMailSendFailure(t *testing.T) {
 
 	err := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(14, "alice@example.com", "raw", "hash", time.Now().Add(time.Hour)))
 	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrMailDeliveryFailure)
 	assert.Contains(t, err.Error(), "send email verification mail")
 }
 

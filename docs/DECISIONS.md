@@ -4485,3 +4485,42 @@
 
 - `docs/ROADMAP.md`의 Step 4 완료 상태와 정합성 맞추기
 - `internal/application/port/hook.go`의 미사용 placeholder 정리
+
+## 2026-03-29 - error taxonomy expands to sqlite/mail/storage operational kinds
+
+상태
+
+- decided
+
+배경
+
+- public HTTP 응답은 이미 정규화되어 있지만, 운영 로그에서 DB busy/constraint, 메일 전송 실패, 파일 스토리지 실패가 전부 `internal server error`로 뭉개져 원인 추적성이 부족했다.
+- Step 6의 목표는 public response 변경이 아니라 internal diagnosis 향상이므로, 공개 계약은 그대로 두고 내부 taxonomy만 세분화하는 것이 적절하다.
+
+관찰
+
+- `internal/customerror/customError.go`의 내부 분류는 `repository`, `cache`, `token` 3개뿐이었다.
+- SQLite 런타임은 `modernc.org/sqlite`의 `Code()`를 통해 busy/locked, constraint, foreign key를 분리할 수 있다.
+- mail delivery와 attachment storage 실패는 상위 계층에서 전부 `internal server error`로 수렴하고 있었다.
+- SQLite repository 초기화 가드는 일부 위치에서 `ErrInternalServerError`를 직접 반환해 같은 저장소 계열 실패와 일관성이 없었다.
+
+결론
+
+- 내부 taxonomy에 `ErrSQLiteBusy`, `ErrSQLiteConstraint`, `ErrSQLiteForeignKey`, `ErrMailDeliveryFailure`, `ErrStorageFailure`를 추가한다.
+- public HTTP 응답은 그대로 유지하고, 내부 로그와 `errors.Is` 기반 분기만 세분화한다.
+- `WrapRepository`는 SQLite code를 감지하면 repository failure와 SQLite kind를 함께 보존한다.
+- mail delivery와 file storage 실패는 각자의 전용 internal kind로 감싸고, SQLite repository 초기화 가드는 repository failure 체인으로 통일한다.
+
+후속 작업
+
+- ROADMAP Step 6의 internal taxonomy 표기를 최신화한다
+- SQLite/helper/test와 mail/storage handler에서 새 internal kind가 보존되는지 회귀 테스트를 추가한다
+
+관련 문서/코드
+
+- `docs/ROADMAP.md`
+- `docs/ARCHITECTURE.md`
+- `internal/customerror/customError.go`
+- `internal/application/event/mail_delivery_handler.go`
+- `internal/application/service/attachment/handlers.go`
+- `internal/infrastructure/persistence/sqlite/helpers.go`

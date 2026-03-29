@@ -122,7 +122,7 @@ func (h *attachmentQueryHandler) GetPostAttachmentFile(ctx context.Context, post
 	}
 	content, err := h.fileStorage.Open(ctx, attachment.StorageKey)
 	if err != nil {
-		return nil, customerror.Wrap(customerror.ErrInternalServerError, "open attachment file", err)
+		return nil, customerror.WrapStorage("open attachment file", err)
 	}
 	return &model.AttachmentFile{FileName: attachment.FileName, ContentType: attachment.ContentType, SizeBytes: attachment.SizeBytes, ETag: buildAttachmentETag(attachment), Content: content}, nil
 }
@@ -163,7 +163,7 @@ func (h *attachmentQueryHandler) GetPostAttachmentPreviewFile(ctx context.Contex
 	}
 	content, err := h.fileStorage.Open(ctx, attachment.StorageKey)
 	if err != nil {
-		return nil, customerror.Wrap(customerror.ErrInternalServerError, "open preview attachment file", err)
+		return nil, customerror.WrapStorage("open preview attachment file", err)
 	}
 	return &model.AttachmentFile{FileName: attachment.FileName, ContentType: attachment.ContentType, SizeBytes: attachment.SizeBytes, ETag: buildAttachmentETag(attachment), Content: content}, nil
 }
@@ -295,7 +295,7 @@ func (h *attachmentCommandHandler) UploadPostAttachment(ctx context.Context, pos
 		if errors.Is(err, errAttachmentTooLarge) {
 			return nil, customerror.ErrInvalidInput
 		}
-		return nil, customerror.Wrap(customerror.ErrInternalServerError, "read upload content", err)
+		return nil, customerror.WrapStorage("read upload content", err)
 	}
 	if err := validateAttachmentUpload(fileName, contentType, data, h.maxUploadSizeBytes); err != nil {
 		return nil, err
@@ -304,13 +304,13 @@ func (h *attachmentCommandHandler) UploadPostAttachment(ctx context.Context, pos
 	data = optimizeAttachmentImage(contentType, data, h.imageOptimization)
 	storageKey := buildAttachmentStorageKey(post.ID, fileName)
 	if err := h.fileStorage.Save(ctx, storageKey, bytes.NewReader(data)); err != nil {
-		return nil, customerror.Wrap(customerror.ErrInternalServerError, "save upload file", err)
+		return nil, customerror.WrapStorage("save upload file", err)
 	}
 	attachmentUUID, err := h.CreatePostAttachment(ctx, postUUID, userID, fileName, contentType, int64(len(data)), storageKey)
 	if err != nil {
 		if deleteErr := h.fileStorage.Delete(ctx, storageKey); deleteErr != nil {
 			h.logger.Warn("attachment rollback file delete failed", "storage_key", storageKey, "post_id", post.ID, "post_uuid", postUUID, "user_id", userID, "error", deleteErr)
-			return nil, errors.Join(err, customerror.Wrap(customerror.ErrInternalServerError, "rollback upload file", deleteErr))
+			return nil, errors.Join(err, customerror.WrapStorage("rollback upload file", deleteErr))
 		}
 		return nil, err
 	}
@@ -411,7 +411,7 @@ func (w *attachmentCleanupWorkflow) CleanupAttachments(ctx context.Context, now 
 			}
 		}
 		if err := w.fileStorage.Delete(ctx, item.StorageKey); err != nil {
-			return deletedCount, customerror.Wrap(customerror.ErrInternalServerError, "delete orphan attachment file", err)
+			return deletedCount, customerror.WrapStorage("delete orphan attachment file", err)
 		}
 		if err := w.attachmentRepository.Delete(ctx, item.ID); err != nil {
 			return deletedCount, customerror.WrapRepository("delete orphan attachment metadata", err)

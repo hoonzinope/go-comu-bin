@@ -567,6 +567,21 @@ func TestAttachmentService_UploadPostAttachment_DeletesStoredFileWhenMetadataSav
 	assert.Equal(t, storage.savedKey, storage.deleteKey)
 }
 
+func TestAttachmentService_UploadPostAttachment_ReturnsStorageFailureOnSaveError(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{saveErr: errors.New("save failed")}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	svc := NewAttachmentService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.unitOfWork, storage, newTestCache(), attachmentsvc.DefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	_, err := svc.UploadPostAttachment(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrStorageFailure)
+	assert.Contains(t, err.Error(), "save upload file")
+	assert.Empty(t, storage.savedKey)
+}
+
 func TestAttachmentService_UploadPostAttachment_LogsWarnWhenRollbackDeleteFails(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{deleteErr: errors.New("delete failed")}
@@ -600,6 +615,7 @@ func TestAttachmentService_UploadPostAttachment_LogsWarnWhenRollbackDeleteFails(
 	_, err := svc.UploadPostAttachment(context.Background(), mustPostUUID(t, repositories.post, postID), userID, "a.png", "image/png", bytes.NewReader(testPNGBytes()))
 	require.Error(t, err)
 	assert.GreaterOrEqual(t, spy.warns, 1)
+	assert.ErrorIs(t, err, customerror.ErrStorageFailure)
 	assert.Contains(t, err.Error(), "rollback upload file")
 }
 
@@ -826,6 +842,24 @@ func TestAttachmentService_GetPostAttachmentFile_Success(t *testing.T) {
 	assert.Equal(t, "hello", string(data))
 }
 
+func TestAttachmentService_GetPostAttachmentFile_ReturnsStorageFailureOnOpenError(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{openErr: errors.New("open failed")}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedPost(repositories.post, userID, boardID, "title", "content")
+	attachment := entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png")
+	attachment.MarkReferenced()
+	attachmentID, err := repositories.attachment.Save(context.Background(), attachment)
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.unitOfWork, storage, newTestCache(), attachmentsvc.DefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	_, err = svc.GetPostAttachmentFile(context.Background(), mustPostUUID(t, repositories.post, postID), mustAttachmentUUID(t, repositories.attachment, attachmentID))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrStorageFailure)
+	assert.Contains(t, err.Error(), "open attachment file")
+}
+
 func TestAttachmentService_GetPostAttachmentFile_RejectsOrphaned(t *testing.T) {
 	repositories := newTestRepositories()
 	storage := &spyFileStorage{openContent: "hello"}
@@ -860,6 +894,22 @@ func TestAttachmentService_GetPostAttachmentPreviewFile_AllowedForOwner(t *testi
 	require.NoError(t, err)
 	assert.Equal(t, "posts/1/a.png", storage.openKey)
 	assert.Equal(t, "hello", string(data))
+}
+
+func TestAttachmentService_GetPostAttachmentPreviewFile_ReturnsStorageFailureOnOpenError(t *testing.T) {
+	repositories := newTestRepositories()
+	storage := &spyFileStorage{openErr: errors.New("open failed")}
+	userID := seedUser(repositories.user, "alice", "pw", "user")
+	boardID := seedBoard(repositories.board, "free", "desc")
+	postID := seedDraftPost(repositories.post, userID, boardID, "title", "content")
+	attachmentID, err := repositories.attachment.Save(context.Background(), entity.NewAttachment(postID, "a.png", "image/png", 5, "posts/1/a.png"))
+	require.NoError(t, err)
+	svc := NewAttachmentService(repositories.user, repositories.board, repositories.post, repositories.attachment, repositories.unitOfWork, storage, newTestCache(), attachmentsvc.DefaultMaxSizeBytes, newTestAuthorizationPolicy())
+
+	_, err = svc.GetPostAttachmentPreviewFile(context.Background(), mustPostUUID(t, repositories.post, postID), mustAttachmentUUID(t, repositories.attachment, attachmentID), userID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrStorageFailure)
+	assert.Contains(t, err.Error(), "open preview attachment file")
 }
 
 func TestAttachmentService_CleanupAttachments_RemovesExpiredOrphans(t *testing.T) {
@@ -962,6 +1012,7 @@ func TestAttachmentService_CleanupAttachments_StopsOnStorageDeleteError(t *testi
 
 	deletedCount, err := svc.CleanupAttachments(context.Background(), time.Now(), time.Hour, 10)
 	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrStorageFailure)
 	assert.Equal(t, 0, deletedCount)
 
 	stillThere, err := repositories.attachment.SelectByID(context.Background(), attachmentID)

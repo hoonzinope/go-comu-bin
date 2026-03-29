@@ -9,6 +9,7 @@ import (
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/porttest"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,6 +107,16 @@ func TestPostRepository_SelectPublishedPostsByTagName(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, posts, 1)
 	assert.Equal(t, firstPostID, posts[0].ID)
+}
+
+func TestUserRepository_NilExecutorReturnsRepositoryFailure(t *testing.T) {
+	t.Parallel()
+
+	repo := NewUserRepository(nil)
+	_, err := repo.Save(context.Background(), entity.NewUser("alice", "pw"))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
+	assert.NotErrorIs(t, err, customerror.ErrInternalServerError)
 }
 
 func TestPostSearchRepository_SearchPublishedPosts(t *testing.T) {
