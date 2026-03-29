@@ -336,7 +336,10 @@ func (h *Handler) handleLogoutSubmit(c *gin.Context) {
 		return
 	}
 	if token, ok := h.authToken(c); ok {
-		_ = h.deps.SessionUseCase.Logout(c.Request.Context(), token)
+		if err := h.deps.SessionUseCase.Logout(c.Request.Context(), token); err != nil {
+			h.renderError(c, http.StatusInternalServerError, "Internal Server Error", err.Error())
+			return
+		}
 	}
 	h.clearSessionCookie(c)
 	c.Redirect(http.StatusSeeOther, "/login")
@@ -903,7 +906,7 @@ func (h *Handler) hasInvalidCookie(c *gin.Context) bool {
 		return false
 	}
 	_, err := h.deps.SessionUseCase.ValidateTokenToId(c.Request.Context(), token)
-	return err != nil
+	return errors.Is(err, customerror.ErrInvalidToken)
 }
 
 func (h *Handler) loadBoards(ctx context.Context) []model.Board {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,15 +11,28 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type testSessionUseCase struct{}
+type testSessionUseCase struct {
+	validateErr error
+	loginErr    error
+	logoutErr   error
+
+	validateCalls int
+	loginCalls    int
+	logoutCalls   int
+}
 
 func (s *testSessionUseCase) ValidateTokenToId(ctx context.Context, token string) (int64, error) {
 	_ = ctx
+	s.validateCalls++
+	if s.validateErr != nil {
+		return 0, s.validateErr
+	}
 	if strings.TrimSpace(token) == "" {
 		return 0, context.Canceled
 	}
@@ -30,6 +44,10 @@ func (s *testSessionUseCase) ValidateTokenToId(ctx context.Context, token string
 
 func (s *testSessionUseCase) Login(ctx context.Context, username, password string) (string, error) {
 	_, _, _ = ctx, username, password
+	s.loginCalls++
+	if s.loginErr != nil {
+		return "", s.loginErr
+	}
 	return "token", nil
 }
 
@@ -45,6 +63,10 @@ func (s *testSessionUseCase) RotateToken(ctx context.Context, userID int64, curr
 
 func (s *testSessionUseCase) Logout(ctx context.Context, token string) error {
 	_, _ = ctx, token
+	s.logoutCalls++
+	if s.logoutErr != nil {
+		return s.logoutErr
+	}
 	return nil
 }
 
@@ -387,9 +409,16 @@ func (a *testAccountUseCase) ConfirmPasswordReset(ctx context.Context, token, ne
 }
 
 func newTestWebHandler() *Handler {
+	return newTestWebHandlerWithSession(&testSessionUseCase{})
+}
+
+func newTestWebHandlerWithSession(session *testSessionUseCase) *Handler {
+	if session == nil {
+		session = &testSessionUseCase{}
+	}
 	h, err := NewHandler(Dependencies{
 		AccountUseCase:      &testAccountUseCase{},
-		SessionUseCase:      &testSessionUseCase{},
+		SessionUseCase:      session,
 		UserUseCase:         &testUserUseCase{},
 		BoardUseCase:        &testBoardUseCase{},
 		PostUseCase:         &testPostUseCase{},
@@ -406,9 +435,13 @@ func newTestWebHandler() *Handler {
 }
 
 func newTestWebEngine() *gin.Engine {
+	return newTestWebEngineWithSession(&testSessionUseCase{})
+}
+
+func newTestWebEngineWithSession(session *testSessionUseCase) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	newTestWebHandler().RegisterRoutes(r)
+	newTestWebHandlerWithSession(session).RegisterRoutes(r)
 	return r
 }
 
@@ -521,4 +554,147 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "Requeue")
 		assert.Contains(t, rr.Body.String(), "Discard")
 	})
+}
+
+func TestHandler_RenderCoreScreens_PreservesSessionCookieOnTransientValidationFailure(t *testing.T) {
+	session := &testSessionUseCase{validateErr: customerror.WrapRepository("lookup session", errors.New("db down"))}
+	r := newTestWebEngineWithSession(session)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "token"})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Feed")
+	assert.GreaterOrEqual(t, session.validateCalls, 1)
+	for _, header := range rr.Header()["Set-Cookie"] {
+		assert.NotContains(t, header, sessionCookieName+"=")
+	}
+}
+
+func TestHandler_RenderCoreScreens_ClearsInvalidCookieWhenTokenInvalid(t *testing.T) {
+	session := &testSessionUseCase{validateErr: customerror.ErrInvalidToken}
+	r := newTestWebEngineWithSession(session)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "token"})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Feed")
+	assert.GreaterOrEqual(t, session.validateCalls, 1)
+	assert.Contains(t, strings.Join(rr.Header()["Set-Cookie"], "\n"), sessionCookieName+"=;")
+}
+
+func TestHandler_LoginSubmit_RejectsMissingOrMismatchedCSRF(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		session := &testSessionUseCase{}
+		r := newTestWebEngineWithSession(session)
+
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=alice&password=pw"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "token"})
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Equal(t, 0, session.loginCalls)
+		assert.NotContains(t, strings.Join(rr.Header()["Set-Cookie"], "\n"), sessionCookieName+"=")
+	})
+
+	t.Run("mismatched", func(t *testing.T) {
+		session := &testSessionUseCase{}
+		r := newTestWebEngineWithSession(session)
+
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=alice&password=pw"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set(csrfHeaderName, "submitted")
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "token"})
+		req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "cookie"})
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Equal(t, 0, session.loginCalls)
+		assert.NotContains(t, strings.Join(rr.Header()["Set-Cookie"], "\n"), sessionCookieName+"=")
+	})
+}
+
+func TestHandler_LoginSubmit_SetsSecureSessionCookieWhenRequestIsSecure(t *testing.T) {
+	session := &testSessionUseCase{}
+	r := newTestWebEngineWithSession(session)
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=alice&password=pw"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(csrfHeaderName, "csrf-token")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-token"})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	assert.Equal(t, 1, session.loginCalls)
+	cookies := strings.Join(rr.Header()["Set-Cookie"], "\n")
+	assert.Contains(t, cookies, sessionCookieName+"=token")
+	assert.Contains(t, cookies, "HttpOnly")
+	assert.Contains(t, cookies, "SameSite=Lax")
+	assert.Contains(t, cookies, "Secure")
+}
+
+func TestHandler_LogoutSubmit_ReturnsErrorAndKeepsCookieWhenLogoutFails(t *testing.T) {
+	session := &testSessionUseCase{logoutErr: errors.New("db down")}
+	r := newTestWebEngineWithSession(session)
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(csrfHeaderName, "csrf-token")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-token"})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Equal(t, 1, session.logoutCalls)
+	assert.NotContains(t, strings.Join(rr.Header()["Set-Cookie"], "\n"), sessionCookieName+"=;")
+}
+
+func TestHandler_LogoutSubmit_ClearsCookieOnSuccess(t *testing.T) {
+	session := &testSessionUseCase{}
+	r := newTestWebEngineWithSession(session)
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(csrfHeaderName, "csrf-token")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "token"})
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-token"})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	assert.Equal(t, 1, session.logoutCalls)
+	cookies := strings.Join(rr.Header()["Set-Cookie"], "\n")
+	assert.Contains(t, cookies, sessionCookieName+"=;")
+	assert.Contains(t, cookies, "Expires=Thu, 01 Jan 1970 00:00:00 GMT")
+}
+
+func TestSafeRedirectTarget(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "empty", raw: "", want: "/"},
+		{name: "relative", raw: "/me", want: "/me"},
+		{name: "absolute", raw: "https://evil.example", want: "/"},
+		{name: "protocol-relative", raw: "//evil.example", want: "/"},
+		{name: "malformed", raw: "://bad", want: "/"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, safeRedirectTarget(tc.raw))
+		})
+	}
 }
