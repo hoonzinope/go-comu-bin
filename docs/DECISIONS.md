@@ -4458,6 +4458,35 @@
 - ROADMAP Step 8 문구를 cookie-first transport와 SSR fallback 규칙으로 구체화
 - auth transport와 SSR fallback 규칙이 실제 구현 순서를 바꾸지 않는지 확인
 
+## 2026-03-29 - Step 8 guest bootstrap and login redirect are gated by current-user revalidation
+
+상태
+
+- decided
+
+배경
+
+- Step 8은 cookie-first transport와 `GET /api/v1/users/me` 기반 current-user store를 전제로 한다.
+- 브라우저 최초 방문 시 guest 발급은 로그인 상태가 아닐 때만 실행돼야 하며, 보호 라우트 진입 후 로그인 복귀 경로도 고정해야 한다.
+
+관찰
+
+- current-user revalidation은 페이지 진입과 포커스 복귀 때 반복 실행될 수 있다.
+- guest bootstrap을 revalidation 이전에 실행하면 이미 로그인된 사용자의 session을 불필요하게 guest로 덮어쓸 수 있다.
+- protected route의 redirect target은 login success 시 복귀 규칙과 함께 정의돼야 한다.
+
+결론
+
+- 브라우저 최초 방문 시 guest 발급은 `GET /api/v1/users/me`가 `401`을 반환한 경우에만 실행한다.
+- guest token은 `HttpOnly` cookie에만 저장하고, localStorage/sessionStorage에는 저장하지 않는다.
+- 401 revalidation failure는 `/login?redirect={원래경로}`로 이동시키고, login success는 `redirect`가 있으면 그 경로로 복귀한다.
+- `redirect`가 없거나 유효하지 않으면 login success의 기본 복귀 경로는 `/`로 둔다.
+
+후속 작업
+
+- ROADMAP Step 8의 guest bootstrap / login redirect 문구를 이 결정과 동일하게 유지
+- UI 구현 시 current-user revalidation, guest bootstrap, login redirect의 순서를 regression test로 고정
+
 ## 2026-03-28 - Step 4 roadmap drops the generic hook system and keeps only the narrow action dispatcher boundary
 
 상태
