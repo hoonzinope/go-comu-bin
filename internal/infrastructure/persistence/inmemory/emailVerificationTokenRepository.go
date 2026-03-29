@@ -175,5 +175,9 @@ func cloneEmailVerificationToken(token *entity.EmailVerificationToken) *entity.E
 		consumedAt := *token.ConsumedAt
 		out.ConsumedAt = &consumedAt
 	}
+	if token.DeliveredAt != nil {
+		deliveredAt := *token.DeliveredAt
+		out.DeliveredAt = &deliveredAt
+	}
 	return &out
 }

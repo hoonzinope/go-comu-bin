@@ -3,11 +3,12 @@ package entity
 import "time"
 
 type PasswordResetToken struct {
-	UserID     int64
-	TokenHash  string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	ConsumedAt *time.Time
+	UserID      int64
+	TokenHash   string
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	ConsumedAt  *time.Time
+	DeliveredAt *time.Time
 }
 
 func NewPasswordResetToken(userID int64, tokenHash string, expiresAt time.Time) *PasswordResetToken {

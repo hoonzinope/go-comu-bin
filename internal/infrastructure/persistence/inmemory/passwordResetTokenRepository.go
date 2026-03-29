@@ -191,5 +191,9 @@ func clonePasswordResetToken(token *entity.PasswordResetToken) *entity.PasswordR
 		consumedAt := *token.ConsumedAt
 		out.ConsumedAt = &consumedAt
 	}
+	if token.DeliveredAt != nil {
+		deliveredAt := *token.DeliveredAt
+		out.DeliveredAt = &deliveredAt
+	}
 	return &out
 }

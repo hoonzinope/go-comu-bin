@@ -57,12 +57,27 @@ func (h *MailDeliveryHandler) sendEmailVerification(ctx context.Context, eventNa
 	if h == nil || h.emailVerificationMailer == nil || h.emailVerificationTokens == nil || userID <= 0 || tokenHash == "" {
 		return nil
 	}
-	if err := h.emailVerificationMailer.SendEmailVerification(ctx, email, rawToken, expiresAt); err != nil {
-		return customerror.WrapMailDelivery("send email verification mail", err)
+	token, err := h.emailVerificationTokens.SelectByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return customerror.WrapRepository("select email verification token before mail send", err)
 	}
-	h.captureToken(eventName, userID, email, rawToken, expiresAt)
-	if err := h.activateEmailVerificationToken(ctx, tokenHash); err != nil {
-		return err
+	if token == nil || token.DeliveredAt == nil {
+		if err := h.emailVerificationMailer.SendEmailVerification(ctx, email, rawToken, expiresAt); err != nil {
+			return customerror.WrapMailDelivery("send email verification mail", err)
+		}
+		h.captureToken(eventName, userID, email, rawToken, expiresAt)
+		if token != nil {
+			deliveredAt := time.Now().UTC()
+			token.DeliveredAt = &deliveredAt
+			if err := h.emailVerificationTokens.Update(ctx, token); err != nil {
+				return customerror.WrapRepository("record email verification delivery after mail send", err)
+			}
+		}
+	}
+	if token != nil {
+		if err := h.activateEmailVerificationToken(ctx, tokenHash); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -71,12 +86,27 @@ func (h *MailDeliveryHandler) sendPasswordReset(ctx context.Context, eventName s
 	if h == nil || h.passwordResetMailer == nil || h.passwordResetTokens == nil || userID <= 0 || tokenHash == "" {
 		return nil
 	}
-	if err := h.passwordResetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
-		return customerror.WrapMailDelivery("send password reset mail", err)
+	token, err := h.passwordResetTokens.SelectByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return customerror.WrapRepository("select password reset token before mail send", err)
 	}
-	h.captureToken(eventName, userID, email, rawToken, expiresAt)
-	if err := h.activatePasswordResetToken(ctx, tokenHash); err != nil {
-		return err
+	if token == nil || token.DeliveredAt == nil {
+		if err := h.passwordResetMailer.SendPasswordReset(ctx, email, rawToken, expiresAt); err != nil {
+			return customerror.WrapMailDelivery("send password reset mail", err)
+		}
+		h.captureToken(eventName, userID, email, rawToken, expiresAt)
+		if token != nil {
+			deliveredAt := time.Now().UTC()
+			token.DeliveredAt = &deliveredAt
+			if err := h.passwordResetTokens.Update(ctx, token); err != nil {
+				return customerror.WrapRepository("record password reset delivery after mail send", err)
+			}
+		}
+	}
+	if token != nil {
+		if err := h.activatePasswordResetToken(ctx, tokenHash); err != nil {
+			return err
+		}
 	}
 	return nil
 }

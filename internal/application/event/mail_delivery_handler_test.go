@@ -116,6 +116,76 @@ func (r *failingPasswordResetTokenRepository) DeleteExpiredOrConsumedBefore(ctx 
 	return r.base.DeleteExpiredOrConsumedBefore(ctx, cutoff, limit)
 }
 
+type flakyEmailVerificationTokenRepository struct {
+	base        port.EmailVerificationTokenRepository
+	failOnUpdate int
+	updateCalls  int
+	updateErr    error
+}
+
+func (r *flakyEmailVerificationTokenRepository) Save(ctx context.Context, token *entity.EmailVerificationToken) error {
+	return r.base.Save(ctx, token)
+}
+
+func (r *flakyEmailVerificationTokenRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.EmailVerificationToken, error) {
+	return r.base.SelectByTokenHash(ctx, tokenHash)
+}
+
+func (r *flakyEmailVerificationTokenRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.EmailVerificationToken, error) {
+	return r.base.SelectLatestByUser(ctx, userID)
+}
+
+func (r *flakyEmailVerificationTokenRepository) InvalidateByUser(ctx context.Context, userID int64) error {
+	return r.base.InvalidateByUser(ctx, userID)
+}
+
+func (r *flakyEmailVerificationTokenRepository) Update(ctx context.Context, token *entity.EmailVerificationToken) error {
+	r.updateCalls++
+	if r.failOnUpdate > 0 && r.updateCalls == r.failOnUpdate {
+		return r.updateErr
+	}
+	return r.base.Update(ctx, token)
+}
+
+func (r *flakyEmailVerificationTokenRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
+	return r.base.DeleteExpiredOrConsumedBefore(ctx, cutoff, limit)
+}
+
+type flakyPasswordResetTokenRepository struct {
+	base         port.PasswordResetTokenRepository
+	failOnUpdate int
+	updateCalls  int
+	updateErr    error
+}
+
+func (r *flakyPasswordResetTokenRepository) Save(ctx context.Context, token *entity.PasswordResetToken) error {
+	return r.base.Save(ctx, token)
+}
+
+func (r *flakyPasswordResetTokenRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.PasswordResetToken, error) {
+	return r.base.SelectByTokenHash(ctx, tokenHash)
+}
+
+func (r *flakyPasswordResetTokenRepository) SelectLatestByUser(ctx context.Context, userID int64) (*entity.PasswordResetToken, error) {
+	return r.base.SelectLatestByUser(ctx, userID)
+}
+
+func (r *flakyPasswordResetTokenRepository) InvalidateByUser(ctx context.Context, userID int64) error {
+	return r.base.InvalidateByUser(ctx, userID)
+}
+
+func (r *flakyPasswordResetTokenRepository) Update(ctx context.Context, token *entity.PasswordResetToken) error {
+	r.updateCalls++
+	if r.failOnUpdate > 0 && r.updateCalls == r.failOnUpdate {
+		return r.updateErr
+	}
+	return r.base.Update(ctx, token)
+}
+
+func (r *flakyPasswordResetTokenRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
+	return r.base.DeleteExpiredOrConsumedBefore(ctx, cutoff, limit)
+}
+
 func TestMailDeliveryHandler_Handle_SendsSignupVerificationAndActivatesExactToken(t *testing.T) {
 	verificationRepo := inmemory.NewEmailVerificationTokenRepository()
 	pending := entity.NewEmailVerificationToken(10, "hash-signup", time.Now().Add(time.Hour))
@@ -177,8 +247,60 @@ func TestMailDeliveryHandler_Handle_ReturnsRepositoryFailure(t *testing.T) {
 	err := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(13, "alice@example.com", "raw-fail", "hash-fail", time.Now().Add(time.Hour)))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, customerror.ErrRepositoryFailure)
-	assert.Contains(t, err.Error(), "activate email verification token after mail send")
+	assert.Contains(t, err.Error(), "record email verification delivery after mail send")
 	require.Len(t, mailer.calls, 1)
+}
+
+func TestMailDeliveryHandler_Handle_DoesNotResendAfterRecordedDeliveryOnRetry(t *testing.T) {
+	verificationRepo := &flakyEmailVerificationTokenRepository{
+		base:         inmemory.NewEmailVerificationTokenRepository(),
+		failOnUpdate: 2,
+		updateErr:    errors.New("update failed"),
+	}
+	pending := entity.NewEmailVerificationToken(15, "hash-retry", time.Now().Add(time.Hour))
+	pending.Consume(time.Now())
+	require.NoError(t, verificationRepo.base.Save(context.Background(), pending))
+	mailer := &recordingEmailVerificationMailer{}
+	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, verificationRepo, inmemory.NewPasswordResetTokenRepository(), "")
+
+	firstErr := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(15, "alice@example.com", "raw-retry", "hash-retry", time.Now().Add(time.Hour)))
+	require.Error(t, firstErr)
+	require.Len(t, mailer.calls, 1)
+
+	secondErr := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(15, "alice@example.com", "raw-retry", "hash-retry", time.Now().Add(time.Hour)))
+	require.NoError(t, secondErr)
+	require.Len(t, mailer.calls, 1)
+
+	loaded, err := verificationRepo.base.SelectByTokenHash(context.Background(), "hash-retry")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.True(t, loaded.IsUsable(time.Now()))
+}
+
+func TestMailDeliveryHandler_Handle_DoesNotResendPasswordResetAfterRecordedDeliveryOnRetry(t *testing.T) {
+	resetRepo := &flakyPasswordResetTokenRepository{
+		base:         inmemory.NewPasswordResetTokenRepository(),
+		failOnUpdate: 2,
+		updateErr:    errors.New("update failed"),
+	}
+	pending := entity.NewPasswordResetToken(16, "hash-reset-retry", time.Now().Add(time.Hour))
+	pending.Consume(time.Now())
+	require.NoError(t, resetRepo.base.Save(context.Background(), pending))
+	mailer := &recordingPasswordResetMailer{}
+	handler := NewMailDeliveryHandler(&recordingEmailVerificationMailer{}, mailer, inmemory.NewEmailVerificationTokenRepository(), resetRepo, "")
+
+	firstErr := handler.Handle(context.Background(), NewPasswordResetRequested(16, "bob@example.com", "raw-reset-retry", "hash-reset-retry", time.Now().Add(time.Hour)))
+	require.Error(t, firstErr)
+	require.Len(t, mailer.calls, 1)
+
+	secondErr := handler.Handle(context.Background(), NewPasswordResetRequested(16, "bob@example.com", "raw-reset-retry", "hash-reset-retry", time.Now().Add(time.Hour)))
+	require.NoError(t, secondErr)
+	require.Len(t, mailer.calls, 1)
+
+	loaded, err := resetRepo.base.SelectByTokenHash(context.Background(), "hash-reset-retry")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.True(t, loaded.IsUsable(time.Now()))
 }
 
 func TestMailDeliveryHandler_Handle_ReturnsMailSendFailure(t *testing.T) {

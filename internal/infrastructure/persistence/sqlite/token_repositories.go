@@ -30,7 +30,7 @@ func NewPasswordResetTokenRepository(exec sqlExecutor) *PasswordResetTokenReposi
 }
 
 func (r *EmailVerificationTokenRepository) Save(ctx context.Context, token *entity.EmailVerificationToken) error {
-	return saveToken(ctx, r.exec, "email_verification_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt)
+	return saveToken(ctx, r.exec, "email_verification_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt, token.DeliveredAt)
 }
 
 func (r *EmailVerificationTokenRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.EmailVerificationToken, error) {
@@ -46,7 +46,7 @@ func (r *EmailVerificationTokenRepository) InvalidateByUser(ctx context.Context,
 }
 
 func (r *EmailVerificationTokenRepository) Update(ctx context.Context, token *entity.EmailVerificationToken) error {
-	return saveToken(ctx, r.exec, "email_verification_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt)
+	return saveToken(ctx, r.exec, "email_verification_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt, token.DeliveredAt)
 }
 
 func (r *EmailVerificationTokenRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
@@ -54,7 +54,7 @@ func (r *EmailVerificationTokenRepository) DeleteExpiredOrConsumedBefore(ctx con
 }
 
 func (r *PasswordResetTokenRepository) Save(ctx context.Context, token *entity.PasswordResetToken) error {
-	return saveToken(ctx, r.exec, "password_reset_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt)
+	return saveToken(ctx, r.exec, "password_reset_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt, token.DeliveredAt)
 }
 
 func (r *PasswordResetTokenRepository) SelectByTokenHash(ctx context.Context, tokenHash string) (*entity.PasswordResetToken, error) {
@@ -70,32 +70,34 @@ func (r *PasswordResetTokenRepository) InvalidateByUser(ctx context.Context, use
 }
 
 func (r *PasswordResetTokenRepository) Update(ctx context.Context, token *entity.PasswordResetToken) error {
-	return saveToken(ctx, r.exec, "password_reset_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt)
+	return saveToken(ctx, r.exec, "password_reset_tokens", token.UserID, token.TokenHash, token.CreatedAt, token.ExpiresAt, token.ConsumedAt, token.DeliveredAt)
 }
 
 func (r *PasswordResetTokenRepository) DeleteExpiredOrConsumedBefore(ctx context.Context, cutoff time.Time, limit int) (int, error) {
 	return deleteExpiredOrConsumedBefore(ctx, r.exec, "password_reset_tokens", cutoff, limit)
 }
 
-func saveToken(ctx context.Context, exec sqlExecutor, table string, userID int64, tokenHash string, createdAt, expiresAt time.Time, consumedAt *time.Time) error {
+func saveToken(ctx context.Context, exec sqlExecutor, table string, userID int64, tokenHash string, createdAt, expiresAt time.Time, consumedAt, deliveredAt *time.Time) error {
 	if exec == nil {
 		return fmt.Errorf("sqlite token repository is not initialized")
 	}
 	_, err := exec.ExecContext(ctx, fmt.Sprintf(`
 INSERT INTO %s (
-    token_hash, user_id, created_at, expires_at, consumed_at
-) VALUES (?, ?, ?, ?, ?)
+    token_hash, user_id, created_at, expires_at, consumed_at, delivered_at
+) VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(token_hash) DO UPDATE SET
     user_id = excluded.user_id,
     created_at = excluded.created_at,
     expires_at = excluded.expires_at,
-    consumed_at = excluded.consumed_at
+    consumed_at = excluded.consumed_at,
+    delivered_at = excluded.delivered_at
 `, table),
 		tokenHash,
 		userID,
 		createdAt.UnixNano(),
 		expiresAt.UnixNano(),
 		timePtrToUnixNano(consumedAt),
+		timePtrToUnixNano(deliveredAt),
 	)
 	if err != nil {
 		return fmt.Errorf("save token in %s: %w", table, err)
@@ -157,7 +159,7 @@ LIMIT ?
 
 func selectEmailVerificationToken(ctx context.Context, exec sqlExecutor, tokenHash string) (*entity.EmailVerificationToken, error) {
 	row := exec.QueryRowContext(ctx, `
-SELECT token_hash, user_id, created_at, expires_at, consumed_at
+SELECT token_hash, user_id, created_at, expires_at, consumed_at, delivered_at
 FROM email_verification_tokens
 WHERE token_hash = ?
 `, tokenHash)
@@ -166,8 +168,9 @@ WHERE token_hash = ?
 		createdAt  int64
 		expiresAt  int64
 		consumedAt sql.NullInt64
+		deliveredAt sql.NullInt64
 	)
-	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt); err != nil {
+	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt, &deliveredAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -176,12 +179,13 @@ WHERE token_hash = ?
 	out.CreatedAt = time.Unix(0, createdAt).UTC()
 	out.ExpiresAt = time.Unix(0, expiresAt).UTC()
 	out.ConsumedAt = unixNanoToTimePtr(consumedAt)
+	out.DeliveredAt = unixNanoToTimePtr(deliveredAt)
 	return &out, nil
 }
 
 func selectLatestEmailVerificationTokenByUser(ctx context.Context, exec sqlExecutor, userID int64) (*entity.EmailVerificationToken, error) {
 	row := exec.QueryRowContext(ctx, `
-SELECT token_hash, user_id, created_at, expires_at, consumed_at
+SELECT token_hash, user_id, created_at, expires_at, consumed_at, delivered_at
 FROM email_verification_tokens
 WHERE user_id = ?
 ORDER BY created_at DESC, token_hash DESC
@@ -192,8 +196,9 @@ LIMIT 1
 		createdAt  int64
 		expiresAt  int64
 		consumedAt sql.NullInt64
+		deliveredAt sql.NullInt64
 	)
-	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt); err != nil {
+	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt, &deliveredAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -202,12 +207,13 @@ LIMIT 1
 	out.CreatedAt = time.Unix(0, createdAt).UTC()
 	out.ExpiresAt = time.Unix(0, expiresAt).UTC()
 	out.ConsumedAt = unixNanoToTimePtr(consumedAt)
+	out.DeliveredAt = unixNanoToTimePtr(deliveredAt)
 	return &out, nil
 }
 
 func selectPasswordResetToken(ctx context.Context, exec sqlExecutor, tokenHash string) (*entity.PasswordResetToken, error) {
 	row := exec.QueryRowContext(ctx, `
-SELECT token_hash, user_id, created_at, expires_at, consumed_at
+SELECT token_hash, user_id, created_at, expires_at, consumed_at, delivered_at
 FROM password_reset_tokens
 WHERE token_hash = ?
 `, tokenHash)
@@ -216,8 +222,9 @@ WHERE token_hash = ?
 		createdAt  int64
 		expiresAt  int64
 		consumedAt sql.NullInt64
+		deliveredAt sql.NullInt64
 	)
-	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt); err != nil {
+	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt, &deliveredAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -226,12 +233,13 @@ WHERE token_hash = ?
 	out.CreatedAt = time.Unix(0, createdAt).UTC()
 	out.ExpiresAt = time.Unix(0, expiresAt).UTC()
 	out.ConsumedAt = unixNanoToTimePtr(consumedAt)
+	out.DeliveredAt = unixNanoToTimePtr(deliveredAt)
 	return &out, nil
 }
 
 func selectLatestPasswordResetTokenByUser(ctx context.Context, exec sqlExecutor, userID int64) (*entity.PasswordResetToken, error) {
 	row := exec.QueryRowContext(ctx, `
-SELECT token_hash, user_id, created_at, expires_at, consumed_at
+SELECT token_hash, user_id, created_at, expires_at, consumed_at, delivered_at
 FROM password_reset_tokens
 WHERE user_id = ?
 ORDER BY created_at DESC, token_hash DESC
@@ -242,8 +250,9 @@ LIMIT 1
 		createdAt  int64
 		expiresAt  int64
 		consumedAt sql.NullInt64
+		deliveredAt sql.NullInt64
 	)
-	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt); err != nil {
+	if err := row.Scan(&out.TokenHash, &out.UserID, &createdAt, &expiresAt, &consumedAt, &deliveredAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -252,5 +261,6 @@ LIMIT 1
 	out.CreatedAt = time.Unix(0, createdAt).UTC()
 	out.ExpiresAt = time.Unix(0, expiresAt).UTC()
 	out.ConsumedAt = unixNanoToTimePtr(consumedAt)
+	out.DeliveredAt = unixNanoToTimePtr(deliveredAt)
 	return &out, nil
 }

@@ -7,5 +7,15 @@ func TruncateNotificationSnapshot(value string, limit int) string {
 	if limit <= 0 || len(value) <= limit {
 		return value
 	}
-	return strings.TrimSpace(value[:limit])
+	end := 0
+	for i := range value {
+		if i > limit {
+			break
+		}
+		end = i
+	}
+	if end <= 0 {
+		return ""
+	}
+	return strings.TrimSpace(value[:end])
 }

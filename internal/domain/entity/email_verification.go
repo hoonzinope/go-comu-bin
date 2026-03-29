@@ -3,11 +3,12 @@ package entity
 import "time"
 
 type EmailVerificationToken struct {
-	UserID     int64
-	TokenHash  string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	ConsumedAt *time.Time
+	UserID      int64
+	TokenHash   string
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	ConsumedAt  *time.Time
+	DeliveredAt *time.Time
 }
 
 func NewEmailVerificationToken(userID int64, tokenHash string, expiresAt time.Time) *EmailVerificationToken {
