@@ -35,7 +35,13 @@ export default defineConfig({
   /* Configure projects for major browsers */
   projects: [
     {
+      name: 'visual',
+      testMatch: /.*visual\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'chromium',
+      testIgnore: /.*visual\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
   ],

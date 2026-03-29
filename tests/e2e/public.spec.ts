@@ -5,6 +5,10 @@ test('renders the public shell and responsive menu', async ({ page }) => {
   await expect(page).toHaveTitle(/Commu Bin/);
   await expect(page.getByRole('heading', { name: 'Feed' })).toBeVisible();
   await expect(page.locator('meta[name="csrf-token"]')).toHaveAttribute('content', /.+/);
+  await expect(page.locator('.sidebar').getByRole('link', { name: 'All feed', exact: true })).toBeVisible();
+  await expect(page.locator('.sidebar').getByRole('link', { name: 'Search', exact: true })).toBeVisible();
+  await expect(page.locator('.sidebar').getByRole('link', { name: 'Profile', exact: true })).toBeVisible();
+  await expect(page.locator('.sidebar').getByRole('link', { name: 'Admin', exact: true })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();

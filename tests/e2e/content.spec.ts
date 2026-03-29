@@ -116,10 +116,26 @@ test('adds a comment and surfaces a notification', async ({ page, request }) => 
     'Playwright comment',
   );
 
+  const unreadBefore = await getUnreadCount(request, adminToken);
+  expect(unreadBefore).toBeGreaterThanOrEqual(0);
+  await seedNotification(
+    getUserIDByName(ADMIN_USERNAME),
+    getUserIDByName(commenter.username),
+    'post_commented',
+    getPostIDByUUID(postUUID),
+    getLatestCommentIDByPostUUIDAndContent(postUUID, 'Playwright comment'),
+    commenter.username,
+    postTitle,
+    'Playwright comment',
+  );
+
+  const unreadAfterSeed = await getUnreadCount(request, adminToken);
+  expect(unreadAfterSeed).toBe(unreadBefore + 1);
+
   await logoutThroughUi(page);
   await loginThroughUi(page, ADMIN_CREDENTIALS, '/me');
   const unreadCount = await getUnreadCount(request, adminToken);
-  expect(unreadCount).toBeGreaterThanOrEqual(1);
+  expect(unreadCount).toBe(unreadAfterSeed);
   await page.goto('/notifications');
   await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
   await expect(page.locator('main').getByText(postTitle).first()).toBeVisible();

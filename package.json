@@ -8,7 +8,9 @@
   },
   "scripts": {
     "test:e2e": "playwright test",
-    "test:e2e:chromium": "playwright test --project=chromium"
+    "test:e2e:chromium": "playwright test --project=chromium",
+    "test:e2e:visual": "playwright test --project=visual",
+    "test:e2e:visual:update": "playwright test --project=visual --update-snapshots"
   },
   "keywords": [],
   "author": "",
