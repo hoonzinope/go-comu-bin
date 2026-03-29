@@ -122,7 +122,7 @@ func TestMailDeliveryHandler_Handle_SendsSignupVerificationAndActivatesExactToke
 	pending.Consume(time.Now())
 	require.NoError(t, verificationRepo.Save(context.Background(), pending))
 	mailer := &recordingEmailVerificationMailer{}
-	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, verificationRepo, inmemory.NewPasswordResetTokenRepository())
+	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, verificationRepo, inmemory.NewPasswordResetTokenRepository(), "")
 
 	err := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(10, "alice@example.com", "raw-signup", "hash-signup", time.Now().Add(time.Hour)))
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestMailDeliveryHandler_Handle_SendsPasswordResetAndActivatesExactToken(t *
 	pending.Consume(time.Now())
 	require.NoError(t, resetRepo.Save(context.Background(), pending))
 	mailer := &recordingPasswordResetMailer{}
-	handler := NewMailDeliveryHandler(&recordingEmailVerificationMailer{}, mailer, inmemory.NewEmailVerificationTokenRepository(), resetRepo)
+	handler := NewMailDeliveryHandler(&recordingEmailVerificationMailer{}, mailer, inmemory.NewEmailVerificationTokenRepository(), resetRepo, "")
 
 	err := handler.Handle(context.Background(), NewPasswordResetRequested(11, "bob@example.com", "raw-reset", "hash-reset", time.Now().Add(time.Hour)))
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestMailDeliveryHandler_Handle_SendsPasswordResetAndActivatesExactToken(t *
 
 func TestMailDeliveryHandler_Handle_TreatsMissingTokenAsSuccess(t *testing.T) {
 	mailer := &recordingEmailVerificationMailer{}
-	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, inmemory.NewEmailVerificationTokenRepository(), inmemory.NewPasswordResetTokenRepository())
+	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, inmemory.NewEmailVerificationTokenRepository(), inmemory.NewPasswordResetTokenRepository(), "")
 
 	err := handler.Handle(context.Background(), NewEmailVerificationResendRequested(12, "alice@example.com", "raw-resend", "missing-hash", time.Now().Add(time.Hour)))
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestMailDeliveryHandler_Handle_ReturnsRepositoryFailure(t *testing.T) {
 	pending.Consume(time.Now())
 	require.NoError(t, verificationRepo.base.Save(context.Background(), pending))
 	mailer := &recordingEmailVerificationMailer{}
-	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, verificationRepo, inmemory.NewPasswordResetTokenRepository())
+	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, verificationRepo, inmemory.NewPasswordResetTokenRepository(), "")
 
 	err := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(13, "alice@example.com", "raw-fail", "hash-fail", time.Now().Add(time.Hour)))
 	require.Error(t, err)
@@ -183,7 +183,7 @@ func TestMailDeliveryHandler_Handle_ReturnsRepositoryFailure(t *testing.T) {
 
 func TestMailDeliveryHandler_Handle_ReturnsMailSendFailure(t *testing.T) {
 	mailer := &recordingEmailVerificationMailer{err: errors.New("smtp down")}
-	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, inmemory.NewEmailVerificationTokenRepository(), inmemory.NewPasswordResetTokenRepository())
+	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, inmemory.NewEmailVerificationTokenRepository(), inmemory.NewPasswordResetTokenRepository(), "")
 
 	err := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(14, "alice@example.com", "raw", "hash", time.Now().Add(time.Hour)))
 	require.Error(t, err)
@@ -192,7 +192,7 @@ func TestMailDeliveryHandler_Handle_ReturnsMailSendFailure(t *testing.T) {
 }
 
 func TestMailDeliveryHandler_Handle_IgnoresUnknownEvent(t *testing.T) {
-	handler := NewMailDeliveryHandler(&recordingEmailVerificationMailer{}, &recordingPasswordResetMailer{}, inmemory.NewEmailVerificationTokenRepository(), inmemory.NewPasswordResetTokenRepository())
+	handler := NewMailDeliveryHandler(&recordingEmailVerificationMailer{}, &recordingPasswordResetMailer{}, inmemory.NewEmailVerificationTokenRepository(), inmemory.NewPasswordResetTokenRepository(), "")
 	err := handler.Handle(context.Background(), nil)
 	require.NoError(t, err)
 }
@@ -202,7 +202,7 @@ func TestMailDeliveryHandler_Handle_AlreadyActiveTokenIsNoOp(t *testing.T) {
 	active := entity.NewEmailVerificationToken(15, "hash-active", time.Now().Add(time.Hour))
 	require.NoError(t, verificationRepo.Save(context.Background(), active))
 	mailer := &recordingEmailVerificationMailer{}
-	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, verificationRepo, inmemory.NewPasswordResetTokenRepository())
+	handler := NewMailDeliveryHandler(mailer, &recordingPasswordResetMailer{}, verificationRepo, inmemory.NewPasswordResetTokenRepository(), "")
 
 	err := handler.Handle(context.Background(), NewSignupEmailVerificationRequested(15, "alice@example.com", "raw-active", "hash-active", time.Now().Add(time.Hour)))
 	require.NoError(t, err)
@@ -217,6 +217,6 @@ func TestMailDeliveryHandler_Handle_NoOpWhenHandlerOrDependenciesMissing(t *test
 	var handler *MailDeliveryHandler
 	require.NoError(t, handler.Handle(context.Background(), NewSignupEmailVerificationRequested(1, "alice@example.com", "raw", "hash", time.Now().Add(time.Hour))))
 
-	handler = NewMailDeliveryHandler(nil, nil, nil, nil)
+	handler = NewMailDeliveryHandler(nil, nil, nil, nil, "")
 	require.NoError(t, handler.Handle(context.Background(), NewPasswordResetRequested(1, "bob@example.com", "raw", "hash", time.Now().Add(time.Hour))))
 }

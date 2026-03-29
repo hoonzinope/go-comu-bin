@@ -229,7 +229,7 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchStore)
 	postRankingHandler := appevent.NewPostRankingHandler(postRankingRepository)
 	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
-	mailDeliveryHandler := appevent.NewMailDeliveryHandler(verificationMailer, noopmail.NewPasswordResetMailSender(), emailVerificationRepository, passwordResetRepository)
+	mailDeliveryHandler := appevent.NewMailDeliveryHandler(verificationMailer, noopmail.NewPasswordResetMailSender(), emailVerificationRepository, passwordResetRepository, "")
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)

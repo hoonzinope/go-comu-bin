@@ -209,8 +209,9 @@
     </div>
   {{else if eq .Kind "login"}}
     <div class="auth-grid">
-      <form class="panel form" action="/login{{if .Redirect}}?redirect={{.Redirect}}{{end}}" method="post">
+      <form class="panel form" action="/login{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <input type="hidden" name="redirect" value="{{.Redirect}}">
         <h1>Login</h1>
         <label>Username</label>
         <input type="text" name="username" value="{{.LoginUsername}}">
@@ -218,8 +219,9 @@
         <input type="password" name="password">
         <button class="button button-primary" type="submit">Login</button>
       </form>
-      <form class="panel form" action="/signup" method="post">
+      <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <input type="hidden" name="redirect" value="{{.Redirect}}">
         <h2>Guest to account</h2>
         <label>Username</label>
         <input type="text" name="username">
@@ -231,8 +233,9 @@
       </form>
     </div>
   {{else if eq .Kind "signup"}}
-    <form class="panel form" action="/signup{{if .Redirect}}?redirect={{.Redirect}}{{end}}" method="post">
+    <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
       <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <input type="hidden" name="redirect" value="{{.Redirect}}">
       <h1>Sign up</h1>
       <label>Username</label>
       <input type="text" name="username">

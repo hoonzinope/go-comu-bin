@@ -43,6 +43,7 @@ func NewHandler(deps Dependencies) (*Handler, error) {
 			}
 			return m
 		},
+		"queryEscape": url.QueryEscape,
 		"shortUUID": func(value string) string {
 			value = strings.TrimSpace(value)
 			if len(value) <= 8 {
@@ -306,7 +307,7 @@ func (h *Handler) handleLoginPage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "login", Redirect: url.QueryEscape(safeRedirectTarget(c.Query("redirect"))), Message: strings.TrimSpace(c.Query("message"))})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "login", Redirect: safeRedirectTarget(c.Query("redirect")), Message: strings.TrimSpace(c.Query("message"))})
 }
 
 func (h *Handler) handleLoginSubmit(c *gin.Context) {
@@ -322,7 +323,10 @@ func (h *Handler) handleLoginSubmit(c *gin.Context) {
 		return
 	}
 	h.setSessionCookie(c, token)
-	redirect := safeRedirectTarget(c.Query("redirect"))
+	redirect := safeRedirectTarget(c.PostForm("redirect"))
+	if redirect == "/" {
+		redirect = safeRedirectTarget(c.Query("redirect"))
+	}
 	c.Redirect(http.StatusSeeOther, redirect)
 }
 
@@ -347,7 +351,7 @@ func (h *Handler) handleSignupPage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "signup", Redirect: url.QueryEscape(safeRedirectTarget(c.Query("redirect")))})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "signup", Redirect: safeRedirectTarget(c.Query("redirect"))})
 }
 
 func (h *Handler) handleSignupSubmit(c *gin.Context) {
@@ -362,7 +366,10 @@ func (h *Handler) handleSignupSubmit(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	redirect := safeRedirectTarget(c.Query("redirect"))
+	redirect := safeRedirectTarget(c.PostForm("redirect"))
+	if redirect == "/" {
+		redirect = safeRedirectTarget(c.Query("redirect"))
+	}
 	loginURL := "/login?message=" + url.QueryEscape("Account created. Please log in.")
 	if redirect != "/" {
 		loginURL += "&redirect=" + url.QueryEscape(redirect)

@@ -170,7 +170,13 @@ func main() {
 	postSearchIndexHandler := appevent.NewPostSearchIndexHandler(postSearchRepository)
 	postRankingHandler := appevent.NewPostRankingHandler(postRankingRepository)
 	notificationHandler := appevent.NewNotificationHandler(notificationRepository)
-	mailDeliveryHandler := appevent.NewMailDeliveryHandler(mailers.EmailVerificationMailSender, mailers.PasswordResetMailSender, emailVerificationRepository, passwordResetRepository)
+	mailDeliveryHandler := appevent.NewMailDeliveryHandler(
+		mailers.EmailVerificationMailSender,
+		mailers.PasswordResetMailSender,
+		emailVerificationRepository,
+		passwordResetRepository,
+		os.Getenv("PLAYWRIGHT_MAIL_CAPTURE_PATH"),
+	)
 	outboxRelay.Subscribe(appevent.EventNameBoardChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, cacheInvalidationHandler)
 	outboxRelay.Subscribe(appevent.EventNamePostChanged, postSearchIndexHandler)
