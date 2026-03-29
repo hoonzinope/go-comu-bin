@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/hoonzinope/go-comu-bin/docs/swagger"
 	appcache "github.com/hoonzinope/go-comu-bin/internal/application/cache"
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
@@ -32,7 +33,9 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	"github.com/hoonzinope/go-comu-bin/internal/application/service"
 	"github.com/hoonzinope/go-comu-bin/internal/config"
+	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery"
+	"github.com/hoonzinope/go-comu-bin/internal/delivery/web"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/auth"
 	cacheRistretto "github.com/hoonzinope/go-comu-bin/internal/infrastructure/cache/ristretto"
@@ -241,7 +244,7 @@ func main() {
 		30*time.Minute,
 		appLogger,
 	)
-	server := delivery.NewHTTPServer(httpAddr(cfg), delivery.HTTPDependencies{
+	apiHandler := delivery.NewHTTPHandler(delivery.HTTPDependencies{
 		SessionUseCase:                         sessionUseCase,
 		AdminAuthorizer:                        userUseCase,
 		UserUseCase:                            userUseCase,
@@ -277,6 +280,54 @@ func main() {
 		PasswordResetRateLimitMaxRequests:      cfg.Delivery.HTTP.Auth.PasswordResetRequestRateLimit.MaxRequests,
 		Logger:                                 appLogger,
 	})
+	webHandler, err := web.NewHandler(web.Dependencies{
+		SessionUseCase:      sessionUseCase,
+		AccountUseCase:      accountUseCase,
+		UserUseCase:         userUseCase,
+		BoardUseCase:        boardUseCase,
+		PostUseCase:         postUseCase,
+		CommentUseCase:      commentUseCase,
+		NotificationUseCase: notificationUseCase,
+		ReportUseCase:       reportUseCase,
+		OutboxAdminUseCase:  outboxAdminUseCase,
+		Logger:              appLogger,
+		AppName:             "Commu Bin",
+	})
+	if err != nil {
+		slog.Error("failed to initialize web delivery", "error", err)
+		exitCode = 1
+		return
+	}
+	r := gin.New()
+	if err := r.SetTrustedProxies(cfg.Delivery.HTTP.TrustedProxies); err != nil {
+		slog.Error("invalid trusted proxies configuration", "error", err)
+		exitCode = 1
+		return
+	}
+	r.Use(delivery.RecoveryWithLogger(appLogger))
+	if cfg.Storage.Attachment.MaxUploadSizeBytes > 0 {
+		r.MaxMultipartMemory = cfg.Storage.Attachment.MaxUploadSizeBytes + 1<<20
+	}
+	apiHandler.RegisterRoutes(r)
+	webHandler.RegisterRoutes(r)
+	r.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/api/v1") {
+			c.JSON(http.StatusNotFound, gin.H{"error": customerror.ErrNotFound.Error()})
+			return
+		}
+		webHandler.RenderNotFound(c)
+	})
+	r.NoMethod(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/api/v1") {
+			c.JSON(http.StatusMethodNotAllowed, gin.H{"error": customerror.ErrMethodNotAllowed.Error()})
+			return
+		}
+		webHandler.RenderMethodNotAllowed(c)
+	})
+	server := &http.Server{
+		Addr:    httpAddr(cfg),
+		Handler: r,
+	}
 	slog.Info("server started", "addr", server.Addr)
 	signalCtx, stopSignal := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignal()

@@ -1,0 +1,479 @@
+{{define "page"}}
+<section class="page">
+  {{if .Message}}<div class="banner">{{.Message}}</div>{{end}}
+  {{if eq .Kind "feed"}}
+    <div class="tab-strip">
+      <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="/?sort=hot">Hot</a>
+      <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="/?sort=latest">Latest</a>
+      <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="/?sort=top">Top</a>
+    </div>
+    <div class="page-heading">
+      <h1>Feed</h1>
+      <p>Latest discussion across visible boards.</p>
+    </div>
+    {{if and .Feed (gt (len .Feed.Posts) 0)}}
+      <div class="stack">
+        {{range .Feed.Posts}}
+        <article class="panel feed-item">
+          <div class="vote-rail">
+            <button>▲</button>
+            <strong>0</strong>
+            <button>▼</button>
+          </div>
+          <div class="item-body">
+            <div class="meta-row">
+              <span class="chip">{{boardName $.Shell.BoardMap .BoardUUID}}</span>
+              <span>@{{shortUUID .AuthorUUID}}</span>
+              <span>{{formatTime .UpdatedAt}}</span>
+            </div>
+            <h2><a href="/posts/{{.UUID}}">{{.Title}}</a></h2>
+            <p>{{truncate .Content 220}}</p>
+          </div>
+        </article>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="panel empty">No posts yet.</div>
+    {{end}}
+  {{else if eq .Kind "board"}}
+    <div class="page-heading">
+      <h1>{{.BoardUUID}}</h1>
+      <p>Board feed.</p>
+    </div>
+    {{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue)}}
+  {{else if eq .Kind "tag"}}
+    <div class="page-heading">
+      <h1>#{{.TagName}}</h1>
+      <p>Tag feed.</p>
+    </div>
+    {{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue)}}
+  {{else if eq .Kind "search"}}
+    <div class="page-heading">
+      <h1>Search</h1>
+      <p>Query: {{if .Query}}"{{.Query}}"{{else}}enter a search term{{end}}</p>
+    </div>
+    {{if .Feed}}{{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue)}}{{else}}
+      <div class="panel empty">Search results appear here.</div>
+    {{end}}
+  {{else if eq .Kind "post"}}
+    <div class="post-layout">
+      <article class="panel post-main">
+        <div class="page-heading">
+          <h1>{{.PostDetail.Post.Title}}</h1>
+          <p>{{shortUUID .PostDetail.Post.UUID}} · {{formatTime .PostDetail.Post.UpdatedAt}}</p>
+        </div>
+        <div class="meta-row">
+          <span class="chip">{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</span>
+          <span>@{{shortUUID .PostDetail.Post.AuthorUUID}}</span>
+          <span>{{len .PostDetail.Comments}} comments</span>
+          <span>{{len .PostDetail.Attachments}} attachments</span>
+        </div>
+        {{if .PostDetail.Tags}}
+        <div class="chip-row">
+          {{range .PostDetail.Tags}}<span class="chip">{{.Name}}</span>{{end}}
+        </div>
+        {{end}}
+        <pre class="markdown">{{.PostDetail.Post.Content}}</pre>
+        {{if .PostDetail.Attachments}}
+        <section id="attachments">
+          <div class="section-title">Attachments</div>
+          <div class="stack">
+            {{range .PostDetail.Attachments}}
+            <div class="panel attachment-row">
+              <div>
+                <div class="table-title">{{.FileName}}</div>
+                <div class="table-sub">{{.ContentType}} · {{.SizeBytes}} bytes</div>
+              </div>
+              <span class="chip">{{shortUUID .UUID}}</span>
+            </div>
+            {{end}}
+          </div>
+        </section>
+        {{end}}
+        <section id="comments">
+          <div class="section-title">Comments</div>
+          {{if .PostDetail.Comments}}
+            <div class="stack">
+              {{range .PostDetail.Comments}}
+              <div class="panel comment">
+                <div class="meta-row"><span>@{{shortUUID .Comment.AuthorUUID}}</span><span>{{formatTime .Comment.CreatedAt}}</span></div>
+                <p>{{.Comment.Content}}</p>
+              </div>
+              {{end}}
+            </div>
+          {{else}}
+            <div class="empty">No comments yet.</div>
+          {{end}}
+        </section>
+      </article>
+      <aside class="panel post-sidebar">
+        <div class="section-title">At a glance</div>
+        <div class="meta-list">
+          <div class="meta-item">
+            <span>Board</span>
+            <strong>{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</strong>
+            <small>{{.PostDetail.Post.BoardUUID}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Author</span>
+            <strong>@{{shortUUID .PostDetail.Post.AuthorUUID}}</strong>
+            <small>{{.PostDetail.Post.AuthorUUID}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Created</span>
+            <strong>{{formatTime .PostDetail.Post.CreatedAt}}</strong>
+            <small>{{formatTime .PostDetail.Post.UpdatedAt}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Comments</span>
+            <strong>{{len .PostDetail.Comments}}</strong>
+            <small>{{if .PostDetail.CommentsHasMore}}More available{{else}}Loaded in full{{end}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Reactions</span>
+            <strong>{{len .PostDetail.Reactions}}</strong>
+            <small>Post-level feedback</small>
+          </div>
+        </div>
+        <div class="section-title">Quick jumps</div>
+        <div class="button-row">
+          <a class="button" href="#comments">Comments</a>
+          {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Attachments</a>{{end}}
+          <a class="button" href="/">Back to feed</a>
+        </div>
+      </aside>
+    </div>
+    <form class="panel form comment-form" action="/posts/{{.PostUUID}}/comments" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <label>Write a comment</label>
+      <textarea name="content" rows="5" placeholder="Share your reply"></textarea>
+      <button class="button button-primary" type="submit">Comment</button>
+    </form>
+  {{else if eq .Kind "compose"}}
+    <div class="page-heading">
+      <h1>{{if eq .EditMode "edit"}}Edit draft{{else if eq .EditMode "draft"}}New draft{{else}}New post{{end}}</h1>
+      <p>{{.BoardUUID}}</p>
+    </div>
+    <div class="compose-layout">
+      <aside class="panel compose-sidebar">
+        <div class="section-title">Workspace</div>
+        <div class="meta-list">
+          <div class="meta-item">
+            <span>Board</span>
+            <strong>{{boardName $.Shell.BoardMap .BoardUUID}}</strong>
+            <small>{{.BoardUUID}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Mode</span>
+            <strong>{{if eq .EditMode "edit"}}Draft edit{{else if eq .EditMode "draft"}}Save draft{{else}}Publish now{{end}}</strong>
+            <small>{{if eq .EditMode "edit"}}Update an existing draft{{else if eq .EditMode "draft"}}Keep working before publish{{else}}Create a live post{{end}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Access</span>
+            <strong>Public</strong>
+            <small>Visible on the board feed.</small>
+          </div>
+          <div class="meta-item">
+            <span>Guidance</span>
+            <strong>Keep it structured</strong>
+            <small>Use short paragraphs, tags, and markdown headings.</small>
+          </div>
+        </div>
+        <div class="section-title">Checklist</div>
+        <div class="stack">
+          <div class="chip">Title set</div>
+          <div class="chip">Tags reviewed</div>
+          <div class="chip">Content ready</div>
+        </div>
+      </aside>
+      <form class="panel form compose-main" action="{{if eq .EditMode "edit"}}/posts/{{.PostUUID}}{{else if eq .EditMode "draft"}}/boards/{{.BoardUUID}}/posts/drafts{{else}}/boards/{{.BoardUUID}}/posts{{end}}" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <div class="section-title">Content</div>
+        <label>Title</label>
+        <input type="text" name="title" value="{{.TitleInput}}" placeholder="Post title">
+        <label>Tags</label>
+        <input type="text" name="tags" value="{{.TagsInput}}" placeholder="go, ui, roadmap">
+        <label>Content</label>
+        <textarea name="content" rows="18" placeholder="Write markdown">{{.ContentInput}}</textarea>
+        <div class="button-row">
+          {{if eq .EditMode "edit"}}
+            <button class="button button-primary" type="submit">Update draft</button>
+            <button class="button" type="submit" formaction="/posts/{{.PostUUID}}/publish">Publish</button>
+          {{else if eq .EditMode "draft"}}
+            <button class="button button-primary" type="submit">Save draft</button>
+          {{else}}
+            <button class="button button-primary" type="submit">Publish</button>
+          {{end}}
+        </div>
+      </form>
+    </div>
+  {{else if eq .Kind "login"}}
+    <div class="auth-grid">
+      <form class="panel form" action="/login{{if .Redirect}}?redirect={{.Redirect}}{{end}}" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <h1>Login</h1>
+        <label>Username</label>
+        <input type="text" name="username" value="{{.LoginUsername}}">
+        <label>Password</label>
+        <input type="password" name="password">
+        <button class="button button-primary" type="submit">Login</button>
+      </form>
+      <form class="panel form" action="/signup" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <h2>Guest to account</h2>
+        <label>Username</label>
+        <input type="text" name="username">
+        <label>Email</label>
+        <input type="email" name="email">
+        <label>Password</label>
+        <input type="password" name="password">
+        <button class="button" type="submit">Sign up</button>
+      </form>
+    </div>
+  {{else if eq .Kind "signup"}}
+    <form class="panel form" action="/signup{{if .Redirect}}?redirect={{.Redirect}}{{end}}" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <h1>Sign up</h1>
+      <label>Username</label>
+      <input type="text" name="username">
+      <label>Email</label>
+      <input type="email" name="email">
+      <label>Password</label>
+      <input type="password" name="password">
+      <button class="button button-primary" type="submit">Create account</button>
+    </form>
+  {{else if eq .Kind "verify-email"}}
+    <form class="panel form" action="/verify-email" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <h1>Verify email</h1>
+      <label>Token</label>
+      <input type="text" name="token" value="{{.VerifyToken}}">
+      <button class="button button-primary" type="submit">Confirm</button>
+    </form>
+  {{else if eq .Kind "reset-password"}}
+    <form class="panel form" action="/reset-password" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <h1>Reset password</h1>
+      <label>Token</label>
+      <input type="text" name="token" value="{{.ResetToken}}">
+      <label>New password</label>
+      <input type="password" name="new_password">
+      <button class="button button-primary" type="submit">Reset</button>
+    </form>
+  {{else if eq .Kind "me"}}
+    <div class="page-heading">
+      <h1>My page</h1>
+      <p>{{.Shell.CurrentUser.Name}} · {{.Shell.CurrentUser.Email}}</p>
+    </div>
+    <div class="grid-2">
+      <form class="panel form" action="/me/delete" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <h2>Delete account</h2>
+        <label>Password</label>
+        <input type="password" name="password">
+        <button class="button button-danger" type="submit">Delete</button>
+      </form>
+      <section class="panel">
+        <h2>Drafts</h2>
+        {{if .Drafts}}
+          {{range .Drafts.Posts}}
+            <div class="list-row"><a href="/posts/{{.UUID}}/edit">{{.Title}}</a><span>{{formatTime .UpdatedAt}}</span></div>
+          {{end}}
+        {{else}}
+          <div class="empty">No drafts yet.</div>
+        {{end}}
+      </section>
+    </div>
+  {{else if eq .Kind "notifications"}}
+    <div class="page-heading">
+      <h1>Notifications</h1>
+      <p>Unread: {{.Shell.UnreadCount}}</p>
+    </div>
+    <form action="/notifications/read-all" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <button class="button" type="submit">Mark all read</button>
+    </form>
+    {{if .Notifications}}
+      <div class="stack">
+        {{range .Notifications.Notifications}}
+        <div class="panel">
+          <div class="meta-row"><span>{{.MessageKey}}</span><span>{{formatTime .CreatedAt}}</span></div>
+          <p>{{.PostTitle}}</p>
+        </div>
+        {{end}}
+      </div>
+    {{end}}
+  {{else if eq .Kind "admin-reports"}}
+    <div class="page-heading"><h1>Reports</h1><p>Moderation queue.</p></div>
+    {{if .Reports}}
+      <div class="panel table-panel">
+        <div class="table-head report-grid">
+          <div>Report</div>
+          <div>Target</div>
+          <div>Decision</div>
+          <div>Action</div>
+        </div>
+        <div class="table-body">
+          {{range .Reports.Reports}}
+          <form class="table-row report-grid" action="/admin/reports/{{.ID}}/resolve" method="post">
+            <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+            <div>
+              <div class="table-title">#{{.ID}} · {{.ReasonCode}}</div>
+              <div class="table-sub">By @{{shortUUID .ReporterUUID}} · {{formatTime .CreatedAt}}</div>
+              <div class="chip-row">
+                <span class="chip">{{.Status}}</span>
+                {{if .ResolvedAt}}<span class="chip">resolved</span>{{end}}
+              </div>
+            </div>
+            <div>
+              <div class="table-title">{{.TargetType}}</div>
+              <div class="table-sub">{{.TargetUUID}}</div>
+              <div class="table-sub">{{if .ResolvedAt}}Resolved{{else}}Awaiting review{{end}}</div>
+            </div>
+            <div class="form">
+              <label>Status</label>
+              <input type="text" name="status" value="{{.Status}}" placeholder="accepted / rejected">
+              <label>Note</label>
+              <input type="text" name="resolution_note" value="{{.ResolutionNote}}" placeholder="Optional note">
+            </div>
+            <div class="button-row">
+              <button class="button button-primary" type="submit">Resolve</button>
+            </div>
+          </form>
+          {{end}}
+        </div>
+      </div>
+    {{end}}
+  {{else if eq .Kind "admin-outbox"}}
+    <div class="page-heading"><h1>Dead outbox</h1><p>Retry or discard failed messages.</p></div>
+    {{if .Outbox}}
+      <div class="panel table-panel">
+        <div class="table-head outbox-grid">
+          <div>Message</div>
+          <div>Schedule</div>
+          <div>Error</div>
+          <div>Action</div>
+        </div>
+        <div class="table-body">
+          {{range .Outbox.Messages}}
+          <div class="table-row outbox-grid">
+            <div>
+              <div class="table-title">{{.EventName}}</div>
+              <div class="table-sub">{{.ID}}</div>
+              <div class="chip-row"><span class="chip">dead</span><span class="chip">Attempts x{{.AttemptCount}}</span></div>
+            </div>
+            <div>
+              <div class="table-title">{{formatTime .OccurredAt}}</div>
+              <div class="table-sub">Retry at {{formatTime .NextAttemptAt}}</div>
+            </div>
+            <div>
+              <div class="table-title">Last error</div>
+              <div class="table-sub">{{.LastError}}</div>
+            </div>
+            <div class="button-row">
+              <form action="/admin/outbox/dead/{{.ID}}/requeue" method="post">
+                <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                <button class="button" type="submit">Requeue</button>
+              </form>
+              <form action="/admin/outbox/dead/{{.ID}}/discard" method="post">
+                <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                <button class="button button-danger" type="submit">Discard</button>
+              </form>
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+    {{end}}
+  {{else if eq .Kind "admin-boards"}}
+    <div class="page-heading">
+      <h1>Boards</h1>
+      <p>Visibility management.</p>
+    </div>
+    {{if .AdminBoards}}
+      <div class="stats-grid">
+        <div class="panel stat-card">
+          <div class="stat-label">Visible</div>
+          <div class="stat-value">{{.BoardVisibleCount}}</div>
+        </div>
+        <div class="panel stat-card">
+          <div class="stat-label">Hidden</div>
+          <div class="stat-value">{{.BoardHiddenCount}}</div>
+        </div>
+        <div class="panel stat-card">
+          <div class="stat-label">Total</div>
+          <div class="stat-value">{{len .AdminBoards.Boards}}</div>
+        </div>
+      </div>
+      <div class="panel table-panel">
+        <div class="table-head">
+          <div>Board</div>
+          <div>Status</div>
+          <div>Action</div>
+        </div>
+        <div class="table-body">
+          {{range .AdminBoards.Boards}}
+          <div class="table-row">
+            <div>
+              <div class="table-title">{{.Name}}</div>
+              <div class="table-sub">{{.UUID}}</div>
+            </div>
+            <div><span class="chip">{{if .Hidden}}Hidden{{else}}Visible{{end}}</span></div>
+            <div>
+              <form action="/admin/boards/{{.UUID}}/visibility" method="post">
+                <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                {{if .Hidden}}
+                  <input type="hidden" name="hidden" value="false">
+                  <button class="button" type="submit">Show</button>
+                {{else}}
+                  <input type="hidden" name="hidden" value="true">
+                  <button class="button button-danger" type="submit">Hide</button>
+                {{end}}
+              </form>
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+    {{else}}
+      <div class="panel empty">No boards available.</div>
+    {{end}}
+  {{else if eq .Kind "admin-snapshot"}}
+    <div class="page-heading">
+      <h1>Admin Snapshot</h1>
+      <p>Board visibility and moderation queue.</p>
+    </div>
+    <div class="stats-grid">
+      <div class="panel stat-card">
+        <div class="stat-label">Reports</div>
+        <div class="stat-value">{{if .Reports}}{{len .Reports.Reports}}{{else}}0{{end}}</div>
+      </div>
+      <div class="panel stat-card">
+        <div class="stat-label">Dead outbox</div>
+        <div class="stat-value">{{if .Outbox}}{{len .Outbox.Messages}}{{else}}0{{end}}</div>
+      </div>
+      <div class="panel stat-card">
+        <div class="stat-label">Hidden boards</div>
+        <div class="stat-value">{{.BoardHiddenCount}}</div>
+      </div>
+    </div>
+  {{else if eq .Kind "admin-suspension"}}
+    <div class="page-heading"><h1>User suspension</h1><p>{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}</p></div>
+    <form class="panel form" action="/admin/users/{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}/suspension" method="post">
+      <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+      <label>Reason</label>
+      <input type="text" name="reason">
+      <label>Duration</label>
+      <input type="text" name="duration" placeholder="7d / 15d / 30d / unlimited">
+      <button class="button button-primary" type="submit">Suspend</button>
+    </form>
+  {{else if eq .Kind "error"}}
+    <div class="panel error-panel">
+      <h1>{{.Shell.Title}}</h1>
+      <p>{{.ErrorMessage}}</p>
+    </div>
+  {{else}}
+    <div class="panel empty">Nothing to render.</div>
+  {{end}}
+</section>
+{{end}}

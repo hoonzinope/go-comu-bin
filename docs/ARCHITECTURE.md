@@ -30,6 +30,7 @@ flowchart LR
 
 - `delivery`
   - HTTP parsing, 인증 미들웨어 연결, status/header/response 직렬화, request body와 multipart 같은 transport 경계 제한을 담당한다.
+  - JSON API와 browser UI는 route space를 분리한다. `/api/v1`은 JSON API 전용이고, `/`, `/login`, `/me`, `/admin/...` 같은 브라우저 경로는 SSR UI 전용이다.
   - background delivery는 polling, schedule trigger, retry/ack, graceful shutdown 경계 관리만 담당한다.
   - HTTP handler와 background worker/job/consumer 모두 use case port만 호출하고, repository/DB 구현체를 직접 호출하지 않는다.
   - JSON 요청 바디 제한은 `delivery.http.maxJSONBodyBytes` 설정으로 적용한다.

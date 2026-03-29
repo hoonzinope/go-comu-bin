@@ -1,0 +1,99 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Shell.Title}}{{.Shell.Title}} | {{.Shell.AppName}}{{else}}{{.Shell.AppName}}{{end}}</title>
+  <meta name="description" content="{{.Shell.Description}}">
+  <meta name="csrf-token" content="{{.Shell.CSRFToken}}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="/assets/site.css">
+  <script defer src="/assets/site.js"></script>
+</head>
+<body>
+<div class="app-shell" x-data="{menuOpen:false}">
+  <header class="topbar">
+    <div class="brand">
+      <a href="/" class="brand-mark">{{.Shell.AppName}}</a>
+      <span class="brand-sub">HTML-FIRST / UI</span>
+    </div>
+    <form class="searchbar" action="/search" method="get">
+      <input type="search" name="q" value="{{.Query}}" placeholder="Search posts, boards, tags">
+      <button type="submit">Search</button>
+    </form>
+    <div class="topbar-actions">
+      {{if .Shell.IsAuthenticated}}
+      <a class="chip" href="/notifications">Notifications {{if gt .Shell.UnreadCount 0}}({{.Shell.UnreadCount}}){{end}}</a>
+      <a class="chip" href="/me">Me</a>
+      {{else}}
+      <a class="chip" href="/login">Login</a>
+      <a class="chip chip-primary" href="/signup">Sign up</a>
+      {{end}}
+      <button class="menu-toggle" type="button" @click="menuOpen = !menuOpen">Menu</button>
+    </div>
+  </header>
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-kicker">Boards</div>
+      <nav class="nav-list">
+        <a class="nav-link {{if eq .Shell.ActiveNav "feed"}}is-active{{end}}" href="/">All feed</a>
+        {{range .Shell.Boards}}
+        <a class="nav-link" href="/boards/{{.UUID}}">{{.Name}}</a>
+        {{end}}
+      </nav>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-kicker">Explore</div>
+      <nav class="nav-list">
+        <a class="nav-link {{if eq .Shell.ActiveNav "search"}}is-active{{end}}" href="/search">Search</a>
+        <a class="nav-link {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me">Profile</a>
+        <a class="nav-link {{if eq .Shell.ActiveNav "admin"}}is-active{{end}}" href="/admin/reports">Admin</a>
+      </nav>
+    </div>
+    {{if .Shell.IsAuthenticated}}
+    <div class="sidebar-section sidebar-footer">
+      <form action="/logout" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <button class="button button-ghost" type="submit">Logout</button>
+      </form>
+    </div>
+    {{end}}
+  </aside>
+  <main class="main-content">
+    {{template "page" .}}
+  </main>
+  <nav class="bottom-nav">
+    <a href="/" class="{{if eq .Shell.ActiveNav "feed"}}is-active{{end}}">Feed</a>
+    <a href="/search" class="{{if eq .Shell.ActiveNav "search"}}is-active{{end}}">Search</a>
+    <a href="{{if .Shell.Boards}}/boards/{{(index .Shell.Boards 0).UUID}}/posts/new{{else}}/login{{end}}" class="{{if eq .Shell.ActiveNav "compose"}}is-active{{end}}">New</a>
+    <a href="/me" class="{{if eq .Shell.ActiveNav "profile"}}is-active{{end}}">Me</a>
+  </nav>
+  <div class="overlay" x-cloak x-show="menuOpen" x-transition.opacity @click="menuOpen = false">
+    <div class="overlay-panel" @click.stop>
+      <div class="sidebar-kicker">Navigation</div>
+      <a href="/" class="overlay-link">Feed</a>
+      <a href="/search" class="overlay-link">Search</a>
+      {{range .Shell.Boards}}
+      <a href="/boards/{{.UUID}}" class="overlay-link">{{.Name}}</a>
+      {{end}}
+      <a href="/me" class="overlay-link">Profile</a>
+      <a href="/notifications" class="overlay-link">Notifications</a>
+      <a href="/admin/reports" class="overlay-link">Admin</a>
+      {{if .Shell.IsAuthenticated}}
+      <form action="/logout" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <button class="overlay-link" type="submit">Logout</button>
+      </form>
+      {{else}}
+      <a href="/login" class="overlay-link">Login</a>
+      {{end}}
+    </div>
+  </div>
+</div>
+</body>
+</html>
+{{end}}

@@ -14,7 +14,8 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
 - 스펙 생성: `make swagger` (`docs/swagger` 산출물 갱신)
 - 정합성 검증: `make verify` 또는 `./scripts/verify-swagger.sh`
 
-모든 엔드포인트는 `/api/v1` prefix를 사용합니다.
+모든 JSON API 엔드포인트는 `/api/v1` prefix를 사용합니다.
+- 브라우저 UI 경로는 `/api/v1` 밖에 둡니다.
 
 공개 도메인 리소스의 외부 식별자는 UUID를 사용합니다.
 - 대상: `User`, `Board`, `Post`, `Comment`, `Attachment`
