@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	postsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/post"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
@@ -91,6 +92,7 @@ func TestPostQueryHandler_GetPostDetail(t *testing.T) {
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		policy.NewRoleAuthorizationPolicy(),
 		newTestCache(),
 		newTestCachePolicy(),
 	)
@@ -120,6 +122,7 @@ func TestPostQueryHandler_GetPostsByTag(t *testing.T) {
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		policy.NewRoleAuthorizationPolicy(),
 		newTestCache(),
 		newTestCachePolicy(),
 	)

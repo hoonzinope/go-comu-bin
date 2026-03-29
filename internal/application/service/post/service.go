@@ -39,7 +39,7 @@ func NewPostServiceWithActionDispatcher(userRepository port.UserRepository, boar
 	attachmentCoordinator := newPostAttachmentCoordinator(attachmentRepository)
 	deletionWorkflow := newPostDeletionWorkflow(commentRepository, reactionRepository, attachmentCoordinator)
 	return &PostService{
-		queryHandler:   newPostQueryHandler(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy),
+		queryHandler:   newPostQueryHandler(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, authorizationPolicy, cache, cachePolicy),
 		commandHandler: newPostCommandHandler(boardRepository, postRepository, unitOfWork, svccommon.ResolveActionDispatcher(actionDispatcher), authorizationPolicy, resolvedLogger, tagCoordinator, attachmentCoordinator, deletionWorkflow),
 	}
 }
@@ -56,6 +56,10 @@ func (s *PostService) GetPostsList(ctx context.Context, boardUUID string, sort s
 	return s.queryHandler.GetPostsList(ctx, boardUUID, sort, window, limit, cursor)
 }
 
+func (s *PostService) GetMyDraftPosts(ctx context.Context, authorID int64, limit int, cursor string) (*model.PostList, error) {
+	return s.queryHandler.GetMyDraftPosts(ctx, authorID, limit, cursor)
+}
+
 func (s *PostService) SearchPosts(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	return s.queryHandler.SearchPosts(ctx, query, sort, window, limit, cursor)
 }
@@ -70,6 +74,10 @@ func (s *PostService) GetPostsByTag(ctx context.Context, tagName string, sort st
 
 func (s *PostService) GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 	return s.queryHandler.GetPostDetail(ctx, postUUID)
+}
+
+func (s *PostService) GetDraftPost(ctx context.Context, postUUID string, userID int64) (*model.PostDetail, error) {
+	return s.queryHandler.GetDraftPost(ctx, postUUID, userID)
 }
 
 func (s *PostService) PublishPost(ctx context.Context, postUUID string, authorID int64) error {

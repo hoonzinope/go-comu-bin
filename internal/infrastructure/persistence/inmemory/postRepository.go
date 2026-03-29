@@ -83,6 +83,13 @@ func (r *PostRepository) SelectPostByUUID(ctx context.Context, postUUID string) 
 	return r.selectPostByUUID(postUUID)
 }
 
+func (r *PostRepository) SelectDraftPostsByAuthorID(ctx context.Context, authorID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectDraftPostsByAuthorID(authorID, limit, lastID)
+}
+
 func (r *PostRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
 	_ = ctx
 	r.coordinator.enter()
@@ -160,6 +167,31 @@ func (r *PostRepository) selectPostByUUID(postUUID string) (*entity.Post, error)
 		}
 	}
 	return nil, nil
+}
+
+func (r *PostRepository) selectDraftPostsByAuthorID(authorID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if limit <= 0 {
+		return []*entity.Post{}, nil
+	}
+	posts := make([]*entity.Post, 0, limit)
+	for _, post := range r.postDB.Data {
+		if post.AuthorID == authorID && post.Status == entity.PostStatusDraft {
+			if lastID > 0 && post.ID >= lastID {
+				continue
+			}
+			posts = append(posts, clonePost(post))
+		}
+	}
+	sort.Slice(posts, func(i, j int) bool {
+		return posts[i].ID > posts[j].ID
+	})
+	if len(posts) > limit {
+		posts = posts[:limit]
+	}
+	return posts, nil
 }
 
 func (r *PostRepository) SelectPostByIDIncludingUnpublished(ctx context.Context, id int64) (*entity.Post, error) {

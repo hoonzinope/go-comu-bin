@@ -518,6 +518,10 @@ func (s *stubUserUseCase) DeleteMe(ctx context.Context, userID int64, password s
 	return nil
 }
 
+func (s *stubUserUseCase) GetMe(ctx context.Context, userID int64) (*model.User, error) {
+	return &model.User{ID: userID, Name: "user", Status: entity.UserStatusActive}, nil
+}
+
 func (s *stubUserUseCase) GetUserSuspension(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
 	return &model.UserSuspension{
 		UserUUID:       targetUserUUID,

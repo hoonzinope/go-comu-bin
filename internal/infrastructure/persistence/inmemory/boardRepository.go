@@ -105,6 +105,13 @@ func (r *BoardRepository) SelectBoardList(ctx context.Context, limit int, lastID
 	return r.selectBoardList(limit, lastID)
 }
 
+func (r *BoardRepository) SelectBoardListIncludingHidden(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectBoardListIncludingHidden(limit, lastID)
+}
+
 func (r *BoardRepository) selectBoardList(limit int, lastID int64) ([]*entity.Board, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -119,6 +126,31 @@ func (r *BoardRepository) selectBoardList(limit int, lastID int64) ([]*entity.Bo
 			continue
 		}
 		if board.Hidden {
+			continue
+		}
+		boards = append(boards, cloneBoard(board))
+	}
+	sort.Slice(boards, func(i, j int) bool {
+		return boards[i].ID > boards[j].ID
+	})
+
+	if len(boards) > limit {
+		boards = boards[:limit]
+	}
+	return boards, nil
+}
+
+func (r *BoardRepository) selectBoardListIncludingHidden(limit int, lastID int64) ([]*entity.Board, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if limit <= 0 {
+		return []*entity.Board{}, nil
+	}
+
+	var boards []*entity.Board
+	for _, board := range r.boardDB.Data {
+		if lastID > 0 && board.ID >= lastID {
 			continue
 		}
 		boards = append(boards, cloneBoard(board))

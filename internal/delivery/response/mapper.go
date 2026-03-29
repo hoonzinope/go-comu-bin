@@ -25,6 +25,25 @@ func BoardListFromDTO(list *model.BoardList) *BoardList {
 	}
 }
 
+func UserFromDTO(user *model.User) *User {
+	if user == nil {
+		return &User{}
+	}
+	return &User{
+		ID:              user.ID,
+		UUID:            user.UUID,
+		Name:            user.Name,
+		Email:           user.Email,
+		Guest:           user.Guest,
+		GuestStatus:     string(user.GuestStatus),
+		EmailVerifiedAt: user.EmailVerifiedAt,
+		Role:            user.Role,
+		Status:          string(user.Status),
+		CreatedAt:       user.CreatedAt,
+		UpdatedAt:       user.UpdatedAt,
+	}
+}
+
 func PostListFromDTO(list *model.PostList) *PostList {
 	if list == nil {
 		return &PostList{}

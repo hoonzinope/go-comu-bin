@@ -37,6 +37,7 @@ type fakeUserUseCase struct {
 	issueGuestAccount func(ctx context.Context) (int64, error)
 	upgradeGuest      func(ctx context.Context, userID int64, username, email, password string) error
 	deleteMe          func(ctx context.Context, userID int64, password string) error
+	getMe             func(ctx context.Context, userID int64) (*model.User, error)
 	getUserSuspension func(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error)
 	suspendUser       func(ctx context.Context, adminID int64, targetUserUUID, reason string, duration model.SuspensionDuration) error
 	unsuspendUser     func(ctx context.Context, adminID int64, targetUserUUID string) error
@@ -70,6 +71,29 @@ func (f *fakeUserUseCase) DeleteMe(ctx context.Context, userID int64, password s
 		return f.deleteMe(ctx, userID, password)
 	}
 	return nil
+}
+
+func (f *fakeUserUseCase) GetMe(ctx context.Context, userID int64) (*model.User, error) {
+	if f.getMe != nil {
+		return f.getMe(ctx, userID)
+	}
+	user, err := f.SelectUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, customerror.ErrUserNotFound
+	}
+	return &model.User{
+		ID:        user.ID,
+		UUID:      user.UUID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		Status:    user.Status,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}, nil
 }
 
 func (f *fakeUserUseCase) GetUserSuspension(ctx context.Context, adminID int64, targetUserUUID string) (*model.UserSuspension, error) {
@@ -337,6 +361,7 @@ func (h *spyHandler) WithGroup(string) slog.Handler { return h }
 
 type fakeBoardUseCase struct {
 	getBoards          func(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	getAllBoards       func(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
 	createBoard        func(ctx context.Context, userID int64, name, description string) (string, error)
 	updateBoard        func(ctx context.Context, boardUUID string, userID int64, name, description string) error
 	deleteBoard        func(ctx context.Context, boardUUID string, userID int64) error
@@ -346,6 +371,13 @@ type fakeBoardUseCase struct {
 func (f *fakeBoardUseCase) GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
 	if f.getBoards != nil {
 		return f.getBoards(ctx, limit, cursor)
+	}
+	return &model.BoardList{}, nil
+}
+
+func (f *fakeBoardUseCase) GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
+	if f.getAllBoards != nil {
+		return f.getAllBoards(ctx, limit, cursor)
 	}
 	return &model.BoardList{}, nil
 }
@@ -436,10 +468,12 @@ type fakePostUseCase struct {
 	createPost      func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error)
 	createDraftPost func(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error)
 	getPostsList    func(ctx context.Context, boardUUID string, sort string, window string, limit int, cursor string) (*model.PostList, error)
+	getMyDraftPosts func(ctx context.Context, authorID int64, limit int, cursor string) (*model.PostList, error)
 	getFeed         func(ctx context.Context, sort string, window string, limit int, cursor string) (*model.PostList, error)
 	searchPosts     func(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error)
 	getPostsByTag   func(ctx context.Context, tagName string, sort string, window string, limit int, cursor string) (*model.PostList, error)
 	getPostDetail   func(ctx context.Context, postUUID string) (*model.PostDetail, error)
+	getDraftPost    func(ctx context.Context, postUUID string, userID int64) (*model.PostDetail, error)
 	publishPost     func(ctx context.Context, postUUID string, authorID int64) error
 	updatePost      func(ctx context.Context, postUUID string, authorID int64, title, content string, tags []string) error
 	deletePost      func(ctx context.Context, postUUID string, authorID int64) error
@@ -462,6 +496,13 @@ func (f *fakePostUseCase) CreateDraftPost(ctx context.Context, title, content st
 func (f *fakePostUseCase) GetPostsList(ctx context.Context, boardUUID string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	if f.getPostsList != nil {
 		return f.getPostsList(ctx, boardUUID, sort, window, limit, cursor)
+	}
+	return &model.PostList{}, nil
+}
+
+func (f *fakePostUseCase) GetMyDraftPosts(ctx context.Context, authorID int64, limit int, cursor string) (*model.PostList, error) {
+	if f.getMyDraftPosts != nil {
+		return f.getMyDraftPosts(ctx, authorID, limit, cursor)
 	}
 	return &model.PostList{}, nil
 }
@@ -490,6 +531,13 @@ func (f *fakePostUseCase) GetPostsByTag(ctx context.Context, tagName string, sor
 func (f *fakePostUseCase) GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 	if f.getPostDetail != nil {
 		return f.getPostDetail(ctx, postUUID)
+	}
+	return &model.PostDetail{}, nil
+}
+
+func (f *fakePostUseCase) GetDraftPost(ctx context.Context, postUUID string, userID int64) (*model.PostDetail, error) {
+	if f.getDraftPost != nil {
+		return f.getDraftPost(ctx, postUUID, userID)
 	}
 	return &model.PostDetail{}, nil
 }

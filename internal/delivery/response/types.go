@@ -2,6 +2,20 @@ package response
 
 import "time"
 
+type User struct {
+	ID              int64      `json:"id"`
+	UUID            string     `json:"uuid"`
+	Name            string     `json:"name"`
+	Email           string     `json:"email"`
+	Guest           bool       `json:"guest"`
+	GuestStatus     string     `json:"guest_status"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
+	Role            string     `json:"role"`
+	Status          string     `json:"status"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
 type Board struct {
 	UUID        string    `json:"uuid"`
 	Name        string    `json:"name"`

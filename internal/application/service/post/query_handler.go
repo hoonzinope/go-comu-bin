@@ -26,6 +26,7 @@ type postQueryHandler struct {
 	attachmentRepository  port.AttachmentRepository
 	commentRepository     port.CommentRepository
 	reactionRepository    port.ReactionRepository
+	authorizationPolicy   policy.AuthorizationPolicy
 	cache                 port.Cache
 	cachePolicy           appcache.Policy
 	postDetailQuery       *postDetailQuery
@@ -33,7 +34,7 @@ type postQueryHandler struct {
 
 type QueryHandler = postQueryHandler
 
-func newPostQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *postQueryHandler {
+func newPostQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, authorizationPolicy policy.AuthorizationPolicy, cache port.Cache, cachePolicy appcache.Policy) *postQueryHandler {
 	return &postQueryHandler{
 		userRepository:        userRepository,
 		boardRepository:       boardRepository,
@@ -45,14 +46,15 @@ func newPostQueryHandler(userRepository port.UserRepository, boardRepository por
 		attachmentRepository:  attachmentRepository,
 		commentRepository:     commentRepository,
 		reactionRepository:    reactionRepository,
+		authorizationPolicy:   authorizationPolicy,
 		cache:                 cache,
 		cachePolicy:           cachePolicy,
 		postDetailQuery:       newPostDetailQuery(userRepository, boardRepository, postRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository),
 	}
 }
 
-func NewQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, cache port.Cache, cachePolicy appcache.Policy) *QueryHandler {
-	return newPostQueryHandler(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, cache, cachePolicy)
+func NewQueryHandler(userRepository port.UserRepository, boardRepository port.BoardRepository, postRepository port.PostRepository, postSearchRepository port.PostSearchRepository, postRankingRepository port.PostRankingRepository, tagRepository port.TagRepository, postTagRepository port.PostTagRepository, attachmentRepository port.AttachmentRepository, commentRepository port.CommentRepository, reactionRepository port.ReactionRepository, authorizationPolicy policy.AuthorizationPolicy, cache port.Cache, cachePolicy appcache.Policy) *QueryHandler {
+	return newPostQueryHandler(userRepository, boardRepository, postRepository, postSearchRepository, postRankingRepository, tagRepository, postTagRepository, attachmentRepository, commentRepository, reactionRepository, authorizationPolicy, cache, cachePolicy)
 }
 
 func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, sortValue string, windowValue string, limit int, cursor string) (*model.PostList, error) {
@@ -139,6 +141,37 @@ func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, s
 		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post list cache payload")
 	}
 	return list, nil
+}
+
+func (h *postQueryHandler) GetMyDraftPosts(ctx context.Context, authorID int64, limit int, cursor string) (*model.PostList, error) {
+	if err := svccommon.RequirePositiveLimit(limit); err != nil {
+		return nil, err
+	}
+	lastID, err := svccommon.DecodeOpaqueCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	fetchLimit, err := svccommon.CursorFetchLimit(limit)
+	if err != nil {
+		return nil, err
+	}
+	page, err := svccommon.LoadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Post, error) {
+		posts, err := h.postRepository.SelectDraftPostsByAuthorID(ctx, authorID, fetchLimit, lastID)
+		if err != nil {
+			return nil, customerror.WrapRepository("select draft posts by author", err)
+		}
+		return posts, nil
+	}, func(item *entity.Post) int64 {
+		return item.ID
+	})
+	if err != nil {
+		return nil, err
+	}
+	postModels, err := h.postsFromEntities(ctx, page.Items)
+	if err != nil {
+		return nil, err
+	}
+	return &model.PostList{Posts: postModels, Limit: limit, Cursor: page.Cursor, HasMore: page.HasMore, NextCursor: page.NextCursor}, nil
 }
 
 func (h *postQueryHandler) GetPostsByTag(ctx context.Context, tagName string, sortValue string, windowValue string, limit int, cursor string) (*model.PostList, error) {
@@ -296,6 +329,27 @@ func (h *postQueryHandler) GetPostDetail(ctx context.Context, postUUID string) (
 		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post detail cache payload")
 	}
 	return detail, nil
+}
+
+func (h *postQueryHandler) GetDraftPost(ctx context.Context, postUUID string, userID int64) (*model.PostDetail, error) {
+	post, err := h.postRepository.SelectPostByUUIDIncludingUnpublished(ctx, postUUID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select draft post by uuid", err)
+	}
+	if post == nil || post.Status == entity.PostStatusDeleted {
+		return nil, customerror.ErrPostNotFound
+	}
+	requester, err := h.userRepository.SelectUserByID(ctx, userID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select requester for draft post", err)
+	}
+	if requester == nil {
+		return nil, customerror.ErrUserNotFound
+	}
+	if err := h.authorizationPolicy.OwnerOrAdmin(requester, post.AuthorID); err != nil {
+		return nil, err
+	}
+	return h.postDetailQuery.LoadDraft(ctx, post.ID)
 }
 
 func (h *postQueryHandler) postsFromEntities(ctx context.Context, posts []*entity.Post) ([]model.Post, error) {

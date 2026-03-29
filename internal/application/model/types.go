@@ -10,6 +10,7 @@ type Board struct {
 	UUID        string
 	Name        string
 	Description string
+	Hidden      bool
 	CreatedAt   time.Time
 }
 

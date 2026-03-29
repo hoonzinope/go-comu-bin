@@ -57,6 +57,35 @@ WHERE uuid = ? AND status = 'published'
 `, postUUID)
 }
 
+func (r *PostRepository) SelectDraftPostsByAuthorID(ctx context.Context, authorID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	if limit <= 0 {
+		return []*entity.Post{}, nil
+	}
+	rows, err := r.db.QueryContext(ctx, `
+SELECT id, uuid, title, content, author_id, board_id, status, created_at, published_at, updated_at, deleted_at
+FROM posts
+WHERE author_id = ? AND status = 'draft' AND (? <= 0 OR id < ?)
+ORDER BY id DESC
+LIMIT ?
+`, authorID, lastID, lastID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	posts := make([]*entity.Post, 0, limit)
+	for rows.Next() {
+		post, scanErr := scanPost(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		posts = append(posts, post)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
 func (r *PostRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
 	return r.selectPostUUIDsByIDs(ctx, ids, false)
 }

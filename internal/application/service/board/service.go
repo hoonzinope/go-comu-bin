@@ -94,6 +94,50 @@ func (s *BoardService) GetBoards(ctx context.Context, limit int, cursor string) 
 	return list, nil
 }
 
+func (s *BoardService) GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
+	if err := svccommon.RequirePositiveLimit(limit); err != nil {
+		return nil, err
+	}
+	lastID, err := svccommon.DecodeOpaqueCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	cacheKey := key.BoardAdminList(limit, lastID)
+	value, err := s.cache.GetOrSetWithTTL(ctx, cacheKey, s.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
+		fetchLimit, err := svccommon.CursorFetchLimit(limit)
+		if err != nil {
+			return nil, err
+		}
+		page, err := svccommon.LoadCursorListPage(ctx, limit, cursor, lastID, func(ctx context.Context) ([]*entity.Board, error) {
+			allBoards, err := s.boardRepository.SelectBoardListIncludingHidden(ctx, fetchLimit, lastID)
+			if err != nil {
+				return nil, customerror.WrapRepository("select all board list", err)
+			}
+			return allBoards, nil
+		}, func(item *entity.Board) int64 {
+			return item.ID
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &model.BoardList{
+			Boards:     mapper.BoardsFromEntities(page.Items),
+			Limit:      limit,
+			Cursor:     page.Cursor,
+			HasMore:    page.HasMore,
+			NextCursor: page.NextCursor,
+		}, nil
+	})
+	if err != nil {
+		return nil, svccommon.NormalizeCacheLoadError("load all board list cache", err)
+	}
+	list, ok := value.(*model.BoardList)
+	if !ok {
+		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode all board list cache payload")
+	}
+	return list, nil
+}
+
 func (s *BoardService) CreateBoard(ctx context.Context, userID int64, name, description string) (string, error) {
 	if strings.TrimSpace(name) == "" {
 		return "", customerror.ErrInvalidInput

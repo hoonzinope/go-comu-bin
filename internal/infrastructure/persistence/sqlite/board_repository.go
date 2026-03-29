@@ -122,6 +122,38 @@ LIMIT ?
 	return boards, nil
 }
 
+func (r *BoardRepository) SelectBoardListIncludingHidden(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("sqlite board repository is not initialized")
+	}
+	if limit <= 0 {
+		return []*entity.Board{}, nil
+	}
+	rows, err := r.db.QueryContext(ctx, `
+SELECT id, uuid, name, description, hidden, created_at
+FROM boards
+WHERE (? <= 0 OR id < ?)
+ORDER BY id DESC
+LIMIT ?
+`, lastID, lastID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	boards := make([]*entity.Board, 0, limit)
+	for rows.Next() {
+		board, scanErr := scanBoard(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		boards = append(boards, board)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return boards, nil
+}
+
 func (r *BoardRepository) Update(ctx context.Context, board *entity.Board) error {
 	if r == nil || r.db == nil {
 		return errors.New("sqlite board repository is not initialized")

@@ -128,6 +128,46 @@ func (q *postDetailQuery) Load(ctx context.Context, id int64) (*model.PostDetail
 	}, nil
 }
 
+func (q *postDetailQuery) LoadDraft(ctx context.Context, id int64) (*model.PostDetail, error) {
+	post, err := q.postRepository.SelectPostByIDIncludingUnpublished(ctx, id)
+	if err != nil {
+		return nil, customerror.WrapRepository("select draft post by id for post detail", err)
+	}
+	if post == nil {
+		return nil, customerror.ErrPostNotFound
+	}
+	board, err := q.boardRepository.SelectBoardByID(ctx, post.BoardID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select board by id for draft post detail", err)
+	}
+	if board == nil {
+		return nil, customerror.ErrBoardNotFound
+	}
+	userUUIDs, err := svccommon.UserUUIDsByIDs(ctx, q.userRepository, []int64{post.AuthorID})
+	if err != nil {
+		return nil, err
+	}
+	postModel, err := postModelFromEntity(post, board.UUID, userUUIDs)
+	if err != nil {
+		return nil, err
+	}
+	tags, err := tagsForPost(ctx, q.postTagRepository, q.tagRepository, post.ID)
+	if err != nil {
+		return nil, err
+	}
+	attachmentEntities, err := q.attachmentRepository.SelectByPostID(ctx, post.ID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select attachments for draft post detail", err)
+	}
+	return &model.PostDetail{
+		Post:        &postModel,
+		Tags:        tags,
+		Attachments: attachmentsFromEntities(post.UUID, attachmentEntities),
+		Comments:    []*model.CommentDetail{},
+		Reactions:   []model.Reaction{},
+	}, nil
+}
+
 func (q *postDetailQuery) visibleCommentsForDetail(ctx context.Context, postID int64, limit int) ([]*entity.Comment, bool, error) {
 	comments, err := q.commentRepository.SelectVisibleComments(ctx, postID, limit+1, 0)
 	if err != nil {

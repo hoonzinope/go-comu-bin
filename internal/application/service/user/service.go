@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	appevent "github.com/hoonzinope/go-comu-bin/internal/application/event"
+	"github.com/hoonzinope/go-comu-bin/internal/application/mapper"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -220,6 +221,18 @@ func (s *UserService) UpgradeGuest(ctx context.Context, userID int64, username, 
 		}
 		return nil
 	})
+}
+
+func (s *UserService) GetMe(ctx context.Context, userID int64) (*model.User, error) {
+	user, err := s.userRepository.SelectUserByID(ctx, userID)
+	if err != nil {
+		return nil, customerror.WrapRepository("select current user", err)
+	}
+	if user == nil {
+		return nil, customerror.ErrUserNotFound
+	}
+	current := mapper.UserFromEntity(user)
+	return &current, nil
 }
 
 func (s *UserService) DeleteMe(ctx context.Context, userID int64, password string) error {

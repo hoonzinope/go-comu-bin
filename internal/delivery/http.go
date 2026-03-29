@@ -250,6 +250,8 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.POST("/auth/password-reset/request", h.handlePasswordResetRequest)
 	v1.POST("/auth/password-reset/confirm", h.handlePasswordResetConfirm)
 	v1.POST("/auth/logout", h.authGinMiddleware, h.handleUserLogout)
+	v1.GET("/users/me", h.authGinMiddleware, h.handleMyUserGet)
+	v1.GET("/users/me/drafts", h.authGinMiddleware, h.handleMyDraftPostsGet)
 	v1.DELETE("/users/me", h.authGinMiddleware, h.handleUserDeleteMe)
 	v1.GET("/users/me/notifications", h.authGinMiddleware, h.handleMyNotificationsGet)
 	v1.GET("/users/me/notifications/unread-count", h.authGinMiddleware, h.handleMyNotificationsUnreadCountGet)
@@ -273,6 +275,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 	v1.GET("/posts/feed", h.handlePostFeedGet)
 	v1.GET("/posts/search", h.handlePostSearchGet)
 	v1.GET("/posts/:postUUID", h.handlePostDetailGet)
+	v1.GET("/posts/:postUUID/draft", h.authGinMiddleware, h.handleDraftPostGet)
 	v1.POST("/posts/:postUUID/publish", h.authGinMiddleware, h.handlePostPublish)
 	v1.GET("/posts/:postUUID/attachments", h.handlePostAttachmentsGet)
 	v1.GET("/posts/:postUUID/attachments/:attachmentUUID/file", h.handlePostAttachmentFileGet)
@@ -718,6 +721,58 @@ func (h *HTTPHandler) handleUserLogout(c *gin.Context) {
 	c.JSON(http.StatusOK, logoutResponse{Logout: "ok"})
 }
 
+// handleMyUserGet godoc
+// @Summary Get Current User
+// @Description Returns the authenticated user profile.
+// @Tags User
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} response.User
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/me [get]
+func (h *HTTPHandler) handleMyUserGet(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	user, err := h.userUseCase.GetMe(c.Request.Context(), userID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.UserFromDTO(user))
+}
+
+// handleMyDraftPostsGet godoc
+// @Summary List My Draft Posts
+// @Description Returns the authenticated user's draft posts.
+// @Tags Post
+// @Security BearerAuth
+// @Produce json
+// @Param limit query int false "Page size"
+// @Param cursor query string false "Opaque cursor"
+// @Success 200 {object} response.PostList
+// @Failure 401 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /users/me/drafts [get]
+func (h *HTTPHandler) handleMyDraftPostsGet(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	limit, cursor, ok := h.parseLimitCursor(c)
+	if !ok {
+		return
+	}
+	list, err := h.postUseCase.GetMyDraftPosts(c.Request.Context(), userID, limit, cursor)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.PostListFromDTO(list))
+}
+
 // handleUserDeleteMe godoc
 // @Summary Delete My Account
 // @Description Delete the authenticated user account with password confirmation.
@@ -751,6 +806,36 @@ func (h *HTTPHandler) handleUserDeleteMe(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// handleDraftPostGet godoc
+// @Summary Get Draft Post
+// @Description Returns a draft post by UUID for the owner or admin.
+// @Tags Post
+// @Security BearerAuth
+// @Produce json
+// @Param postUUID path string true "Post UUID" format(uuid)
+// @Success 200 {object} response.PostDetail
+// @Failure 401 {object} errorResponse
+// @Failure 403 {object} errorResponse
+// @Failure 404 {object} errorResponse
+// @Failure 500 {object} errorResponse
+// @Router /posts/{postUUID}/draft [get]
+func (h *HTTPHandler) handleDraftPostGet(c *gin.Context) {
+	userID, ok := h.requireAuthUserID(c)
+	if !ok {
+		return
+	}
+	postUUID, ok := parsePathUUID(c, "postUUID", "post")
+	if !ok {
+		return
+	}
+	detail, err := h.postUseCase.GetDraftPost(c.Request.Context(), postUUID, userID)
+	if err != nil {
+		writeUseCaseError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, response.PostDetailFromDTO(detail))
 }
 
 // handleMyNotificationsGet godoc

@@ -5,11 +5,28 @@ import (
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
+func UserFromEntity(user *entity.User) model.User {
+	return model.User{
+		ID:              user.ID,
+		UUID:            user.UUID,
+		Name:            user.Name,
+		Email:           user.Email,
+		Guest:           user.Guest,
+		GuestStatus:     user.GuestStatus,
+		EmailVerifiedAt: user.EmailVerifiedAt,
+		Role:            user.Role,
+		Status:          user.Status,
+		CreatedAt:       user.CreatedAt,
+		UpdatedAt:       user.UpdatedAt,
+	}
+}
+
 func BoardFromEntity(board *entity.Board) model.Board {
 	return model.Board{
 		UUID:        board.UUID,
 		Name:        board.Name,
 		Description: board.Description,
+		Hidden:      board.Hidden,
 		CreatedAt:   board.CreatedAt,
 	}
 }

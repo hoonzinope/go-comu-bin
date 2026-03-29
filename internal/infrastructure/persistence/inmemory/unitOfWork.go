@@ -611,6 +611,10 @@ func (r boardTxRepository) SelectBoardList(ctx context.Context, limit int, lastI
 	_ = ctx
 	return r.repo.selectBoardList(limit, lastID)
 }
+func (r boardTxRepository) SelectBoardListIncludingHidden(ctx context.Context, limit int, lastID int64) ([]*entity.Board, error) {
+	_ = ctx
+	return r.repo.selectBoardListIncludingHidden(limit, lastID)
+}
 func (r boardTxRepository) Save(ctx context.Context, board *entity.Board) (int64, error) {
 	_ = ctx
 	if r.beforeWrite != nil {
@@ -647,6 +651,10 @@ func (r postTxRepository) SelectPostByID(ctx context.Context, id int64) (*entity
 func (r postTxRepository) SelectPostByUUID(ctx context.Context, postUUID string) (*entity.Post, error) {
 	_ = ctx
 	return r.repo.selectPostByUUID(postUUID)
+}
+func (r postTxRepository) SelectDraftPostsByAuthorID(ctx context.Context, authorID int64, limit int, lastID int64) ([]*entity.Post, error) {
+	_ = ctx
+	return r.repo.selectDraftPostsByAuthorID(authorID, limit, lastID)
 }
 func (r postTxRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
 	_ = ctx

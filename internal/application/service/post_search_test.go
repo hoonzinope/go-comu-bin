@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hoonzinope/go-comu-bin/internal/application/policy"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
 	postsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/post"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
@@ -105,6 +106,7 @@ func TestPostQueryHandler_SearchPosts_UsesCompositeCursorPagination(t *testing.T
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		policy.NewRoleAuthorizationPolicy(),
 		newTestCache(),
 		newTestCachePolicy(),
 	)
@@ -150,6 +152,7 @@ func TestPostQueryHandler_SearchPosts_RankedCursorPaginationUsesFeedCursor(t *te
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		policy.NewRoleAuthorizationPolicy(),
 		newTestCache(),
 		newTestCachePolicy(),
 	)
@@ -187,6 +190,7 @@ func TestPostQueryHandler_SearchPosts_InvalidCursor(t *testing.T) {
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		policy.NewRoleAuthorizationPolicy(),
 		newTestCache(),
 		newTestCachePolicy(),
 	)
@@ -209,6 +213,7 @@ func TestPostQueryHandler_SearchPosts_WithoutRepositoryFails(t *testing.T) {
 		repositories.attachment,
 		repositories.comment,
 		repositories.reaction,
+		policy.NewRoleAuthorizationPolicy(),
 		newTestCache(),
 		newTestCachePolicy(),
 	)

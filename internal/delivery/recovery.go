@@ -9,6 +9,10 @@ import (
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 )
 
+func RecoveryWithLogger(logger *slog.Logger) gin.HandlerFunc {
+	return recoveryWithLogger(logger)
+}
+
 func recoveryWithLogger(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {

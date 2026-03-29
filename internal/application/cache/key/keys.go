@@ -10,6 +10,14 @@ func BoardListPrefix() string {
 	return "boards:list:"
 }
 
+func BoardAdminList(limit int, lastID int64) string {
+	return fmt.Sprintf("boards:admin:list:limit:%d:last:%d", limit, lastID)
+}
+
+func BoardAdminListPrefix() string {
+	return "boards:admin:list:"
+}
+
 func PostList(boardID int64, limit int, lastID int64) string {
 	return fmt.Sprintf("posts:list:board:%d:limit:%d:last:%d", boardID, limit, lastID)
 }
