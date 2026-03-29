@@ -30,6 +30,24 @@ func (r *countingPostRepository) SelectPostsByIDsIncludingUnpublished(ctx contex
 	return r.PostRepository.SelectPostsByIDsIncludingUnpublished(ctx, ids)
 }
 
+type recordingPostRankingRepository struct {
+	port.PostRankingRepository
+	listFeedCalls int
+	lastSort      port.PostFeedSort
+	lastWindow    port.PostRankingWindow
+	lastLimit     int
+	lastCursor    *port.PostFeedCursor
+}
+
+func (r *recordingPostRankingRepository) ListFeed(ctx context.Context, sortBy port.PostFeedSort, window port.PostRankingWindow, limit int, cursor *port.PostFeedCursor) ([]port.PostFeedResult, error) {
+	r.listFeedCalls++
+	r.lastSort = sortBy
+	r.lastWindow = window
+	r.lastLimit = limit
+	r.lastCursor = cursor
+	return r.PostRankingRepository.ListFeed(ctx, sortBy, window, limit, cursor)
+}
+
 func TestPostService_GetFeed_DefaultsToHotAndReflectsRankingEvents(t *testing.T) {
 	repositories := newTestRepositories()
 	cache := newTestCache()
@@ -255,4 +273,62 @@ func TestPostService_GetFeed_RejectsInvalidSortAndCursor(t *testing.T) {
 	_, err = svc.GetFeed(context.Background(), "hot", "", 10, "bad-cursor")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, customerror.ErrInvalidInput))
+}
+
+func TestPostService_GetFeed_TopPropagatesDefaultAndExplicitWindows(t *testing.T) {
+	cases := []struct {
+		name       string
+		window     string
+		wantWindow port.PostRankingWindow
+	}{
+		{name: "default", window: "", wantWindow: port.PostRankingWindow7d},
+		{name: "24h", window: "24h", wantWindow: port.PostRankingWindow24h},
+		{name: "7d", window: "7d", wantWindow: port.PostRankingWindow7d},
+		{name: "30d", window: "30d", wantWindow: port.PostRankingWindow30d},
+		{name: "all", window: "all", wantWindow: port.PostRankingWindowAll},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repositories := newTestRepositories()
+			recordingRanking := &recordingPostRankingRepository{PostRankingRepository: repositories.postRanking}
+			repositories.postRanking = recordingRanking
+			cache := newTestCache()
+			actionDispatcher := newTestActionDispatcher(t, repositories, cache)
+			postSvc := NewPostServiceWithActionDispatcher(
+				repositories.user,
+				repositories.board,
+				repositories.post,
+				repositories.postSearch,
+				repositories.postRanking,
+				repositories.tag,
+				repositories.postTag,
+				repositories.attachment,
+				repositories.comment,
+				repositories.reaction,
+				repositories.unitOfWork,
+				cache,
+				actionDispatcher,
+				newTestCachePolicy(),
+				newTestAuthorizationPolicy(),
+			)
+			userID := seedUser(repositories.user, "alice", "pw", "user")
+			boardID := seedBoard(repositories.board, "free", "desc")
+			boardUUID := mustBoardUUID(t, repositories.board, boardID)
+			postUUID, err := postSvc.CreatePost(context.Background(), "top title", "top body", nil, nil, userID, boardUUID)
+			require.NoError(t, err)
+			createdPost, err := repositories.post.SelectPostByUUID(context.Background(), postUUID)
+			require.NoError(t, err)
+			require.NotNil(t, createdPost)
+			require.NoError(t, repositories.postRanking.UpsertPostSnapshot(context.Background(), createdPost.ID, createdPost.BoardID, createdPost.PublishedAt, createdPost.Status))
+
+			list, err := postSvc.GetFeed(context.Background(), "top", tc.window, 10, "")
+			require.NoError(t, err)
+			require.Len(t, list.Posts, 1)
+			assert.Equal(t, postUUID, list.Posts[0].UUID)
+			require.Equal(t, 1, recordingRanking.listFeedCalls)
+			assert.Equal(t, port.PostFeedSortTop, recordingRanking.lastSort)
+			assert.Equal(t, tc.wantWindow, recordingRanking.lastWindow)
+		})
+	}
 }
