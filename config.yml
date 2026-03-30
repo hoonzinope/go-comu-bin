@@ -72,9 +72,9 @@ event:
 
 admin:
   bootstrap:
-    enabled: false
-    username: ""
-    password: ""
+    enabled: true
+    username: "admin"
+    password: "commu-admin-1q2w#E$R!"
 
 jobs:
   enabled: true

@@ -2008,7 +2008,8 @@
 결론
 
 - admin bootstrap은 기본 비활성화하고, config에서 명시적으로 `enabled` 했을 때만 수행한다.
-- bootstrap admin의 `username`, `password`는 config에서 받되, 빈 값과 알려진 기본값(`admin`) 같은 placeholder는 허용하지 않는다.
+- bootstrap admin의 `username`, `password`는 config에서 받되, 빈 값은 허용하지 않는다.
+- 로컬 샘플 `config.yml`에서 초기 bootstrap admin을 `admin/admin`으로 두는 예외는 별도 결정으로 관리한다.
 - JWT secret도 committed default를 두지 않고, placeholder/빈 값이면 시작 실패로 처리한다.
 - 토큰 검증 시 세션 캐시뿐 아니라 사용자 존재/삭제 상태도 다시 확인해 deleted user의 stale session을 차단한다.
 - 로그인 요청도 signup과 동일하게 request validation을 먼저 수행한다.
@@ -2026,6 +2027,72 @@
 - `cmd/main.go`
 - `config.yml`
 - `docs/ARCHITECTURE.md`
+
+## 2026-03-30 - 로컬 기본 이미지에는 초기 bootstrap admin을 config로 함께 심는다
+
+상태
+
+- decided
+
+배경
+
+- 로컬에서 처음 컨테이너를 띄울 때 관리 계정이 없으면 웹 UI의 관리자 경로 검증이 막힌다.
+- 이미지 기본 구성과 호스트 데이터 디렉터리가 분리되어 있으므로, 초기 시드 계정은 데이터 볼륨이 아니라 config에서 읽어야 한다.
+- 기존 bootstrap 로직은 "없으면 생성"에 가까웠고, 이미 같은 username이 있을 때는 패스워드를 갱신하지 않았다.
+
+결론
+
+- 기본 `config.yml`에 `admin.bootstrap.enabled`, `admin.bootstrap.username`, `admin.bootstrap.password`를 넣고, 이미지 초기 실행 시 해당 계정을 upsert 방식으로 맞춘다.
+- bootstrap admin은 `username` 기준으로 찾아서 없으면 생성, 있으면 role/password/status를 config 값으로 갱신한다.
+- 이 기본값은 로컬 개발/검증 편의를 위한 것이며, 배포 환경에서는 호스트 config로 덮어쓸 수 있다.
+
+후속 작업
+
+- `cmd/main.go`의 bootstrap admin 로직을 upsert로 변경
+- `internal/config` 검증과 테스트에 bootstrap 기본값 반영
+- `config.yml`, `README.md`, `docs/CONFIG.md`, `.env.example` 갱신
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `config.yml`
+- `internal/config/config.go`
+- `docs/CONFIG.md`
+
+## 2026-03-30 - 로컬 bootstrap admin의 초기 비밀번호와 점검 스크립트를 고정한다
+
+상태
+
+- decided
+
+배경
+
+- 초기 관리 계정은 로컬에서 바로 로그인할 수 있어야 하며, 비밀번호를 다시 추측하거나 별도 전달받지 않아도 되어야 한다.
+- 운영 점검 시에는 현재 설정 파일 기준으로 부팅된 관리 계정이 실제로 로그인 가능한지 빠르게 확인할 수 있어야 한다.
+
+관찰
+
+- 기본 `config.yml`은 container image 내부에서 읽히지만, 호스트 config로 덮어쓸 수도 있다.
+- bootstrap admin은 `cmd/main.go`에서 config 값을 기준으로 upsert된다.
+- 로그인 성공 여부는 `/api/v1/auth/login` 응답 코드와 `Authorization` 헤더로 확인할 수 있다.
+
+결론
+
+- 로컬 기본 bootstrap admin은 `admin / commu-admin-1q2w#E$R!`로 고정한다.
+- 관리용 점검은 `scripts/check-bootstrap-admin.sh`가 현재 설정 파일을 읽어 로그인 가능 여부를 검사한다.
+
+후속 작업
+
+- `config.yml`과 호스트 config를 새 비밀번호로 갱신
+- `README.md`, `docs/CONFIG.md`에 초기 비밀번호와 점검 스크립트 반영
+- `scripts/check-bootstrap-admin.sh` 추가
+
+관련 문서/코드
+
+- `config.yml`
+- `scripts/check-bootstrap-admin.sh`
+- `cmd/main.go`
+- `README.md`
 - `docs/CONFIG.md`
 
 ## 2026-03-11 - ROADMAP 상태 표기를 outbox 전환 기준으로 동기화

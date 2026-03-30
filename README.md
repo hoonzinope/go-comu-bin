@@ -88,16 +88,22 @@ docker run -d \
 - macOS 호스트 경로를 직접 붙이는 bind mount는 SQLite WAL과 충돌할 수 있으니 피하는 편이 낫습니다.
 
 `docker-compose.yml`을 쓰면 같은 구성을 더 짧게 반복할 수 있습니다.
+호스트에서 `config.yml`을 관리하려면 `COMMU_BIN_CONFIG_PATH`로 파일 경로를 지정해 `/app/config.yml`에 읽기 전용 마운트합니다.
+기본 `config.yml`에는 로컬 관리용 초기 bootstrap admin(`admin` / `commu-admin-1q2w#E$R!`)이 들어 있습니다.
 
 `.env.example`을 `.env`로 복사한 뒤 값을 채우면 됩니다.
 
 ```bash
 COMMU_BIN_IMAGE=docker.io/<your-user>/commu-bin:latest \
+COMMU_BIN_CONFIG_PATH=/Users/hoonzi/Documents/docker_v/go-commu-bin-data/config.yml \
 DELIVERY_HTTP_AUTH_SECRET='replace-with-real-secret' \
 docker compose up -d
 ```
 
 - `commu_data`와 `commu_logs` named volume이 자동으로 생성됩니다.
+- `COMMU_BIN_CONFIG_PATH`가 가리키는 호스트 `config.yml`이 `/app/config.yml`로 마운트됩니다.
+- bootstrap admin은 `config.yml`의 `admin.bootstrap.*` 값으로 시드됩니다.
+- 관리용 점검은 `scripts/check-bootstrap-admin.sh`를 사용하면 됩니다.
 - 이미지 이름은 Docker Hub에 push한 태그로 바꾸면 됩니다.
 
 ## Configuration

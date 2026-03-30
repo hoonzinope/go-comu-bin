@@ -15,6 +15,9 @@
 - 예: `ADMIN_BOOTSTRAP_PASSWORD`
 - 예: `LOGGING_FILEPATH`
 
+Docker Compose로 호스트 설정 파일을 쓰는 경우에는 `COMMU_BIN_CONFIG_PATH`를 `/app/config.yml`에 마운트해서 사용합니다.
+기본 `config.yml`은 로컬 관리용 초기 bootstrap admin(`admin` / `commu-admin-1q2w#E$R!`)을 포함합니다.
+
 ## 예시
 
 ```yaml
@@ -188,10 +191,9 @@ jobs:
 - `event.outbox.processingLeaseMillis`: `> 0`
 - `event.outbox.leaseRefreshMillis`: `> 0`
 - `event.outbox.leaseRefreshMillis`: `processingLeaseMillis`보다 작아야 함
-- `admin.bootstrap.enabled`: 기본 `false`
+- `admin.bootstrap.enabled`: 기본 `true` in repo sample config
 - `admin.bootstrap.username`: bootstrap enabled일 때 필수
 - `admin.bootstrap.password`: bootstrap enabled일 때 필수
-- `admin.bootstrap.password`: placeholder 값 금지 (`admin`)
 - `cache.listTTLSeconds`: `> 0`
 - `cache.detailTTLSeconds`: `> 0`
 - `cache.maxCost`: `> 0`, runtime cache capacity
@@ -283,4 +285,5 @@ jobs:
 - 커밋된 `config.yml`은 샘플로 취급합니다.
 - 실제 실행 전에는 `delivery.http.auth.secret`를 반드시 실값으로 넣어야 합니다.
 - 운영 환경에서는 예측 가능한 문자열 대신 충분히 긴 랜덤 시크릿(최소 32자 이상)을 사용합니다.
-- bootstrap admin이 필요할 때만 `admin.bootstrap.enabled=true`로 켜고, 일회성 강한 비밀번호를 설정한 뒤 다시 끄는 것을 기본으로 합니다.
+- bootstrap admin은 샘플 `config.yml`에 포함되어 있다. 운영 환경에서는 호스트 config로 덮어쓰거나 별도 시드 전략을 사용한다.
+- 관리용 점검 스크립트는 `scripts/check-bootstrap-admin.sh`를 사용한다.

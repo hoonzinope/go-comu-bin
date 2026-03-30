@@ -152,6 +152,24 @@ func (b *testBoardUseCase) SetBoardVisibility(ctx context.Context, boardUUID str
 	return nil
 }
 
+type testBoardUseCaseEmpty struct{}
+
+func (b *testBoardUseCaseEmpty) GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
+	_, _, _ = ctx, limit, cursor
+	return &model.BoardList{}, nil
+}
+
+func (b *testBoardUseCaseEmpty) GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
+	_, _, _ = ctx, limit, cursor
+	return &model.BoardList{}, nil
+}
+
+func (b *testBoardUseCaseEmpty) SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error {
+	_, _, _ = ctx, boardUUID, userID
+	_ = hidden
+	return nil
+}
+
 type testPostUseCase struct{}
 
 func (p *testPostUseCase) CreatePost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
@@ -434,6 +452,35 @@ func newTestWebHandlerWithSession(session *testSessionUseCase) *Handler {
 	return h
 }
 
+func newTestWebHandlerWithBoardUseCase(session *testSessionUseCase, boardUseCase interface {
+	GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error
+}) *Handler {
+	if session == nil {
+		session = &testSessionUseCase{}
+	}
+	if boardUseCase == nil {
+		boardUseCase = &testBoardUseCase{}
+	}
+	h, err := NewHandler(Dependencies{
+		AccountUseCase:      &testAccountUseCase{},
+		SessionUseCase:      session,
+		UserUseCase:         &testUserUseCase{},
+		BoardUseCase:        boardUseCase,
+		PostUseCase:         &testPostUseCase{},
+		CommentUseCase:      &testCommentUseCase{},
+		NotificationUseCase: &testNotificationUseCase{},
+		ReportUseCase:       &testReportUseCase{},
+		OutboxAdminUseCase:  &testOutboxAdminUseCase{},
+		AppName:             "Commu Bin",
+	})
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
 func newTestWebEngine() *gin.Engine {
 	return newTestWebEngineWithSession(&testSessionUseCase{})
 }
@@ -442,6 +489,17 @@ func newTestWebEngineWithSession(session *testSessionUseCase) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	newTestWebHandlerWithSession(session).RegisterRoutes(r)
+	return r
+}
+
+func newTestWebEngineWithBoardUseCase(session *testSessionUseCase, boardUseCase interface {
+	GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error
+}) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	newTestWebHandlerWithBoardUseCase(session, boardUseCase).RegisterRoutes(r)
 	return r
 }
 
@@ -554,6 +612,20 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "Requeue")
 		assert.Contains(t, rr.Body.String(), "Discard")
 	})
+}
+
+func TestHandler_RenderCoreScreens_DisablesNewPostWhenNoBoards(t *testing.T) {
+	r := newTestWebEngineWithBoardUseCase(&testSessionUseCase{}, &testBoardUseCaseEmpty{})
+
+	req, rr := authRequest(http.MethodGet, "/")
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	assert.Contains(t, body, "New Post")
+	assert.Contains(t, body, "bottom-nav-item is-disabled")
+	assert.Contains(t, body, "aria-disabled=\"true\"")
+	assert.NotContains(t, body, "href=\"/login\"")
 }
 
 func TestHandler_RenderCoreScreens_PreservesSessionCookieOnTransientValidationFailure(t *testing.T) {

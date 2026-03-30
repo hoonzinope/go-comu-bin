@@ -807,10 +807,15 @@ func (h *Handler) shellForRequest(c *gin.Context, activeNav string) (ShellData, 
 	}
 	boards := h.loadBoards(c.Request.Context())
 	csrfToken := h.ensureCSRFToken(c)
+	composeURL := ""
+	if len(boards) > 0 {
+		composeURL = "/boards/" + boards[0].UUID + "/posts/new"
+	}
 	shell := ShellData{
 		AppName:     fallbackAppName(h.deps.AppName),
 		Title:       fallbackAppName(h.deps.AppName),
 		ActiveNav:   activeNav,
+		ComposeURL:  composeURL,
 		CurrentUser: user,
 		UnreadCount: h.loadUnreadCount(c.Request.Context(), user),
 		CSRFToken:   csrfToken,

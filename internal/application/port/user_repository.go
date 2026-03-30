@@ -10,6 +10,7 @@ import (
 type UserRepository interface {
 	Save(ctx context.Context, user *entity.User) (int64, error)
 	SelectUserByUsername(ctx context.Context, username string) (*entity.User, error)
+	SelectUserByUsernameIncludingDeleted(ctx context.Context, username string) (*entity.User, error)
 	SelectUserByEmail(ctx context.Context, email string) (*entity.User, error)
 	SelectUserByUUID(ctx context.Context, userUUID string) (*entity.User, error)
 	SelectUserByID(ctx context.Context, id int64) (*entity.User, error)

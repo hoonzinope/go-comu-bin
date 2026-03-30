@@ -88,6 +88,25 @@ func (r *UserRepository) selectUserByUsername(username string) (*entity.User, er
 	return nil, nil
 }
 
+func (r *UserRepository) SelectUserByUsernameIncludingDeleted(ctx context.Context, username string) (*entity.User, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+	return r.selectUserByUsernameIncludingDeleted(username)
+}
+
+func (r *UserRepository) selectUserByUsernameIncludingDeleted(username string) (*entity.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, user := range r.userDB.Data {
+		if user.Name == username {
+			return cloneUser(user), nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *UserRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
 	_ = ctx
 	r.coordinator.enter()

@@ -85,6 +85,7 @@ type ShellData struct {
 	Title           string
 	Description     string
 	ActiveNav       string
+	ComposeURL      string
 	CurrentUser     *model.User
 	IsAuthenticated bool
 	IsAdmin         bool

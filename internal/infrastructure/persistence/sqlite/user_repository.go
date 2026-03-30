@@ -71,6 +71,10 @@ func (r *UserRepository) SelectUserByUsername(ctx context.Context, username stri
 	return r.selectUser(ctx, "SELECT * FROM users WHERE name = ? AND deleted_at IS NULL LIMIT 1", strings.TrimSpace(username))
 }
 
+func (r *UserRepository) SelectUserByUsernameIncludingDeleted(ctx context.Context, username string) (*entity.User, error) {
+	return r.selectUser(ctx, "SELECT * FROM users WHERE name = ? LIMIT 1", strings.TrimSpace(username))
+}
+
 func (r *UserRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
 	email = normalizeEmailForStorage(email)
 	if email == "" {

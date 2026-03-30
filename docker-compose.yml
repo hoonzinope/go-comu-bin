@@ -13,8 +13,8 @@ services:
       STORAGE_PROVIDER: "local"
       STORAGE_LOCAL_ROOTDIR: "/app/data/uploads"
       JOBS_ENABLED: "true"
-      ADMIN_BOOTSTRAP_ENABLED: "false"
     volumes:
+      - "${COMMU_BIN_CONFIG_PATH:?set COMMU_BIN_CONFIG_PATH}:/app/config.yml:ro"
       - commu_data:/app/data
       - commu_logs:/app/logs
 

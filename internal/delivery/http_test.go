@@ -149,6 +149,10 @@ func (f *fakeUserUseCase) SelectUserByUsername(_ context.Context, username strin
 	return &entity.User{ID: 1, Name: username, Status: entity.UserStatusActive}, nil
 }
 
+func (f *fakeUserUseCase) SelectUserByUsernameIncludingDeleted(_ context.Context, username string) (*entity.User, error) {
+	return &entity.User{ID: 1, Name: username, Status: entity.UserStatusActive}, nil
+}
+
 func (f *fakeUserUseCase) SelectUserByEmail(_ context.Context, email string) (*entity.User, error) {
 	return &entity.User{ID: 1, Email: email, Status: entity.UserStatusActive}, nil
 }

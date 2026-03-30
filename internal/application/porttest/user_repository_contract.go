@@ -46,6 +46,30 @@ func RunUserRepositoryContractTests(t *testing.T, newRepository func() port.User
 		assert.Equal(t, id, byUUID.ID)
 	})
 
+	t.Run("select by username including deleted returns soft deleted user", func(t *testing.T) {
+		repo := newRepository()
+
+		user := entity.NewUser("alice", "pw")
+		id, err := repo.Save(context.Background(), user)
+		require.NoError(t, err)
+		user.ID = id
+		now := time.Now()
+		user.Status = entity.UserStatusDeleted
+		user.DeletedAt = &now
+		user.UpdatedAt = now
+		require.NoError(t, repo.Update(context.Background(), user))
+
+		byName, err := repo.SelectUserByUsername(context.Background(), "alice")
+		require.NoError(t, err)
+		assert.Nil(t, byName)
+
+		includingDeleted, err := repo.SelectUserByUsernameIncludingDeleted(context.Background(), "alice")
+		require.NoError(t, err)
+		require.NotNil(t, includingDeleted)
+		assert.Equal(t, id, includingDeleted.ID)
+		assert.True(t, includingDeleted.IsDeleted())
+	})
+
 	t.Run("username is unique", func(t *testing.T) {
 		repo := newRepository()
 

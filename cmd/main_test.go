@@ -21,8 +21,10 @@ import (
 )
 
 type stubUserRepository struct {
-	selectUserByUsername func(ctx context.Context, username string) (*entity.User, error)
-	save                 func(ctx context.Context, user *entity.User) (int64, error)
+	selectUserByUsername                 func(ctx context.Context, username string) (*entity.User, error)
+	selectUserByUsernameIncludingDeleted func(ctx context.Context, username string) (*entity.User, error)
+	save                                 func(ctx context.Context, user *entity.User) (int64, error)
+	update                               func(ctx context.Context, user *entity.User) error
 }
 
 func (r *stubUserRepository) Save(ctx context.Context, user *entity.User) (int64, error) {
@@ -35,6 +37,13 @@ func (r *stubUserRepository) Save(ctx context.Context, user *entity.User) (int64
 func (r *stubUserRepository) SelectUserByUsername(ctx context.Context, username string) (*entity.User, error) {
 	if r.selectUserByUsername != nil {
 		return r.selectUserByUsername(ctx, username)
+	}
+	return nil, nil
+}
+
+func (r *stubUserRepository) SelectUserByUsernameIncludingDeleted(ctx context.Context, username string) (*entity.User, error) {
+	if r.selectUserByUsernameIncludingDeleted != nil {
+		return r.selectUserByUsernameIncludingDeleted(ctx, username)
 	}
 	return nil, nil
 }
@@ -63,7 +72,10 @@ func (r *stubUserRepository) SelectGuestCleanupCandidates(context.Context, time.
 	return []*entity.User{}, nil
 }
 
-func (r *stubUserRepository) Update(context.Context, *entity.User) error {
+func (r *stubUserRepository) Update(ctx context.Context, user *entity.User) error {
+	if r.update != nil {
+		return r.update(ctx, user)
+	}
 	return nil
 }
 
@@ -106,25 +118,74 @@ func TestEnsureBootstrapAdmin_SkipsWhenDisabled(t *testing.T) {
 	assert.False(t, called)
 }
 
-func TestEnsureBootstrapAdmin_SkipsWhenUserAlreadyExists(t *testing.T) {
+func TestEnsureBootstrapAdmin_UpdatesExistingActiveUser(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Admin.Bootstrap.Enabled = true
 	cfg.Admin.Bootstrap.Username = "admin"
 	cfg.Admin.Bootstrap.Password = "strong-admin-password"
 
-	calledSave := false
+	var updatedUser *entity.User
 	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
-		selectUserByUsername: func(_ context.Context, username string) (*entity.User, error) {
-			return &entity.User{ID: 1, Name: username}, nil
+		selectUserByUsernameIncludingDeleted: func(_ context.Context, username string) (*entity.User, error) {
+			return &entity.User{ID: 1, Name: username, Role: "user", Status: entity.UserStatusActive}, nil
+		},
+		update: func(_ context.Context, user *entity.User) error {
+			updatedUser = user
+			return nil
 		},
 		save: func(context.Context, *entity.User) (int64, error) {
-			calledSave = true
-			return 1, nil
+			t.Fatal("save should not be called when updating an existing user")
+			return 0, nil
 		},
 	})
 
 	require.NoError(t, err)
-	assert.False(t, calledSave)
+	require.NotNil(t, updatedUser)
+	assert.Equal(t, "admin", updatedUser.Name)
+	assert.Equal(t, "admin", updatedUser.Role)
+	assert.Equal(t, entity.UserStatusActive, updatedUser.Status)
+}
+
+func TestEnsureBootstrapAdmin_UpsertsExistingUser(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Admin.Bootstrap.Enabled = true
+	cfg.Admin.Bootstrap.Username = "admin"
+	cfg.Admin.Bootstrap.Password = "admin"
+
+	var updatedUser *entity.User
+	err := ensureBootstrapAdmin(cfg, &stubUserRepository{
+		selectUserByUsernameIncludingDeleted: func(_ context.Context, username string) (*entity.User, error) {
+			return &entity.User{
+				ID:               1,
+				UUID:             "existing-uuid",
+				Name:             username,
+				Password:         "old-password",
+				Role:             "user",
+				Status:           entity.UserStatusDeleted,
+				DeletedAt:        func() *time.Time { now := time.Now().Add(-time.Hour); return &now }(),
+				CreatedAt:        time.Now().Add(-time.Hour),
+				UpdatedAt:        time.Now().Add(-time.Hour),
+				SuspensionReason: "old",
+			}, nil
+		},
+		update: func(_ context.Context, user *entity.User) error {
+			updatedUser = user
+			return nil
+		},
+		save: func(context.Context, *entity.User) (int64, error) {
+			t.Fatal("save should not be called when upserting existing user")
+			return 0, nil
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, updatedUser)
+	assert.Equal(t, int64(1), updatedUser.ID)
+	assert.Equal(t, "admin", updatedUser.Name)
+	assert.Equal(t, "admin", updatedUser.Role)
+	assert.Equal(t, entity.UserStatusActive, updatedUser.Status)
+	assert.Nil(t, updatedUser.DeletedAt)
+	assert.NotEqual(t, "old-password", updatedUser.Password)
 }
 
 type stubAttachmentCleanupUseCase struct{}

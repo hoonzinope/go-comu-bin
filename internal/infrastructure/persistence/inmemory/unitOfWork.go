@@ -504,6 +504,10 @@ func (r userTxRepository) SelectUserByUsername(ctx context.Context, username str
 	_ = ctx
 	return r.repo.selectUserByUsername(username)
 }
+func (r userTxRepository) SelectUserByUsernameIncludingDeleted(ctx context.Context, username string) (*entity.User, error) {
+	_ = ctx
+	return r.repo.selectUserByUsernameIncludingDeleted(username)
+}
 func (r userTxRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
 	_ = ctx
 	return r.repo.selectUserByEmail(email)

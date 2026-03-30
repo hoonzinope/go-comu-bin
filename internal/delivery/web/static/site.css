@@ -125,12 +125,13 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 .main-content {
   margin-left: 18rem;
   padding: 1.25rem;
+  min-width: 0;
   background-image:
     linear-gradient(to right, rgba(115,124,129,.13) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(115,124,129,.13) 1px, transparent 1px);
   background-size: 24px 24px;
 }
-.page { max-width: 74rem; margin: 0 auto; display: grid; gap: 1rem; }
+.page { width: 100%; margin: 0; display: grid; gap: 1rem; }
 .tab-strip {
   display: flex;
   flex-wrap: wrap;
@@ -350,7 +351,7 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   border-top: var(--border);
   background: rgba(248,249,251,.98);
 }
-.bottom-nav a {
+.bottom-nav-item {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -365,8 +366,13 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-.bottom-nav a:last-child { border-right: none; }
-.bottom-nav a.is-active { background: var(--accent); color: #fff; }
+.bottom-nav-item:last-child { border-right: none; }
+.bottom-nav-item.is-active { background: var(--accent); color: #fff; }
+.bottom-nav-item.is-disabled {
+  background: var(--surface-2);
+  color: rgba(43,52,56,.58);
+  cursor: not-allowed;
+}
 .bottom-nav .material-symbols-outlined { font-size: 1.25rem; }
 
 .overlay {
@@ -487,6 +493,12 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
   margin-bottom: 1.25rem;
 }
 .sidebar-new-post:hover { background: var(--ink); border-color: var(--ink); }
+.sidebar-new-post.is-disabled {
+  background: var(--surface-2);
+  color: rgba(43,52,56,.58);
+  border-color: rgba(115,124,129,.52);
+  cursor: not-allowed;
+}
 
 /* ── Chip status variants ── */
 .chip-active  { background: #e6ffdb; color: var(--accent); border: 1px solid var(--accent); }

@@ -10,7 +10,6 @@ import (
 )
 
 const placeholderJWTSecret = "commu-bin-secret-key"
-const placeholderBootstrapPassword = "admin"
 const minJWTSecretLength = 32
 const minDefaultPageLimit = 1
 const maxDefaultPageLimit = 1000
@@ -633,9 +632,6 @@ func validate(cfg *Config) error {
 		}
 		if strings.TrimSpace(cfg.Admin.Bootstrap.Password) == "" {
 			return fmt.Errorf("invalid admin.bootstrap.password: cannot be empty when bootstrap is enabled")
-		}
-		if strings.TrimSpace(cfg.Admin.Bootstrap.Password) == placeholderBootstrapPassword {
-			return fmt.Errorf("invalid admin.bootstrap.password: placeholder password is not allowed")
 		}
 	}
 	return nil

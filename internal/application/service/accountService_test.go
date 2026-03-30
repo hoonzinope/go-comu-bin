@@ -146,6 +146,10 @@ func (r *failOnNthUserUpdateRepository) SelectUserByUsername(ctx context.Context
 	return r.base.SelectUserByUsername(ctx, username)
 }
 
+func (r *failOnNthUserUpdateRepository) SelectUserByUsernameIncludingDeleted(ctx context.Context, username string) (*entity.User, error) {
+	return r.base.SelectUserByUsernameIncludingDeleted(ctx, username)
+}
+
 func (r *failOnNthUserUpdateRepository) SelectUserByEmail(ctx context.Context, email string) (*entity.User, error) {
 	return r.base.SelectUserByEmail(ctx, email)
 }

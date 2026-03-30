@@ -460,13 +460,12 @@ func ensureBootstrapAdmin(cfg *config.Config, userRepository port.UserRepository
 		return nil
 	}
 	username := strings.TrimSpace(cfg.Admin.Bootstrap.Username)
-	password := cfg.Admin.Bootstrap.Password
-	existingUser, err := userRepository.SelectUserByUsername(context.Background(), username)
-	if err != nil {
-		return err
+	password := strings.TrimSpace(cfg.Admin.Bootstrap.Password)
+	if username == "" {
+		return fmt.Errorf("invalid admin.bootstrap.username: cannot be empty when bootstrap is enabled")
 	}
-	if existingUser != nil {
-		return nil
+	if password == "" {
+		return fmt.Errorf("invalid admin.bootstrap.password: cannot be empty when bootstrap is enabled")
 	}
 
 	passwordHasher := auth.NewBcryptPasswordHasher(0)
@@ -474,9 +473,34 @@ func ensureBootstrapAdmin(cfg *config.Config, userRepository port.UserRepository
 	if err != nil {
 		return err
 	}
-	admin := entity.NewAdmin(username, hashedPassword)
-	_, err = userRepository.Save(context.Background(), admin)
-	return err
+
+	existingUser, err := userRepository.SelectUserByUsernameIncludingDeleted(context.Background(), username)
+	if err != nil {
+		return err
+	}
+	if existingUser == nil {
+		admin := entity.NewAdmin(username, hashedPassword)
+		_, err = userRepository.Save(context.Background(), admin)
+		return err
+	}
+
+	now := time.Now()
+	existingUser.Name = username
+	existingUser.Email = ""
+	existingUser.Password = hashedPassword
+	existingUser.Guest = false
+	existingUser.GuestStatus = ""
+	existingUser.GuestIssuedAt = nil
+	existingUser.GuestActivatedAt = nil
+	existingUser.GuestExpiredAt = nil
+	existingUser.EmailVerifiedAt = nil
+	existingUser.Role = "admin"
+	existingUser.Status = entity.UserStatusActive
+	existingUser.SuspensionReason = ""
+	existingUser.SuspendedUntil = nil
+	existingUser.DeletedAt = nil
+	existingUser.UpdatedAt = now
+	return userRepository.Update(context.Background(), existingUser)
 }
 
 func httpAddr(cfg *config.Config) string {

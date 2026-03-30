@@ -685,6 +685,31 @@ func TestLoadFromViper_RequiresBootstrapCredentialsWhenEnabled(t *testing.T) {
 	assert.Nil(t, cfg)
 }
 
+func TestLoadFromViper_AllowsDefaultBootstrapAdminCredentials(t *testing.T) {
+	v := viper.New()
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("admin.bootstrap.enabled", true)
+	v.Set("admin.bootstrap.username", "admin")
+	v.Set("admin.bootstrap.password", "admin")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.Set("jobs.attachmentCleanup.batchSize", 50)
+
+	cfg, err := loadFromViper(v)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.True(t, cfg.Admin.Bootstrap.Enabled)
+	assert.Equal(t, "admin", cfg.Admin.Bootstrap.Username)
+	assert.Equal(t, "admin", cfg.Admin.Bootstrap.Password)
+}
+
 func TestLoadFromViper_InvalidOutboxConfig(t *testing.T) {
 	base := func() *viper.Viper {
 		v := viper.New()

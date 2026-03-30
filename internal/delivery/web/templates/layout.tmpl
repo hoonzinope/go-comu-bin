@@ -19,8 +19,8 @@
 <div class="app-shell" x-data="{menuOpen:false}">
   <header class="topbar">
     <div class="brand">
-      <a href="/" class="brand-mark">{{.Shell.AppName}}</a>
-      <span class="brand-sub">HTML-FIRST / UI</span>
+      <a href="/" class="brand-mark">urrrm community</a>
+      <span class="brand-sub">tiny community site</span>
     </div>
     <form class="searchbar" action="/search" method="get">
       <input type="search" name="q" value="{{.Query}}" placeholder="Search posts, boards, tags">
@@ -40,10 +40,14 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-dir-title">Directory</div>
-      <div class="sidebar-dir-version">{{.Shell.AppName}} / V1</div>
+      <div class="sidebar-dir-version">urrrm / v1</div>
     </div>
     {{if .Shell.IsAuthenticated}}
-    <a class="sidebar-new-post" href="{{if .Shell.Boards}}/boards/{{(index .Shell.Boards 0).UUID}}/posts/new{{else}}/login{{end}}">+ New Post</a>
+      {{if .Shell.ComposeURL}}
+    <a class="sidebar-new-post" href="{{.Shell.ComposeURL}}">+ New Post</a>
+      {{else}}
+    <span class="sidebar-new-post is-disabled" aria-disabled="true">+ New Post</span>
+      {{end}}
     {{end}}
     <div class="sidebar-section">
       <div class="sidebar-kicker">Boards</div>
@@ -75,10 +79,14 @@
     {{template "page" .}}
   </main>
   <nav class="bottom-nav">
-    <a href="/" class="{{if eq .Shell.ActiveNav "feed"}}is-active{{end}}"><span class="material-symbols-outlined">dynamic_feed</span><span>Feed</span></a>
-    <a href="/search" class="{{if eq .Shell.ActiveNav "search"}}is-active{{end}}"><span class="material-symbols-outlined">search</span><span>Search</span></a>
-    <a href="{{if .Shell.Boards}}/boards/{{(index .Shell.Boards 0).UUID}}/posts/new{{else}}/login{{end}}" class="{{if eq .Shell.ActiveNav "compose"}}is-active{{end}}"><span class="material-symbols-outlined">add_box</span><span>New</span></a>
-    <a href="/me" class="{{if eq .Shell.ActiveNav "profile"}}is-active{{end}}"><span class="material-symbols-outlined">person</span><span>Me</span></a>
+    <a class="bottom-nav-item {{if eq .Shell.ActiveNav "feed"}}is-active{{end}}" href="/"><span class="material-symbols-outlined">dynamic_feed</span><span>Feed</span></a>
+    <a class="bottom-nav-item {{if eq .Shell.ActiveNav "search"}}is-active{{end}}" href="/search"><span class="material-symbols-outlined">search</span><span>Search</span></a>
+    {{if .Shell.ComposeURL}}
+    <a class="bottom-nav-item {{if eq .Shell.ActiveNav "compose"}}is-active{{end}}" href="{{.Shell.ComposeURL}}"><span class="material-symbols-outlined">add_box</span><span>New</span></a>
+    {{else}}
+    <span class="bottom-nav-item is-disabled" aria-disabled="true"><span class="material-symbols-outlined">add_box</span><span>New</span></span>
+    {{end}}
+    <a class="bottom-nav-item {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me"><span class="material-symbols-outlined">person</span><span>Me</span></a>
   </nav>
   <div class="overlay" x-cloak x-show="menuOpen" x-transition.opacity @click="menuOpen = false">
     <div class="overlay-panel" @click.stop>

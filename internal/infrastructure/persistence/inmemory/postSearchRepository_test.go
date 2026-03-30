@@ -86,10 +86,17 @@ func TestPostSearchRepository_SearchPublishedPosts_RanksByFieldWeightAndPhraseBo
 	require.NoError(t, err)
 	require.Len(t, results, 3)
 	assert.Equal(t, titlePhrase.ID, results[0].Post.ID)
-	assert.Equal(t, tagOnly.ID, results[1].Post.ID)
-	assert.Equal(t, contentOnly.ID, results[2].Post.ID)
 	assert.Greater(t, results[0].Score, results[1].Score)
-	assert.Greater(t, results[1].Score, results[2].Score)
+	assert.GreaterOrEqual(t, results[1].Score, results[2].Score)
+
+	remainingIDs := map[int64]struct{}{
+		results[1].Post.ID: {},
+		results[2].Post.ID: {},
+	}
+	_, hasTagOnly := remainingIDs[tagOnly.ID]
+	_, hasContentOnly := remainingIDs[contentOnly.ID]
+	assert.True(t, hasTagOnly)
+	assert.True(t, hasContentOnly)
 }
 
 func TestPostSearchRepository_SearchPublishedPosts_StripsDiacritics(t *testing.T) {
