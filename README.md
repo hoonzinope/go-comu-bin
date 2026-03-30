@@ -60,6 +60,33 @@ go run ./cmd
 
 - [http://localhost:18577/swagger/index.html](http://localhost:18577/swagger/index.html)
 
+## Docker
+
+Docker Hub에 올릴 때는 다중 아키텍처 이미지를 빌드하는 쪽이 안전합니다.
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t docker.io/<your-user>/commu-bin:latest \
+  --push .
+```
+
+Mac mini에서 컨테이너를 띄울 때는 SQLite DB와 로컬 업로드 경로를 호스트 바인드 마운트 대신 named volume으로 붙이세요.
+
+```bash
+docker run -d \
+  --name commu-bin \
+  -p 18577:18577 \
+  -e DELIVERY_HTTP_AUTH_SECRET='replace-with-real-secret' \
+  -v commu_data:/app/data \
+  -v commu_logs:/app/logs \
+  docker.io/<your-user>/commu-bin:latest
+```
+
+- `/app/data` 아래에 SQLite DB와 로컬 업로드가 함께 들어갑니다.
+- `/app/logs` 아래에 파일 로그가 기록됩니다.
+- macOS 호스트 경로를 직접 붙이는 bind mount는 SQLite WAL과 충돌할 수 있으니 피하는 편이 낫습니다.
+
 ## Configuration
 
 주요 설정:

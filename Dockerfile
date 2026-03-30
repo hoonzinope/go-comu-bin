@@ -1,4 +1,7 @@
-FROM golang:1.25.0-alpine AS build
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
+FROM --platform=$BUILDPLATFORM golang:1.25.0-alpine AS build
 
 WORKDIR /src
 
@@ -9,9 +12,12 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/commu-bin ./cmd
+ARG TARGETOS
+ARG TARGETARCH
 
-FROM alpine:3.21
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /out/commu-bin ./cmd
+
+FROM --platform=$TARGETPLATFORM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata \
 	&& addgroup -S app \

@@ -4581,3 +4581,32 @@
 - `internal/application/event/mail_delivery_handler.go`
 - `internal/application/service/attachment/handlers.go`
 - `internal/infrastructure/persistence/sqlite/helpers.go`
+
+## 2026-03-30 - Docker image build is target-arch aware and Mac deployments use named volumes
+
+상태
+
+- decided
+
+배경
+
+- Dockerfile이 `GOARCH=amd64`로 고정돼 있으면 arm64 호스트인 Mac mini에서 이미지를 받아도 네이티브 실행이 아니라 에뮬레이션 경로를 타게 된다.
+- SQLite DB와 로컬 업로드는 `./data` 아래, 파일 로그는 `./logs` 아래에 저장된다.
+- macOS 호스트 경로를 직접 연결하는 bind mount는 SQLite WAL과 충돌할 수 있으므로 운영 예시에서 피해야 한다.
+
+관찰
+
+- BuildKit은 `TARGETOS`, `TARGETARCH`, `BUILDPLATFORM`, `TARGETPLATFORM`을 제공하므로 Go 바이너리를 대상 플랫폼 기준으로 빌드할 수 있다.
+- 이 서비스는 `CGO_ENABLED=0`인 순수 Go 바이너리라서 cross compile로도 실행 이미지를 안전하게 만들 수 있다.
+- Dockerfile 자체만으로 bind mount 강제를 할 수는 없고, 실행 예시와 배포 문서가 volume 정책을 안내해야 한다.
+
+결론
+
+- Dockerfile은 요청된 target platform 기준으로 바이너리를 빌드하도록 바꾼다.
+- Docker Hub 배포 예시는 `docker buildx build --platform linux/amd64,linux/arm64`를 사용한다.
+- Mac mini 실행 예시는 `/app/data`와 `/app/logs`를 named volume으로 붙이고, 호스트 bind mount는 사용하지 않는다.
+
+후속 작업
+
+- README의 Docker 섹션을 배포 예시로 정리한다.
+- 필요하면 `docker-compose.yml` 예시를 추가해 named volume 구성을 더 명시적으로 만든다.
