@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="/assets/site.css">
   <script defer src="/assets/site.js"></script>
@@ -37,6 +38,13 @@
     </div>
   </header>
   <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-dir-title">Directory</div>
+      <div class="sidebar-dir-version">{{.Shell.AppName}} / V1</div>
+    </div>
+    {{if .Shell.IsAuthenticated}}
+    <a class="sidebar-new-post" href="{{if .Shell.Boards}}/boards/{{(index .Shell.Boards 0).UUID}}/posts/new{{else}}/login{{end}}">+ New Post</a>
+    {{end}}
     <div class="sidebar-section">
       <div class="sidebar-kicker">Boards</div>
       <nav class="nav-list">
@@ -67,10 +75,10 @@
     {{template "page" .}}
   </main>
   <nav class="bottom-nav">
-    <a href="/" class="{{if eq .Shell.ActiveNav "feed"}}is-active{{end}}">Feed</a>
-    <a href="/search" class="{{if eq .Shell.ActiveNav "search"}}is-active{{end}}">Search</a>
-    <a href="{{if .Shell.Boards}}/boards/{{(index .Shell.Boards 0).UUID}}/posts/new{{else}}/login{{end}}" class="{{if eq .Shell.ActiveNav "compose"}}is-active{{end}}">New</a>
-    <a href="/me" class="{{if eq .Shell.ActiveNav "profile"}}is-active{{end}}">Me</a>
+    <a href="/" class="{{if eq .Shell.ActiveNav "feed"}}is-active{{end}}"><span class="material-symbols-outlined">dynamic_feed</span><span>Feed</span></a>
+    <a href="/search" class="{{if eq .Shell.ActiveNav "search"}}is-active{{end}}"><span class="material-symbols-outlined">search</span><span>Search</span></a>
+    <a href="{{if .Shell.Boards}}/boards/{{(index .Shell.Boards 0).UUID}}/posts/new{{else}}/login{{end}}" class="{{if eq .Shell.ActiveNav "compose"}}is-active{{end}}"><span class="material-symbols-outlined">add_box</span><span>New</span></a>
+    <a href="/me" class="{{if eq .Shell.ActiveNav "profile"}}is-active{{end}}"><span class="material-symbols-outlined">person</span><span>Me</span></a>
   </nav>
   <div class="overlay" x-cloak x-show="menuOpen" x-transition.opacity @click="menuOpen = false">
     <div class="overlay-panel" @click.stop>

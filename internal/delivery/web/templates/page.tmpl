@@ -324,8 +324,8 @@
               <div class="table-title">#{{.ID}} · {{.ReasonCode}}</div>
               <div class="table-sub">By @{{shortUUID .ReporterUUID}} · {{formatTime .CreatedAt}}</div>
               <div class="chip-row">
-                <span class="chip">{{.Status}}</span>
-                {{if .ResolvedAt}}<span class="chip">resolved</span>{{end}}
+                <span class="chip {{if eq .Status "pending"}}chip-pending{{else if eq .Status "accepted"}}chip-active{{else if eq .Status "rejected"}}chip-dead{{end}}">{{.Status}}</span>
+                {{if .ResolvedAt}}<span class="chip chip-active">resolved</span>{{end}}
               </div>
             </div>
             <div>
@@ -363,7 +363,7 @@
             <div>
               <div class="table-title">{{.EventName}}</div>
               <div class="table-sub">{{.ID}}</div>
-              <div class="chip-row"><span class="chip">dead</span><span class="chip">Attempts x{{.AttemptCount}}</span></div>
+              <div class="chip-row"><span class="chip chip-dead">dead</span><span class="chip chip-pending">Attempts x{{.AttemptCount}}</span></div>
             </div>
             <div>
               <div class="table-title">{{formatTime .OccurredAt}}</div>
@@ -421,7 +421,7 @@
               <div class="table-title">{{.Name}}</div>
               <div class="table-sub">{{.UUID}}</div>
             </div>
-            <div><span class="chip">{{if .Hidden}}Hidden{{else}}Visible{{end}}</span></div>
+            <div><span class="chip {{if .Hidden}}chip-hidden{{else}}chip-active{{end}}">{{if .Hidden}}Hidden{{else}}Visible{{end}}</span></div>
             <div>
               <form action="/admin/boards/{{.UUID}}/visibility" method="post">
                 <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
