@@ -116,7 +116,7 @@
         </div>
         {{if .PostDetail.Tags}}
         <div class="chip-row">
-          {{range .PostDetail.Tags}}<span class="chip">{{.Name}}</span>{{end}}
+          {{range .PostDetail.Tags}}<a class="chip" href="/tags/{{.Name}}">{{.Name}}</a>{{end}}
         </div>
         {{end}}
         <pre class="markdown">{{.PostDetail.Post.Content}}</pre>
@@ -339,6 +339,7 @@
         <label>Password</label>
         <input type="password" name="password">
         <button class="button button-primary" type="submit">Login</button>
+        <a href="/reset-password">Forgot password?</a>
       </form>
       <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -669,6 +670,12 @@
       <a class="button" href="/admin/reports">Reports</a>
       <a class="button" href="/admin/outbox">Outbox</a>
       <a class="button" href="/admin/boards">Boards</a>
+    </div>
+    <div class="panel form" x-data="{userUUID:''}">
+      <h2>User Suspension</h2>
+      <label>User UUID</label>
+      <input type="text" x-model="userUUID" placeholder="Enter user UUID">
+      <a class="button button-primary" :href="'/admin/users/'+userUUID+'/suspension'">Manage</a>
     </div>
   {{else if eq .Kind "admin-suspension"}}
     <div class="page-heading"><h1>User suspension</h1><p>{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}</p></div>

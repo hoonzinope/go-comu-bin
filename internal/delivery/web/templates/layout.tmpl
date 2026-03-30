@@ -62,7 +62,13 @@
       <div class="sidebar-kicker">Explore</div>
       <nav class="nav-list">
         <a class="nav-link {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me">Profile</a>
-        <a class="nav-link {{if eq .Shell.ActiveNav "admin"}}is-active{{end}}" href="/admin/reports">Admin</a>
+        <a class="nav-link" href="/notifications">Notifications</a>
+        {{if .Shell.IsAdmin}}
+        <a class="nav-link {{if eq .Shell.ActiveNav "admin"}}is-active{{end}}" href="/admin">Admin</a>
+        <a class="nav-link" href="/admin/boards">&#x2514; Boards</a>
+        <a class="nav-link" href="/admin/reports">&#x2514; Reports</a>
+        <a class="nav-link" href="/admin/outbox">&#x2514; Outbox</a>
+        {{end}}
       </nav>
     </div>
     {{if .Shell.IsAuthenticated}}
@@ -96,7 +102,12 @@
       {{end}}
       <a href="/me" class="overlay-link">Profile</a>
       <a href="/notifications" class="overlay-link">Notifications</a>
-      <a href="/admin/reports" class="overlay-link">Admin</a>
+      {{if .Shell.IsAdmin}}
+      <a href="/admin" class="overlay-link">Admin</a>
+      <a href="/admin/boards" class="overlay-link">&#x2514; Boards</a>
+      <a href="/admin/reports" class="overlay-link">&#x2514; Reports</a>
+      <a href="/admin/outbox" class="overlay-link">&#x2514; Outbox</a>
+      {{end}}
       {{if .Shell.IsAuthenticated}}
       <form action="/logout" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
