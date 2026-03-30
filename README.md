@@ -87,6 +87,19 @@ docker run -d \
 - `/app/logs` 아래에 파일 로그가 기록됩니다.
 - macOS 호스트 경로를 직접 붙이는 bind mount는 SQLite WAL과 충돌할 수 있으니 피하는 편이 낫습니다.
 
+`docker-compose.yml`을 쓰면 같은 구성을 더 짧게 반복할 수 있습니다.
+
+`.env.example`을 `.env`로 복사한 뒤 값을 채우면 됩니다.
+
+```bash
+COMMU_BIN_IMAGE=docker.io/<your-user>/commu-bin:latest \
+DELIVERY_HTTP_AUTH_SECRET='replace-with-real-secret' \
+docker compose up -d
+```
+
+- `commu_data`와 `commu_logs` named volume이 자동으로 생성됩니다.
+- 이미지 이름은 Docker Hub에 push한 태그로 바꾸면 됩니다.
+
 ## Configuration
 
 주요 설정:

@@ -4610,3 +4610,32 @@
 
 - README의 Docker 섹션을 배포 예시로 정리한다.
 - 필요하면 `docker-compose.yml` 예시를 추가해 named volume 구성을 더 명시적으로 만든다.
+
+## 2026-03-30 - Docker Compose deployment uses the Docker Hub image and named volumes
+
+상태
+
+- decided
+
+배경
+
+- 단일 `docker run` 예시만으로는 운영자가 Mac mini 배포 시 어떤 volume 구성을 써야 하는지 놓치기 쉽다.
+- Docker Hub 이미지 기반 배포는 compose 파일 하나로 image, ports, env, named volumes를 묶어두는 편이 반복 실행에 유리하다.
+
+관찰
+
+- 앱은 `/app/data`와 `/app/logs`를 각각 DB/업로드와 파일 로그에 사용한다.
+- compose 파일은 bind mount 대신 named volume을 선언해 SQLite WAL 충돌 리스크를 줄일 수 있다.
+- Docker Hub 공개 이미지를 쓸 경우 compose는 기본적으로 `image` pull 경로를 따라가고, 필요하면 `platform`을 추가할 수 있다.
+
+결론
+
+- `docker-compose.yml`은 Docker Hub 이미지와 named volumes를 기본으로 둔다.
+- 필수 시크릿과 이미지 경로는 `.env` 또는 shell 환경에서 주입하도록 `DELIVERY_HTTP_AUTH_SECRET`와 `COMMU_BIN_IMAGE`를 required variable로 둔다.
+- `/app/data`와 `/app/logs`는 각각 `commu_data`, `commu_logs` named volume으로 분리한다.
+- `.env.example`은 배포용 필수 변수 템플릿으로 제공한다.
+
+후속 작업
+
+- README의 Docker 섹션에 compose 실행 예시를 추가한다.
+- 필요하면 `.env.example`을 별도로 만들어 필수 환경변수를 정리한다.
