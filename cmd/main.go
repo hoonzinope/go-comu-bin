@@ -296,6 +296,7 @@ func main() {
 		NotificationUseCase: notificationUseCase,
 		ReportUseCase:       reportUseCase,
 		OutboxAdminUseCase:  outboxAdminUseCase,
+		ReactionUseCase:     reactionUseCase,
 		Logger:              appLogger,
 		AppName:             "Commu Bin",
 	})

@@ -16,9 +16,23 @@
         {{range .Feed.Posts}}
         <article class="panel feed-item">
           <div class="vote-rail">
-            <button>▲</button>
-            <strong>0</strong>
-            <button>▼</button>
+            {{if $.Shell.IsAuthenticated}}
+            <form action="/posts/{{.UUID}}/reactions" method="post" style="display:contents">
+              <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+              <input type="hidden" name="reaction_type" value="like">
+              <button type="submit">▲</button>
+            </form>
+            <strong>·</strong>
+            <form action="/posts/{{.UUID}}/reactions" method="post" style="display:contents">
+              <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+              <input type="hidden" name="reaction_type" value="dislike">
+              <button type="submit">▼</button>
+            </form>
+            {{else}}
+            <a href="/login">▲</a>
+            <strong>·</strong>
+            <a href="/login">▼</a>
+            {{end}}
           </div>
           <div class="item-body">
             <div class="meta-row">
@@ -37,10 +51,10 @@
     {{end}}
   {{else if eq .Kind "board"}}
     <div class="page-heading">
-      <h1>{{.BoardUUID}}</h1>
+      <h1>{{boardName .Shell.BoardMap .BoardUUID}}</h1>
       <p>Board feed.</p>
     </div>
-    {{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue)}}
+    {{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue "BoardUUID" .BoardUUID)}}
   {{else if eq .Kind "tag"}}
     <div class="page-heading">
       <h1>#{{.TagName}}</h1>
@@ -52,7 +66,39 @@
       <h1>Search</h1>
       <p>Query: {{if .Query}}"{{.Query}}"{{else}}enter a search term{{end}}</p>
     </div>
-    {{if .Feed}}{{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue)}}{{else}}
+    {{if .Query}}
+    <div class="tab-strip">
+      <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="/search?q={{queryEscape .Query}}&sort=hot">Hot</a>
+      <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="/search?q={{queryEscape .Query}}&sort=latest">Latest</a>
+      <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="/search?q={{queryEscape .Query}}&sort=top">Top</a>
+    </div>
+    {{end}}
+    {{if .Feed}}
+      {{if gt (len .Feed.Posts) 0}}
+        <div class="stack">
+          {{range .Feed.Posts}}
+          <article class="panel feed-item">
+            <div class="vote-rail">
+              <button>▲</button>
+              <strong>·</strong>
+              <button>▼</button>
+            </div>
+            <div class="item-body">
+              <div class="meta-row">
+                <span class="chip">{{boardName $.Shell.BoardMap .BoardUUID}}</span>
+                <span>@{{shortUUID .AuthorUUID}}</span>
+                <span>{{formatTime .UpdatedAt}}</span>
+              </div>
+              <h2><a href="/posts/{{.UUID}}">{{.Title}}</a></h2>
+              <p>{{truncate .Content 220}}</p>
+            </div>
+          </article>
+          {{end}}
+        </div>
+      {{else}}
+        <div class="panel empty">No results found.</div>
+      {{end}}
+    {{else}}
       <div class="panel empty">Search results appear here.</div>
     {{end}}
   {{else if eq .Kind "post"}}
@@ -95,9 +141,29 @@
           {{if .PostDetail.Comments}}
             <div class="stack">
               {{range .PostDetail.Comments}}
-              <div class="panel comment">
-                <div class="meta-row"><span>@{{shortUUID .Comment.AuthorUUID}}</span><span>{{formatTime .Comment.CreatedAt}}</span></div>
-                <p>{{.Comment.Content}}</p>
+              <div class="panel comment" x-data="{editing:false}">
+                <div class="meta-row"><span>@{{shortUUID .Comment.AuthorUUID}}</span><span>{{formatTime .Comment.CreatedAt}}</span>
+                  {{if and $.Shell.CurrentUser (eq $.Shell.CurrentUser.UUID .Comment.AuthorUUID)}}
+                  <span class="button-row" style="margin-left:auto">
+                    <button class="button" type="button" @click="editing=!editing">Edit</button>
+                    <form action="/comments/{{.Comment.UUID}}/delete" method="post" style="display:contents">
+                      <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                      <input type="hidden" name="post_uuid" value="{{$.PostUUID}}">
+                      <button class="button button-danger" type="submit" onclick="return confirm('Delete comment?')">Delete</button>
+                    </form>
+                  </span>
+                  {{end}}
+                </div>
+                <p x-show="!editing">{{.Comment.Content}}</p>
+                <form x-show="editing" action="/comments/{{.Comment.UUID}}" method="post">
+                  <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                  <input type="hidden" name="post_uuid" value="{{$.PostUUID}}">
+                  <textarea name="content" rows="3">{{.Comment.Content}}</textarea>
+                  <div class="button-row">
+                    <button class="button button-primary" type="submit">Save</button>
+                    <button class="button" type="button" @click="editing=false">Cancel</button>
+                  </div>
+                </form>
               </div>
               {{end}}
             </div>
@@ -141,14 +207,69 @@
           {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Attachments</a>{{end}}
           <a class="button" href="/">Back to feed</a>
         </div>
+        {{if .Shell.IsAuthenticated}}
+        <div class="section-title">Reactions</div>
+        <div class="button-row">
+          <form action="/posts/{{.PostUUID}}/reactions" method="post">
+            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+            <input type="hidden" name="reaction_type" value="like">
+            <button class="button" type="submit">▲ Upvote</button>
+          </form>
+          <form action="/posts/{{.PostUUID}}/reactions" method="post">
+            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+            <input type="hidden" name="reaction_type" value="dislike">
+            <button class="button" type="submit">▼ Downvote</button>
+          </form>
+          <form action="/posts/{{.PostUUID}}/reactions" method="post">
+            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+            <input type="hidden" name="_method" value="delete">
+            <button class="button button-ghost" type="submit">Remove</button>
+          </form>
+        </div>
+        {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
+        <div class="section-title">Manage</div>
+        <div class="button-row">
+          <a class="button" href="/posts/{{.PostUUID}}/edit">Edit</a>
+          <form action="/posts/{{.PostUUID}}/delete" method="post" style="display:contents">
+            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+            <button class="button button-danger" type="submit" onclick="return confirm('Delete this post?')">Delete</button>
+          </form>
+        </div>
+        {{end}}
+        <div class="section-title">Report</div>
+        <form action="/reports" method="post" x-data="{open:false}">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="target_type" value="post">
+          <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
+          <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
+          <select name="reason_code">
+            <option value="spam">Spam</option>
+            <option value="abuse">Abuse</option>
+            <option value="sexual">Sexual</option>
+            <option value="violence">Violence</option>
+            <option value="illegal">Illegal</option>
+            <option value="other">Other</option>
+          </select>
+          <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
+          <button class="button" type="submit">Report</button>
+        </form>
+        {{end}}
       </aside>
     </div>
+    {{if .Shell.IsAuthenticated}}
     <form class="panel form comment-form" action="/posts/{{.PostUUID}}/comments" method="post">
       <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
       <label>Write a comment</label>
       <textarea name="content" rows="5" placeholder="Share your reply"></textarea>
       <button class="button button-primary" type="submit">Comment</button>
     </form>
+    {{else}}
+    <div class="panel form comment-form">
+      <label>Write a comment</label>
+      <textarea name="content" rows="5" placeholder="Share your reply" disabled></textarea>
+      <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to comment</a>
+    </div>
+    {{end}}
   {{else if eq .Kind "compose"}}
     <div class="page-heading">
       <h1>{{if eq .EditMode "edit"}}Edit draft{{else if eq .EditMode "draft"}}New draft{{else}}New post{{end}}</h1>
@@ -254,6 +375,7 @@
       <button class="button button-primary" type="submit">Confirm</button>
     </form>
   {{else if eq .Kind "reset-password"}}
+    {{if .ResetToken}}
     <form class="panel form" action="/reset-password" method="post">
       <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
       <h1>Reset password</h1>
@@ -263,12 +385,38 @@
       <input type="password" name="new_password">
       <button class="button button-primary" type="submit">Reset</button>
     </form>
+    {{else}}
+    <form class="panel form" action="/reset-password" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <h1>Forgot password</h1>
+      <label>Email</label>
+      <input type="email" name="email" required>
+      <button class="button button-primary" type="submit">Send reset link</button>
+    </form>
+    {{end}}
   {{else if eq .Kind "me"}}
     <div class="page-heading">
       <h1>My page</h1>
       <p>{{.Shell.CurrentUser.Name}} · {{.Shell.CurrentUser.Email}}</p>
     </div>
+    {{if .Shell.CurrentUser.Guest}}
+    <div class="panel form">
+      <h2>Guest account</h2>
+      <p>Upgrade to a full account to unlock all features.</p>
+      <a class="button button-primary" href="/me/upgrade">Upgrade account</a>
+    </div>
+    {{end}}
+    {{if and (not .Shell.CurrentUser.Guest) (not .Shell.CurrentUser.EmailVerifiedAt)}}
+    <div class="panel form">
+      <h2>Email not verified</h2>
+      <form action="/me/verify-email" method="post" style="display:contents">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <button class="button button-primary" type="submit">Send verification email</button>
+      </form>
+    </div>
+    {{end}}
     <div class="grid-2">
+      {{if not .Shell.CurrentUser.Guest}}
       <form class="panel form" action="/me/delete" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
         <h2>Delete account</h2>
@@ -276,6 +424,7 @@
         <input type="password" name="password">
         <button class="button button-danger" type="submit">Delete</button>
       </form>
+      {{end}}
       <section class="panel">
         <h2>Drafts</h2>
         {{if .Drafts}}
@@ -300,7 +449,14 @@
       <div class="stack">
         {{range .Notifications.Notifications}}
         <div class="panel">
-          <div class="meta-row"><span>{{.MessageKey}}</span><span>{{formatTime .CreatedAt}}</span></div>
+          <div class="meta-row"><span>{{.MessageKey}}</span><span>{{formatTime .CreatedAt}}</span>
+            {{if not .ReadAt}}
+            <form action="/notifications/{{.UUID}}/read" method="post" style="display:contents">
+              <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+              <button class="button" type="submit" style="margin-left:auto">Mark read</button>
+            </form>
+            {{end}}
+          </div>
           <p>{{.PostTitle}}</p>
         </div>
         {{end}}
@@ -393,6 +549,15 @@
       <h1>Boards</h1>
       <p>Visibility management.</p>
     </div>
+    <form class="panel form" action="/admin/boards" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <div class="section-title">Create new board</div>
+      <label>Name</label>
+      <input type="text" name="name" placeholder="Board name" required>
+      <label>Description</label>
+      <input type="text" name="description" placeholder="Short description">
+      <button class="button button-primary" type="submit">Create board</button>
+    </form>
     {{if .AdminBoards}}
       <div class="stats-grid">
         <div class="panel stat-card">
@@ -420,10 +585,12 @@
             <div>
               <div class="table-title">{{.Name}}</div>
               <div class="table-sub">{{.UUID}}</div>
+              <div class="table-sub">{{.Description}}</div>
             </div>
             <div><span class="chip {{if .Hidden}}chip-hidden{{else}}chip-active{{end}}">{{if .Hidden}}Hidden{{else}}Visible{{end}}</span></div>
-            <div>
-              <form action="/admin/boards/{{.UUID}}/visibility" method="post">
+            <div class="button-row">
+              <a class="button" href="/admin/boards/{{.UUID}}/edit">Edit</a>
+              <form action="/admin/boards/{{.UUID}}/visibility" method="post" style="display:contents">
                 <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
                 {{if .Hidden}}
                   <input type="hidden" name="hidden" value="false">
@@ -433,6 +600,10 @@
                   <button class="button button-danger" type="submit">Hide</button>
                 {{end}}
               </form>
+              <form action="/admin/boards/{{.UUID}}/delete" method="post" style="display:contents">
+                <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                <button class="button button-danger" type="submit" onclick="return confirm('Delete this board?')">Delete</button>
+              </form>
             </div>
           </div>
           {{end}}
@@ -441,6 +612,40 @@
     {{else}}
       <div class="panel empty">No boards available.</div>
     {{end}}
+  {{else if eq .Kind "me-upgrade"}}
+    <div class="page-heading">
+      <h1>Upgrade account</h1>
+      <p>Create a full account from your guest session.</p>
+    </div>
+    <form class="panel form" action="/me/upgrade" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <label>Username</label>
+      <input type="text" name="username" required>
+      <label>Email</label>
+      <input type="email" name="email" required>
+      <label>Password</label>
+      <input type="password" name="password" required>
+      <div class="button-row">
+        <button class="button button-primary" type="submit">Create account</button>
+        <a class="button" href="/me">Cancel</a>
+      </div>
+    </form>
+  {{else if eq .Kind "admin-board-edit"}}
+    <div class="page-heading">
+      <h1>Edit Board</h1>
+      {{if .AdminBoardTarget}}<p>{{.AdminBoardTarget.Name}}</p>{{end}}
+    </div>
+    <form class="panel form" action="/admin/boards/{{.BoardUUID}}" method="post">
+      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+      <label>Name</label>
+      <input type="text" name="name" value="{{if .AdminBoardTarget}}{{.AdminBoardTarget.Name}}{{end}}" required>
+      <label>Description</label>
+      <input type="text" name="description" value="{{if .AdminBoardTarget}}{{.AdminBoardTarget.Description}}{{end}}">
+      <div class="button-row">
+        <button class="button button-primary" type="submit">Save</button>
+        <a class="button" href="/admin/boards">Cancel</a>
+      </div>
+    </form>
   {{else if eq .Kind "admin-snapshot"}}
     <div class="page-heading">
       <h1>Admin Snapshot</h1>
@@ -460,8 +665,23 @@
         <div class="stat-value">{{.BoardHiddenCount}}</div>
       </div>
     </div>
+    <div class="button-row">
+      <a class="button" href="/admin/reports">Reports</a>
+      <a class="button" href="/admin/outbox">Outbox</a>
+      <a class="button" href="/admin/boards">Boards</a>
+    </div>
   {{else if eq .Kind "admin-suspension"}}
     <div class="page-heading"><h1>User suspension</h1><p>{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}</p></div>
+    {{if and .Suspension (eq .Suspension.Status "suspended")}}
+    <div class="panel form">
+      <p>This user is currently suspended. Reason: {{.Suspension.Reason}}</p>
+      <form action="/admin/users/{{.Suspension.UserUUID}}/suspension" method="post">
+        <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+        <input type="hidden" name="_method" value="unsuspend">
+        <button class="button button-primary" type="submit">Unsuspend</button>
+      </form>
+    </div>
+    {{else}}
     <form class="panel form" action="/admin/users/{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}/suspension" method="post">
       <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
       <label>Reason</label>
@@ -470,6 +690,7 @@
       <input type="text" name="duration" placeholder="7d / 15d / 30d / unlimited">
       <button class="button button-primary" type="submit">Suspend</button>
     </form>
+    {{end}}
   {{else if eq .Kind "error"}}
     <div class="panel error-panel">
       <h1>{{.Shell.Title}}</h1>

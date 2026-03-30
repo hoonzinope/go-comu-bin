@@ -1,8 +1,10 @@
 package web
 
-import "context"
+import (
+	"context"
 
-import "github.com/hoonzinope/go-comu-bin/internal/application/model"
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
+)
 
 type Dependencies struct {
 	AccountUseCase interface {
@@ -34,7 +36,14 @@ type Dependencies struct {
 	BoardUseCase interface {
 		GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
 		GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+		CreateBoard(ctx context.Context, userID int64, name, description string) (string, error)
+		UpdateBoard(ctx context.Context, boardUUID string, userID int64, name, description string) error
+		DeleteBoard(ctx context.Context, boardUUID string, userID int64) error
 		SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error
+	}
+	ReactionUseCase interface {
+		SetReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error)
+		DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType) error
 	}
 	PostUseCase interface {
 		CreatePost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error)
@@ -114,6 +123,7 @@ type PageData struct {
 	Reports           *model.ReportList
 	Outbox            *model.OutboxDeadMessageList
 	AdminBoards       *model.BoardList
+	AdminBoardTarget  *model.Board
 	BoardVisibleCount int
 	BoardHiddenCount  int
 	Suspension        *model.UserSuspension

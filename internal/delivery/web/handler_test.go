@@ -146,6 +146,21 @@ func (b *testBoardUseCase) GetAllBoards(ctx context.Context, limit int, cursor s
 	}, nil
 }
 
+func (b *testBoardUseCase) CreateBoard(ctx context.Context, userID int64, name, description string) (string, error) {
+	_, _, _, _ = ctx, userID, name, description
+	return "new-board-uuid", nil
+}
+
+func (b *testBoardUseCase) UpdateBoard(ctx context.Context, boardUUID string, userID int64, name, description string) error {
+	_, _, _, _, _ = ctx, boardUUID, userID, name, description
+	return nil
+}
+
+func (b *testBoardUseCase) DeleteBoard(ctx context.Context, boardUUID string, userID int64) error {
+	_, _, _ = ctx, boardUUID, userID
+	return nil
+}
+
 func (b *testBoardUseCase) SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error {
 	_, _, _ = ctx, boardUUID, userID
 	_ = hidden
@@ -164,9 +179,36 @@ func (b *testBoardUseCaseEmpty) GetAllBoards(ctx context.Context, limit int, cur
 	return &model.BoardList{}, nil
 }
 
+func (b *testBoardUseCaseEmpty) CreateBoard(ctx context.Context, userID int64, name, description string) (string, error) {
+	_, _, _, _ = ctx, userID, name, description
+	return "new-board-uuid", nil
+}
+
+func (b *testBoardUseCaseEmpty) UpdateBoard(ctx context.Context, boardUUID string, userID int64, name, description string) error {
+	_, _, _, _, _ = ctx, boardUUID, userID, name, description
+	return nil
+}
+
+func (b *testBoardUseCaseEmpty) DeleteBoard(ctx context.Context, boardUUID string, userID int64) error {
+	_, _, _ = ctx, boardUUID, userID
+	return nil
+}
+
 func (b *testBoardUseCaseEmpty) SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error {
 	_, _, _ = ctx, boardUUID, userID
 	_ = hidden
+	return nil
+}
+
+type testReactionUseCase struct{}
+
+func (r *testReactionUseCase) SetReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType, reactionType model.ReactionType) (bool, error) {
+	_, _, _, _, _ = ctx, userID, targetUUID, targetType, reactionType
+	return true, nil
+}
+
+func (r *testReactionUseCase) DeleteReaction(ctx context.Context, userID int64, targetUUID string, targetType model.ReactionTargetType) error {
+	_, _, _, _ = ctx, userID, targetUUID, targetType
 	return nil
 }
 
@@ -444,6 +486,7 @@ func newTestWebHandlerWithSession(session *testSessionUseCase) *Handler {
 		NotificationUseCase: &testNotificationUseCase{},
 		ReportUseCase:       &testReportUseCase{},
 		OutboxAdminUseCase:  &testOutboxAdminUseCase{},
+		ReactionUseCase:     &testReactionUseCase{},
 		AppName:             "Commu Bin",
 	})
 	if err != nil {
@@ -455,6 +498,9 @@ func newTestWebHandlerWithSession(session *testSessionUseCase) *Handler {
 func newTestWebHandlerWithBoardUseCase(session *testSessionUseCase, boardUseCase interface {
 	GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
 	GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	CreateBoard(ctx context.Context, userID int64, name, description string) (string, error)
+	UpdateBoard(ctx context.Context, boardUUID string, userID int64, name, description string) error
+	DeleteBoard(ctx context.Context, boardUUID string, userID int64) error
 	SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error
 }) *Handler {
 	if session == nil {
@@ -473,6 +519,7 @@ func newTestWebHandlerWithBoardUseCase(session *testSessionUseCase, boardUseCase
 		NotificationUseCase: &testNotificationUseCase{},
 		ReportUseCase:       &testReportUseCase{},
 		OutboxAdminUseCase:  &testOutboxAdminUseCase{},
+		ReactionUseCase:     &testReactionUseCase{},
 		AppName:             "Commu Bin",
 	})
 	if err != nil {
@@ -495,6 +542,9 @@ func newTestWebEngineWithSession(session *testSessionUseCase) *gin.Engine {
 func newTestWebEngineWithBoardUseCase(session *testSessionUseCase, boardUseCase interface {
 	GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
 	GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error)
+	CreateBoard(ctx context.Context, userID int64, name, description string) (string, error)
+	UpdateBoard(ctx context.Context, boardUUID string, userID int64, name, description string) error
+	DeleteBoard(ctx context.Context, boardUUID string, userID int64) error
 	SetBoardVisibility(ctx context.Context, boardUUID string, userID int64, hidden bool) error
 }) *gin.Engine {
 	gin.SetMode(gin.TestMode)

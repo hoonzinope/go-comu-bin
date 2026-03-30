@@ -61,7 +61,6 @@
     <div class="sidebar-section">
       <div class="sidebar-kicker">Explore</div>
       <nav class="nav-list">
-        <a class="nav-link {{if eq .Shell.ActiveNav "search"}}is-active{{end}}" href="/search">Search</a>
         <a class="nav-link {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me">Profile</a>
         <a class="nav-link {{if eq .Shell.ActiveNav "admin"}}is-active{{end}}" href="/admin/reports">Admin</a>
       </nav>
@@ -92,7 +91,6 @@
     <div class="overlay-panel" @click.stop>
       <div class="sidebar-kicker">Navigation</div>
       <a href="/" class="overlay-link">Feed</a>
-      <a href="/search" class="overlay-link">Search</a>
       {{range .Shell.Boards}}
       <a href="/boards/{{.UUID}}" class="overlay-link">{{.Name}}</a>
       {{end}}

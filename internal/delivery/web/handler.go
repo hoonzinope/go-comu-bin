@@ -101,7 +101,12 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/posts/:postUUID/edit", h.handleEditDraft)
 	r.POST("/posts/:postUUID", h.requireHTMLAuth(h.handleUpdatePostSubmit))
 	r.POST("/posts/:postUUID/publish", h.requireHTMLAuth(h.handlePublishPostSubmit))
+	r.POST("/posts/:postUUID/delete", h.requireHTMLAuth(h.handleDeletePostSubmit))
 	r.POST("/posts/:postUUID/comments", h.requireHTMLAuth(h.handleCreateCommentSubmit))
+	r.POST("/posts/:postUUID/reactions", h.requireHTMLAuth(h.handlePostReactionSubmit))
+	r.POST("/comments/:commentUUID", h.requireHTMLAuth(h.handleUpdateCommentSubmit))
+	r.POST("/comments/:commentUUID/delete", h.requireHTMLAuth(h.handleDeleteCommentSubmit))
+	r.POST("/reports", h.requireHTMLAuth(h.handleCreateReportSubmit))
 	r.GET("/tags/:tagName", h.handleTagFeed)
 	r.GET("/search", h.handleSearch)
 
@@ -117,15 +122,24 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	r.GET("/me", h.requireHTMLAuth(h.handleMePage))
 	r.POST("/me/delete", h.requireHTMLAuth(h.handleMeDeleteSubmit))
+	r.POST("/me/verify-email", h.requireHTMLAuth(h.handleMeRequestVerifyEmailSubmit))
+	r.GET("/me/upgrade", h.requireHTMLAuth(h.handleMeUpgradePage))
+	r.POST("/me/upgrade", h.requireHTMLAuth(h.handleMeUpgradeSubmit))
 	r.GET("/notifications", h.requireHTMLAuth(h.handleNotificationsPage))
 	r.POST("/notifications/read-all", h.requireHTMLAuth(h.handleNotificationsReadAllSubmit))
+	r.POST("/notifications/:notificationUUID/read", h.requireHTMLAuth(h.handleNotificationReadSubmit))
 
+	r.GET("/admin", h.requireHTMLAdmin(h.handleAdminDashboard))
 	r.GET("/admin/reports", h.requireHTMLAdmin(h.handleAdminReportsPage))
 	r.POST("/admin/reports/:reportID/resolve", h.requireHTMLAdmin(h.handleAdminReportResolveSubmit))
 	r.GET("/admin/outbox", h.requireHTMLAdmin(h.handleAdminOutboxPage))
 	r.POST("/admin/outbox/dead/:messageID/requeue", h.requireHTMLAdmin(h.handleAdminOutboxRequeueSubmit))
 	r.POST("/admin/outbox/dead/:messageID/discard", h.requireHTMLAdmin(h.handleAdminOutboxDiscardSubmit))
 	r.GET("/admin/boards", h.requireHTMLAdmin(h.handleAdminBoardsPage))
+	r.POST("/admin/boards", h.requireHTMLAdmin(h.handleAdminBoardCreateSubmit))
+	r.GET("/admin/boards/:boardUUID/edit", h.requireHTMLAdmin(h.handleAdminBoardEditPage))
+	r.POST("/admin/boards/:boardUUID", h.requireHTMLAdmin(h.handleAdminBoardUpdateSubmit))
+	r.POST("/admin/boards/:boardUUID/delete", h.requireHTMLAdmin(h.handleAdminBoardDeleteSubmit))
 	r.POST("/admin/boards/:boardUUID/visibility", h.requireHTMLAdmin(h.handleAdminBoardVisibilitySubmit))
 	r.GET("/admin/users/:userUUID/suspension", h.requireHTMLAdmin(h.handleAdminSuspensionPage))
 	r.POST("/admin/users/:userUUID/suspension", h.requireHTMLAdmin(h.handleAdminSuspensionSubmit))
@@ -423,12 +437,21 @@ func (h *Handler) handleResetPasswordSubmit(c *gin.Context) {
 		return
 	}
 	token := strings.TrimSpace(c.PostForm("token"))
-	newPassword := c.PostForm("new_password")
-	if err := h.deps.AccountUseCase.ConfirmPasswordReset(c.Request.Context(), token, newPassword); err != nil {
-		h.renderUseCaseError(c, err)
-		return
+	if token != "" {
+		newPassword := c.PostForm("new_password")
+		if err := h.deps.AccountUseCase.ConfirmPasswordReset(c.Request.Context(), token, newPassword); err != nil {
+			h.renderUseCaseError(c, err)
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/login?message="+url.QueryEscape("Password reset complete."))
+	} else {
+		email := strings.TrimSpace(c.PostForm("email"))
+		if err := h.deps.AccountUseCase.RequestPasswordReset(c.Request.Context(), email); err != nil {
+			h.renderUseCaseError(c, err)
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/reset-password?message="+url.QueryEscape("Reset link sent to your email."))
 	}
-	c.Redirect(http.StatusSeeOther, "/login?message="+url.QueryEscape("Password reset complete."))
 }
 
 func (h *Handler) handleCreatePostSubmit(c *gin.Context) {
@@ -555,6 +578,60 @@ func (h *Handler) handleMeDeleteSubmit(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, "/")
 }
 
+func (h *Handler) handleMeRequestVerifyEmailSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "profile")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	if err := h.deps.AccountUseCase.RequestEmailVerification(c.Request.Context(), userIDFromModel(shell.CurrentUser)); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/me?message="+url.QueryEscape("Verification email sent."))
+}
+
+func (h *Handler) handleMeUpgradePage(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "profile")
+	if !ok {
+		return
+	}
+	if !shell.CurrentUser.Guest {
+		c.Redirect(http.StatusSeeOther, "/me")
+		return
+	}
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "me-upgrade"})
+}
+
+func (h *Handler) handleMeUpgradeSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "profile")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	token, ok2 := h.authToken(c)
+	if !ok2 {
+		h.renderError(c, http.StatusUnauthorized, "Unauthorized", "session not found")
+		return
+	}
+	username := strings.TrimSpace(c.PostForm("username"))
+	email := strings.TrimSpace(c.PostForm("email"))
+	password := c.PostForm("password")
+	newToken, err := h.deps.AccountUseCase.UpgradeGuestAccount(c.Request.Context(), userIDFromModel(shell.CurrentUser), token, username, email, password)
+	if err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	h.setSessionCookie(c, newToken)
+	c.Redirect(http.StatusSeeOther, "/me?message="+url.QueryEscape("Account upgraded successfully."))
+}
+
 func (h *Handler) handleNotificationsPage(c *gin.Context) {
 	shell, ok := h.requireHTMLAuthShell(c, "profile")
 	if !ok {
@@ -582,6 +659,34 @@ func (h *Handler) handleNotificationsReadAllSubmit(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusSeeOther, "/notifications")
+}
+
+func (h *Handler) handlePostReactionSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "feed")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	postUUID := strings.TrimSpace(c.Param("postUUID"))
+	reactionTypeRaw := strings.TrimSpace(c.PostForm("reaction_type"))
+	if h.deps.ReactionUseCase == nil {
+		c.Redirect(http.StatusSeeOther, "/posts/"+postUUID)
+		return
+	}
+	reactionType, ok := model.ParseReactionType(reactionTypeRaw)
+	if !ok {
+		c.Redirect(http.StatusSeeOther, "/posts/"+postUUID)
+		return
+	}
+	if strings.TrimSpace(c.PostForm("_method")) == "delete" {
+		_ = h.deps.ReactionUseCase.DeleteReaction(c.Request.Context(), userIDFromModel(shell.CurrentUser), postUUID, model.ReactionTargetPost)
+	} else {
+		_, _ = h.deps.ReactionUseCase.SetReaction(c.Request.Context(), userIDFromModel(shell.CurrentUser), postUUID, model.ReactionTargetPost, reactionType)
+	}
+	c.Redirect(http.StatusSeeOther, "/posts/"+postUUID)
 }
 
 func (h *Handler) handleAdminReportsPage(c *gin.Context) {
@@ -667,6 +772,26 @@ func (h *Handler) handleAdminOutboxDiscardSubmit(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, "/admin/outbox")
 }
 
+func (h *Handler) handleAdminDashboard(c *gin.Context) {
+	shell, ok := h.requireHTMLAdminShell(c)
+	if !ok {
+		return
+	}
+	adminID := userIDFromModel(shell.CurrentUser)
+	reports, _ := h.deps.ReportUseCase.GetReports(c.Request.Context(), adminID, nil, webDefaultLimit, 0)
+	outbox, _ := h.deps.OutboxAdminUseCase.GetDeadMessages(c.Request.Context(), adminID, webDefaultLimit, "")
+	boards, _ := h.deps.BoardUseCase.GetAllBoards(c.Request.Context(), webDefaultLimit, "")
+	hiddenCount := 0
+	if boards != nil {
+		for _, b := range boards.Boards {
+			if b.Hidden {
+				hiddenCount++
+			}
+		}
+	}
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-snapshot", Reports: reports, Outbox: outbox, BoardHiddenCount: hiddenCount})
+}
+
 func (h *Handler) handleAdminBoardsPage(c *gin.Context) {
 	shell, ok := h.requireHTMLAdminShell(c)
 	if !ok {
@@ -689,6 +814,92 @@ func (h *Handler) handleAdminBoardsPage(c *gin.Context) {
 		}
 	}
 	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-boards", AdminBoards: boards, BoardVisibleCount: visibleCount, BoardHiddenCount: hiddenCount})
+}
+
+func (h *Handler) handleAdminBoardCreateSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAdminShell(c)
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	name := strings.TrimSpace(c.PostForm("name"))
+	description := strings.TrimSpace(c.PostForm("description"))
+	if h.deps.BoardUseCase == nil {
+		h.renderError(c, http.StatusNotImplemented, "Not Implemented", "board use case is not configured")
+		return
+	}
+	if _, err := h.deps.BoardUseCase.CreateBoard(c.Request.Context(), userIDFromModel(shell.CurrentUser), name, description); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/admin/boards")
+}
+
+func (h *Handler) handleAdminBoardEditPage(c *gin.Context) {
+	shell, ok := h.requireHTMLAdminShell(c)
+	if !ok {
+		return
+	}
+	boardUUID := strings.TrimSpace(c.Param("boardUUID"))
+	boards, err := h.deps.BoardUseCase.GetAllBoards(c.Request.Context(), 100, "")
+	if err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	var target *model.Board
+	if boards != nil {
+		for _, b := range boards.Boards {
+			if b.UUID == boardUUID {
+				bc := b
+				target = &bc
+				break
+			}
+		}
+	}
+	if target == nil {
+		h.renderError(c, http.StatusNotFound, "Not Found", "board not found")
+		return
+	}
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-board-edit", BoardUUID: boardUUID, AdminBoardTarget: target})
+}
+
+func (h *Handler) handleAdminBoardUpdateSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAdminShell(c)
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	boardUUID := strings.TrimSpace(c.Param("boardUUID"))
+	name := strings.TrimSpace(c.PostForm("name"))
+	description := strings.TrimSpace(c.PostForm("description"))
+	if err := h.deps.BoardUseCase.UpdateBoard(c.Request.Context(), boardUUID, userIDFromModel(shell.CurrentUser), name, description); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/admin/boards")
+}
+
+func (h *Handler) handleAdminBoardDeleteSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAdminShell(c)
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	boardUUID := strings.TrimSpace(c.Param("boardUUID"))
+	if err := h.deps.BoardUseCase.DeleteBoard(c.Request.Context(), boardUUID, userIDFromModel(shell.CurrentUser)); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/admin/boards")
 }
 
 func (h *Handler) handleAdminBoardVisibilitySubmit(c *gin.Context) {
@@ -745,7 +956,110 @@ func (h *Handler) handleAdminSuspensionSubmit(c *gin.Context) {
 			return
 		}
 	}
-	c.Redirect(http.StatusSeeOther, "/admin/boards")
+	c.Redirect(http.StatusSeeOther, "/admin/reports")
+}
+
+func (h *Handler) handleDeletePostSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	postUUID := strings.TrimSpace(c.Param("postUUID"))
+	if err := h.deps.PostUseCase.DeletePost(c.Request.Context(), postUUID, userIDFromModel(shell.CurrentUser)); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/")
+}
+
+func (h *Handler) handleUpdateCommentSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	commentUUID := strings.TrimSpace(c.Param("commentUUID"))
+	content := strings.TrimSpace(c.PostForm("content"))
+	postUUID := strings.TrimSpace(c.PostForm("post_uuid"))
+	if err := h.deps.CommentUseCase.UpdateComment(c.Request.Context(), commentUUID, userIDFromModel(shell.CurrentUser), content); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	redirect := "/"
+	if postUUID != "" {
+		redirect = "/posts/" + postUUID
+	}
+	c.Redirect(http.StatusSeeOther, redirect)
+}
+
+func (h *Handler) handleDeleteCommentSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	commentUUID := strings.TrimSpace(c.Param("commentUUID"))
+	postUUID := strings.TrimSpace(c.PostForm("post_uuid"))
+	if err := h.deps.CommentUseCase.DeleteComment(c.Request.Context(), commentUUID, userIDFromModel(shell.CurrentUser)); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	redirect := "/"
+	if postUUID != "" {
+		redirect = "/posts/" + postUUID
+	}
+	c.Redirect(http.StatusSeeOther, redirect)
+}
+
+func (h *Handler) handleCreateReportSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	targetType := model.ReportTargetType(strings.TrimSpace(c.PostForm("target_type")))
+	targetUUID := strings.TrimSpace(c.PostForm("target_uuid"))
+	reasonCode := model.ReportReasonCode(strings.TrimSpace(c.PostForm("reason_code")))
+	reasonDetail := strings.TrimSpace(c.PostForm("reason_detail"))
+	redirect := strings.TrimSpace(c.PostForm("redirect"))
+	if _, err := h.deps.ReportUseCase.CreateReport(c.Request.Context(), userIDFromModel(shell.CurrentUser), targetType, targetUUID, reasonCode, reasonDetail); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	if redirect == "" {
+		redirect = "/"
+	}
+	c.Redirect(http.StatusSeeOther, redirect+"?message="+url.QueryEscape("Report submitted."))
+}
+
+func (h *Handler) handleNotificationReadSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	notificationUUID := strings.TrimSpace(c.Param("notificationUUID"))
+	if err := h.deps.NotificationUseCase.MarkMyNotificationRead(c.Request.Context(), userIDFromModel(shell.CurrentUser), notificationUUID); err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/notifications")
 }
 
 func (h *Handler) RenderError(c *gin.Context, status int, title, message string) {
