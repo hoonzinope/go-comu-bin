@@ -124,7 +124,7 @@ docker compose up -d
 ## API
 
 - Base path: `/api/v1`
-- OpenAPI docs: `docs/swagger/`
+- OpenAPI docs: `docs/swagger/` (`make swagger`로 갱신, `make verify-swagger`로 정합성 확인)
 - Human-readable API guide: [docs/API.md](docs/API.md)
 
 주요 엔드포인트 그룹:
@@ -183,6 +183,7 @@ npm run test:e2e:visual
 ```
 
 Browser E2E/visual tests require Node.js/npm and the Playwright browsers installed.
+Swagger 산출물은 `docs/swagger/docs.go`, `docs/swagger/swagger.json`, `docs/swagger/swagger.yaml`로 생성됩니다.
 
 패키지별/스타일 가이드는 [docs/TESTING.md](docs/TESTING.md) 참고.
 
