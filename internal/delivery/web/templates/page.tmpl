@@ -361,6 +361,13 @@
         <input type="password" name="password">
         <button class="button" type="submit">Sign up</button>
       </form>
+      <form class="panel form guest-login" action="/guest{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <input type="hidden" name="redirect" value="{{.Redirect}}">
+        <h2>Continue as guest</h2>
+        <p>Enter with a temporary account that stays on this device.</p>
+        <button class="button button-primary" type="submit">Continue as guest</button>
+      </form>
     </div>
   {{else if eq .Kind "signup"}}
     <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">

@@ -27,6 +27,7 @@ const (
 	csrfCookieName    = "csrf_token"
 	csrfHeaderName    = "X-CSRF-Token"
 	webDefaultLimit   = 20
+	guestSessionAge   = 30 * 24 * time.Hour
 )
 
 type Handler struct {
@@ -119,6 +120,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.POST("/signup", h.handleSignupSubmit)
 	r.GET("/login", h.handleLoginPage)
 	r.POST("/login", h.handleLoginSubmit)
+	r.POST("/guest", h.handleGuestLoginSubmit)
 	r.POST("/logout", h.handleLogoutSubmit)
 	r.GET("/verify-email", h.handleVerifyEmailPage)
 	r.POST("/verify-email", h.handleVerifyEmailSubmit)
@@ -166,6 +168,8 @@ func (h *Handler) serveAsset(c *gin.Context) {
 		c.Data(http.StatusOK, "text/css; charset=utf-8", data)
 	case strings.HasSuffix(name, ".js"):
 		c.Data(http.StatusOK, "text/javascript; charset=utf-8", data)
+	case strings.HasSuffix(name, ".svg"):
+		c.Data(http.StatusOK, "image/svg+xml; charset=utf-8", data)
 	default:
 		c.Data(http.StatusOK, http.DetectContentType(data), data)
 	}
@@ -345,7 +349,29 @@ func (h *Handler) handleLoginSubmit(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.setSessionCookie(c, token)
+	h.setSessionCookie(c, token, 0)
+	redirect := safeRedirectTarget(c.PostForm("redirect"))
+	if redirect == "/" {
+		redirect = safeRedirectTarget(c.Query("redirect"))
+	}
+	c.Redirect(http.StatusSeeOther, redirect)
+}
+
+func (h *Handler) handleGuestLoginSubmit(c *gin.Context) {
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	if currentUser, ok := h.currentUser(c); ok && currentUser != nil {
+		c.Redirect(http.StatusSeeOther, "/me")
+		return
+	}
+	token, err := h.deps.SessionUseCase.IssueGuestToken(c.Request.Context())
+	if err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	h.setSessionCookie(c, token, guestSessionAge)
 	redirect := safeRedirectTarget(c.PostForm("redirect"))
 	if redirect == "/" {
 		redirect = safeRedirectTarget(c.Query("redirect"))
@@ -637,7 +663,7 @@ func (h *Handler) handleMeUpgradeSubmit(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.setSessionCookie(c, newToken)
+	h.setSessionCookie(c, newToken, 0)
 	c.Redirect(http.StatusSeeOther, "/me?message="+url.QueryEscape("Account upgraded successfully."))
 }
 
@@ -1125,8 +1151,17 @@ func (h *Handler) renderError(c *gin.Context, status int, title, message string)
 
 func (h *Handler) shellForRequest(c *gin.Context, activeNav string) (ShellData, bool) {
 	user, ok := h.currentUser(c)
+	_, hasToken := h.authToken(c)
+	skipGuest := false
 	if !ok && h.hasInvalidCookie(c) {
 		h.clearSessionCookie(c)
+		skipGuest = true
+	}
+	if !ok && !hasToken && !skipGuest && h.shouldAutoIssueGuest(activeNav) {
+		if guest, issued := h.issueGuestUser(c); issued {
+			user = guest
+			ok = true
+		}
 	}
 	boards := h.loadBoards(c.Request.Context())
 	csrfToken := h.ensureCSRFToken(c)
@@ -1149,6 +1184,35 @@ func (h *Handler) shellForRequest(c *gin.Context, activeNav string) (ShellData, 
 		shell.IsAdmin = strings.EqualFold(user.Role, "admin")
 	}
 	return shell, true
+}
+
+func (h *Handler) shouldAutoIssueGuest(activeNav string) bool {
+	switch activeNav {
+	case "feed", "boards", "tags", "search":
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *Handler) issueGuestUser(c *gin.Context) (*model.User, bool) {
+	if h.deps.SessionUseCase == nil || h.deps.UserUseCase == nil {
+		return nil, false
+	}
+	token, err := h.deps.SessionUseCase.IssueGuestToken(c.Request.Context())
+	if err != nil {
+		return nil, false
+	}
+	userID, err := h.deps.SessionUseCase.ValidateTokenToId(c.Request.Context(), token)
+	if err != nil {
+		return nil, false
+	}
+	user, err := h.deps.UserUseCase.GetMe(c.Request.Context(), userID)
+	if err != nil {
+		return nil, false
+	}
+	h.setSessionCookie(c, token, guestSessionAge)
+	return user, true
 }
 
 func (h *Handler) requireHTMLAuthShell(c *gin.Context, activeNav string) (ShellData, bool) {
@@ -1301,8 +1365,8 @@ func (h *Handler) redirectToLogin(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, "/login?redirect="+url.QueryEscape(redirect))
 }
 
-func (h *Handler) setSessionCookie(c *gin.Context, token string) {
-	h.setCookie(c, sessionCookieName, token, true, 0)
+func (h *Handler) setSessionCookie(c *gin.Context, token string, maxAge time.Duration) {
+	h.setCookie(c, sessionCookieName, token, true, maxAge)
 }
 
 func (h *Handler) clearSessionCookie(c *gin.Context) {

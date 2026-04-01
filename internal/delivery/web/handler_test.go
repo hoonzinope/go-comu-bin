@@ -22,9 +22,10 @@ type testSessionUseCase struct {
 	loginErr    error
 	logoutErr   error
 
-	validateCalls int
-	loginCalls    int
-	logoutCalls   int
+	validateCalls   int
+	loginCalls      int
+	logoutCalls     int
+	issueGuestCalls int
 }
 
 func (s *testSessionUseCase) ValidateTokenToId(ctx context.Context, token string) (int64, error) {
@@ -53,6 +54,7 @@ func (s *testSessionUseCase) Login(ctx context.Context, username, password strin
 
 func (s *testSessionUseCase) IssueGuestToken(ctx context.Context) (string, error) {
 	_ = ctx
+	s.issueGuestCalls++
 	return "guest-token", nil
 }
 
@@ -583,6 +585,7 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Login")
 		assert.Contains(t, rr.Body.String(), "Guest to account")
+		assert.Contains(t, rr.Body.String(), "Continue as guest")
 	})
 
 	t.Run("profile", func(t *testing.T) {
@@ -678,6 +681,21 @@ func TestHandler_RenderCoreScreens_DisablesNewPostWhenNoBoards(t *testing.T) {
 	assert.NotContains(t, body, "href=\"/login\"")
 }
 
+func TestHandler_RenderCoreScreens_AutoIssuesGuestSessionOnPublicPages(t *testing.T) {
+	session := &testSessionUseCase{}
+	r := newTestWebEngineWithSession(session)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.GreaterOrEqual(t, session.issueGuestCalls, 1)
+	cookies := strings.Join(rr.Header()["Set-Cookie"], "\n")
+	assert.Contains(t, cookies, sessionCookieName+"=guest-token")
+	assert.Contains(t, cookies, "Max-Age=2592000")
+}
+
 func TestHandler_RenderCoreScreens_PreservesSessionCookieOnTransientValidationFailure(t *testing.T) {
 	session := &testSessionUseCase{validateErr: customerror.WrapRepository("lookup session", errors.New("db down"))}
 	r := newTestWebEngineWithSession(session)
@@ -763,6 +781,26 @@ func TestHandler_LoginSubmit_SetsSecureSessionCookieWhenRequestIsSecure(t *testi
 	assert.Contains(t, cookies, "HttpOnly")
 	assert.Contains(t, cookies, "SameSite=Lax")
 	assert.Contains(t, cookies, "Secure")
+}
+
+func TestHandler_GuestLoginSubmit_SetsPersistentSessionCookie(t *testing.T) {
+	session := &testSessionUseCase{}
+	r := newTestWebEngineWithSession(session)
+
+	req := httptest.NewRequest(http.MethodPost, "/guest", strings.NewReader("redirect=/me"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(csrfHeaderName, "csrf-token")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf-token"})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	assert.Equal(t, 1, session.issueGuestCalls)
+	cookies := strings.Join(rr.Header()["Set-Cookie"], "\n")
+	assert.Contains(t, cookies, sessionCookieName+"=guest-token")
+	assert.Contains(t, cookies, "Max-Age=2592000")
+	assert.Contains(t, cookies, "Expires=")
+	assert.Contains(t, rr.Header().Get("Location"), "/me")
 }
 
 func TestHandler_LogoutSubmit_ReturnsErrorAndKeepsCookieWhenLogoutFails(t *testing.T) {
