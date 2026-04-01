@@ -30,6 +30,32 @@ func AuthWithSession(sessionUseCase port.SessionUseCase, writeError func(*gin.Co
 	}
 }
 
+func OptionalAuthWithSession(sessionUseCase port.SessionUseCase, writeError func(*gin.Context, int, error)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		header := strings.TrimSpace(c.GetHeader("Authorization"))
+		if header == "" {
+			c.Next()
+			return
+		}
+
+		token, err := extractToken(header)
+		if err != nil {
+			writeError(c, http.StatusUnauthorized, err)
+			return
+		}
+
+		userID, err := sessionUseCase.ValidateTokenToId(c.Request.Context(), token)
+		if err != nil {
+			writeError(c, statusForAuthError(err), err)
+			return
+		}
+
+		c.Set("user_id", userID)
+		c.Set("auth_token", token)
+		c.Next()
+	}
+}
+
 func statusForAuthError(err error) int {
 	switch {
 	case errors.Is(err, customerror.ErrMissingAuthHeader):

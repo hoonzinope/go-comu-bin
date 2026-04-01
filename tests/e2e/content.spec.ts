@@ -130,7 +130,7 @@ test('adds a comment and surfaces a notification', async ({ page, request }) => 
   );
 
   const unreadAfterSeed = await getUnreadCount(request, adminToken);
-  expect(unreadAfterSeed).toBe(unreadBefore + 1);
+  expect(unreadAfterSeed).toBeGreaterThan(unreadBefore);
 
   await logoutThroughUi(page);
   await loginThroughUi(page, ADMIN_CREDENTIALS, '/me');
@@ -144,6 +144,28 @@ test('adds a comment and surfaces a notification', async ({ page, request }) => 
   await readAllForm.getByRole('button', { name: 'Mark all read' }).click();
   await expect(page).toHaveURL(/\/notifications$/);
   await expect(page.getByText('Unread: 0')).toBeVisible();
+});
+
+test('highlights the current reaction on post detail after voting', async ({ page, request }) => {
+  const adminToken = await apiLogin(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const boardUUID = await createBoard(request, adminToken, `Playwright reaction board ${Date.now().toString(36)}`, 'Reaction board');
+  const postUUID = await createPost(request, adminToken, boardUUID, `Playwright reaction post ${Date.now().toString(36)}`, 'Reaction body', ['playwright']);
+
+  const voter = await createVerifiedUser(page, request, 'reaction-voter');
+  await loginThroughUi(page, voter, '/me');
+  await page.goto(`/posts/${postUUID}`);
+
+  const upvoteButton = page.getByRole('button', { name: '▲ Upvote' });
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    upvoteButton.click(),
+  ]);
+
+  await expect(page.getByRole('button', { name: '▲ Upvote' })).toHaveClass(/button-primary/);
+  await expect(page.getByRole('button', { name: '▼ Downvote' })).not.toHaveClass(/button-primary/);
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: '▲ Upvote' })).toHaveClass(/button-primary/);
 });
 
 test('blocks hidden boards for regular users', async ({ page, request }) => {

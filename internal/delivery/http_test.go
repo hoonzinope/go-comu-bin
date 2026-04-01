@@ -2938,11 +2938,13 @@ func TestHTTP_PostDetail_IncludesCommentsHasMore(t *testing.T) {
 }
 
 func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
+	reactionType := entity.ReactionTypeLike
 	post := &fakePostUseCase{
 		getPostDetail: func(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 			return &model.PostDetail{
-				Post: &model.Post{UUID: postUUID, Title: "hello"},
-				Tags: []model.Tag{{ID: 1, Name: "go"}},
+				Post:           &model.Post{UUID: postUUID, Title: "hello"},
+				Tags:           []model.Tag{{ID: 1, Name: "go"}},
+				MyReactionType: &reactionType,
 			}, nil
 		},
 	}
@@ -2952,6 +2954,7 @@ func TestHTTP_PostDetail_IncludesTags(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"tags":[{"id":1,"name":"go"`)
+	assert.Contains(t, rr.Body.String(), `"my_reaction_type":"like"`)
 }
 
 func TestHTTP_TagPosts_Success(t *testing.T) {

@@ -364,6 +364,8 @@ definitions:
     properties:
       comment:
         $ref: '#/definitions/response.Comment'
+      my_reaction_type:
+        type: string
       reactions:
         items:
           $ref: '#/definitions/response.Reaction'
@@ -468,6 +470,8 @@ definitions:
         type: array
       comments_has_more:
         type: boolean
+      my_reaction_type:
+        type: string
       post:
         $ref: '#/definitions/response.Post'
       reactions:
@@ -516,6 +520,31 @@ definitions:
       id:
         type: integer
       name:
+        type: string
+    type: object
+  response.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      email_verified_at:
+        type: string
+      guest:
+        type: boolean
+      guest_status:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      uuid:
         type: string
     type: object
 info:
@@ -1951,6 +1980,44 @@ paths:
       summary: Create Comment
       tags:
       - Comment
+  /posts/{postUUID}/draft:
+    get:
+      description: Returns a draft post by UUID for the owner or admin.
+      parameters:
+      - description: Post UUID
+        format: uuid
+        in: path
+        name: postUUID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostDetail'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Draft Post
+      tags:
+      - Post
   /posts/{postUUID}/publish:
     post:
       description: Publishes a draft post by UUID.
@@ -2484,6 +2551,60 @@ paths:
       summary: Delete My Account
       tags:
       - User
+    get:
+      description: Returns the authenticated user profile.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.User'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Current User
+      tags:
+      - User
+  /users/me/drafts:
+    get:
+      description: Returns the authenticated user's draft posts.
+      parameters:
+      - description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.PostList'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/delivery.errorResponse'
+      security:
+      - BearerAuth: []
+      summary: List My Draft Posts
+      tags:
+      - Post
   /users/me/notifications:
     get:
       description: Returns notifications for the authenticated user with cursor pagination.

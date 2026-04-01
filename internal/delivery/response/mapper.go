@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 func BoardListFromDTO(list *model.BoardList) *BoardList {
@@ -90,6 +91,7 @@ func PostDetailFromDTO(detail *model.PostDetail) *PostDetail {
 		Comments:        comments,
 		CommentsHasMore: detail.CommentsHasMore,
 		Reactions:       reactions,
+		MyReactionType:  reactionTypeStringPtr(detail.MyReactionType),
 	}
 }
 
@@ -212,8 +214,9 @@ func commentDetailFromDTO(detail *model.CommentDetail) CommentDetail {
 		reactions = append(reactions, reactionFromDTO(reaction))
 	}
 	return CommentDetail{
-		Comment:   commentPtrFromDTO(detail.Comment),
-		Reactions: reactions,
+		Comment:        commentPtrFromDTO(detail.Comment),
+		Reactions:      reactions,
+		MyReactionType: reactionTypeStringPtr(detail.MyReactionType),
 	}
 }
 
@@ -249,6 +252,14 @@ func reactionFromDTO(reaction model.Reaction) Reaction {
 		UserUUID:   reaction.UserUUID,
 		CreatedAt:  reaction.CreatedAt,
 	}
+}
+
+func reactionTypeStringPtr(value *entity.ReactionType) *string {
+	if value == nil {
+		return nil
+	}
+	raw := string(*value)
+	return &raw
 }
 
 func attachmentFromDTO(attachment model.Attachment) Attachment {

@@ -213,12 +213,12 @@
           <form action="/posts/{{.PostUUID}}/reactions" method="post">
             <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
             <input type="hidden" name="reaction_type" value="like">
-            <button class="button" type="submit">▲ Upvote</button>
+            <button class="button {{if reactionActive .PostDetail.MyReactionType "like"}}button-primary is-active{{end}}" type="submit">▲ Upvote</button>
           </form>
           <form action="/posts/{{.PostUUID}}/reactions" method="post">
             <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
             <input type="hidden" name="reaction_type" value="dislike">
-            <button class="button" type="submit">▼ Downvote</button>
+            <button class="button {{if reactionActive .PostDetail.MyReactionType "dislike"}}button-primary is-active{{end}}" type="submit">▼ Downvote</button>
           </form>
           <form action="/posts/{{.PostUUID}}/reactions" method="post">
             <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">

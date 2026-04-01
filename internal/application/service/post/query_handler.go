@@ -306,6 +306,20 @@ func (h *postQueryHandler) GetPostDetail(ctx context.Context, postUUID string) (
 	if post == nil {
 		return nil, customerror.ErrPostNotFound
 	}
+	if viewerUserID, ok := ViewerUserIDFromContext(ctx); ok {
+		detail, err := h.postDetailQuery.Load(ctx, post.ID)
+		if err != nil {
+			return nil, err
+		}
+		board, err := h.boardRepository.SelectBoardByUUID(ctx, detail.Post.BoardUUID)
+		if err != nil {
+			return nil, customerror.WrapRepository("select board by uuid for post detail visibility", err)
+		}
+		if err := policy.EnsureBoardVisible(board, nil); err != nil {
+			return nil, customerror.ErrPostNotFound
+		}
+		return clonePostDetailForViewer(detail, viewerUserID), nil
+	}
 	cacheKey := key.PostDetail(post.ID)
 	value, err := h.cache.GetOrSetWithTTL(ctx, cacheKey, h.cachePolicy.DetailTTLSeconds, func(ctx context.Context) (interface{}, error) {
 		detail, err := h.postDetailQuery.Load(ctx, post.ID)

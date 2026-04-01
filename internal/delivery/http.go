@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
+	postsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/post"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/middleware"
 	"github.com/hoonzinope/go-comu-bin/internal/delivery/response"
@@ -73,6 +74,7 @@ type HTTPHandler struct {
 	passwordResetRateLimitMaxRequests     int
 	logger                                *slog.Logger
 	authGinMiddleware                     gin.HandlerFunc
+	optionalAuthGinMiddleware             gin.HandlerFunc
 	adminGinMiddleware                    gin.HandlerFunc
 }
 
@@ -154,6 +156,9 @@ func NewHTTPHandler(deps HTTPDependencies) *HTTPHandler {
 		logger:                                logger,
 	}
 	handler.authGinMiddleware = middleware.AuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
+		writeHTTPError(handler.logger, c, status, err)
+	})
+	handler.optionalAuthGinMiddleware = middleware.OptionalAuthWithSession(deps.SessionUseCase, func(c *gin.Context, status int, err error) {
 		writeHTTPError(handler.logger, c, status, err)
 	})
 	handler.adminGinMiddleware = middleware.AdminOnly(deps.AdminAuthorizer, func(c *gin.Context, status int, err error) {
@@ -274,7 +279,7 @@ func (h *HTTPHandler) RegisterRoutes(r *gin.Engine) {
 
 	v1.GET("/posts/feed", h.handlePostFeedGet)
 	v1.GET("/posts/search", h.handlePostSearchGet)
-	v1.GET("/posts/:postUUID", h.handlePostDetailGet)
+	v1.GET("/posts/:postUUID", h.optionalAuthGinMiddleware, h.handlePostDetailGet)
 	v1.GET("/posts/:postUUID/draft", h.authGinMiddleware, h.handleDraftPostGet)
 	v1.POST("/posts/:postUUID/publish", h.authGinMiddleware, h.handlePostPublish)
 	v1.GET("/posts/:postUUID/attachments", h.handlePostAttachmentsGet)
@@ -1672,7 +1677,11 @@ func (h *HTTPHandler) handlePostDetailGet(c *gin.Context) {
 		return
 	}
 
-	post, err := h.postUseCase.GetPostDetail(c.Request.Context(), postUUID)
+	ctx := c.Request.Context()
+	if userID, ok := middleware.UserID(c); ok {
+		ctx = postsvc.WithViewerUserID(ctx, userID)
+	}
+	post, err := h.postUseCase.GetPostDetail(ctx, postUUID)
 	if err != nil {
 		writeUseCaseError(c, err)
 		return

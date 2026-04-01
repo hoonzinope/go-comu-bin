@@ -17,7 +17,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
+	postsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/post"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
+	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
 
 const (
@@ -75,6 +77,9 @@ func NewHandler(deps Dependencies) (*Handler, error) {
 				return board.Name
 			}
 			return uuid
+		},
+		"reactionActive": func(current *entity.ReactionType, expected string) bool {
+			return current != nil && string(*current) == expected
 		},
 	}
 	templates, err := template.New("layout").Funcs(funcMap).ParseFS(embeddedAssets, "templates/*.tmpl")
@@ -247,7 +252,11 @@ func (h *Handler) handlePostDetail(c *gin.Context) {
 		return
 	}
 	postUUID := strings.TrimSpace(c.Param("postUUID"))
-	detail, err := h.deps.PostUseCase.GetPostDetail(c.Request.Context(), postUUID)
+	ctx := c.Request.Context()
+	if shell.CurrentUser != nil {
+		ctx = postsvc.WithViewerUserID(ctx, userIDFromModel(shell.CurrentUser))
+	}
+	detail, err := h.deps.PostUseCase.GetPostDetail(ctx, postUUID)
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return

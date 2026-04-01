@@ -269,6 +269,8 @@ JSON 요청 바디는 `delivery.http.maxJSONBodyBytes`를 초과하면 `400 Bad 
   - `post.content` 안의 이미지 참조는 `![alt](attachment://{attachmentUUID})` 형식을 사용합니다.
   - 각 attachment는 실제 파일 조회용 `file_url`과 draft 미리보기용 `preview_url`을 포함합니다.
   - `reactions[]`는 `target_uuid`, `user_uuid`, `type`을 기준으로 해석합니다.
+  - `my_reaction_type`은 인증된 사용자일 때만 `like` 또는 `dislike`를 반환하고, 미인증/guest는 `null`입니다.
+  - 각 `comments[].comment`에도 동일한 `my_reaction_type`이 포함되어 댓글 반응 강조에 재사용됩니다.
 - `GET /api/v1/posts/{postUUID}/draft` (인증 필요, 작성자 또는 admin)
   - draft post detail을 반환합니다.
   - published detail과 분리된 editor resume/edit contract입니다.

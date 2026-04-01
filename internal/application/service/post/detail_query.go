@@ -223,6 +223,43 @@ func reactionsFromEntitiesWithTargetUUID(reactions []*entity.Reaction, targetUUI
 	return out, nil
 }
 
+func clonePostDetailForViewer(detail *model.PostDetail, viewerUserID int64) *model.PostDetail {
+	if detail == nil {
+		return nil
+	}
+	cloned := *detail
+	cloned.Tags = append([]model.Tag(nil), detail.Tags...)
+	cloned.Attachments = append([]model.Attachment(nil), detail.Attachments...)
+	cloned.Reactions = append([]model.Reaction(nil), detail.Reactions...)
+	cloned.MyReactionType = reactionTypeForViewer(detail.Reactions, viewerUserID)
+	if len(detail.Comments) > 0 {
+		cloned.Comments = make([]*model.CommentDetail, len(detail.Comments))
+		for i, comment := range detail.Comments {
+			if comment == nil {
+				continue
+			}
+			commentClone := *comment
+			commentClone.Reactions = append([]model.Reaction(nil), comment.Reactions...)
+			commentClone.MyReactionType = reactionTypeForViewer(comment.Reactions, viewerUserID)
+			cloned.Comments[i] = &commentClone
+		}
+	}
+	return &cloned
+}
+
+func reactionTypeForViewer(reactions []model.Reaction, viewerUserID int64) *entity.ReactionType {
+	if viewerUserID <= 0 {
+		return nil
+	}
+	for _, reaction := range reactions {
+		if reaction.UserID == viewerUserID {
+			reactionType := reaction.Type
+			return &reactionType
+		}
+	}
+	return nil
+}
+
 func tagsForPost(ctx context.Context, postTagRepository port.PostTagRepository, tagRepository port.TagRepository, postID int64) ([]model.Tag, error) {
 	relations, err := postTagRepository.SelectActiveByPostID(ctx, postID)
 	if err != nil {

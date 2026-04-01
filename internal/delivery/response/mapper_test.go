@@ -47,6 +47,7 @@ func TestPostDetailFromDTO(t *testing.T) {
 				UserUUID:   "reactor-uuid",
 				CreatedAt:  now,
 			}},
+			MyReactionType: reactionTypePtr(entity.ReactionTypeLike),
 		}},
 		CommentsHasMore: true,
 		Reactions: []model.Reaction{{
@@ -57,6 +58,7 @@ func TestPostDetailFromDTO(t *testing.T) {
 			UserUUID:   "reactor-uuid",
 			CreatedAt:  now,
 		}},
+		MyReactionType: reactionTypePtr(entity.ReactionTypeDislike),
 	}
 
 	resp := PostDetailFromDTO(view)
@@ -67,6 +69,10 @@ func TestPostDetailFromDTO(t *testing.T) {
 	assert.Equal(t, "/api/v1/posts/post-uuid/attachments/attachment-uuid/preview", resp.Attachments[0].PreviewURL)
 	assert.Equal(t, "reactor-uuid", resp.Reactions[0].UserUUID)
 	assert.Equal(t, "commenter-uuid", resp.Comments[0].Comment.AuthorUUID)
+	require.NotNil(t, resp.MyReactionType)
+	assert.Equal(t, "dislike", *resp.MyReactionType)
+	require.NotNil(t, resp.Comments[0].MyReactionType)
+	assert.Equal(t, "like", *resp.Comments[0].MyReactionType)
 	assert.True(t, resp.CommentsHasMore)
 }
 
@@ -119,5 +125,9 @@ func TestListMappers(t *testing.T) {
 }
 
 func stringPtr(v string) *string {
+	return &v
+}
+
+func reactionTypePtr(v entity.ReactionType) *entity.ReactionType {
 	return &v
 }

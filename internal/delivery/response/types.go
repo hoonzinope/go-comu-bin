@@ -56,6 +56,7 @@ type PostDetail struct {
 	Comments        []CommentDetail `json:"comments"`
 	CommentsHasMore bool            `json:"comments_has_more"`
 	Reactions       []Reaction      `json:"reactions"`
+	MyReactionType  *string         `json:"my_reaction_type"`
 }
 
 type Tag struct {
@@ -82,8 +83,9 @@ type CommentList struct {
 }
 
 type CommentDetail struct {
-	Comment   *Comment   `json:"comment"`
-	Reactions []Reaction `json:"reactions"`
+	Comment        *Comment   `json:"comment"`
+	Reactions      []Reaction `json:"reactions"`
+	MyReactionType *string    `json:"my_reaction_type"`
 }
 
 type Notification struct {

@@ -426,6 +426,11 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
   color: var(--accent);
   border-color: var(--accent);
 }
+.button-primary.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .button-danger:hover:not(:disabled) {
   background: #fff;
   color: var(--danger);
