@@ -47,7 +47,12 @@
         {{end}}
       </div>
     {{else}}
-      <div class="panel empty">No posts yet.</div>
+      <div class="panel empty">
+        <p>No posts yet.</p>
+        {{if and $.Shell.IsAuthenticated $.Shell.ComposeURL}}
+        <a class="button button-primary empty-cta" href="{{$.Shell.ComposeURL}}">+ Write the first post</a>
+        {{end}}
+      </div>
     {{end}}
   {{else if eq .Kind "board"}}
     <div class="page-heading">
@@ -96,13 +101,16 @@
           {{end}}
         </div>
       {{else}}
-        <div class="panel empty">No results found.</div>
+        <div class="panel empty">
+          <p>No results found.</p>
+          <a class="button empty-cta" href="/">Browse all posts</a>
+        </div>
       {{end}}
     {{else}}
       <div class="panel empty">Search results appear here.</div>
     {{end}}
   {{else if eq .Kind "post"}}
-    <div class="post-layout">
+    <div class="post-layout page-main">
       <article class="panel post-main">
         <div class="page-heading">
           <h1>{{.PostDetail.Post.Title}}</h1>
@@ -275,7 +283,7 @@
       <h1>{{if eq .EditMode "edit"}}Edit draft{{else if eq .EditMode "draft"}}New draft{{else}}New post{{end}}</h1>
       <p>{{.BoardUUID}}</p>
     </div>
-    <div class="compose-layout">
+    <div class="compose-layout page-main">
       <aside class="panel compose-sidebar">
         <div class="section-title">Workspace</div>
         <div class="meta-list">
@@ -433,7 +441,12 @@
             <div class="list-row"><a href="/posts/{{.UUID}}/edit">{{.Title}}</a><span>{{formatTime .UpdatedAt}}</span></div>
           {{end}}
         {{else}}
-          <div class="empty">No drafts yet.</div>
+          <div class="empty">
+            <p>No drafts yet.</p>
+            {{if $.Shell.ComposeURL}}
+            <a class="button empty-cta" href="{{$.Shell.ComposeURL}}">+ Start a draft</a>
+            {{end}}
+          </div>
         {{end}}
       </section>
     </div>
@@ -477,7 +490,7 @@
           {{range .Reports.Reports}}
           <form class="table-row report-grid" action="/admin/reports/{{.ID}}/resolve" method="post">
             <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
-            <div>
+            <div data-label="Report">
               <div class="table-title">#{{.ID}} · {{.ReasonCode}}</div>
               <div class="table-sub">By @{{shortUUID .ReporterUUID}} · {{formatTime .CreatedAt}}</div>
               <div class="chip-row">
@@ -485,18 +498,18 @@
                 {{if .ResolvedAt}}<span class="chip chip-active">resolved</span>{{end}}
               </div>
             </div>
-            <div>
+            <div data-label="Target">
               <div class="table-title">{{.TargetType}}</div>
               <div class="table-sub">{{.TargetUUID}}</div>
               <div class="table-sub">{{if .ResolvedAt}}Resolved{{else}}Awaiting review{{end}}</div>
             </div>
-            <div class="form">
+            <div class="form" data-label="Decision">
               <label>Status</label>
               <input type="text" name="status" value="{{.Status}}" placeholder="accepted / rejected">
               <label>Note</label>
               <input type="text" name="resolution_note" value="{{.ResolutionNote}}" placeholder="Optional note">
             </div>
-            <div class="button-row">
+            <div class="button-row" data-label="Action">
               <button class="button button-primary" type="submit">Resolve</button>
             </div>
           </form>
@@ -517,20 +530,20 @@
         <div class="table-body">
           {{range .Outbox.Messages}}
           <div class="table-row outbox-grid">
-            <div>
+            <div data-label="Message">
               <div class="table-title">{{.EventName}}</div>
               <div class="table-sub">{{.ID}}</div>
               <div class="chip-row"><span class="chip chip-dead">dead</span><span class="chip chip-pending">Attempts x{{.AttemptCount}}</span></div>
             </div>
-            <div>
+            <div data-label="Schedule">
               <div class="table-title">{{formatTime .OccurredAt}}</div>
               <div class="table-sub">Retry at {{formatTime .NextAttemptAt}}</div>
             </div>
-            <div>
+            <div data-label="Error">
               <div class="table-title">Last error</div>
               <div class="table-sub">{{.LastError}}</div>
             </div>
-            <div class="button-row">
+            <div class="button-row" data-label="Action">
               <form action="/admin/outbox/dead/{{.ID}}/requeue" method="post">
                 <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
                 <button class="button" type="submit">Requeue</button>
@@ -583,13 +596,13 @@
         <div class="table-body">
           {{range .AdminBoards.Boards}}
           <div class="table-row">
-            <div>
+            <div data-label="Board">
               <div class="table-title">{{.Name}}</div>
               <div class="table-sub">{{.UUID}}</div>
               <div class="table-sub">{{.Description}}</div>
             </div>
-            <div><span class="chip {{if .Hidden}}chip-hidden{{else}}chip-active{{end}}">{{if .Hidden}}Hidden{{else}}Visible{{end}}</span></div>
-            <div class="button-row">
+            <div data-label="Status"><span class="chip {{if .Hidden}}chip-hidden{{else}}chip-active{{end}}">{{if .Hidden}}Hidden{{else}}Visible{{end}}</span></div>
+            <div class="button-row" data-label="Action">
               <a class="button" href="/admin/boards/{{.UUID}}/edit">Edit</a>
               <form action="/admin/boards/{{.UUID}}/visibility" method="post" style="display:contents">
                 <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
