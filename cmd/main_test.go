@@ -83,6 +83,53 @@ func (r *stubUserRepository) Delete(context.Context, int64) error {
 	return nil
 }
 
+type stubBoardRepository struct {
+	selectBoardByUUID func(ctx context.Context, boardUUID string) (*entity.Board, error)
+	save              func(ctx context.Context, board *entity.Board) (int64, error)
+	update            func(ctx context.Context, board *entity.Board) error
+}
+
+func (r *stubBoardRepository) SelectBoardByID(context.Context, int64) (*entity.Board, error) {
+	return nil, nil
+}
+
+func (r *stubBoardRepository) SelectBoardByUUID(ctx context.Context, boardUUID string) (*entity.Board, error) {
+	if r.selectBoardByUUID != nil {
+		return r.selectBoardByUUID(ctx, boardUUID)
+	}
+	return nil, nil
+}
+
+func (r *stubBoardRepository) SelectBoardsByIDs(context.Context, []int64) (map[int64]*entity.Board, error) {
+	return map[int64]*entity.Board{}, nil
+}
+
+func (r *stubBoardRepository) SelectBoardList(context.Context, int, int64) ([]*entity.Board, error) {
+	return []*entity.Board{}, nil
+}
+
+func (r *stubBoardRepository) SelectBoardListIncludingHidden(context.Context, int, int64) ([]*entity.Board, error) {
+	return []*entity.Board{}, nil
+}
+
+func (r *stubBoardRepository) Save(ctx context.Context, board *entity.Board) (int64, error) {
+	if r.save != nil {
+		return r.save(ctx, board)
+	}
+	return 1, nil
+}
+
+func (r *stubBoardRepository) Update(ctx context.Context, board *entity.Board) error {
+	if r.update != nil {
+		return r.update(ctx, board)
+	}
+	return nil
+}
+
+func (r *stubBoardRepository) Delete(context.Context, int64) error {
+	return nil
+}
+
 func TestEnsureBootstrapAdmin_ReturnsError_WhenSaveFails(t *testing.T) {
 	expected := errors.New("save failed")
 	cfg := &config.Config{}
@@ -186,6 +233,65 @@ func TestEnsureBootstrapAdmin_UpsertsExistingUser(t *testing.T) {
 	assert.Equal(t, entity.UserStatusActive, updatedUser.Status)
 	assert.Nil(t, updatedUser.DeletedAt)
 	assert.NotEqual(t, "old-password", updatedUser.Password)
+}
+
+func TestEnsureBootstrapGeneralBoard_CreatesMissingBoard(t *testing.T) {
+	var savedBoard *entity.Board
+
+	err := ensureBootstrapGeneralBoard(&stubBoardRepository{
+		selectBoardByUUID: func(_ context.Context, boardUUID string) (*entity.Board, error) {
+			assert.Equal(t, generalBoardUUID, boardUUID)
+			return nil, nil
+		},
+		save: func(_ context.Context, board *entity.Board) (int64, error) {
+			savedBoard = board
+			return 7, nil
+		},
+		update: func(context.Context, *entity.Board) error {
+			t.Fatal("update should not be called when board is missing")
+			return nil
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, savedBoard)
+	assert.Equal(t, generalBoardUUID, savedBoard.UUID)
+	assert.Equal(t, generalBoardName, savedBoard.Name)
+	assert.Equal(t, generalBoardDescription, savedBoard.Description)
+	assert.False(t, savedBoard.Hidden)
+}
+
+func TestEnsureBootstrapGeneralBoard_UpdatesExistingBoard(t *testing.T) {
+	var updatedBoard *entity.Board
+
+	err := ensureBootstrapGeneralBoard(&stubBoardRepository{
+		selectBoardByUUID: func(_ context.Context, boardUUID string) (*entity.Board, error) {
+			assert.Equal(t, generalBoardUUID, boardUUID)
+			return &entity.Board{
+				ID:          3,
+				UUID:        generalBoardUUID,
+				Name:        "Old",
+				Description: "Old description",
+				Hidden:      true,
+			}, nil
+		},
+		save: func(context.Context, *entity.Board) (int64, error) {
+			t.Fatal("save should not be called when board already exists")
+			return 0, nil
+		},
+		update: func(_ context.Context, board *entity.Board) error {
+			updatedBoard = board
+			return nil
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, updatedBoard)
+	assert.Equal(t, int64(3), updatedBoard.ID)
+	assert.Equal(t, generalBoardUUID, updatedBoard.UUID)
+	assert.Equal(t, generalBoardName, updatedBoard.Name)
+	assert.Equal(t, generalBoardDescription, updatedBoard.Description)
+	assert.False(t, updatedBoard.Hidden)
 }
 
 type stubAttachmentCleanupUseCase struct{}

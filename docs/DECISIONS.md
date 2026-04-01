@@ -4706,3 +4706,39 @@
 
 - README의 Docker 섹션에 compose 실행 예시를 추가한다.
 - 필요하면 `.env.example`을 별도로 만들어 필수 환경변수를 정리한다.
+
+## 2026-04-01 - initial General board is bootstrapped idempotently
+
+상태
+
+- decided
+
+배경
+
+- 초기 유입이 없더라도 최소한 하나의 진입점이 있어야 게시글/댓글 흐름과 탐색 UX를 바로 시작할 수 있다.
+- 배포를 반복해도 기존 post/comment 데이터는 보존되어야 하므로, board seed는 중복 생성이 아니라 idempotent bootstrap이어야 한다.
+
+관찰
+
+- board 저장소는 `uuid` 기준 조회와 `Save`/`Update`를 모두 제공한다.
+- post/comment는 board ID를 참조하므로, board row 자체만 유지되면 기존 콘텐츠는 볼륨에 그대로 남는다.
+- 이미 생성된 board가 있으면 이름/설명만 갱신하고, 새로 만들 때만 insert 하는 흐름이 가장 안전하다.
+
+결론
+
+- `General` board를 bootstrap seed로 둔다.
+- seed 판별 기준은 고정 UUID로 둔다.
+- 부팅 시 해당 UUID의 board가 없으면 새로 만들고, 있으면 이름/설명/hidden 상태를 `General` 기준으로 정리한다.
+- 재배포로는 board/post/comment 데이터가 초기화되지 않으며, 볼륨 삭제가 있어야만 사라진다.
+
+후속 작업
+
+- `cmd/main.go`에 board bootstrap upsert 추가
+- `cmd/main_test.go`에 missing/existing board bootstrap 회귀 테스트 추가
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `cmd/main_test.go`
+- `internal/application/port/board_repository.go`
+- `internal/infrastructure/persistence/sqlite/board_repository.go`

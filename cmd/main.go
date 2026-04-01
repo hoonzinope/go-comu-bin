@@ -50,6 +50,12 @@ import (
 	objectstorage "github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/object"
 )
 
+const (
+	generalBoardUUID        = "00000000-0000-0000-0000-000000000001"
+	generalBoardName        = "General"
+	generalBoardDescription = "General discussion"
+)
+
 func main() {
 	bootstrapLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(bootstrapLogger)
@@ -129,6 +135,11 @@ func main() {
 
 	if err := ensureBootstrapAdmin(cfg, userRepository); err != nil {
 		slog.Error("failed to ensure bootstrap admin user", "error", err)
+		exitCode = 1
+		return
+	}
+	if err := ensureBootstrapGeneralBoard(boardRepository); err != nil {
+		slog.Error("failed to ensure bootstrap general board", "error", err)
 		exitCode = 1
 		return
 	}
@@ -502,6 +513,29 @@ func ensureBootstrapAdmin(cfg *config.Config, userRepository port.UserRepository
 	existingUser.DeletedAt = nil
 	existingUser.UpdatedAt = now
 	return userRepository.Update(context.Background(), existingUser)
+}
+
+func ensureBootstrapGeneralBoard(boardRepository port.BoardRepository) error {
+	if boardRepository == nil {
+		return nil
+	}
+
+	existingBoard, err := boardRepository.SelectBoardByUUID(context.Background(), generalBoardUUID)
+	if err != nil {
+		return err
+	}
+	if existingBoard == nil {
+		board := entity.NewBoard(generalBoardName, generalBoardDescription)
+		board.UUID = generalBoardUUID
+		board.Hidden = false
+		_, err = boardRepository.Save(context.Background(), board)
+		return err
+	}
+
+	existingBoard.Name = generalBoardName
+	existingBoard.Description = generalBoardDescription
+	existingBoard.Hidden = false
+	return boardRepository.Update(context.Background(), existingBoard)
 }
 
 func httpAddr(cfg *config.Config) string {
