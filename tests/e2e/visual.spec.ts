@@ -59,7 +59,8 @@ test('captures the login and signup surfaces', async ({ page }) => {
 
 test('captures the feed, composer, and post detail surfaces', async ({ page, request }) => {
   const adminToken = await apiLogin(request, ADMIN_USERNAME, ADMIN_CREDENTIALS.password);
-  const boardUUID = await createBoard(request, adminToken, 'Visual feed board', 'Board used for Playwright snapshots');
+  const boardName = 'Visual feed board';
+  const boardUUID = await createBoard(request, adminToken, boardName, 'Board used for Playwright snapshots');
   const publishedUUID = await createPost(
     request,
     adminToken,
@@ -71,7 +72,7 @@ test('captures the feed, composer, and post detail surfaces', async ({ page, req
 
   await page.goto(`/boards/${boardUUID}`);
   await prepareVisualPage(page, 1440, 1200);
-  await expect(page.getByRole('heading', { name: boardUUID })).toBeVisible();
+  await expect(page.getByRole('heading', { name: boardName })).toBeVisible();
   await expect(page.getByText('Visual feed title')).toBeVisible();
   await page.addStyleTag({ content: '.page-heading h1 { display: none !important; }' });
   await page.addStyleTag({ content: '.feed-item .chip { display: none !important; }' });
