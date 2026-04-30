@@ -337,7 +337,44 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 }
 .pagination {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+  justify-content: center;
+}
+.pagination-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  align-items: center;
+}
+.pagination-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  padding: .55rem .8rem;
+  border: var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.pagination-link.is-current {
+  background: var(--accent);
+  color: #fff;
+  border-color: rgba(38, 95, 73, 0.24);
+}
+.pagination-link.is-disabled {
+  background: rgba(255, 255, 255, 0.56);
+  color: rgba(29, 39, 48, 0.42);
+  box-shadow: none;
+}
+.pagination-step {
+  min-width: 4.75rem;
 }
 .comment-report-form {
   display: grid;

@@ -84,6 +84,9 @@ func NewHandler(deps Dependencies) (*Handler, error) {
 		"pageURL": func(base string, params ...any) string {
 			return pageURL(base, params...)
 		},
+		"listPageURL": func(data any, page int) string {
+			return listPageURL(data, page)
+		},
 		"cursorValue": func(value *string) string {
 			if value == nil {
 				return ""
@@ -301,13 +304,23 @@ func (h *Handler) handleFeed(c *gin.Context) {
 	sortValue := strings.TrimSpace(c.Query("sort"))
 	windowValue := strings.TrimSpace(c.Query("window"))
 	limit := parsePageLimit(c.Query("limit"))
-	cursor := strings.TrimSpace(c.Query("cursor"))
-	feed, err := h.deps.PostUseCase.GetFeed(c.Request.Context(), sortValue, windowValue, limit, cursor)
+	page := parsePageNumber(c.Query("page"))
+	feed, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, cursor string) (*model.PostList, string, bool, error) {
+		list, err := h.deps.PostUseCase.GetFeed(ctx, sortValue, windowValue, limit, cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		nextCursor := ""
+		if list != nil && list.NextCursor != nil {
+			nextCursor = strings.TrimSpace(*list.NextCursor)
+		}
+		return list, nextCursor, list != nil && list.HasMore && nextCursor != "", nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "feed", ListBaseURL: "/", Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "feed", ListBaseURL: "/", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleBoardFeed(c *gin.Context) {
@@ -319,13 +332,23 @@ func (h *Handler) handleBoardFeed(c *gin.Context) {
 	sortValue := strings.TrimSpace(c.Query("sort"))
 	windowValue := strings.TrimSpace(c.Query("window"))
 	limit := parsePageLimit(c.Query("limit"))
-	cursor := strings.TrimSpace(c.Query("cursor"))
-	feed, err := h.deps.PostUseCase.GetPostsList(c.Request.Context(), boardUUID, sortValue, windowValue, limit, cursor)
+	page := parsePageNumber(c.Query("page"))
+	feed, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, cursor string) (*model.PostList, string, bool, error) {
+		list, err := h.deps.PostUseCase.GetPostsList(ctx, boardUUID, sortValue, windowValue, limit, cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		nextCursor := ""
+		if list != nil && list.NextCursor != nil {
+			nextCursor = strings.TrimSpace(*list.NextCursor)
+		}
+		return list, nextCursor, list != nil && list.HasMore && nextCursor != "", nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", ListBaseURL: "/boards/" + boardUUID, BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", ListBaseURL: "/boards/" + boardUUID, ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleTagFeed(c *gin.Context) {
@@ -337,13 +360,23 @@ func (h *Handler) handleTagFeed(c *gin.Context) {
 	sortValue := strings.TrimSpace(c.Query("sort"))
 	windowValue := strings.TrimSpace(c.Query("window"))
 	limit := parsePageLimit(c.Query("limit"))
-	cursor := strings.TrimSpace(c.Query("cursor"))
-	feed, err := h.deps.PostUseCase.GetPostsByTag(c.Request.Context(), tagName, sortValue, windowValue, limit, cursor)
+	page := parsePageNumber(c.Query("page"))
+	feed, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, cursor string) (*model.PostList, string, bool, error) {
+		list, err := h.deps.PostUseCase.GetPostsByTag(ctx, tagName, sortValue, windowValue, limit, cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		nextCursor := ""
+		if list != nil && list.NextCursor != nil {
+			nextCursor = strings.TrimSpace(*list.NextCursor)
+		}
+		return list, nextCursor, list != nil && list.HasMore && nextCursor != "", nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "tag", ListBaseURL: "/tags/" + tagName, TagName: tagName, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "tag", ListBaseURL: "/tags/" + tagName, ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), TagName: tagName, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleSearch(c *gin.Context) {
@@ -355,17 +388,29 @@ func (h *Handler) handleSearch(c *gin.Context) {
 	sortValue := strings.TrimSpace(c.Query("sort"))
 	windowValue := strings.TrimSpace(c.Query("window"))
 	limit := parsePageLimit(c.Query("limit"))
-	cursor := strings.TrimSpace(c.Query("cursor"))
+	page := parsePageNumber(c.Query("page"))
 	var feed *model.PostList
+	hasMore := false
+	currentPage := 1
 	var err error
 	if query != "" {
-		feed, err = h.deps.PostUseCase.SearchPosts(c.Request.Context(), query, sortValue, windowValue, limit, cursor)
+		feed, currentPage, hasMore, err = loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, cursor string) (*model.PostList, string, bool, error) {
+			list, err := h.deps.PostUseCase.SearchPosts(ctx, query, sortValue, windowValue, limit, cursor)
+			if err != nil {
+				return nil, "", false, err
+			}
+			nextCursor := ""
+			if list != nil && list.NextCursor != nil {
+				nextCursor = strings.TrimSpace(*list.NextCursor)
+			}
+			return list, nextCursor, list != nil && list.HasMore && nextCursor != "", nil
+		})
 		if err != nil {
 			h.renderUseCaseError(c, err)
 			return
 		}
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "search", ListBaseURL: "/search", Query: query, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "search", ListBaseURL: "/search", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Query: query, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handlePostDetail(c *gin.Context) {
@@ -712,13 +757,23 @@ func (h *Handler) handleMePage(c *gin.Context) {
 	}
 	userID := userIDFromModel(shell.CurrentUser)
 	limit := parsePageLimit(c.Query("limit"))
-	cursor := strings.TrimSpace(c.Query("cursor"))
-	drafts, err := h.deps.PostUseCase.GetMyDraftPosts(c.Request.Context(), userID, limit, cursor)
+	page := parsePageNumber(c.Query("page"))
+	drafts, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, cursor string) (*model.PostList, string, bool, error) {
+		list, err := h.deps.PostUseCase.GetMyDraftPosts(ctx, userID, limit, cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		nextCursor := ""
+		if list != nil && list.NextCursor != nil {
+			nextCursor = strings.TrimSpace(*list.NextCursor)
+		}
+		return list, nextCursor, list != nil && list.HasMore && nextCursor != "", nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "me", ListBaseURL: "/me", Drafts: drafts})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "me", ListBaseURL: "/me", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Drafts: drafts})
 }
 
 func (h *Handler) handleMeDeleteSubmit(c *gin.Context) {
@@ -800,13 +855,23 @@ func (h *Handler) handleNotificationsPage(c *gin.Context) {
 		return
 	}
 	limit := parsePageLimit(c.Query("limit"))
-	cursor := strings.TrimSpace(c.Query("cursor"))
-	notifs, err := h.deps.NotificationUseCase.GetMyNotifications(c.Request.Context(), userIDFromModel(shell.CurrentUser), limit, cursor)
+	page := parsePageNumber(c.Query("page"))
+	notifs, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, cursor string) (*model.NotificationList, string, bool, error) {
+		list, err := h.deps.NotificationUseCase.GetMyNotifications(ctx, userIDFromModel(shell.CurrentUser), limit, cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		nextCursor := ""
+		if list != nil && list.NextCursor != nil {
+			nextCursor = strings.TrimSpace(*list.NextCursor)
+		}
+		return list, nextCursor, list != nil && list.HasMore && nextCursor != "", nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "notifications", ListBaseURL: "/notifications", Notifications: notifs})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "notifications", ListBaseURL: "/notifications", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Notifications: notifs})
 }
 
 func (h *Handler) handleNotificationsReadAllSubmit(c *gin.Context) {
@@ -903,13 +968,23 @@ func (h *Handler) handleAdminReportsPage(c *gin.Context) {
 		return
 	}
 	limit := parsePageLimit(c.Query("limit"))
-	lastID := parseLastID(c.Query("last_id"))
-	reports, err := h.deps.ReportUseCase.GetReports(c.Request.Context(), userIDFromModel(shell.CurrentUser), nil, limit, lastID)
+	page := parsePageNumber(c.Query("page"))
+	reports, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, int64(0), func(ctx context.Context, lastID int64) (*model.ReportList, int64, bool, error) {
+		list, err := h.deps.ReportUseCase.GetReports(ctx, userIDFromModel(shell.CurrentUser), nil, limit, lastID)
+		if err != nil {
+			return nil, 0, false, err
+		}
+		nextLastID := int64(0)
+		if list != nil && list.NextLastID != nil {
+			nextLastID = *list.NextLastID
+		}
+		return list, nextLastID, list != nil && list.HasMore && nextLastID > 0, nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-reports", ListBaseURL: "/admin/reports", Reports: reports})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-reports", ListBaseURL: "/admin/reports", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Reports: reports})
 }
 
 func (h *Handler) handleAdminReportResolveSubmit(c *gin.Context) {
@@ -943,13 +1018,23 @@ func (h *Handler) handleAdminOutboxPage(c *gin.Context) {
 		return
 	}
 	limit := parsePageLimit(c.Query("limit"))
-	lastID := strings.TrimSpace(c.Query("last_id"))
-	outbox, err := h.deps.OutboxAdminUseCase.GetDeadMessages(c.Request.Context(), userIDFromModel(shell.CurrentUser), limit, lastID)
+	page := parsePageNumber(c.Query("page"))
+	outbox, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, lastID string) (*model.OutboxDeadMessageList, string, bool, error) {
+		list, err := h.deps.OutboxAdminUseCase.GetDeadMessages(ctx, userIDFromModel(shell.CurrentUser), limit, lastID)
+		if err != nil {
+			return nil, "", false, err
+		}
+		nextLastID := ""
+		if list != nil && list.NextLastID != nil {
+			nextLastID = strings.TrimSpace(*list.NextLastID)
+		}
+		return list, nextLastID, list != nil && list.HasMore && nextLastID != "", nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-outbox", ListBaseURL: "/admin/outbox", Outbox: outbox})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-outbox", ListBaseURL: "/admin/outbox", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Outbox: outbox})
 }
 
 func (h *Handler) handleAdminOutboxRequeueSubmit(c *gin.Context) {
@@ -1010,8 +1095,18 @@ func (h *Handler) handleAdminBoardsPage(c *gin.Context) {
 		return
 	}
 	limit := parsePageLimit(c.Query("limit"))
-	cursor := strings.TrimSpace(c.Query("cursor"))
-	boards, err := h.deps.BoardUseCase.GetAllBoards(c.Request.Context(), limit, cursor)
+	page := parsePageNumber(c.Query("page"))
+	boards, currentPage, hasMore, err := loadSequentialPage(c.Request.Context(), page, "", func(ctx context.Context, cursor string) (*model.BoardList, string, bool, error) {
+		list, err := h.deps.BoardUseCase.GetAllBoards(ctx, limit, cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		nextCursor := ""
+		if list != nil && list.NextCursor != nil {
+			nextCursor = strings.TrimSpace(*list.NextCursor)
+		}
+		return list, nextCursor, list != nil && list.HasMore && nextCursor != "", nil
+	})
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
@@ -1027,7 +1122,7 @@ func (h *Handler) handleAdminBoardsPage(c *gin.Context) {
 			}
 		}
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-boards", ListBaseURL: "/admin/boards", AdminBoards: boards, BoardVisibleCount: visibleCount, BoardHiddenCount: hiddenCount})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-boards", ListBaseURL: "/admin/boards", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), AdminBoards: boards, BoardVisibleCount: visibleCount, BoardHiddenCount: hiddenCount})
 }
 
 func (h *Handler) handleAdminBoardCreateSubmit(c *gin.Context) {
@@ -1615,6 +1710,17 @@ func parsePageLimit(raw string) int {
 		return 100
 	}
 	return value
+}
+
+func parsePageNumber(raw string) int {
+	if strings.TrimSpace(raw) == "" {
+		return 1
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return 1
+	}
+	return clampWebPageNumber(value)
 }
 
 func parseLastID(raw string) int64 {

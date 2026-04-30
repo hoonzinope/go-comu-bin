@@ -113,6 +113,8 @@ type PageData struct {
 	SortValue         string
 	WindowValue       string
 	ListBaseURL       string
+	ListLimit         int
+	Pagination        *PaginationData
 	BoardUUID         string
 	BoardName         string
 	TagName           string
@@ -143,4 +145,11 @@ type PageData struct {
 	VerifyToken       string
 	ResetToken        string
 	ErrorMessage      string
+}
+
+type PaginationData struct {
+	Page     int
+	PrevPage int
+	NextPage int
+	Pages    []int
 }

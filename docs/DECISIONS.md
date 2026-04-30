@@ -81,7 +81,7 @@
 - `internal/delivery/web/handler.go`
 - `tests/e2e/content.spec.ts`
 
-## 2026-04-30 - web lists는 existing cursor/last_id metadata를 화면의 load more 링크로 연결한다
+## 2026-04-30 - web list pagination은 page 기반 Prev/Next + 숫자 표시로 바꾸고 총 페이지 수는 계산하지 않는다
 
 상태
 
@@ -89,33 +89,37 @@
 
 배경
 
-- public list API와 admin list API는 이미 cursor/last_id 기반 pagination을 반환하지만, web UI는 목록만 렌더링하고 다음 페이지 진입점이 없었다.
-- 사용자 입장에서는 feed, board, tag, search, drafts, notifications, admin queues가 모두 "끊긴 목록"처럼 보인다.
+- 기존 web list는 cursor/last_id 기반 `Load more` 링크만 노출해서 이전 페이지로 돌아가거나 페이지 위치를 빠르게 파악하기 어려웠다.
+- 사용자는 목록 화면에서 `Prev / Next`와 숫자 페이지를 기대했지만, total count까지 계산하는 방식은 read path 비용이 커질 수 있었다.
+- 공개 목록 API와 관리 목록 API는 이미 cursor/last_id로 페이지 단위 조회가 가능하므로, web UI만 페이지 표현을 바꾸는 편이 안전하다.
 
 관찰
 
-- `PostList`, `BoardList`, `NotificationList`, `CommentList`, `ReportList`, `OutboxDeadMessageList`에 pagination metadata가 들어 있다.
-- web handler는 해당 메타데이터를 이미 읽어오지만 템플릿이 링크로 노출하지 않았다.
+- `PostList`, `BoardList`, `NotificationList`, `ReportList`, `OutboxDeadMessageList`는 모두 다음 페이지 진입 정보만 가지고 있고 total count는 없다.
+- web handler는 각 목록의 page 1부터 순차적으로 조회해도 현재 페이지를 재구성할 수 있다.
+- 페이지 상한을 두면 전체 개수 없이도 직접 page 입력을 제어할 수 있다.
 
 결론
 
-- web list 화면은 별도 API를 새로 만들지 않고, 기존 list metadata를 `Load more` 링크로 직접 연결한다.
-- post detail comments는 comment list API를 사용해 같은 방식으로 pagination 링크를 노출한다.
+- web list는 `page` 쿼리를 사용하고, `Prev / Next`와 현재 페이지 주변 숫자만 보여준다.
+- total page 수는 계산하지 않는다.
+- page 상한은 1000으로 제한해 비정상적인 deep paging을 막는다.
+- backend cursor/last_id 계약은 유지하고, web shell만 page navigation으로 바꾼다.
 
 후속 작업
 
-- list 페이지용 helper/link style 정리
+- feed/board/tag/search/drafts/notifications/admin list 화면의 pagination UI 교체
+- page 기반 navigation 회귀 테스트 추가
+- visual snapshot 갱신
 
 관련 문서/코드
 
 - `internal/delivery/web/handler.go`
 - `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/types.go`
 - `internal/application/model/post_list.go`
-- `internal/application/model/comment_list.go`
 - `internal/application/model/notification.go`
-- `internal/application/model/board_list.go`
-- `internal/application/model/report.go`
-- `internal/application/model/outbox_dead.go`
+- `docs/API.md`
 
 ## 2026-03-27 - runtime cache는 Ristretto-backed adapter로 전환하고 in-memory는 test double로 남긴다
 

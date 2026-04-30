@@ -828,16 +828,15 @@ func TestHandler_RenderPaginationLinks(t *testing.T) {
 		path string
 		want string
 	}{
-		{name: "feed", path: "/", want: "cursor=feed-next"},
-		{name: "board", path: "/boards/general-uuid", want: "cursor=board-next"},
-		{name: "tag", path: "/tags/playwright", want: "cursor=tag-next"},
-		{name: "search", path: "/search?q=go", want: "cursor=search-next"},
-		{name: "drafts", path: "/me", want: "cursor=draft-next"},
-		{name: "notifications", path: "/notifications", want: "cursor=notification-next"},
-		{name: "admin reports", path: "/admin/reports", want: "last_id=9"},
-		{name: "admin outbox", path: "/admin/outbox", want: "last_id=dead-next"},
-		{name: "admin boards", path: "/admin/boards", want: "cursor=boards-next"},
-		{name: "post comments", path: "/posts/post-uuid", want: "comment_cursor=comment-next"},
+		{name: "feed", path: "/", want: "page=2"},
+		{name: "board", path: "/boards/general-uuid", want: "page=2"},
+		{name: "tag", path: "/tags/playwright", want: "page=2"},
+		{name: "search", path: "/search?q=go", want: "page=2"},
+		{name: "drafts", path: "/me", want: "page=2"},
+		{name: "notifications", path: "/notifications", want: "page=2"},
+		{name: "admin reports", path: "/admin/reports", want: "page=2"},
+		{name: "admin outbox", path: "/admin/outbox", want: "page=2"},
+		{name: "admin boards", path: "/admin/boards", want: "page=2"},
 	}
 
 	for _, tc := range cases {
@@ -851,10 +850,21 @@ func TestHandler_RenderPaginationLinks(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, rr.Code)
 			body := rr.Body.String()
-			assert.Contains(t, body, "Load more")
+			assert.Contains(t, body, "Prev")
+			assert.Contains(t, body, "Next")
 			assert.Contains(t, body, tc.want)
 		})
 	}
+
+	req := httptest.NewRequest(http.MethodGet, "/posts/post-uuid", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "admin-token"})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	assert.Contains(t, body, "Load more comments")
+	assert.Contains(t, body, "comment_cursor=comment-next")
 }
 
 func TestHandler_RenderCoreScreens_DisablesNewPostWhenNoBoards(t *testing.T) {

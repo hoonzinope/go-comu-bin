@@ -1,3 +1,29 @@
+{{define "pagination"}}
+{{if and .Pagination (or (gt .Pagination.PrevPage 0) (gt .Pagination.NextPage 0) (gt (len .Pagination.Pages) 1))}}
+<nav class="pagination" aria-label="Pagination">
+  {{if gt .Pagination.PrevPage 0}}
+  <a class="pagination-link pagination-step" href="{{listPageURL . .Pagination.PrevPage}}">Prev</a>
+  {{else}}
+  <span class="pagination-link pagination-step is-disabled" aria-disabled="true">Prev</span>
+  {{end}}
+  <div class="pagination-pages">
+    {{range .Pagination.Pages}}
+      {{if eq . $.Pagination.Page}}
+      <span class="pagination-link is-current" aria-current="page">{{.}}</span>
+      {{else}}
+      <a class="pagination-link" href="{{listPageURL $ .}}">{{.}}</a>
+      {{end}}
+    {{end}}
+  </div>
+  {{if gt .Pagination.NextPage 0}}
+  <a class="pagination-link pagination-step" href="{{listPageURL . .Pagination.NextPage}}">Next</a>
+  {{else}}
+  <span class="pagination-link pagination-step is-disabled" aria-disabled="true">Next</span>
+  {{end}}
+</nav>
+{{end}}
+{{end}}
+
 {{define "page"}}
 <section class="page">
   {{if .Message}}<div class="banner">{{.Message}}</div>{{end}}
@@ -46,11 +72,7 @@
         </article>
         {{end}}
       </div>
-      {{if and .Feed.HasMore .Feed.NextCursor}}
-      <div class="pagination">
-        <a class="button button-primary" href="{{if eq .ListBaseURL "/search"}}{{pageURL .ListBaseURL "q" .Query "sort" .SortValue "window" .WindowValue "limit" .Feed.Limit "cursor" (cursorValue .Feed.NextCursor)}}{{else}}{{pageURL .ListBaseURL "sort" .SortValue "window" .WindowValue "limit" .Feed.Limit "cursor" (cursorValue .Feed.NextCursor)}}{{end}}">Load more</a>
-      </div>
-      {{end}}
+      {{template "pagination" .}}
     {{else}}
       <div class="panel empty">
         <p>No posts yet.</p>
@@ -64,13 +86,13 @@
       <h1>{{if .BoardName}}{{.BoardName}}{{else}}{{boardName .Shell.BoardMap .BoardUUID}}{{end}}</h1>
       <p>Board feed.</p>
     </div>
-    {{template "page" (dict "Shell" .Shell "Kind" "feed" "ListBaseURL" (printf "/boards/%s" .BoardUUID) "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
+    {{template "page" (dict "Shell" .Shell "Kind" "feed" "ListBaseURL" (printf "/boards/%s" .BoardUUID) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
   {{else if eq .Kind "tag"}}
     <div class="page-heading">
       <h1>#{{.TagName}}</h1>
       <p>Tag feed.</p>
     </div>
-    {{template "page" (dict "Shell" .Shell "Kind" "feed" "ListBaseURL" (printf "/tags/%s" .TagName) "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
+    {{template "page" (dict "Shell" .Shell "Kind" "feed" "ListBaseURL" (printf "/tags/%s" .TagName) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
   {{else if eq .Kind "search"}}
     <div class="page-heading">
       <h1>Search</h1>
@@ -105,11 +127,7 @@
           </article>
           {{end}}
         </div>
-        {{if and .Feed.HasMore .Feed.NextCursor}}
-        <div class="pagination">
-          <a class="button button-primary" href="{{pageURL .ListBaseURL "q" .Query "sort" .SortValue "window" .WindowValue "limit" .Feed.Limit "cursor" (cursorValue .Feed.NextCursor)}}">Load more</a>
-        </div>
-        {{end}}
+        {{template "pagination" .}}
       {{else}}
         <div class="panel empty">
           <p>No results found.</p>
@@ -512,11 +530,7 @@
       {{range .Drafts.Posts}}
         <div class="list-row"><a href="/posts/{{.UUID}}/edit">{{.Title}}</a><span>{{formatTime .UpdatedAt}}</span></div>
       {{end}}
-      {{if and .Drafts.HasMore .Drafts.NextCursor}}
-      <div class="pagination">
-        <a class="button button-primary" href="{{pageURL "/me" "limit" .Drafts.Limit "cursor" (cursorValue .Drafts.NextCursor)}}">Load more</a>
-      </div>
-      {{end}}
+      {{template "pagination" .}}
     {{else}}
           <div class="empty">
             <p>No drafts yet.</p>
@@ -552,11 +566,7 @@
         </div>
         {{end}}
       </div>
-      {{if and .Notifications.HasMore .Notifications.NextCursor}}
-      <div class="pagination">
-        <a class="button button-primary" href="{{pageURL "/notifications" "limit" .Notifications.Limit "cursor" (cursorValue .Notifications.NextCursor)}}">Load more</a>
-      </div>
-      {{end}}
+      {{template "pagination" .}}
     {{end}}
   {{else if eq .Kind "admin-reports"}}
     <div class="page-heading"><h1>Reports</h1><p>Moderation queue.</p></div>
@@ -598,11 +608,7 @@
           {{end}}
         </div>
       </div>
-      {{if and .Reports.HasMore .Reports.NextLastID}}
-      <div class="pagination">
-        <a class="button button-primary" href="{{pageURL "/admin/reports" "limit" .Reports.Limit "last_id" (int64Value .Reports.NextLastID)}}">Load more</a>
-      </div>
-      {{end}}
+      {{template "pagination" .}}
     {{end}}
   {{else if eq .Kind "admin-outbox"}}
     <div class="page-heading"><h1>Dead outbox</h1><p>Retry or discard failed messages.</p></div>
@@ -644,11 +650,7 @@
           {{end}}
         </div>
       </div>
-      {{if and .Outbox.HasMore .Outbox.NextLastID}}
-      <div class="pagination">
-        <a class="button button-primary" href="{{pageURL "/admin/outbox" "limit" .Outbox.Limit "last_id" (cursorValue .Outbox.NextLastID)}}">Load more</a>
-      </div>
-      {{end}}
+      {{template "pagination" .}}
     {{end}}
   {{else if eq .Kind "admin-boards"}}
     <div class="page-heading">
@@ -715,11 +717,7 @@
           {{end}}
         </div>
       </div>
-      {{if and .AdminBoards.HasMore .AdminBoards.NextCursor}}
-      <div class="pagination">
-        <a class="button button-primary" href="{{pageURL "/admin/boards" "limit" .AdminBoards.Limit "cursor" (cursorValue .AdminBoards.NextCursor)}}">Load more</a>
-      </div>
-      {{end}}
+      {{template "pagination" .}}
     {{else}}
       <div class="panel empty">No boards available.</div>
     {{end}}
