@@ -28,7 +28,7 @@
       <button type="submit">Search</button>
     </form>
     <div class="topbar-actions">
-      {{if and .Shell.IsAuthenticated (not .Shell.CurrentUser.Guest)}}
+      {{if canInteract .Shell}}
       <a class="chip" href="/notifications">Notifications {{if gt .Shell.UnreadCount 0}}({{.Shell.UnreadCount}}){{end}}</a>
       <a class="chip" href="/me">Me</a>
       {{else}}
@@ -40,10 +40,10 @@
   </header>
   <aside class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-dir-title">Directory</div>
+      <div class="sidebar-dir-title">Boards</div>
       <div class="sidebar-dir-version">urrrm / v1</div>
     </div>
-    {{if .Shell.IsAuthenticated}}
+    {{if canInteract .Shell}}
       {{if .Shell.ComposeURL}}
     <a class="sidebar-new-post" href="{{.Shell.ComposeURL}}">+ New Post</a>
       {{else}}
@@ -59,25 +59,22 @@
         {{end}}
       </nav>
     </div>
+    {{if canInteract .Shell}}
     <div class="sidebar-section">
-      <div class="sidebar-kicker">Explore</div>
+      <div class="sidebar-kicker">Account</div>
       <nav class="nav-list">
-        {{if and .Shell.IsAuthenticated (not .Shell.CurrentUser.Guest)}}
         <a class="nav-link {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me">Profile</a>
         <a class="nav-link" href="/notifications">Notifications</a>
-          {{if .Shell.IsAdmin}}
+        {{if .Shell.IsAdmin}}
         <a class="nav-link {{if eq .Shell.ActiveNav "admin"}}is-active{{end}}" href="/admin">Admin</a>
         <a class="nav-link" href="/admin/boards">&#x2514; Boards</a>
         <a class="nav-link" href="/admin/reports">&#x2514; Reports</a>
         <a class="nav-link" href="/admin/outbox">&#x2514; Outbox</a>
-          {{end}}
-        {{else}}
-        <a class="nav-link {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/login">Login</a>
-        <a class="nav-link" href="/signup">Sign up</a>
         {{end}}
       </nav>
     </div>
-    {{if and .Shell.IsAuthenticated (not .Shell.CurrentUser.Guest)}}
+    {{end}}
+    {{if canInteract .Shell}}
     <div class="sidebar-section sidebar-footer">
       <form action="/logout" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -97,7 +94,7 @@
     {{else}}
     <span class="bottom-nav-item is-disabled" aria-disabled="true"><span class="material-symbols-outlined">add_box</span><span>New</span></span>
     {{end}}
-    {{if and .Shell.IsAuthenticated (not .Shell.CurrentUser.Guest)}}
+    {{if canInteract .Shell}}
     <a class="bottom-nav-item {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me"><span class="material-symbols-outlined">person</span><span>Me</span></a>
     {{else}}
     <a class="bottom-nav-item {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/login"><span class="material-symbols-outlined">person</span><span>Login</span></a>
@@ -105,12 +102,13 @@
   </nav>
   <div class="overlay" x-cloak x-show="menuOpen" x-transition.opacity @click="menuOpen = false">
     <div class="overlay-panel" @click.stop>
-      <div class="sidebar-kicker">Navigation</div>
+      <div class="sidebar-kicker">Boards</div>
       <a href="/" class="overlay-link">Feed</a>
       {{range .Shell.Boards}}
       <a href="/boards/{{.UUID}}" class="overlay-link">{{.Name}}</a>
       {{end}}
-      {{if and .Shell.IsAuthenticated (not .Shell.CurrentUser.Guest)}}
+      {{if canInteract .Shell}}
+      <div class="sidebar-kicker">Account</div>
       <a href="/me" class="overlay-link">Profile</a>
       <a href="/notifications" class="overlay-link">Notifications</a>
         {{if .Shell.IsAdmin}}
@@ -119,17 +117,12 @@
       <a href="/admin/reports" class="overlay-link">&#x2514; Reports</a>
       <a href="/admin/outbox" class="overlay-link">&#x2514; Outbox</a>
         {{end}}
-      {{else}}
-      <a href="/login" class="overlay-link">Login</a>
-      <a href="/signup" class="overlay-link">Sign up</a>
       {{end}}
-      {{if and .Shell.IsAuthenticated (not .Shell.CurrentUser.Guest)}}
+      {{if canInteract .Shell}}
       <form action="/logout" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
         <button class="overlay-link" type="submit">Logout</button>
       </form>
-      {{else}}
-      <a href="/login" class="overlay-link">Login</a>
       {{end}}
     </div>
   </div>

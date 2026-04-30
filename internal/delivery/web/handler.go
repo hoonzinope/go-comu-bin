@@ -117,6 +117,9 @@ func NewHandler(deps Dependencies) (*Handler, error) {
 		"reactionActive": func(current *entity.ReactionType, expected string) bool {
 			return current != nil && string(*current) == expected
 		},
+		"canInteract": func(shell ShellData) bool {
+			return shell.IsAuthenticated && shell.CurrentUser != nil && !shell.CurrentUser.Guest
+		},
 	}
 	templates, err := template.New("layout").Funcs(funcMap).ParseFS(embeddedAssets, "templates/*.tmpl")
 	if err != nil {

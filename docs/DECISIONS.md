@@ -158,6 +158,43 @@
 - `internal/delivery/web/static/site.css`
 - `internal/delivery/web/handler_test.go`
 
+## 2026-04-30 - web shell은 boards 중심 IA로 단순화하고 post detail은 editorial hierarchy로 정리한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 shell은 topbar, sidebar, bottom nav, overlay에서 비슷한 목적의 탐색/인증 진입점을 반복 노출해 사용자가 메뉴의 중심을 놓치기 쉽다.
+- post detail은 정보 카드를 늘리는 방식보다 제목-메타-본문-행동-댓글의 순서를 분명하게 보여주는 편이 읽기와 토론 흐름에 맞다.
+- 댓글 입력은 로그인 후에야 막히는 것보다, 읽는 단계에서 먼저 안내하는 편이 friction이 낮다.
+
+관찰
+
+- topbar, sidebar, overlay에 로그인/가입 또는 탐색 링크가 중복 노출된다.
+- post detail의 핵심 정보는 board, author, time, tags, reactions, attachments, comments로 나뉘어 있지만 위계가 충분히 분리돼 있지 않다.
+- 비인증 상태의 댓글 입력은 disabled textarea로만 보여서 왜 못 쓰는지 즉시 알기 어렵다.
+
+결론
+
+- sidebar와 overlay는 boards 중심으로 단순화하고, 인증 진입점은 topbar에만 둔다.
+- post detail은 제목과 byline을 가장 강하게 보여주고, 메타는 한 줄 흐름으로 압축한다.
+- 댓글은 비인증 상태에서 textarea 대신 로그인 안내 패널을 노출한다.
+
+후속 작업
+
+- `layout.tmpl`과 `page.tmpl` 재배치
+- `site.css` hierarchy 조정
+- navigation/comment friction 회귀 테스트 갱신
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/layout.tmpl`
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/handler_test.go`
+
 ## 2026-03-27 - runtime cache는 Ristretto-backed adapter로 전환하고 in-memory는 test double로 남긴다
 
 상태

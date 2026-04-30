@@ -84,12 +84,12 @@ test('creates posts and drafts from the composer and renders them in feed, tag, 
   await page.goto(`/posts/${publishedUUID}`);
   await expect(page.getByRole('heading', { name: publishedTitle })).toBeVisible();
   const postMain = page.locator('article.post-main');
-  await expect(postMain.getByText('Board', { exact: true })).toBeVisible();
-  await expect(postMain.getByText('Author', { exact: true })).toBeVisible();
-  await expect(postMain.getByText('Timing', { exact: true })).toBeVisible();
-  await expect(postMain.getByText('Activity', { exact: true })).toBeVisible();
+  await expect(postMain.locator('.post-eyebrow')).toContainText(boardName);
+  await expect(postMain.locator('.post-byline')).toContainText('comments');
   await expect(postMain.getByText('Actions', { exact: true })).toBeVisible();
-  await expect(postMain.locator('#comments .section-title')).toHaveText('Comments');
+  await expect(postMain.getByRole('link', { name: 'Comments' })).toBeVisible();
+  await expect(postMain.locator('#comments .section-title')).toContainText('Comments');
+  await expect(postMain.locator('form.comment-form')).toBeVisible();
   await expect(postMain.getByRole('button', { name: '▲ Upvote' })).toBeVisible();
   await expect(postMain.getByRole('link', { name: 'Edit' })).toBeVisible();
   await expect(postMain.getByRole('button', { name: 'Delete' })).toBeVisible();

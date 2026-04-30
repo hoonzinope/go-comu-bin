@@ -140,32 +140,20 @@
   {{else if eq .Kind "post"}}
     <div class="post-layout page-main">
       <article class="panel post-main">
-        <div class="page-heading">
-          <h1>{{.PostDetail.Post.Title}}</h1>
-          <p>{{shortUUID .PostDetail.Post.UUID}} · {{formatTime .PostDetail.Post.UpdatedAt}}</p>
-        </div>
-        <div class="meta-list post-summary-grid">
-          <div class="meta-item">
-            <span>Board</span>
-            <strong>{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</strong>
-            <small>{{.PostDetail.Post.BoardUUID}}</small>
+        <header class="post-header">
+          <div class="post-eyebrow">
+            <a class="chip" href="/boards/{{.PostDetail.Post.BoardUUID}}">{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</a>
+            <span class="post-uuid">#{{shortUUID .PostDetail.Post.UUID}}</span>
           </div>
-          <div class="meta-item">
-            <span>Author</span>
-            <strong>@{{shortUUID .PostDetail.Post.AuthorUUID}}</strong>
-            <small>{{.PostDetail.Post.AuthorUUID}}</small>
+          <h1 class="post-title">{{.PostDetail.Post.Title}}</h1>
+          <div class="post-byline">
+            <span>@{{shortUUID .PostDetail.Post.AuthorUUID}}</span>
+            <span>{{formatTime .PostDetail.Post.CreatedAt}}</span>
+            <span>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</span>
+            <span>{{len .PostDetail.Attachments}} attachments</span>
+            <span>{{len .PostDetail.Reactions}} reactions</span>
           </div>
-          <div class="meta-item">
-            <span>Timing</span>
-            <strong>{{formatTime .PostDetail.Post.CreatedAt}}</strong>
-            <small>Updated {{formatTime .PostDetail.Post.UpdatedAt}}</small>
-          </div>
-          <div class="meta-item">
-            <span>Activity</span>
-            <strong>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</strong>
-            <small>{{len .PostDetail.Attachments}} attachments · {{len .PostDetail.Reactions}} reactions</small>
-          </div>
-        </div>
+        </header>
         {{if .PostDetail.Tags}}
         <div class="chip-row">
           {{range .PostDetail.Tags}}<a class="chip" href="/tags/{{.Name}}">{{.Name}}</a>{{end}}
@@ -175,7 +163,7 @@
         <section class="post-actions">
           <div class="section-title">Actions</div>
           <div class="button-row">
-            {{if .Shell.IsAuthenticated}}
+            {{if canInteract .Shell}}
             <form action="/posts/{{.PostUUID}}/reactions" method="post">
               <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
               <input type="hidden" name="reaction_type" value="like">
@@ -194,6 +182,10 @@
             {{else}}
             <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to react</a>
             {{end}}
+          </div>
+          <div class="button-row">
+            <a class="button" href="#comments">Comments</a>
+            {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Attachments</a>{{end}}
           </div>
           {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
           <div class="button-row">
@@ -245,7 +237,21 @@
         </section>
         {{end}}
         <section id="comments">
-          <div class="section-title">Comments</div>
+          <div class="section-title">Comments <span class="section-count">{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}}</span></div>
+          {{if canInteract .Shell}}
+          <form class="panel form comment-form" action="/posts/{{.PostUUID}}/comments" method="post">
+            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+            <label>Write a comment</label>
+            <textarea name="content" rows="5" placeholder="Share your reply"></textarea>
+            <button class="button button-primary" type="submit">Comment</button>
+          </form>
+          {{else}}
+          <div class="panel form comment-form comment-cta">
+            <label>Write a comment</label>
+            <p>Sign in to join the discussion before replying.</p>
+            <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to comment</a>
+          </div>
+          {{end}}
           {{if .Comments}}
             <div class="stack">
               {{range .Comments.Comments}}
@@ -263,7 +269,7 @@
                   {{end}}
                 </div>
                 <p x-show="!editing">{{.Content}}</p>
-                {{if $.Shell.IsAuthenticated}}
+                {{if canInteract $.Shell}}
                 <div class="button-row">
                   <form action="/comments/{{.UUID}}/reactions" method="post">
                     <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
@@ -302,7 +308,6 @@
                 </form>
                 {{else}}
                 <div class="meta-row">
-                  <span>{{len .Reactions}} reactions</span>
                   <a class="button" href="/login?redirect={{queryEscape (printf "/posts/%s" $.PostUUID)}}">Login to react</a>
                 </div>
                 {{end}}
@@ -329,20 +334,6 @@
         </section>
       </article>
     </div>
-    {{if .Shell.IsAuthenticated}}
-    <form class="panel form comment-form" action="/posts/{{.PostUUID}}/comments" method="post">
-      <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-      <label>Write a comment</label>
-      <textarea name="content" rows="5" placeholder="Share your reply"></textarea>
-      <button class="button button-primary" type="submit">Comment</button>
-    </form>
-    {{else}}
-    <div class="panel form comment-form">
-      <label>Write a comment</label>
-      <textarea name="content" rows="5" placeholder="Share your reply" disabled></textarea>
-      <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to comment</a>
-    </div>
-    {{end}}
   {{else if eq .Kind "compose"}}
     <div class="page-heading">
       <h1>{{if eq .EditMode "edit"}}Edit draft{{else if eq .EditMode "draft"}}New draft{{else}}New post{{end}}</h1>
