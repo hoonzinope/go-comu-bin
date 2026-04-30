@@ -23,7 +23,7 @@ test('creates posts and drafts from the composer and renders them in feed, tag, 
   const boardUUID = await createBoard(request, adminToken, boardName, `Board for ${boardName}`);
   const suffix = Date.now().toString(36);
   const publishedTitle = `Playwright publish ${suffix}`;
-  const publishedBody = `Published body ${suffix}`;
+  const publishedBody = `Published body ${suffix} with [docs](https://example.com)`;
   const publishedTags = 'playwright, ui';
   const draftTitle = `Playwright draft ${suffix}`;
   const draftBody = `Draft body ${suffix}`;
@@ -39,7 +39,8 @@ test('creates posts and drafts from the composer and renders them in feed, tag, 
   await page.waitForURL(/\/posts\/[0-9a-f-]{36}$/);
   const publishedUUID = new URL(page.url()).pathname.split('/').pop() as string;
   await expect(page.getByRole('heading', { name: publishedTitle })).toBeVisible();
-  await expect(page.locator('pre.markdown')).toContainText(publishedBody);
+  await expect(page.locator('.markdown a', { hasText: 'docs' })).toHaveAttribute('href', 'https://example.com');
+  await expect(page.locator('.markdown')).toContainText(`Published body ${suffix}`);
 
   await page.goto(`/boards/${boardUUID}/posts/drafts/new`);
   const draftForm = page.locator(`form[action="/boards/${boardUUID}/posts/drafts"]`).first();

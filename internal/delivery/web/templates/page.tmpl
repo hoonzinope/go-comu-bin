@@ -3,9 +3,9 @@
   {{if .Message}}<div class="banner">{{.Message}}</div>{{end}}
   {{if eq .Kind "feed"}}
     <div class="tab-strip">
-      <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="/?sort=hot">Hot</a>
-      <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="/?sort=latest">Latest</a>
-      <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="/?sort=top">Top</a>
+      <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="{{pageURL .ListBaseURL "sort" "hot"}}">Hot</a>
+      <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="{{pageURL .ListBaseURL "sort" "latest"}}">Latest</a>
+      <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="{{pageURL .ListBaseURL "sort" "top"}}">Top</a>
     </div>
     <div class="page-heading">
       <h1>Feed</h1>
@@ -41,11 +41,16 @@
               <span>{{formatTime .UpdatedAt}}</span>
             </div>
             <h2><a href="/posts/{{.UUID}}">{{.Title}}</a></h2>
-            <p>{{truncate .Content 220}}</p>
+            <p>{{truncate (normalizeContent .Content) 220}}</p>
           </div>
         </article>
         {{end}}
       </div>
+      {{if and .Feed.HasMore .Feed.NextCursor}}
+      <div class="pagination">
+        <a class="button button-primary" href="{{if eq .ListBaseURL "/search"}}{{pageURL .ListBaseURL "q" .Query "sort" .SortValue "window" .WindowValue "limit" .Feed.Limit "cursor" (cursorValue .Feed.NextCursor)}}{{else}}{{pageURL .ListBaseURL "sort" .SortValue "window" .WindowValue "limit" .Feed.Limit "cursor" (cursorValue .Feed.NextCursor)}}{{end}}">Load more</a>
+      </div>
+      {{end}}
     {{else}}
       <div class="panel empty">
         <p>No posts yet.</p>
@@ -59,13 +64,13 @@
       <h1>{{boardName .Shell.BoardMap .BoardUUID}}</h1>
       <p>Board feed.</p>
     </div>
-    {{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue "BoardUUID" .BoardUUID)}}
+    {{template "page" (dict "Shell" .Shell "Kind" "feed" "ListBaseURL" (printf "/boards/%s" .BoardUUID) "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
   {{else if eq .Kind "tag"}}
     <div class="page-heading">
       <h1>#{{.TagName}}</h1>
       <p>Tag feed.</p>
     </div>
-    {{template "page" (dict "Shell" .Shell "Kind" "feed" "Feed" .Feed "SortValue" .SortValue)}}
+    {{template "page" (dict "Shell" .Shell "Kind" "feed" "ListBaseURL" (printf "/tags/%s" .TagName) "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
   {{else if eq .Kind "search"}}
     <div class="page-heading">
       <h1>Search</h1>
@@ -73,9 +78,9 @@
     </div>
     {{if .Query}}
     <div class="tab-strip">
-      <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="/search?q={{queryEscape .Query}}&sort=hot">Hot</a>
-      <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="/search?q={{queryEscape .Query}}&sort=latest">Latest</a>
-      <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="/search?q={{queryEscape .Query}}&sort=top">Top</a>
+      <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "hot"}}">Hot</a>
+      <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "latest"}}">Latest</a>
+      <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "top"}}">Top</a>
     </div>
     {{end}}
     {{if .Feed}}
@@ -100,6 +105,11 @@
           </article>
           {{end}}
         </div>
+        {{if and .Feed.HasMore .Feed.NextCursor}}
+        <div class="pagination">
+          <a class="button button-primary" href="{{pageURL .ListBaseURL "q" .Query "sort" .SortValue "window" .WindowValue "limit" .Feed.Limit "cursor" (cursorValue .Feed.NextCursor)}}">Load more</a>
+        </div>
+        {{end}}
       {{else}}
         <div class="panel empty">
           <p>No results found.</p>
@@ -119,7 +129,7 @@
         <div class="meta-row">
           <span class="chip">{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</span>
           <span>@{{shortUUID .PostDetail.Post.AuthorUUID}}</span>
-          <span>{{len .PostDetail.Comments}} comments</span>
+          <span>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</span>
           <span>{{len .PostDetail.Attachments}} attachments</span>
         </div>
         {{if .PostDetail.Tags}}
@@ -127,7 +137,7 @@
           {{range .PostDetail.Tags}}<a class="chip" href="/tags/{{.Name}}">{{.Name}}</a>{{end}}
         </div>
         {{end}}
-        <pre class="markdown">{{.PostDetail.Post.Content}}</pre>
+        <div class="markdown">{{renderMarkdown .PostDetail.Post.Content}}</div>
         {{if .PostDetail.Attachments}}
         <section id="attachments">
           <div class="section-title">Attachments</div>
@@ -135,8 +145,15 @@
             {{range .PostDetail.Attachments}}
             <div class="panel attachment-row">
               <div>
-                <div class="table-title">{{.FileName}}</div>
+                {{ $attachmentPostUUID := .PostUUID }}{{ if eq $attachmentPostUUID "" }}{{ $attachmentPostUUID = $.PostDetail.Post.UUID }}{{ end }}
+                <div class="table-title"><a href="{{printf "/api/v1/posts/%s/attachments/%s/file" $attachmentPostUUID .UUID}}">{{.FileName}}</a></div>
                 <div class="table-sub">{{.ContentType}} · {{.SizeBytes}} bytes</div>
+                <div class="chip-row">
+                  <a class="chip" href="{{printf "/api/v1/posts/%s/attachments/%s/file" $attachmentPostUUID .UUID}}">Open file</a>
+                  {{if or $.Shell.IsAdmin (and $.Shell.CurrentUser (eq $.Shell.CurrentUser.UUID $.PostDetail.Post.AuthorUUID))}}
+                  <a class="chip" href="{{if .PreviewURL}}{{.PreviewURL}}{{else}}{{printf "/api/v1/posts/%s/attachments/%s/preview" $attachmentPostUUID .UUID}}{{end}}">Preview</a>
+                  {{end}}
+                </div>
               </div>
               <span class="chip">{{shortUUID .UUID}}</span>
             </div>
@@ -146,15 +163,15 @@
         {{end}}
         <section id="comments">
           <div class="section-title">Comments</div>
-          {{if .PostDetail.Comments}}
+          {{if .Comments}}
             <div class="stack">
-              {{range .PostDetail.Comments}}
+              {{range .Comments.Comments}}
               <div class="panel comment" x-data="{editing:false}">
-                <div class="meta-row"><span>@{{shortUUID .Comment.AuthorUUID}}</span><span>{{formatTime .Comment.CreatedAt}}</span>
-                  {{if and $.Shell.CurrentUser (eq $.Shell.CurrentUser.UUID .Comment.AuthorUUID)}}
+                <div class="meta-row"><span>@{{shortUUID .AuthorUUID}}</span><span>{{formatTime .CreatedAt}}</span>
+                  {{if and $.Shell.CurrentUser (eq $.Shell.CurrentUser.UUID .AuthorUUID)}}
                   <span class="button-row" style="margin-left:auto">
                     <button class="button" type="button" @click="editing=!editing">Edit</button>
-                    <form action="/comments/{{.Comment.UUID}}/delete" method="post" style="display:contents">
+                    <form action="/comments/{{.UUID}}/delete" method="post" style="display:contents">
                       <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
                       <input type="hidden" name="post_uuid" value="{{$.PostUUID}}">
                       <button class="button button-danger" type="submit" onclick="return confirm('Delete comment?')">Delete</button>
@@ -162,11 +179,54 @@
                   </span>
                   {{end}}
                 </div>
-                <p x-show="!editing">{{.Comment.Content}}</p>
-                <form x-show="editing" action="/comments/{{.Comment.UUID}}" method="post">
+                <p x-show="!editing">{{.Content}}</p>
+                {{if $.Shell.IsAuthenticated}}
+                <div class="button-row">
+                  <form action="/comments/{{.UUID}}/reactions" method="post">
+                    <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                    <input type="hidden" name="post_uuid" value="{{$.PostUUID}}">
+                    <input type="hidden" name="reaction_type" value="like">
+                    <button class="button button-primary" type="submit">▲ Upvote</button>
+                  </form>
+                  <form action="/comments/{{.UUID}}/reactions" method="post">
+                    <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                    <input type="hidden" name="post_uuid" value="{{$.PostUUID}}">
+                    <input type="hidden" name="reaction_type" value="dislike">
+                    <button class="button" type="submit">▼ Downvote</button>
+                  </form>
+                  <form action="/comments/{{.UUID}}/reactions" method="post">
+                    <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                    <input type="hidden" name="post_uuid" value="{{$.PostUUID}}">
+                    <input type="hidden" name="_method" value="delete">
+                    <button class="button button-ghost" type="submit">Remove</button>
+                  </form>
+                </div>
+                <form action="/reports" method="post" class="comment-report-form">
+                  <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                  <input type="hidden" name="target_type" value="comment">
+                  <input type="hidden" name="target_uuid" value="{{.UUID}}">
+                  <input type="hidden" name="redirect" value="/posts/{{$.PostUUID}}">
+                  <select name="reason_code">
+                    <option value="spam">Spam</option>
+                    <option value="abuse">Abuse</option>
+                    <option value="sexual">Sexual</option>
+                    <option value="violence">Violence</option>
+                    <option value="illegal">Illegal</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
+                  <button class="button" type="submit">Report comment</button>
+                </form>
+                {{else}}
+                <div class="meta-row">
+                  <span>{{len .Reactions}} reactions</span>
+                  <a class="button" href="/login?redirect={{queryEscape (printf "/posts/%s" $.PostUUID)}}">Login to react</a>
+                </div>
+                {{end}}
+                <form x-show="editing" action="/comments/{{.UUID}}" method="post">
                   <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
                   <input type="hidden" name="post_uuid" value="{{$.PostUUID}}">
-                  <textarea name="content" rows="3">{{.Comment.Content}}</textarea>
+                  <textarea name="content" rows="3">{{.Content}}</textarea>
                   <div class="button-row">
                     <button class="button button-primary" type="submit">Save</button>
                     <button class="button" type="button" @click="editing=false">Cancel</button>
@@ -175,6 +235,11 @@
               </div>
               {{end}}
             </div>
+            {{if and .Comments.HasMore .Comments.NextCursor}}
+            <div class="pagination">
+              <a class="button button-primary" href="{{pageURL (printf "/posts/%s" .PostUUID) "comment_limit" .Comments.Limit "comment_cursor" (cursorValue .Comments.NextCursor)}}">Load more comments</a>
+            </div>
+            {{end}}
           {{else}}
             <div class="empty">No comments yet.</div>
           {{end}}
@@ -200,8 +265,8 @@
           </div>
           <div class="meta-item">
             <span>Comments</span>
-            <strong>{{len .PostDetail.Comments}}</strong>
-            <small>{{if .PostDetail.CommentsHasMore}}More available{{else}}Loaded in full{{end}}</small>
+            <strong>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}}</strong>
+            <small>{{if .Comments}}{{if .Comments.HasMore}}More available{{else}}Loaded in full{{end}}{{else}}No comments loaded{{end}}</small>
           </div>
           <div class="meta-item">
             <span>Reactions</span>
@@ -443,11 +508,16 @@
       {{end}}
       <section class="panel">
         <h2>Drafts</h2>
-        {{if .Drafts}}
-          {{range .Drafts.Posts}}
-            <div class="list-row"><a href="/posts/{{.UUID}}/edit">{{.Title}}</a><span>{{formatTime .UpdatedAt}}</span></div>
-          {{end}}
-        {{else}}
+    {{if .Drafts}}
+      {{range .Drafts.Posts}}
+        <div class="list-row"><a href="/posts/{{.UUID}}/edit">{{.Title}}</a><span>{{formatTime .UpdatedAt}}</span></div>
+      {{end}}
+      {{if and .Drafts.HasMore .Drafts.NextCursor}}
+      <div class="pagination">
+        <a class="button button-primary" href="{{pageURL "/me" "limit" .Drafts.Limit "cursor" (cursorValue .Drafts.NextCursor)}}">Load more</a>
+      </div>
+      {{end}}
+    {{else}}
           <div class="empty">
             <p>No drafts yet.</p>
             {{if $.Shell.ComposeURL}}
@@ -482,6 +552,11 @@
         </div>
         {{end}}
       </div>
+      {{if and .Notifications.HasMore .Notifications.NextCursor}}
+      <div class="pagination">
+        <a class="button button-primary" href="{{pageURL "/notifications" "limit" .Notifications.Limit "cursor" (cursorValue .Notifications.NextCursor)}}">Load more</a>
+      </div>
+      {{end}}
     {{end}}
   {{else if eq .Kind "admin-reports"}}
     <div class="page-heading"><h1>Reports</h1><p>Moderation queue.</p></div>
@@ -523,6 +598,11 @@
           {{end}}
         </div>
       </div>
+      {{if and .Reports.HasMore .Reports.NextLastID}}
+      <div class="pagination">
+        <a class="button button-primary" href="{{pageURL "/admin/reports" "limit" .Reports.Limit "last_id" (int64Value .Reports.NextLastID)}}">Load more</a>
+      </div>
+      {{end}}
     {{end}}
   {{else if eq .Kind "admin-outbox"}}
     <div class="page-heading"><h1>Dead outbox</h1><p>Retry or discard failed messages.</p></div>
@@ -564,6 +644,11 @@
           {{end}}
         </div>
       </div>
+      {{if and .Outbox.HasMore .Outbox.NextLastID}}
+      <div class="pagination">
+        <a class="button button-primary" href="{{pageURL "/admin/outbox" "limit" .Outbox.Limit "last_id" (cursorValue .Outbox.NextLastID)}}">Load more</a>
+      </div>
+      {{end}}
     {{end}}
   {{else if eq .Kind "admin-boards"}}
     <div class="page-heading">
@@ -630,6 +715,11 @@
           {{end}}
         </div>
       </div>
+      {{if and .AdminBoards.HasMore .AdminBoards.NextCursor}}
+      <div class="pagination">
+        <a class="button button-primary" href="{{pageURL "/admin/boards" "limit" .AdminBoards.Limit "cursor" (cursorValue .AdminBoards.NextCursor)}}">Load more</a>
+      </div>
+      {{end}}
     {{else}}
       <div class="panel empty">No boards available.</div>
     {{end}}

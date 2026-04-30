@@ -85,6 +85,10 @@ func (u *testUserUseCase) GetMe(ctx context.Context, userID int64) (*model.User,
 	if userID == 1 {
 		user.Role = "admin"
 		user.Name = "Admin"
+	} else if userID == 2 {
+		user.Guest = true
+		user.Name = "Guest"
+		user.Email = ""
 	}
 	return user, nil
 }
@@ -127,10 +131,16 @@ func (u *testUserUseCase) UnsuspendUser(ctx context.Context, adminID int64, targ
 	return nil
 }
 
-type testBoardUseCase struct{}
+type testBoardUseCase struct {
+	boards    *model.BoardList
+	allBoards *model.BoardList
+}
 
 func (b *testBoardUseCase) GetBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
 	_, _, _ = ctx, limit, cursor
+	if b != nil && b.boards != nil {
+		return b.boards, nil
+	}
 	return &model.BoardList{
 		Boards: []model.Board{
 			{UUID: "general-uuid", Name: "General", Description: "Visible board"},
@@ -140,6 +150,9 @@ func (b *testBoardUseCase) GetBoards(ctx context.Context, limit int, cursor stri
 
 func (b *testBoardUseCase) GetAllBoards(ctx context.Context, limit int, cursor string) (*model.BoardList, error) {
 	_, _, _ = ctx, limit, cursor
+	if b != nil && b.allBoards != nil {
+		return b.allBoards, nil
+	}
 	return &model.BoardList{
 		Boards: []model.Board{
 			{UUID: "general-uuid", Name: "General", Description: "Visible board", Hidden: false},
@@ -214,7 +227,13 @@ func (r *testReactionUseCase) DeleteReaction(ctx context.Context, userID int64, 
 	return nil
 }
 
-type testPostUseCase struct{}
+type testPostUseCase struct {
+	boardList  *model.PostList
+	draftList  *model.PostList
+	feedList   *model.PostList
+	tagList    *model.PostList
+	searchList *model.PostList
+}
 
 func (p *testPostUseCase) CreatePost(ctx context.Context, title, content string, tags []string, mentionedUsernames []string, authorID int64, boardUUID string) (string, error) {
 	_, _, _, _, _, _ = ctx, title, content, tags, mentionedUsernames, authorID
@@ -230,11 +249,17 @@ func (p *testPostUseCase) CreateDraftPost(ctx context.Context, title, content st
 
 func (p *testPostUseCase) GetPostsList(ctx context.Context, boardUUID string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	_, _, _, _, _, _ = ctx, boardUUID, sort, window, limit, cursor
+	if p != nil && p.boardList != nil {
+		return p.boardList, nil
+	}
 	return &model.PostList{}, nil
 }
 
 func (p *testPostUseCase) GetMyDraftPosts(ctx context.Context, authorID int64, limit int, cursor string) (*model.PostList, error) {
 	_, _, _, _ = ctx, authorID, limit, cursor
+	if p != nil && p.draftList != nil {
+		return p.draftList, nil
+	}
 	return &model.PostList{
 		Posts: []model.Post{
 			{UUID: "draft-uuid", Title: "Draft title", Content: "Draft body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(20, 0), UpdatedAt: time.Unix(20, 0)},
@@ -244,6 +269,9 @@ func (p *testPostUseCase) GetMyDraftPosts(ctx context.Context, authorID int64, l
 
 func (p *testPostUseCase) GetFeed(ctx context.Context, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	_, _, _, _, _ = ctx, sort, window, limit, cursor
+	if p != nil && p.feedList != nil {
+		return p.feedList, nil
+	}
 	return &model.PostList{
 		Posts: []model.Post{
 			{UUID: "post-uuid", Title: "Feed title", Content: "Feed body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(10, 0), UpdatedAt: time.Unix(10, 0)},
@@ -254,19 +282,25 @@ func (p *testPostUseCase) GetFeed(ctx context.Context, sort string, window strin
 func (p *testPostUseCase) SearchPosts(ctx context.Context, query string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	_, _, _, _, _ = ctx, query, sort, window, limit
 	_ = cursor
+	if p != nil && p.searchList != nil {
+		return p.searchList, nil
+	}
 	return &model.PostList{}, nil
 }
 
 func (p *testPostUseCase) GetPostsByTag(ctx context.Context, tagName string, sort string, window string, limit int, cursor string) (*model.PostList, error) {
 	_, _, _, _, _ = ctx, tagName, sort, window, limit
 	_ = cursor
+	if p != nil && p.tagList != nil {
+		return p.tagList, nil
+	}
 	return &model.PostList{}, nil
 }
 
 func (p *testPostUseCase) GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 	_, _ = ctx, postUUID
 	return &model.PostDetail{
-		Post: &model.Post{UUID: "post-uuid", Title: "Feed title", Content: "Feed body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(10, 0), UpdatedAt: time.Unix(10, 0)},
+		Post: &model.Post{UUID: "post-uuid", Title: "Feed title", Content: "Feed body with <script>alert(1)</script> and [docs](https://example.com)", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(10, 0), UpdatedAt: time.Unix(10, 0)},
 		Tags: []model.Tag{
 			{Name: "roadmap"},
 			{Name: "ui"},
@@ -310,7 +344,9 @@ func (p *testPostUseCase) DeletePost(ctx context.Context, postUUID string, autho
 	return nil
 }
 
-type testCommentUseCase struct{}
+type testCommentUseCase struct {
+	comments *model.CommentList
+}
 
 func (c *testCommentUseCase) CreateComment(ctx context.Context, content string, mentionedUsernames []string, authorID int64, postUUID string, parentUUID *string) (string, error) {
 	_, _, _, _, _ = ctx, content, mentionedUsernames, authorID, postUUID
@@ -321,6 +357,9 @@ func (c *testCommentUseCase) CreateComment(ctx context.Context, content string, 
 func (c *testCommentUseCase) GetCommentsByPost(ctx context.Context, postUUID string, limit int, cursor string) (*model.CommentList, error) {
 	_, _, _ = ctx, postUUID, limit
 	_ = cursor
+	if c != nil && c.comments != nil {
+		return c.comments, nil
+	}
 	return &model.CommentList{
 		Comments: []model.Comment{
 			{UUID: "comment-uuid", Content: "Looks good.", AuthorUUID: "user-uuid", PostUUID: "post-uuid", CreatedAt: time.Unix(15, 0)},
@@ -339,11 +378,16 @@ func (c *testCommentUseCase) DeleteComment(ctx context.Context, commentUUID stri
 	return nil
 }
 
-type testNotificationUseCase struct{}
+type testNotificationUseCase struct {
+	notifications *model.NotificationList
+}
 
 func (n *testNotificationUseCase) GetMyNotifications(ctx context.Context, userID int64, limit int, cursor string) (*model.NotificationList, error) {
 	_, _, _ = ctx, userID, limit
 	_ = cursor
+	if n != nil && n.notifications != nil {
+		return n.notifications, nil
+	}
 	return &model.NotificationList{}, nil
 }
 
@@ -362,7 +406,9 @@ func (n *testNotificationUseCase) MarkAllMyNotificationsRead(ctx context.Context
 	return nil
 }
 
-type testReportUseCase struct{}
+type testReportUseCase struct {
+	reports *model.ReportList
+}
 
 func (r *testReportUseCase) CreateReport(ctx context.Context, reporterUserID int64, targetType model.ReportTargetType, targetUUID string, reasonCode model.ReportReasonCode, reasonDetail string) (int64, error) {
 	_, _, _, _, _ = ctx, reporterUserID, targetType, targetUUID, reasonCode
@@ -372,6 +418,9 @@ func (r *testReportUseCase) CreateReport(ctx context.Context, reporterUserID int
 
 func (r *testReportUseCase) GetReports(ctx context.Context, adminID int64, status *model.ReportStatus, limit int, lastID int64) (*model.ReportList, error) {
 	_, _, _, _, _ = ctx, adminID, status, limit, lastID
+	if r != nil && r.reports != nil {
+		return r.reports, nil
+	}
 	now := time.Unix(30, 0)
 	resolver := "admin-uuid"
 	return &model.ReportList{
@@ -412,10 +461,15 @@ func (r *testReportUseCase) ResolveReport(ctx context.Context, adminID, reportID
 	return nil
 }
 
-type testOutboxAdminUseCase struct{}
+type testOutboxAdminUseCase struct {
+	outbox *model.OutboxDeadMessageList
+}
 
 func (o *testOutboxAdminUseCase) GetDeadMessages(ctx context.Context, adminID int64, limit int, lastID string) (*model.OutboxDeadMessageList, error) {
 	_, _, _, _ = ctx, adminID, limit, lastID
+	if o != nil && o.outbox != nil {
+		return o.outbox, nil
+	}
 	now := time.Unix(40, 0)
 	return &model.OutboxDeadMessageList{
 		Messages: []model.OutboxDeadMessage{
@@ -478,23 +532,48 @@ func newTestWebHandlerWithSession(session *testSessionUseCase) *Handler {
 	if session == nil {
 		session = &testSessionUseCase{}
 	}
-	h, err := NewHandler(Dependencies{
-		AccountUseCase:      &testAccountUseCase{},
-		SessionUseCase:      session,
-		UserUseCase:         &testUserUseCase{},
-		BoardUseCase:        &testBoardUseCase{},
-		PostUseCase:         &testPostUseCase{},
-		CommentUseCase:      &testCommentUseCase{},
-		NotificationUseCase: &testNotificationUseCase{},
-		ReportUseCase:       &testReportUseCase{},
-		OutboxAdminUseCase:  &testOutboxAdminUseCase{},
-		ReactionUseCase:     &testReactionUseCase{},
-		AppName:             "Commu Bin",
-	})
+	h, err := newTestHandlerWithDependencies(session, &testBoardUseCase{}, &testPostUseCase{}, &testCommentUseCase{}, &testNotificationUseCase{}, &testReportUseCase{}, &testOutboxAdminUseCase{})
 	if err != nil {
 		panic(err)
 	}
 	return h
+}
+
+func newTestHandlerWithDependencies(session *testSessionUseCase, boardUseCase *testBoardUseCase, postUseCase *testPostUseCase, commentUseCase *testCommentUseCase, notificationUseCase *testNotificationUseCase, reportUseCase *testReportUseCase, outboxUseCase *testOutboxAdminUseCase) (*Handler, error) {
+	if session == nil {
+		session = &testSessionUseCase{}
+	}
+	if boardUseCase == nil {
+		boardUseCase = &testBoardUseCase{}
+	}
+	if postUseCase == nil {
+		postUseCase = &testPostUseCase{}
+	}
+	if commentUseCase == nil {
+		commentUseCase = &testCommentUseCase{}
+	}
+	if notificationUseCase == nil {
+		notificationUseCase = &testNotificationUseCase{}
+	}
+	if reportUseCase == nil {
+		reportUseCase = &testReportUseCase{}
+	}
+	if outboxUseCase == nil {
+		outboxUseCase = &testOutboxAdminUseCase{}
+	}
+	return NewHandler(Dependencies{
+		AccountUseCase:      &testAccountUseCase{},
+		SessionUseCase:      session,
+		UserUseCase:         &testUserUseCase{},
+		BoardUseCase:        boardUseCase,
+		PostUseCase:         postUseCase,
+		CommentUseCase:      commentUseCase,
+		NotificationUseCase: notificationUseCase,
+		ReportUseCase:       reportUseCase,
+		OutboxAdminUseCase:  outboxUseCase,
+		ReactionUseCase:     &testReactionUseCase{},
+		AppName:             "Commu Bin",
+	})
 }
 
 func newTestWebHandlerWithBoardUseCase(session *testSessionUseCase, boardUseCase interface {
@@ -552,6 +631,17 @@ func newTestWebEngineWithBoardUseCase(session *testSessionUseCase, boardUseCase 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	newTestWebHandlerWithBoardUseCase(session, boardUseCase).RegisterRoutes(r)
+	return r
+}
+
+func newTestWebEngineWithDependencies(session *testSessionUseCase, boardUseCase *testBoardUseCase, postUseCase *testPostUseCase, commentUseCase *testCommentUseCase, notificationUseCase *testNotificationUseCase, reportUseCase *testReportUseCase, outboxUseCase *testOutboxAdminUseCase) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h, err := newTestHandlerWithDependencies(session, boardUseCase, postUseCase, commentUseCase, notificationUseCase, reportUseCase, outboxUseCase)
+	if err != nil {
+		panic(err)
+	}
+	h.RegisterRoutes(r)
 	return r
 }
 
@@ -617,8 +707,30 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "Feed title")
 		assert.Contains(t, rr.Body.String(), "At a glance")
 		assert.Contains(t, rr.Body.String(), "Attachments")
+		assert.Contains(t, rr.Body.String(), `<a href="https://example.com"`)
+		assert.Contains(t, rr.Body.String(), `>docs</a>`)
+		assert.Contains(t, rr.Body.String(), `/api/v1/posts/post-uuid/attachments/attach-uuid/file`)
+		assert.Contains(t, rr.Body.String(), `/api/v1/posts/post-uuid/attachments/attach-uuid/preview`)
+		assert.NotContains(t, rr.Body.String(), "<pre class=\"markdown\">")
+		assert.NotContains(t, rr.Body.String(), "<script>alert(1)</script>")
 		assert.Contains(t, rr.Body.String(), "Looks good.")
+		assert.Contains(t, rr.Body.String(), `/comments/comment-uuid/reactions`)
+		assert.Contains(t, rr.Body.String(), `target_type" value="comment"`)
+		assert.Contains(t, rr.Body.String(), `/reports`)
 		assert.Contains(t, rr.Body.String(), "Write a comment")
+	})
+
+	t.Run("guest navigation hides auth-only links", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.NotContains(t, body, `href="/me"`)
+		assert.NotContains(t, body, `href="/notifications"`)
+		assert.NotContains(t, body, `href="/logout"`)
+		assert.Contains(t, body, `href="/login"`)
 	})
 
 	t.Run("draft edit", func(t *testing.T) {
@@ -665,6 +777,84 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "Requeue")
 		assert.Contains(t, rr.Body.String(), "Discard")
 	})
+}
+
+func TestHandler_RenderPaginationLinks(t *testing.T) {
+	feedCursor := "feed-next"
+	boardCursor := "board-next"
+	tagCursor := "tag-next"
+	searchCursor := "search-next"
+	draftCursor := "draft-next"
+	notificationCursor := "notification-next"
+	boardListCursor := "boards-next"
+	commentCursor := "comment-next"
+	reportLastID := int64(9)
+	outboxLastID := "dead-next"
+
+	postUseCase := &testPostUseCase{
+		feedList:   &model.PostList{Posts: []model.Post{{UUID: "feed-post", Title: "Feed post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &feedCursor},
+		boardList:  &model.PostList{Posts: []model.Post{{UUID: "board-post", Title: "Board post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &boardCursor},
+		tagList:    &model.PostList{Posts: []model.Post{{UUID: "tag-post", Title: "Tag post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &tagCursor},
+		searchList: &model.PostList{Posts: []model.Post{{UUID: "search-post", Title: "Search post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &searchCursor},
+		draftList:  &model.PostList{Posts: []model.Post{{UUID: "draft-uuid-2", Title: "Draft next", Content: "Draft body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &draftCursor},
+	}
+	commentUseCase := &testCommentUseCase{
+		comments: &model.CommentList{
+			Comments: []model.Comment{{UUID: "comment-1", Content: "First", AuthorUUID: "user-uuid", PostUUID: "post-uuid"}, {UUID: "comment-2", Content: "Second", AuthorUUID: "user-uuid", PostUUID: "post-uuid"}},
+			Limit:    2,
+			HasMore:  true,
+			NextCursor: func() *string {
+				return &commentCursor
+			}(),
+		},
+	}
+	notificationUseCase := &testNotificationUseCase{
+		notifications: &model.NotificationList{Notifications: []model.Notification{{UUID: "notif-1", MessageKey: "post_commented", CreatedAt: time.Unix(60, 0)}}, Limit: 20, HasMore: true, NextCursor: &notificationCursor},
+	}
+	reportUseCase := &testReportUseCase{
+		reports: &model.ReportList{Reports: []model.Report{{ID: 11, ReasonCode: "spam", TargetType: "post", TargetUUID: "post-uuid", ReporterUUID: "reporter-uuid", Status: "pending", CreatedAt: time.Unix(70, 0), UpdatedAt: time.Unix(70, 0)}}, Limit: 20, HasMore: true, NextLastID: &reportLastID},
+	}
+	outboxUseCase := &testOutboxAdminUseCase{
+		outbox: &model.OutboxDeadMessageList{Messages: []model.OutboxDeadMessage{{ID: "dead-1", EventName: "post.changed", AttemptCount: 1, LastError: "boom", OccurredAt: time.Unix(80, 0), NextAttemptAt: time.Unix(90, 0)}}, Limit: 20, HasMore: true, NextLastID: &outboxLastID},
+	}
+	boardUseCase := &testBoardUseCase{
+		boards:    &model.BoardList{Boards: []model.Board{{UUID: "general-uuid", Name: "General", Description: "Visible board"}}, Limit: 20, HasMore: true, NextCursor: &boardListCursor},
+		allBoards: &model.BoardList{Boards: []model.Board{{UUID: "general-uuid", Name: "General", Description: "Visible board"}}, Limit: 20, HasMore: true, NextCursor: &boardListCursor},
+	}
+	r := newTestWebEngineWithDependencies(&testSessionUseCase{}, boardUseCase, postUseCase, commentUseCase, notificationUseCase, reportUseCase, outboxUseCase)
+
+	cases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "feed", path: "/", want: "cursor=feed-next"},
+		{name: "board", path: "/boards/general-uuid", want: "cursor=board-next"},
+		{name: "tag", path: "/tags/playwright", want: "cursor=tag-next"},
+		{name: "search", path: "/search?q=go", want: "cursor=search-next"},
+		{name: "drafts", path: "/me", want: "cursor=draft-next"},
+		{name: "notifications", path: "/notifications", want: "cursor=notification-next"},
+		{name: "admin reports", path: "/admin/reports", want: "last_id=9"},
+		{name: "admin outbox", path: "/admin/outbox", want: "last_id=dead-next"},
+		{name: "admin boards", path: "/admin/boards", want: "cursor=boards-next"},
+		{name: "post comments", path: "/posts/post-uuid", want: "comment_cursor=comment-next"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			if strings.HasPrefix(tc.path, "/me") || strings.HasPrefix(tc.path, "/notifications") || strings.HasPrefix(tc.path, "/admin") || strings.HasPrefix(tc.path, "/posts/") {
+				req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "admin-token"})
+			}
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			require.Equal(t, http.StatusOK, rr.Code)
+			body := rr.Body.String()
+			assert.Contains(t, body, "Load more")
+			assert.Contains(t, body, tc.want)
+		})
+	}
 }
 
 func TestHandler_RenderCoreScreens_DisablesNewPostWhenNoBoards(t *testing.T) {

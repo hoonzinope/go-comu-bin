@@ -15,7 +15,11 @@
 }
 
 * { box-sizing: border-box; }
-html, body { min-height: 100%; }
+html, body {
+  min-height: 100%;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
 body {
   margin: 0;
   font-family: "Work Sans", sans-serif;
@@ -331,10 +335,71 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   gap: .5rem;
   align-items: center;
 }
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+}
+.comment-report-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
 .meta-row { color: rgba(43,52,56,.72); }
 .chip { padding: .35rem .55rem; }
 .section-title { margin: 1.25rem 0 .75rem; font-family: "Space Grotesk", sans-serif; font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; border-left: 1.5px solid var(--ink); padding-left: .6rem; }
-.markdown { white-space: pre-wrap; font-family: "Work Sans", sans-serif; line-height: 1.7; margin: 1rem 0 0; background: var(--surface); padding: 1rem; border: var(--border); }
+.markdown {
+  display: grid;
+  gap: .85rem;
+  white-space: normal;
+  font-family: "Work Sans", sans-serif;
+  line-height: 1.7;
+  margin: 1rem 0 0;
+  background: var(--surface);
+  padding: 1rem;
+  border: var(--border);
+  overflow-wrap: anywhere;
+}
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p { margin: 0; }
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: .35rem 0 0;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+.markdown h1 { font-size: 1.75rem; }
+.markdown h2 { font-size: 1.4rem; }
+.markdown h3 { font-size: 1.15rem; }
+.markdown ul,
+.markdown ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.markdown li + li { margin-top: .25rem; }
+.markdown blockquote {
+  margin: 0;
+  padding: .65rem .9rem;
+  border-left: 4px solid var(--accent);
+  background: var(--surface-alt);
+}
+.markdown pre {
+  margin: 0;
+  padding: .85rem 1rem;
+  border: var(--border);
+  background: var(--surface-alt);
+  overflow: auto;
+}
+.markdown code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: .92em;
+}
+.markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}
+.markdown a:hover { color: var(--ink); }
 .form { display: grid; gap: .75rem; }
 .form h1, .form h2 { margin: 0; font-family: "Space Grotesk", sans-serif; letter-spacing: -0.04em; }
 .form label {

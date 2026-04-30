@@ -111,6 +111,8 @@ type PageData struct {
 	Message           string
 	Query             string
 	SortValue         string
+	WindowValue       string
+	ListBaseURL       string
 	BoardUUID         string
 	TagName           string
 	PostUUID          string
@@ -118,6 +120,7 @@ type PageData struct {
 	Redirect          string
 	Feed              *model.PostList
 	PostDetail        *model.PostDetail
+	Comments          *model.CommentList
 	Drafts            *model.PostList
 	Notifications     *model.NotificationList
 	Reports           *model.ReportList

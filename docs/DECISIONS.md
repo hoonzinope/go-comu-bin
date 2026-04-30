@@ -46,6 +46,77 @@
 - internal/...
 ```
 
+## 2026-04-30 - post detail body는 raw markdown 저장을 유지하고 서버 렌더링 HTML로 노출한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 web UI의 post detail 본문은 `<pre>`로 그대로 출력되어 markdown 링크가 클릭 가능한 HTML로 렌더링되지 않는다.
+- downstream `job-build`는 web UI를 바꿀 수 없으므로, 게시글 본문 렌더링 책임은 `go-comu-bin`의 서버 쪽에서 해결해야 한다.
+- 본문 저장 포맷은 그대로 유지해야 해서, raw markdown source of truth를 손대지 않는 경계가 필요하다.
+
+관찰
+
+- `internal/delivery/web/templates/page.tmpl`의 post detail은 `normalizeContent` 결과를 `<pre class="markdown">`로 감싸고 있다.
+- `internal/delivery/web/static/site.css`는 `.markdown`을 preformatted text 스타일로 가정하고 있다.
+- repository에는 markdown 파서로 쓸 수 있는 `github.com/yuin/goldmark`가 이미 포함되어 있다.
+
+결론
+
+- post detail 본문은 raw markdown 저장은 그대로 두고, 서버에서 HTML로 렌더링해 출력한다.
+- 렌더링은 raw HTML을 허용하지 않는 안전한 boundary를 유지하고, 템플릿에는 HTML로 주입한다.
+- tag chips는 본문 렌더링과 분리해 기존 위치를 유지한다.
+
+후속 작업
+
+- visual regression baseline 정리
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/handler.go`
+- `tests/e2e/content.spec.ts`
+
+## 2026-04-30 - web lists는 existing cursor/last_id metadata를 화면의 load more 링크로 연결한다
+
+상태
+
+- decided
+
+배경
+
+- public list API와 admin list API는 이미 cursor/last_id 기반 pagination을 반환하지만, web UI는 목록만 렌더링하고 다음 페이지 진입점이 없었다.
+- 사용자 입장에서는 feed, board, tag, search, drafts, notifications, admin queues가 모두 "끊긴 목록"처럼 보인다.
+
+관찰
+
+- `PostList`, `BoardList`, `NotificationList`, `CommentList`, `ReportList`, `OutboxDeadMessageList`에 pagination metadata가 들어 있다.
+- web handler는 해당 메타데이터를 이미 읽어오지만 템플릿이 링크로 노출하지 않았다.
+
+결론
+
+- web list 화면은 별도 API를 새로 만들지 않고, 기존 list metadata를 `Load more` 링크로 직접 연결한다.
+- post detail comments는 comment list API를 사용해 같은 방식으로 pagination 링크를 노출한다.
+
+후속 작업
+
+- list 페이지용 helper/link style 정리
+
+관련 문서/코드
+
+- `internal/delivery/web/handler.go`
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/application/model/post_list.go`
+- `internal/application/model/comment_list.go`
+- `internal/application/model/notification.go`
+- `internal/application/model/board_list.go`
+- `internal/application/model/report.go`
+- `internal/application/model/outbox_dead.go`
+
 ## 2026-03-27 - runtime cache는 Ristretto-backed adapter로 전환하고 in-memory는 test double로 남긴다
 
 상태
@@ -4742,3 +4813,26 @@
 - `cmd/main_test.go`
 - `internal/application/port/board_repository.go`
 - `internal/infrastructure/persistence/sqlite/board_repository.go`
+## 2026-04-30 - web public UI exposes attachment, comment reaction, and comment report actions; guest nav hides auth-only links
+
+상태
+
+- decided
+
+배경
+
+- 웹 화면이 일부 API 기능을 노출하지 못했고, 반대로 로그인하지 않은 사용자에게 `Profile`/`Notifications` 같은 auth-only 진입점이 보였다.
+- 게시글 상세에서 첨부파일은 메타데이터만 보이고 실제 파일/미리보기 진입점이 없었으며, 댓글의 반응/신고는 API만 있고 UI가 없었다.
+
+결론
+
+- 게스트용 네비게이션에서는 auth-only 링크를 숨긴다.
+- 게시글 상세에서는 첨부파일 파일 URL과 미리보기 URL을 노출한다.
+- 댓글 카드에는 댓글 반응 조작과 댓글 신고 진입점을 제공한다.
+
+후속 작업
+
+- `internal/delivery/web/layout.tmpl`에서 guest/auth 네비게이션 분기 정리
+- `internal/delivery/web/templates/page.tmpl`에서 댓글 액션과 첨부파일 링크 추가
+- `internal/delivery/web/handler.go`에 댓글 반응 제출 처리 추가
+- `internal/delivery/web/handler_test.go`에 노출/비노출 회귀 테스트 추가

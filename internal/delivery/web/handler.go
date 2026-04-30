@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -20,6 +21,9 @@ import (
 	postsvc "github.com/hoonzinope/go-comu-bin/internal/application/service/post"
 	customerror "github.com/hoonzinope/go-comu-bin/internal/customerror"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
+	"github.com/microcosm-cc/bluemonday"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 )
 
 const (
@@ -28,6 +32,13 @@ const (
 	csrfHeaderName    = "X-CSRF-Token"
 	webDefaultLimit   = 20
 	guestSessionAge   = 30 * 24 * time.Hour
+)
+
+var (
+	markdownRenderer = goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+	)
+	markdownPolicy = bluemonday.UGCPolicy()
 )
 
 type Handler struct {
@@ -64,6 +75,27 @@ func NewHandler(deps Dependencies) (*Handler, error) {
 			}
 			return value[:max-1] + "…"
 		},
+		"normalizeContent": func(value string) string {
+			return normalizeContent(value)
+		},
+		"renderMarkdown": func(value string) template.HTML {
+			return renderMarkdown(value)
+		},
+		"pageURL": func(base string, params ...any) string {
+			return pageURL(base, params...)
+		},
+		"cursorValue": func(value *string) string {
+			if value == nil {
+				return ""
+			}
+			return strings.TrimSpace(*value)
+		},
+		"int64Value": func(value *int64) string {
+			if value == nil {
+				return ""
+			}
+			return strconv.FormatInt(*value, 10)
+		},
 		"formatTime": func(t time.Time) string {
 			if t.IsZero() {
 				return "-"
@@ -94,6 +126,91 @@ func NewHandler(deps Dependencies) (*Handler, error) {
 	return &Handler{deps: deps, templates: templates, assetsFS: assets}, nil
 }
 
+func normalizeContent(value string) string {
+	if value == "" {
+		return value
+	}
+	return strings.NewReplacer(
+		`\r\n`, "\n",
+		`\n`, "\n",
+		`\r`, "\n",
+		`\t`, "\t",
+	).Replace(value)
+}
+
+func renderMarkdown(value string) template.HTML {
+	value = normalizeContent(value)
+	if value == "" {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := markdownRenderer.Convert([]byte(value), &buf); err != nil {
+		return template.HTML(template.HTMLEscapeString(value))
+	}
+	return template.HTML(markdownPolicy.SanitizeBytes(buf.Bytes()))
+}
+
+func pageURL(base string, params ...any) string {
+	if strings.TrimSpace(base) == "" {
+		base = "/"
+	}
+	if len(params)%2 != 0 {
+		return base
+	}
+	values := url.Values{}
+	for i := 0; i < len(params); i += 2 {
+		key, _ := params[i].(string)
+		if key == "" {
+			continue
+		}
+		switch value := params[i+1].(type) {
+		case string:
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			values.Set(key, value)
+		case *string:
+			if value == nil {
+				continue
+			}
+			trimmed := strings.TrimSpace(*value)
+			if trimmed == "" {
+				continue
+			}
+			values.Set(key, trimmed)
+		case int:
+			if value == 0 {
+				continue
+			}
+			values.Set(key, strconv.Itoa(value))
+		case *int64:
+			if value == nil {
+				continue
+			}
+			values.Set(key, strconv.FormatInt(*value, 10))
+		case int64:
+			if value == 0 {
+				continue
+			}
+			values.Set(key, strconv.FormatInt(value, 10))
+		default:
+			if value == nil {
+				continue
+			}
+			str := strings.TrimSpace(fmt.Sprint(value))
+			if str == "" {
+				continue
+			}
+			values.Set(key, str)
+		}
+	}
+	if len(values) == 0 {
+		return base
+	}
+	return base + "?" + values.Encode()
+}
+
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/assets/*filepath", h.serveAsset)
 
@@ -110,6 +227,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.POST("/posts/:postUUID/delete", h.requireHTMLAuth(h.handleDeletePostSubmit))
 	r.POST("/posts/:postUUID/comments", h.requireHTMLAuth(h.handleCreateCommentSubmit))
 	r.POST("/posts/:postUUID/reactions", h.requireHTMLAuth(h.handlePostReactionSubmit))
+	r.POST("/comments/:commentUUID/reactions", h.requireHTMLAuth(h.handleCommentReactionSubmit))
 	r.POST("/comments/:commentUUID", h.requireHTMLAuth(h.handleUpdateCommentSubmit))
 	r.POST("/comments/:commentUUID/delete", h.requireHTMLAuth(h.handleDeleteCommentSubmit))
 	r.POST("/reports", h.requireHTMLAuth(h.handleCreateReportSubmit))
@@ -189,7 +307,7 @@ func (h *Handler) handleFeed(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "feed", Feed: feed, SortValue: sortValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "feed", ListBaseURL: "/", Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleBoardFeed(c *gin.Context) {
@@ -207,7 +325,7 @@ func (h *Handler) handleBoardFeed(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", BoardUUID: boardUUID, Feed: feed, SortValue: sortValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", ListBaseURL: "/boards/" + boardUUID, BoardUUID: boardUUID, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleTagFeed(c *gin.Context) {
@@ -225,7 +343,7 @@ func (h *Handler) handleTagFeed(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "tag", TagName: tagName, Feed: feed, SortValue: sortValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "tag", ListBaseURL: "/tags/" + tagName, TagName: tagName, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleSearch(c *gin.Context) {
@@ -247,7 +365,7 @@ func (h *Handler) handleSearch(c *gin.Context) {
 			return
 		}
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "search", Query: query, Feed: feed, SortValue: sortValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "search", ListBaseURL: "/search", Query: query, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handlePostDetail(c *gin.Context) {
@@ -265,7 +383,14 @@ func (h *Handler) handlePostDetail(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "post", PostDetail: detail, PostUUID: postUUID})
+	commentsLimit := parsePageLimit(c.Query("comment_limit"))
+	commentsCursor := strings.TrimSpace(c.Query("comment_cursor"))
+	comments, err := h.deps.CommentUseCase.GetCommentsByPost(ctx, postUUID, commentsLimit, commentsCursor)
+	if err != nil {
+		h.renderUseCaseError(c, err)
+		return
+	}
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "post", ListBaseURL: "/posts/" + postUUID, PostDetail: detail, PostUUID: postUUID, Comments: comments})
 }
 
 func (h *Handler) handleNewPost(c *gin.Context) {
@@ -586,12 +711,14 @@ func (h *Handler) handleMePage(c *gin.Context) {
 		return
 	}
 	userID := userIDFromModel(shell.CurrentUser)
-	drafts, err := h.deps.PostUseCase.GetMyDraftPosts(c.Request.Context(), userID, webDefaultLimit, "")
+	limit := parsePageLimit(c.Query("limit"))
+	cursor := strings.TrimSpace(c.Query("cursor"))
+	drafts, err := h.deps.PostUseCase.GetMyDraftPosts(c.Request.Context(), userID, limit, cursor)
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "me", Drafts: drafts})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "me", ListBaseURL: "/me", Drafts: drafts})
 }
 
 func (h *Handler) handleMeDeleteSubmit(c *gin.Context) {
@@ -672,12 +799,14 @@ func (h *Handler) handleNotificationsPage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	notifs, err := h.deps.NotificationUseCase.GetMyNotifications(c.Request.Context(), userIDFromModel(shell.CurrentUser), webDefaultLimit, "")
+	limit := parsePageLimit(c.Query("limit"))
+	cursor := strings.TrimSpace(c.Query("cursor"))
+	notifs, err := h.deps.NotificationUseCase.GetMyNotifications(c.Request.Context(), userIDFromModel(shell.CurrentUser), limit, cursor)
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "notifications", Notifications: notifs})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "notifications", ListBaseURL: "/notifications", Notifications: notifs})
 }
 
 func (h *Handler) handleNotificationsReadAllSubmit(c *gin.Context) {
@@ -724,17 +853,63 @@ func (h *Handler) handlePostReactionSubmit(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, "/posts/"+postUUID)
 }
 
+func (h *Handler) handleCommentReactionSubmit(c *gin.Context) {
+	shell, ok := h.requireHTMLAuthShell(c, "feed")
+	if !ok {
+		return
+	}
+	if err := h.requireCSRF(c); err != nil {
+		h.renderError(c, http.StatusForbidden, "Forbidden", err.Error())
+		return
+	}
+	commentUUID := strings.TrimSpace(c.Param("commentUUID"))
+	postUUID := strings.TrimSpace(c.PostForm("post_uuid"))
+	reactionTypeRaw := strings.TrimSpace(c.PostForm("reaction_type"))
+	if h.deps.ReactionUseCase == nil {
+		if postUUID == "" {
+			postUUID = "/"
+		} else {
+			postUUID = "/posts/" + postUUID
+		}
+		c.Redirect(http.StatusSeeOther, postUUID)
+		return
+	}
+	reactionType, ok := model.ParseReactionType(reactionTypeRaw)
+	if !ok {
+		if postUUID == "" {
+			postUUID = "/"
+		} else {
+			postUUID = "/posts/" + postUUID
+		}
+		c.Redirect(http.StatusSeeOther, postUUID)
+		return
+	}
+	if strings.TrimSpace(c.PostForm("_method")) == "delete" {
+		_ = h.deps.ReactionUseCase.DeleteReaction(c.Request.Context(), userIDFromModel(shell.CurrentUser), commentUUID, model.ReactionTargetComment)
+	} else {
+		_, _ = h.deps.ReactionUseCase.SetReaction(c.Request.Context(), userIDFromModel(shell.CurrentUser), commentUUID, model.ReactionTargetComment, reactionType)
+	}
+	if postUUID == "" {
+		postUUID = "/"
+	} else {
+		postUUID = "/posts/" + postUUID
+	}
+	c.Redirect(http.StatusSeeOther, postUUID)
+}
+
 func (h *Handler) handleAdminReportsPage(c *gin.Context) {
 	shell, ok := h.requireHTMLAdminShell(c)
 	if !ok {
 		return
 	}
-	reports, err := h.deps.ReportUseCase.GetReports(c.Request.Context(), userIDFromModel(shell.CurrentUser), nil, webDefaultLimit, 0)
+	limit := parsePageLimit(c.Query("limit"))
+	lastID := parseLastID(c.Query("last_id"))
+	reports, err := h.deps.ReportUseCase.GetReports(c.Request.Context(), userIDFromModel(shell.CurrentUser), nil, limit, lastID)
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-reports", Reports: reports})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-reports", ListBaseURL: "/admin/reports", Reports: reports})
 }
 
 func (h *Handler) handleAdminReportResolveSubmit(c *gin.Context) {
@@ -767,12 +942,14 @@ func (h *Handler) handleAdminOutboxPage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	outbox, err := h.deps.OutboxAdminUseCase.GetDeadMessages(c.Request.Context(), userIDFromModel(shell.CurrentUser), webDefaultLimit, "")
+	limit := parsePageLimit(c.Query("limit"))
+	lastID := strings.TrimSpace(c.Query("last_id"))
+	outbox, err := h.deps.OutboxAdminUseCase.GetDeadMessages(c.Request.Context(), userIDFromModel(shell.CurrentUser), limit, lastID)
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-outbox", Outbox: outbox})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-outbox", ListBaseURL: "/admin/outbox", Outbox: outbox})
 }
 
 func (h *Handler) handleAdminOutboxRequeueSubmit(c *gin.Context) {
@@ -832,7 +1009,9 @@ func (h *Handler) handleAdminBoardsPage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	boards, err := h.deps.BoardUseCase.GetAllBoards(c.Request.Context(), webDefaultLimit, "")
+	limit := parsePageLimit(c.Query("limit"))
+	cursor := strings.TrimSpace(c.Query("cursor"))
+	boards, err := h.deps.BoardUseCase.GetAllBoards(c.Request.Context(), limit, cursor)
 	if err != nil {
 		h.renderUseCaseError(c, err)
 		return
@@ -848,7 +1027,7 @@ func (h *Handler) handleAdminBoardsPage(c *gin.Context) {
 			}
 		}
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-boards", AdminBoards: boards, BoardVisibleCount: visibleCount, BoardHiddenCount: hiddenCount})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "admin-boards", ListBaseURL: "/admin/boards", AdminBoards: boards, BoardVisibleCount: visibleCount, BoardHiddenCount: hiddenCount})
 }
 
 func (h *Handler) handleAdminBoardCreateSubmit(c *gin.Context) {
@@ -1410,6 +1589,18 @@ func parsePageLimit(raw string) int {
 	}
 	if value > 100 {
 		return 100
+	}
+	return value
+}
+
+func parseLastID(raw string) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return 0
 	}
 	return value
 }
