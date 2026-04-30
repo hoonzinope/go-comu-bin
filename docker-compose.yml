@@ -1,14 +1,36 @@
 services:
+  mysql:
+    image: "mysql:8.4"
+    container_name: commu-bin-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-commu_bin}"
+      MYSQL_USER: "${MYSQL_USER:-commu_bin}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-commu_bin}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-commu-bin-root}"
+      TZ: "Asia/Seoul"
+    volumes:
+      - commu_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   app:
     image: "${COMMU_BIN_IMAGE:?set COMMU_BIN_IMAGE to your Docker Hub image}"
     container_name: commu-bin
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
     ports:
       - "18577:18577"
     environment:
+      DATABASE_DRIVER: "${DATABASE_DRIVER:-mysql}"
+      DATABASE_DSN: "${DATABASE_DSN:-commu_bin:commu_bin@tcp(mysql:3306)/commu_bin?parseTime=true&charset=utf8mb4&loc=UTC&multiStatements=true}"
       DELIVERY_HTTP_AUTH_SECRET: "${DELIVERY_HTTP_AUTH_SECRET:?set DELIVERY_HTTP_AUTH_SECRET}"
       DELIVERY_HTTP_PORT: "18577"
-      DATABASE_PATH: "/app/data/data.db"
       LOGGING_FILEPATH: "/app/logs/app.jsonl"
       STORAGE_PROVIDER: "local"
       STORAGE_LOCAL_ROOTDIR: "/app/data/uploads"
@@ -21,3 +43,4 @@ services:
 volumes:
   commu_data:
   commu_logs:
+  commu_mysql:

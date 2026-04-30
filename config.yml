@@ -14,6 +14,11 @@ logging:
   compress: true
   localTime: true
 
+database:
+  driver: "sqlite"
+  path: "./data/data.db"
+  dsn: ""
+
 storage:
   provider: "local"
   local:

@@ -30,12 +30,12 @@ const (
 )
 
 type PostSearchRepository struct {
-	db               sqlExecutor
+	db               TxExecutor
 	afterRebuildLoad func()
 	writerGate       sync.RWMutex
 }
 
-func NewPostSearchRepository(db sqlExecutor) *PostSearchRepository {
+func NewPostSearchRepository(db TxExecutor) *PostSearchRepository {
 	return &PostSearchRepository{db: db}
 }
 
@@ -174,20 +174,17 @@ func (r *PostSearchRepository) DeletePost(ctx context.Context, postID int64) err
 }
 
 func (r *PostSearchRepository) withTransaction(ctx context.Context, fn func(exec sqlExecutor) error) error {
-	if db, ok := r.db.(*sql.DB); ok {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			_ = tx.Rollback()
-		}()
-		if err := fn(tx); err != nil {
-			return err
-		}
-		return tx.Commit()
+	exec, tx, err := beginWrappedTx(ctx, r.db)
+	if err != nil {
+		return err
 	}
-	return fn(r.db)
+	defer func() {
+		_ = tx.Rollback()
+	}()
+	if err := fn(exec); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *PostSearchRepository) replaceSearchDocuments(ctx context.Context, exec sqlExecutor, tableName string, documents []searchDocument) error {

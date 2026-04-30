@@ -35,7 +35,9 @@ type Config struct {
 		LocalTime  bool   `yaml:"localTime"`
 	} `yaml:"logging"`
 	Database struct {
-		Path string `yaml:"path"`
+		Driver string `yaml:"driver"`
+		Path   string `yaml:"path"`
+		DSN    string `yaml:"dsn"`
 	} `yaml:"database"`
 	Admin struct {
 		Bootstrap struct {
@@ -180,7 +182,9 @@ func Load() (*Config, error) {
 		"logging.maxAgeDays",
 		"logging.compress",
 		"logging.localTime",
+		"database.driver",
 		"database.path",
+		"database.dsn",
 		"admin.bootstrap.enabled",
 		"admin.bootstrap.username",
 		"admin.bootstrap.password",
@@ -281,7 +285,9 @@ func loadFromViper(v *viper.Viper) (*Config, error) {
 	v.SetDefault("logging.maxAgeDays", 30)
 	v.SetDefault("logging.compress", true)
 	v.SetDefault("logging.localTime", true)
+	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.path", "./data/data.db")
+	v.SetDefault("database.dsn", "")
 	v.SetDefault("admin.bootstrap.enabled", false)
 	v.SetDefault("storage.provider", "local")
 	v.SetDefault("storage.local.rootDir", "./data/uploads")
@@ -521,8 +527,19 @@ func validate(cfg *Config) error {
 	if cfg.Logging.MaxAgeDays < 0 {
 		return fmt.Errorf("invalid logging.maxAgeDays: %d (must be >= 0)", cfg.Logging.MaxAgeDays)
 	}
-	if strings.TrimSpace(cfg.Database.Path) == "" {
-		return fmt.Errorf("invalid database.path: cannot be empty")
+	cfg.Database.Driver = strings.ToLower(strings.TrimSpace(cfg.Database.Driver))
+	switch cfg.Database.Driver {
+	case "", "sqlite":
+		cfg.Database.Driver = "sqlite"
+		if strings.TrimSpace(cfg.Database.Path) == "" {
+			return fmt.Errorf("invalid database.path: cannot be empty")
+		}
+	case "mysql":
+		if strings.TrimSpace(cfg.Database.DSN) == "" {
+			return fmt.Errorf("invalid database.dsn: cannot be empty")
+		}
+	default:
+		return fmt.Errorf("invalid database.driver: %s", cfg.Database.Driver)
 	}
 	switch cfg.Storage.Provider {
 	case "local":

@@ -90,6 +90,9 @@ docker run -d \
 `docker-compose.yml`을 쓰면 같은 구성을 더 짧게 반복할 수 있습니다.
 호스트에서 `config.yml`을 관리하려면 `COMMU_BIN_CONFIG_PATH`로 파일 경로를 지정해 `/app/config.yml`에 읽기 전용 마운트합니다.
 기본 `config.yml`에는 로컬 관리용 초기 bootstrap admin(`admin` / `commu-admin-1q2w#E$R!`)이 들어 있습니다.
+기본 `docker-compose.yml`은 MySQL 서비스를 함께 띄우고, 앱은 `DATABASE_DRIVER=mysql` + `DATABASE_DSN=...mysql:3306...`로 붙습니다.
+SQLite 파일 백엔드로 돌리고 싶으면 `DATABASE_DRIVER=sqlite`로 바꾸고 `DATABASE_PATH`를 다시 넣으면 됩니다.
+앱을 호스트에서 직접 띄우는 경우에는 `DATABASE_DSN`의 호스트 부분을 `127.0.0.1:3306`로 바꾸면 됩니다.
 
 `.env.example`을 `.env`로 복사한 뒤 값을 채우면 됩니다.
 

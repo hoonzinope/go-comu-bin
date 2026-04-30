@@ -8,17 +8,45 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
-type sqlExecutor interface {
+type Executor interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+type TxExecutor interface {
+	Executor
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
+type txWrapper interface {
+	WrapTx(tx *sql.Tx) Executor
+}
+
+type sqlTxCommitter interface {
+	Commit() error
+	Rollback() error
+}
+
+type sqlExecutor = Executor
+
 type sqliteCoder interface {
 	Code() int
+}
+
+func beginWrappedTx(ctx context.Context, db TxExecutor) (Executor, sqlTxCommitter, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	if wrapper, ok := db.(txWrapper); ok {
+		return wrapper.WrapTx(tx), tx, nil
+	}
+	return tx, tx, nil
 }
 
 func sqliteErrorCode(err error) (int, bool) {
@@ -77,6 +105,10 @@ func uniqueConstraintError(err error) bool {
 		case sqlite3.SQLITE_CONSTRAINT_UNIQUE, sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY:
 			return true
 		}
+	}
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) {
+		return mysqlErr.Number == 1062
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unique constraint failed") || strings.Contains(msg, "constraint failed")

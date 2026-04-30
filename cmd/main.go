@@ -45,6 +45,7 @@ import (
 	noopmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/noop"
 	smtpmail "github.com/hoonzinope/go-comu-bin/internal/infrastructure/mail/smtp"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/inmemory"
+	mysqlpersist "github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/mysql"
 	sqlitepersist "github.com/hoonzinope/go-comu-bin/internal/infrastructure/persistence/sqlite"
 	rateLimitInMemory "github.com/hoonzinope/go-comu-bin/internal/infrastructure/ratelimit/inmemory"
 	"github.com/hoonzinope/go-comu-bin/internal/infrastructure/storage/localfs"
@@ -99,15 +100,37 @@ func main() {
 	appCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	authDB, err := sqlitepersist.Open(appCtx, sqlitepersist.Options{Path: cfg.Database.Path})
-	if err != nil {
-		slog.Error("failed to initialize sqlite auth database", "error", err)
+	var authDB sqlitepersist.TxExecutor
+	var dbCloser io.Closer
+	switch cfg.Database.Driver {
+	case "sqlite":
+		db, err := sqlitepersist.Open(appCtx, sqlitepersist.Options{Path: cfg.Database.Path})
+		if err != nil {
+			slog.Error("failed to initialize sqlite auth database", "error", err)
+			exitCode = 1
+			return
+		}
+		authDB = db
+		dbCloser = db
+	case "mysql":
+		db, err := mysqlpersist.Open(appCtx, mysqlpersist.Options{DSN: cfg.Database.DSN})
+		if err != nil {
+			slog.Error("failed to initialize mysql auth database", "error", err)
+			exitCode = 1
+			return
+		}
+		authDB = db
+		dbCloser = db
+	default:
+		slog.Error("failed to initialize database", "error", fmt.Errorf("unsupported database driver: %s", cfg.Database.Driver))
 		exitCode = 1
 		return
 	}
 	defer func() {
-		if closeErr := authDB.Close(); closeErr != nil {
-			slog.Warn("failed to close sqlite auth database", "error", closeErr)
+		if dbCloser != nil {
+			if closeErr := dbCloser.Close(); closeErr != nil {
+				slog.Warn("failed to close database", "error", closeErr)
+			}
 		}
 	}()
 
@@ -374,7 +397,7 @@ func main() {
 	}
 }
 
-func seedPostRankingSnapshots(ctx context.Context, db *sql.DB, rankingRepository *inmemory.PostRankingRepository) error {
+func seedPostRankingSnapshots(ctx context.Context, db sqlitepersist.Executor, rankingRepository *inmemory.PostRankingRepository) error {
 	if db == nil || rankingRepository == nil {
 		return nil
 	}

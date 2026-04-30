@@ -38,7 +38,8 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	v.Set("logging.maxAgeDays", 30)
 	v.Set("logging.compress", true)
 	v.Set("logging.localTime", true)
-	v.Set("database.path", "./data/data.db")
+	v.Set("database.driver", "mysql")
+	v.Set("database.dsn", "commu_bin:commu_bin@tcp(mysql:3306)/commu_bin?parseTime=true&loc=UTC")
 	v.Set("storage.provider", "local")
 	v.Set("storage.local.rootDir", "./data/uploads")
 	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
@@ -85,7 +86,8 @@ func TestLoadFromViper_ValidConfig(t *testing.T) {
 	assert.Equal(t, 30, cfg.Logging.MaxAgeDays)
 	assert.True(t, cfg.Logging.Compress)
 	assert.True(t, cfg.Logging.LocalTime)
-	assert.Equal(t, "./data/data.db", cfg.Database.Path)
+	assert.Equal(t, "mysql", cfg.Database.Driver)
+	assert.Equal(t, "commu_bin:commu_bin@tcp(mysql:3306)/commu_bin?parseTime=true&loc=UTC", cfg.Database.DSN)
 	assert.True(t, cfg.Admin.Bootstrap.Enabled)
 	assert.Equal(t, "admin", cfg.Admin.Bootstrap.Username)
 	assert.Equal(t, "local", cfg.Storage.Provider)
@@ -202,6 +204,26 @@ func TestLoad_LoadsFromEnvironmentWithoutConfigFile(t *testing.T) {
 	assert.Equal(t, "env-secret-1234567890-abcdef-1234", cfg.Delivery.HTTP.Auth.Secret)
 	assert.Equal(t, "./logs/app.jsonl", cfg.Logging.FilePath)
 	assert.Equal(t, []string{"127.0.0.1", "10.0.0.0/8"}, cfg.Delivery.HTTP.TrustedProxies)
+}
+
+func TestLoadFromViper_MySQLRequiresDSN(t *testing.T) {
+	v := viper.New()
+	v.Set("database.driver", "mysql")
+	v.Set("delivery.http.port", 18577)
+	v.Set("delivery.http.auth.secret", "test-secret-1234567890-abcdef-1234")
+	v.Set("cache.listTTLSeconds", 30)
+	v.Set("cache.detailTTLSeconds", 30)
+	v.Set("storage.provider", "local")
+	v.Set("storage.local.rootDir", "./data/uploads")
+	v.Set("storage.attachment.maxUploadSizeBytes", int64(10<<20))
+	v.Set("storage.attachment.imageOptimization.jpegQuality", 82)
+	v.Set("jobs.attachmentCleanup.intervalSeconds", 600)
+	v.Set("jobs.attachmentCleanup.gracePeriodSeconds", 600)
+	v.Set("jobs.attachmentCleanup.batchSize", 50)
+
+	_, err := loadFromViper(v)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database.dsn")
 }
 
 func TestLoadFromViper_InvalidPort(t *testing.T) {

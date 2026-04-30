@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/hoonzinope/go-comu-bin/internal/application/port"
@@ -11,7 +10,7 @@ import (
 var _ port.UnitOfWork = (*UnitOfWork)(nil)
 
 type UnitOfWork struct {
-	db                     *sql.DB
+	db                     TxExecutor
 	boardRepository        port.BoardRepository
 	postRepository         port.PostRepository
 	tagRepository          port.TagRepository
@@ -27,7 +26,7 @@ type UnitOfWork struct {
 }
 
 func NewUnitOfWork(
-	db *sql.DB,
+	db TxExecutor,
 	boardRepository port.BoardRepository,
 	postRepository port.PostRepository,
 	tagRepository port.TagRepository,
@@ -62,7 +61,7 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 	if u == nil || u.db == nil {
 		return fmt.Errorf("sqlite unit of work is not initialized")
 	}
-	tx, err := u.db.BeginTx(ctx, nil)
+	exec, tx, err := beginWrappedTx(ctx, u.db)
 	if err != nil {
 		return fmt.Errorf("begin sqlite transaction: %w", err)
 	}
@@ -71,19 +70,19 @@ func (u *UnitOfWork) WithinTransaction(ctx context.Context, fn func(tx port.TxSc
 	}()
 	scope := sqliteTxScope{
 		ctx:                    ctx,
-		userRepository:         NewUserRepository(tx),
-		boardRepository:        NewBoardRepository(tx),
-		postRepository:         NewPostRepository(tx),
-		tagRepository:          NewTagRepository(tx),
-		postTagRepository:      NewPostTagRepository(tx),
-		commentRepository:      NewCommentRepository(tx),
-		reactionRepository:     NewReactionRepository(tx),
-		attachmentRepository:   NewAttachmentRepository(tx),
-		reportRepository:       NewReportRepository(tx),
-		notificationRepository: NewNotificationRepository(tx),
-		emailVerificationRepo:  NewEmailVerificationTokenRepository(tx),
-		passwordResetRepo:      NewPasswordResetTokenRepository(tx),
-		outbox:                 NewOutboxAppender(tx),
+		userRepository:         NewUserRepository(exec),
+		boardRepository:        NewBoardRepository(exec),
+		postRepository:         NewPostRepository(exec),
+		tagRepository:          NewTagRepository(exec),
+		postTagRepository:      NewPostTagRepository(exec),
+		commentRepository:      NewCommentRepository(exec),
+		reactionRepository:     NewReactionRepository(exec),
+		attachmentRepository:   NewAttachmentRepository(exec),
+		reportRepository:       NewReportRepository(exec),
+		notificationRepository: NewNotificationRepository(exec),
+		emailVerificationRepo:  NewEmailVerificationTokenRepository(exec),
+		passwordResetRepo:      NewPasswordResetTokenRepository(exec),
+		outbox:                 NewOutboxAppender(exec),
 	}
 	if err := fn(&scope); err != nil {
 		return err

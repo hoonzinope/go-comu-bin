@@ -46,6 +46,45 @@
 - internal/...
 ```
 
+## 2026-05-01 - persistence는 sqlite와 mysql을 설정으로 전환하고 mysql은 로컬 컨테이너 연결을 지원한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 persistence wiring은 SQLite 파일 경로에 고정되어 있어, 로컬 개발이나 컨테이너 환경에서 MySQL을 재사용하기 어렵다.
+- 운영/검증 환경에서 MySQL 컨테이너를 그대로 붙여보려면 연결 정보와 마이그레이션 경로가 별도로 필요하다.
+- 기존 repository 계약은 유지하면서 backend만 바꾸는 편이 영향 범위를 가장 작게 만들 수 있다.
+
+관찰
+
+- `cmd/main.go`는 현재 `sqlite.Open`과 `sqlite.UnitOfWork`에 직접 의존한다.
+- `internal/config/config.go`는 `database.path`만 읽고 있어 backend 선택 개념이 없다.
+- repository 구현은 대부분 SQLExecutor 기반이라 backend 교체 가능성이 높지만, outbox와 post search처럼 트랜잭션을 직접 여는 경로는 wrapper 지원이 필요하다.
+
+결론
+
+- database backend는 설정으로 선택하게 하고, 기본값은 기존 SQLite를 유지한다.
+- MySQL은 별도 `dsn` 기반 연결로 열고, repository contract는 기존 SQLite 구현을 재사용하되 MySQL 호환 SQL rewrite와 트랜잭션 wrapper를 추가한다.
+- 로컬 실행용 `docker-compose.yml`에는 MySQL 서비스를 추가해 app 컨테이너가 같은 네트워크에서 바로 붙을 수 있게 한다.
+
+후속 작업
+
+- `internal/config/config.go`에 database driver/dsn 추가
+- `internal/infrastructure/persistence/mysql` 추가
+- SQLite repository의 transaction open 경로를 wrapper 친화적으로 조정
+- `docker-compose.yml`과 `docs/CONFIG.md` 업데이트
+
+관련 문서/코드
+
+- `cmd/main.go`
+- `internal/config/config.go`
+- `internal/infrastructure/persistence/sqlite/*`
+- `internal/infrastructure/persistence/mysql/*`
+- `docker-compose.yml`
+
 ## 2026-04-30 - post detail body는 raw markdown 저장을 유지하고 서버 렌더링 HTML로 노출한다
 
 상태

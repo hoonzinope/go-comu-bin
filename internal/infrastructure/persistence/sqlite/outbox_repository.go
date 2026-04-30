@@ -14,7 +14,7 @@ import (
 var _ port.OutboxStore = (*OutboxRepository)(nil)
 
 type OutboxRepository struct {
-	db                *sql.DB
+	db                TxExecutor
 	processingTimeout time.Duration
 }
 
@@ -36,7 +36,7 @@ func WithProcessingTimeout(timeout time.Duration) outboxRepositoryOption {
 	}
 }
 
-func NewOutboxRepository(db *sql.DB, opts ...outboxRepositoryOption) *OutboxRepository {
+func NewOutboxRepository(db TxExecutor, opts ...outboxRepositoryOption) *OutboxRepository {
 	cfg := outboxRepositoryConfig{
 		processingTimeout: 30 * time.Second,
 	}
@@ -77,7 +77,7 @@ func (r *OutboxRepository) FetchReady(ctx context.Context, limit int, now time.T
 		return []port.OutboxMessage{}, nil
 	}
 	ctx = normalizeOutboxContext(ctx)
-	tx, err := r.db.BeginTx(ctx, nil)
+	exec, tx, err := beginWrappedTx(ctx, r.db)
 	if err != nil {
 		return nil, fmt.Errorf("begin sqlite outbox fetch transaction: %w", err)
 	}
@@ -85,7 +85,7 @@ func (r *OutboxRepository) FetchReady(ctx context.Context, limit int, now time.T
 		_ = tx.Rollback()
 	}()
 
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := exec.QueryContext(ctx, `
 SELECT sequence, id, event_name, payload, occurred_at, attempt_count, next_attempt_at, status, last_error
 FROM outbox_messages
 WHERE status IN ('pending', 'processing') AND next_attempt_at <= ?
@@ -106,7 +106,7 @@ LIMIT ?
 		item.Status = port.OutboxStatusProcessing
 		item.AttemptCount++
 		item.NextAttemptAt = now.Add(r.processingTimeout)
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := exec.ExecContext(ctx, `
 UPDATE outbox_messages
 SET status = 'processing', attempt_count = ?, next_attempt_at = ?
 WHERE sequence = ?
@@ -206,7 +206,7 @@ func (r *OutboxRepository) MarkSucceeded(ctx context.Context, ids ...string) err
 		return nil
 	}
 	ctx = normalizeOutboxContext(ctx)
-	tx, err := r.db.BeginTx(ctx, nil)
+	exec, tx, err := beginWrappedTx(ctx, r.db)
 	if err != nil {
 		return fmt.Errorf("begin sqlite outbox success transaction: %w", err)
 	}
@@ -217,7 +217,7 @@ func (r *OutboxRepository) MarkSucceeded(ctx context.Context, ids ...string) err
 		if strings.TrimSpace(id) == "" {
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM outbox_messages WHERE id = ?`, id); err != nil {
+		if _, err := exec.ExecContext(ctx, `DELETE FROM outbox_messages WHERE id = ?`, id); err != nil {
 			return err
 		}
 	}

@@ -201,7 +201,10 @@ jobs:
 - `cache.bufferItems`: `> 0`, buffered write/get size
 - `cache.metrics`: `true | false`, cache metrics on/off
 - `storage.local.rootDir`: 필수(빈 값 불가)
-- `database.path`: SQLite auth DB 파일 경로, 필수
+- `database.driver`: `sqlite | mysql`
+- `database.path`: `database.driver=sqlite`일 때 SQLite auth DB 파일 경로, 필수
+- `database.dsn`: `database.driver=mysql`일 때 MySQL DSN, 필수
+  - `parseTime=true`, `charset=utf8mb4`, `loc=UTC`, `multiStatements=true`를 포함하는 구성이 권장된다.
 - `storage.provider`: `local | object`
 - `storage.object.endpoint`: provider가 `object`일 때 필수
 - `storage.object.bucket`: provider가 `object`일 때 필수
@@ -231,6 +234,10 @@ jobs:
 - JSON body 최대 크기(bytes): `cmd/main.go` -> `cfg.Delivery.HTTP.MaxJSONBodyBytes`
   - JSON API 요청 바디가 이 값을 초과하면 `400 Bad Request (request body too large)`를 반환합니다.
 - JWT 시크릿: `cmd/main.go` -> `cfg.Delivery.HTTP.Auth.Secret`
+- database backend:
+  - `cmd/main.go` -> `cfg.Database.Driver`
+  - `sqlite` 일 때 `cfg.Database.Path`
+  - `mysql` 일 때 `cfg.Database.DSN`
 - HTTP read/write 요청 rate limit: `cmd/main.go` -> `cfg.Delivery.HTTP.RateLimit.*`
   - `enabled=true`일 때 `/api/v1` 하위 `GET/HEAD/OPTIONS` 요청은 `readRequests`, `POST/PUT/DELETE/PATCH` 요청은 `writeRequests`를 `method+route+client_ip` 기준으로 적용합니다.
 - trusted proxies: `cmd/main.go` -> `cfg.Delivery.HTTP.TrustedProxies`

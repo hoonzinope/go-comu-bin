@@ -56,7 +56,7 @@ func ApplyMigrations(ctx context.Context, db *sql.DB, migrations fs.FS) error {
 func ensureMigrationsTable(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
-    name TEXT PRIMARY KEY,
+    name VARCHAR(255) PRIMARY KEY,
     applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 `, schemaMigrationsTable))
