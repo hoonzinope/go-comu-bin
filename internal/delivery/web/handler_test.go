@@ -300,7 +300,7 @@ func (p *testPostUseCase) GetPostsByTag(ctx context.Context, tagName string, sor
 func (p *testPostUseCase) GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 	_, _ = ctx, postUUID
 	return &model.PostDetail{
-		Post: &model.Post{UUID: "post-uuid", Title: "Feed title", Content: "Feed body with <script>alert(1)</script> and [docs](https://example.com)", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(10, 0), UpdatedAt: time.Unix(10, 0)},
+		Post: &model.Post{UUID: "post-uuid", Title: "Feed title", Content: "Lead summary sentence.\n\nFeed body with <script>alert(1)</script> and [docs](https://example.com)", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(10, 0), UpdatedAt: time.Unix(10, 0)},
 		Tags: []model.Tag{
 			{Name: "roadmap"},
 			{Name: "ui"},
@@ -705,12 +705,15 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Feed title")
+		assert.Contains(t, rr.Body.String(), "Lead summary sentence.")
 		assert.NotContains(t, rr.Body.String(), "At a glance")
 		assert.NotContains(t, rr.Body.String(), "Quick jumps")
 		assert.Contains(t, rr.Body.String(), "Comments")
 		assert.Contains(t, rr.Body.String(), "Login to react")
 		assert.Contains(t, rr.Body.String(), "Login to comment")
 		assert.Contains(t, rr.Body.String(), "Actions")
+		assert.Contains(t, rr.Body.String(), "report-toggle")
+		assert.Contains(t, rr.Body.String(), "Report")
 		assert.Contains(t, rr.Body.String(), "Attachments")
 		assert.Contains(t, rr.Body.String(), `<a href="https://example.com"`)
 		assert.Contains(t, rr.Body.String(), `>docs</a>`)
@@ -734,9 +737,12 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.NotContains(t, body, `href="/me"`)
 		assert.NotContains(t, body, `href="/notifications"`)
 		assert.NotContains(t, body, `href="/logout"`)
-		assert.NotContains(t, body, `sidebar-kicker">Explore`)
+		assert.NotContains(t, body, `sidebar-kicker">Account`)
+		assert.Contains(t, body, `sidebar-dir-title">Directory`)
 		assert.Equal(t, 1, strings.Count(body, `href="/signup"`))
 		assert.Contains(t, body, `href="/login"`)
+		assert.Contains(t, body, `bottom-nav-item`)
+		assert.Contains(t, body, `>Menu</span>`)
 	})
 
 	t.Run("draft edit", func(t *testing.T) {

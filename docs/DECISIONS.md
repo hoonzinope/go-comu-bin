@@ -195,6 +195,47 @@
 - `internal/delivery/web/static/site.css`
 - `internal/delivery/web/handler_test.go`
 
+## 2026-04-30 - web shell은 topbar / boards sidebar / mobile menu로 역할을 분리하고 post는 title-summary-body 위계를 유지한다
+
+상태
+
+- decided
+
+배경
+
+- 리뷰에서 topbar, sidebar, bottom nav가 모두 네비게이션처럼 보여 IA가 겹친다는 지적이 있었다.
+- post detail은 제목과 본문이 같은 레벨로 보이고, 액션과 신고가 과하게 노출되어 secondary action의 우선순위가 뒤집혀 보였다.
+- post 모델에는 별도 summary 필드가 없어서, 읽기 화면에서 제목과 본문 사이의 완충 레이어가 부족했다.
+
+관찰
+
+- topbar에는 auth/status 액션을 두고, sidebar에는 boards 탐색만 두는 편이 책임 분리가 명확하다.
+- 모바일에서는 bottom nav를 primary shortcuts로만 두고, 나머지 탐색과 계정은 menu overlay로 모으는 편이 단순하다.
+- post summary는 저장 스키마를 당장 바꾸지 않더라도, 현재 content에서 derived excerpt로 노출하면 title/body 사이의 hierarchy를 강화할 수 있다.
+
+결론
+
+- topbar는 auth/status, sidebar는 boards, bottom nav는 mobile shortcuts, menu overlay는 secondary navigation으로 역할을 고정한다.
+- sidebar 상단 라벨과 boards 섹션 라벨은 중복되지 않게 정리한다.
+- report는 primary actions와 분리해 접힌 secondary action으로 내린다.
+- post는 title, derived summary, body 순서로 위계를 맞추고, raw content 저장은 그대로 유지한다.
+
+후속 작업
+
+- `layout.tmpl`에서 sidebar/account/bottom-nav 책임 재배치
+- `page.tmpl`에서 post summary와 report 노출 방식 조정
+- `mapper`와 response model에 derived summary 반영
+- 테스트/visual snapshot 갱신
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/layout.tmpl`
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/application/mapper/dto_mapper.go`
+- `internal/application/model/types.go`
+- `internal/delivery/response/types.go`
+
 ## 2026-03-27 - runtime cache는 Ristretto-backed adapter로 전환하고 in-memory는 test double로 남긴다
 
 상태

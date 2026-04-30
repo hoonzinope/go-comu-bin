@@ -34,6 +34,7 @@ type BoardList struct {
 type Post struct {
 	UUID       string    `json:"uuid"`
 	Title      string    `json:"title"`
+	Summary    string    `json:"summary,omitempty"`
 	Content    string    `json:"content"`
 	AuthorUUID string    `json:"author_uuid"`
 	BoardUUID  string    `json:"board_uuid"`

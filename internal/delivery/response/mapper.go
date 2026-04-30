@@ -170,6 +170,7 @@ func postFromDTO(post model.Post) Post {
 	return Post{
 		UUID:       post.UUID,
 		Title:      post.Title,
+		Summary:    post.Summary,
 		Content:    post.Content,
 		AuthorUUID: post.AuthorUUID,
 		BoardUUID:  post.BoardUUID,

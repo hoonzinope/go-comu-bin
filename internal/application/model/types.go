@@ -17,6 +17,7 @@ type Board struct {
 type Post struct {
 	UUID       string
 	Title      string
+	Summary    string
 	Content    string
 	AuthorID   int64
 	AuthorUUID string

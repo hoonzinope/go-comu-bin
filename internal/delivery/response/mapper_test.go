@@ -17,6 +17,7 @@ func TestPostDetailFromDTO(t *testing.T) {
 			UUID:       "post-uuid",
 			Title:      "hello",
 			Content:    "world",
+			Summary:    "summary",
 			AuthorUUID: "user-uuid",
 			BoardUUID:  "board-uuid",
 			CreatedAt:  now,
@@ -64,6 +65,7 @@ func TestPostDetailFromDTO(t *testing.T) {
 	resp := PostDetailFromDTO(view)
 	require.NotNil(t, resp)
 	assert.Equal(t, "post-uuid", resp.Post.UUID)
+	assert.Equal(t, "summary", resp.Post.Summary)
 	assert.Equal(t, "user-uuid", resp.Post.AuthorUUID)
 	assert.Equal(t, "/api/v1/posts/post-uuid/attachments/attachment-uuid/file", resp.Attachments[0].FileURL)
 	assert.Equal(t, "/api/v1/posts/post-uuid/attachments/attachment-uuid/preview", resp.Attachments[0].PreviewURL)
@@ -99,7 +101,7 @@ func TestListMappers(t *testing.T) {
 		NextCursor: stringPtr("cursor-3"),
 	})
 	postList := PostListFromDTO(&model.PostList{
-		Posts:      []model.Post{{UUID: "post-uuid", Title: "t", Content: "c", AuthorUUID: "u", BoardUUID: "board-uuid", CreatedAt: now, UpdatedAt: now}},
+		Posts:      []model.Post{{UUID: "post-uuid", Title: "t", Content: "c", Summary: "summary", AuthorUUID: "u", BoardUUID: "board-uuid", CreatedAt: now, UpdatedAt: now}},
 		Limit:      10,
 		Cursor:     "cursor-4",
 		HasMore:    true,
@@ -122,6 +124,7 @@ func TestListMappers(t *testing.T) {
 	assert.Equal(t, "cursor-3", *boardList.NextCursor)
 	assert.Equal(t, "cursor-2", *postList.NextCursor)
 	assert.Equal(t, "free", boardList.Boards[0].Name)
+	assert.Equal(t, "summary", postList.Posts[0].Summary)
 }
 
 func stringPtr(v string) *string {

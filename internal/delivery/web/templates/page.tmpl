@@ -67,7 +67,7 @@
               <span>{{formatTime .UpdatedAt}}</span>
             </div>
             <h2><a href="/posts/{{.UUID}}">{{.Title}}</a></h2>
-            <p>{{truncate (normalizeContent .Content) 220}}</p>
+            <p>{{if .Summary}}{{.Summary}}{{else}}{{truncate (normalizeContent .Content) 220}}{{end}}</p>
           </div>
         </article>
         {{end}}
@@ -122,7 +122,7 @@
                 <span>{{formatTime .UpdatedAt}}</span>
               </div>
               <h2><a href="/posts/{{.UUID}}">{{.Title}}</a></h2>
-              <p>{{truncate .Content 220}}</p>
+              <p>{{if .Summary}}{{.Summary}}{{else}}{{truncate (normalizeContent .Content) 220}}{{end}}</p>
             </div>
           </article>
           {{end}}
@@ -153,6 +153,9 @@
             <span>{{len .PostDetail.Attachments}} attachments</span>
             <span>{{len .PostDetail.Reactions}} reactions</span>
           </div>
+          {{if .PostDetail.Post.Summary}}
+          <p class="post-summary">{{.PostDetail.Post.Summary}}</p>
+          {{end}}
         </header>
         {{if .PostDetail.Tags}}
         <div class="chip-row">
@@ -196,22 +199,25 @@
             </form>
           </div>
           {{end}}
-          <form action="/reports" method="post" class="comment-report-form" x-data="{open:false}">
-            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-            <input type="hidden" name="target_type" value="post">
-            <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
-            <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
-            <select name="reason_code">
-              <option value="spam">Spam</option>
-              <option value="abuse">Abuse</option>
-              <option value="sexual">Sexual</option>
-              <option value="violence">Violence</option>
-              <option value="illegal">Illegal</option>
-              <option value="other">Other</option>
-            </select>
-            <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
-            <button class="button" type="submit">Report</button>
-          </form>
+          <details class="secondary-action report-toggle">
+            <summary class="button button-ghost">Report</summary>
+            <form action="/reports" method="post" class="comment-report-form">
+              <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+              <input type="hidden" name="target_type" value="post">
+              <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
+              <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
+              <select name="reason_code">
+                <option value="spam">Spam</option>
+                <option value="abuse">Abuse</option>
+                <option value="sexual">Sexual</option>
+                <option value="violence">Violence</option>
+                <option value="illegal">Illegal</option>
+                <option value="other">Other</option>
+              </select>
+              <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
+              <button class="button" type="submit">Report</button>
+            </form>
+          </details>
         </section>
         {{if .PostDetail.Attachments}}
         <section id="attachments">
@@ -290,22 +296,25 @@
                     <button class="button button-ghost" type="submit">Remove</button>
                   </form>
                 </div>
-                <form action="/reports" method="post" class="comment-report-form">
-                  <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
-                  <input type="hidden" name="target_type" value="comment">
-                  <input type="hidden" name="target_uuid" value="{{.UUID}}">
-                  <input type="hidden" name="redirect" value="/posts/{{$.PostUUID}}">
-                  <select name="reason_code">
-                    <option value="spam">Spam</option>
-                    <option value="abuse">Abuse</option>
-                    <option value="sexual">Sexual</option>
-                    <option value="violence">Violence</option>
-                    <option value="illegal">Illegal</option>
-                    <option value="other">Other</option>
-                  </select>
-                  <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
-                  <button class="button" type="submit">Report comment</button>
-                </form>
+                <details class="secondary-action report-toggle">
+                  <summary class="button button-ghost">Report comment</summary>
+                  <form action="/reports" method="post" class="comment-report-form">
+                    <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+                    <input type="hidden" name="target_type" value="comment">
+                    <input type="hidden" name="target_uuid" value="{{.UUID}}">
+                    <input type="hidden" name="redirect" value="/posts/{{$.PostUUID}}">
+                    <select name="reason_code">
+                      <option value="spam">Spam</option>
+                      <option value="abuse">Abuse</option>
+                      <option value="sexual">Sexual</option>
+                      <option value="violence">Violence</option>
+                      <option value="illegal">Illegal</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
+                    <button class="button" type="submit">Report comment</button>
+                  </form>
+                </details>
                 {{else}}
                 <div class="meta-row">
                   <a class="button" href="/login?redirect={{queryEscape (printf "/posts/%s" $.PostUUID)}}">Login to react</a>

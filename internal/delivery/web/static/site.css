@@ -100,6 +100,7 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 }
 .button-ghost { background: transparent; }
 .topbar-actions { display: flex; gap: .5rem; align-items: center; }
+.topbar-action-form { display: contents; }
 
 .sidebar {
   position: fixed;
@@ -250,6 +251,13 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   font-weight: 800;
   letter-spacing: -0.07em;
   line-height: .98;
+}
+.post-summary {
+  margin: 0;
+  max-width: 54rem;
+  font-size: 1.03rem;
+  line-height: 1.7;
+  color: rgba(43,52,56,.78);
 }
 .post-byline {
   display: flex;
@@ -423,10 +431,21 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 .pagination-step {
   min-width: 4.75rem;
 }
+.secondary-action {
+  display: grid;
+  gap: .75rem;
+}
+.secondary-action > summary {
+  width: fit-content;
+  list-style: none;
+}
+.secondary-action > summary::-webkit-details-marker {
+  display: none;
+}
 .comment-report-form {
   display: grid;
   gap: 0.75rem;
-  margin-top: 0.75rem;
+  max-width: 32rem;
 }
 .comment-cta {
   gap: .6rem;
@@ -546,6 +565,12 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   padding: .55rem .5rem;
   text-align: center;
   border-right: var(--border);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
   font-family: "Space Grotesk", sans-serif;
   font-size: .62rem;
   letter-spacing: .04em;
@@ -557,6 +582,13 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   background: var(--surface-2);
   color: rgba(43,52,56,.58);
   cursor: not-allowed;
+}
+.bottom-nav-item:hover:not(.is-disabled) {
+  background: var(--ink);
+  color: #fff;
+}
+.bottom-nav-item:active:not(.is-disabled) {
+  transform: translateY(1px);
 }
 .bottom-nav .material-symbols-outlined { font-size: 1.25rem; }
 
@@ -781,6 +813,7 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
   .stats-grid { grid-template-columns: 1fr; }
   .attachment-row { align-items: start; flex-direction: column; }
   .comment-form { margin-left: 0; max-width: none; }
+  .comment-report-form { max-width: none; }
   .auth-grid { grid-template-columns: 1fr; }
   .item-body { padding: .75rem .9rem; }
   /* bottom nav: larger touch target */
@@ -815,6 +848,7 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
     margin-bottom: .3rem;
   }
   .page-main { max-width: 100%; }
+  .post-summary { font-size: .97rem; }
 }
 
 /* ---- v2 responsive redesign overrides ---- */

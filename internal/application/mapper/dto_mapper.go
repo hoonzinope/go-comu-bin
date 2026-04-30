@@ -1,6 +1,8 @@
 package mapper
 
 import (
+	"strings"
+
 	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 	"github.com/hoonzinope/go-comu-bin/internal/domain/entity"
 )
@@ -43,11 +45,31 @@ func PostFromEntity(post *entity.Post) model.Post {
 	return model.Post{
 		UUID:      post.UUID,
 		Title:     post.Title,
+		Summary:   derivePostSummary(post.Content),
 		Content:   post.Content,
 		AuthorID:  post.AuthorID,
 		CreatedAt: post.CreatedAt,
 		UpdatedAt: post.UpdatedAt,
 	}
+}
+
+func derivePostSummary(content string) string {
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	normalized = strings.TrimSpace(normalized)
+	if normalized == "" {
+		return ""
+	}
+	paragraphs := strings.Split(normalized, "\n\n")
+	summary := strings.TrimSpace(paragraphs[0])
+	summary = strings.Join(strings.Fields(summary), " ")
+	if summary == "" {
+		return ""
+	}
+	runes := []rune(summary)
+	if len(runes) <= 180 {
+		return summary
+	}
+	return string(runes[:177]) + "..."
 }
 
 func PostsFromEntities(items []*entity.Post) []model.Post {

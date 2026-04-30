@@ -31,17 +31,23 @@
       {{if canInteract .Shell}}
       <a class="chip" href="/notifications">Notifications {{if gt .Shell.UnreadCount 0}}({{.Shell.UnreadCount}}){{end}}</a>
       <a class="chip" href="/me">Me</a>
+      {{if .Shell.IsAdmin}}
+      <a class="chip" href="/admin">Admin</a>
+      {{end}}
+      <form class="topbar-action-form" action="/logout" method="post">
+        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+        <button class="chip" type="submit">Logout</button>
+      </form>
       {{else}}
       <a class="chip" href="/login">Login</a>
       <a class="chip chip-primary" href="/signup">Sign up</a>
       {{end}}
-      <button class="menu-toggle" type="button" @click="menuOpen = !menuOpen">Menu</button>
     </div>
   </header>
   <aside class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-dir-title">Boards</div>
-      <div class="sidebar-dir-version">urrrm / v1</div>
+      <div class="sidebar-dir-title">Directory</div>
+      <div class="sidebar-dir-version">Boards / v1</div>
     </div>
     {{if canInteract .Shell}}
       {{if .Shell.ComposeURL}}
@@ -51,7 +57,7 @@
       {{end}}
     {{end}}
     <div class="sidebar-section">
-      <div class="sidebar-kicker">Boards</div>
+      <div class="sidebar-kicker">Browse</div>
       <nav class="nav-list">
         <a class="nav-link {{if eq .Shell.ActiveNav "feed"}}is-active{{end}}" href="/">All feed</a>
         {{range .Shell.Boards}}
@@ -59,29 +65,6 @@
         {{end}}
       </nav>
     </div>
-    {{if canInteract .Shell}}
-    <div class="sidebar-section">
-      <div class="sidebar-kicker">Account</div>
-      <nav class="nav-list">
-        <a class="nav-link {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me">Profile</a>
-        <a class="nav-link" href="/notifications">Notifications</a>
-        {{if .Shell.IsAdmin}}
-        <a class="nav-link {{if eq .Shell.ActiveNav "admin"}}is-active{{end}}" href="/admin">Admin</a>
-        <a class="nav-link" href="/admin/boards">&#x2514; Boards</a>
-        <a class="nav-link" href="/admin/reports">&#x2514; Reports</a>
-        <a class="nav-link" href="/admin/outbox">&#x2514; Outbox</a>
-        {{end}}
-      </nav>
-    </div>
-    {{end}}
-    {{if canInteract .Shell}}
-    <div class="sidebar-section sidebar-footer">
-      <form action="/logout" method="post">
-        <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-        <button class="button button-ghost" type="submit">Logout</button>
-      </form>
-    </div>
-    {{end}}
   </aside>
   <main class="main-content">
     {{template "page" .}}
@@ -94,11 +77,7 @@
     {{else}}
     <span class="bottom-nav-item is-disabled" aria-disabled="true"><span class="material-symbols-outlined">add_box</span><span>New</span></span>
     {{end}}
-    {{if canInteract .Shell}}
-    <a class="bottom-nav-item {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/me"><span class="material-symbols-outlined">person</span><span>Me</span></a>
-    {{else}}
-    <a class="bottom-nav-item {{if eq .Shell.ActiveNav "profile"}}is-active{{end}}" href="/login"><span class="material-symbols-outlined">person</span><span>Login</span></a>
-    {{end}}
+    <button class="bottom-nav-item" type="button" @click="menuOpen = !menuOpen"><span class="material-symbols-outlined">menu</span><span>Menu</span></button>
   </nav>
   <div class="overlay" x-cloak x-show="menuOpen" x-transition.opacity @click="menuOpen = false">
     <div class="overlay-panel" @click.stop>
