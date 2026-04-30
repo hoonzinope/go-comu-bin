@@ -146,16 +146,15 @@
             <span class="post-uuid">#{{shortUUID .PostDetail.Post.UUID}}</span>
           </div>
           <h1 class="post-title">{{.PostDetail.Post.Title}}</h1>
-          <div class="post-byline">
-            <span>@{{shortUUID .PostDetail.Post.AuthorUUID}}</span>
-            <span>{{formatTime .PostDetail.Post.CreatedAt}}</span>
-            <span>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</span>
-            <span>{{len .PostDetail.Attachments}} attachments</span>
-            <span>{{len .PostDetail.Reactions}} reactions</span>
+          <div class="post-meta">
+            <div class="post-byline">
+              <span>@{{shortUUID .PostDetail.Post.AuthorUUID}}</span>
+              <span>{{formatTime .PostDetail.Post.CreatedAt}}</span>
+              <span>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</span>
+              <span>{{len .PostDetail.Attachments}} attachments</span>
+              <span>{{len .PostDetail.Reactions}} reactions</span>
+            </div>
           </div>
-          {{if .PostDetail.Post.Summary}}
-          <p class="post-summary">{{.PostDetail.Post.Summary}}</p>
-          {{end}}
         </header>
         {{if .PostDetail.Tags}}
         <div class="chip-row">

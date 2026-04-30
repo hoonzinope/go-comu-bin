@@ -300,7 +300,7 @@ func (p *testPostUseCase) GetPostsByTag(ctx context.Context, tagName string, sor
 func (p *testPostUseCase) GetPostDetail(ctx context.Context, postUUID string) (*model.PostDetail, error) {
 	_, _ = ctx, postUUID
 	return &model.PostDetail{
-		Post: &model.Post{UUID: "post-uuid", Title: "Feed title", Content: "Lead summary sentence.\n\nFeed body with <script>alert(1)</script> and [docs](https://example.com)", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(10, 0), UpdatedAt: time.Unix(10, 0)},
+		Post: &model.Post{UUID: "post-uuid", Title: "Feed title", Summary: "Lead summary sentence.", Content: "Lead summary sentence.\n\nFeed body with <script>alert(1)</script> and [docs](https://example.com)", BoardUUID: "general-uuid", AuthorUUID: "user-uuid", CreatedAt: time.Unix(10, 0), UpdatedAt: time.Unix(10, 0)},
 		Tags: []model.Tag{
 			{Name: "roadmap"},
 			{Name: "ui"},
@@ -712,6 +712,8 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "Login to react")
 		assert.Contains(t, rr.Body.String(), "Login to comment")
 		assert.Contains(t, rr.Body.String(), "Actions")
+		assert.Contains(t, rr.Body.String(), "post-meta")
+		assert.NotContains(t, rr.Body.String(), "post-summary")
 		assert.Contains(t, rr.Body.String(), "report-toggle")
 		assert.Contains(t, rr.Body.String(), "Report")
 		assert.Contains(t, rr.Body.String(), "Attachments")

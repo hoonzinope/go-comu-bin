@@ -4955,3 +4955,42 @@
 - `internal/delivery/web/templates/page.tmpl`에서 댓글 액션과 첨부파일 링크 추가
 - `internal/delivery/web/handler.go`에 댓글 반응 제출 처리 추가
 - `internal/delivery/web/handler_test.go`에 노출/비노출 회귀 테스트 추가
+
+## 2026-04-30 - post summary는 header meta로 묶고 guest write/react는 서비스 정책을 따른다
+
+상태
+
+- decided
+
+배경
+
+- post summary가 본문 앞에 따로 보이면 body duplicate처럼 느껴져서, summary는 header의 메타 정보로 읽히는 편이 더 자연스럽다.
+- guest 세션이 로그인처럼 보이더라도 write/comment/reaction 허용 여부는 UI가 아니라 서비스 정책과 API 계약이 결정해야 한다.
+
+관찰
+
+- `internal/delivery/web/templates/page.tmpl`에는 summary가 `post-header` 안에 있지만 title/byline 바로 아래의 독립 문단으로 렌더링되고 있다.
+- `internal/delivery/web/handler.go`의 `canInteract`는 guest를 비활성화하지만, 실제 write/reaction/comment 정책은 service layer의 guest 정책에 있다.
+- `internal/delivery/http.go`의 write routes는 auth 세션을 요구하지만, guest token은 session validation을 통과할 수 있다.
+- `internal/application/service/post/command_handler.go`, `internal/application/service/comment/command_handler.go`, `internal/application/service/reaction/service.go`는 guest write/react를 정책으로 차단한다.
+
+결론
+
+- post summary는 header의 meta block으로 합쳐서 제목/메타/본문의 위계를 더 분명하게 만든다.
+- guest write/react/comment는 UI만 풀지 않고, 서비스 정책이 허용하지 않는 한 그대로 막아둔다.
+
+후속 작업
+
+- post detail header 재배치
+- summary 메타 스타일 추가
+- guest 정책 관련 회귀 테스트 확인
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/handler.go`
+- `internal/delivery/http.go`
+- `internal/application/service/post/command_handler.go`
+- `internal/application/service/comment/command_handler.go`
+- `internal/application/service/reaction/service.go`

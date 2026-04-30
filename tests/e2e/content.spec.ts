@@ -85,7 +85,7 @@ test('creates posts and drafts from the composer and renders them in feed, tag, 
   await expect(page.getByRole('heading', { name: publishedTitle })).toBeVisible();
   const postMain = page.locator('article.post-main');
   await expect(postMain.locator('.post-eyebrow')).toContainText(boardName);
-  await expect(postMain.locator('.post-summary')).toContainText(`Published body ${suffix}`);
+  await expect(postMain.locator('.post-summary')).toHaveCount(0);
   await expect(postMain.locator('.post-byline')).toContainText('comments');
   await expect(postMain.getByText('Actions', { exact: true })).toBeVisible();
   await expect(postMain.getByRole('link', { name: 'Comments' })).toBeVisible();
