@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -140,6 +141,11 @@ func main() {
 	}
 	if err := ensureBootstrapGeneralBoard(boardRepository); err != nil {
 		slog.Error("failed to ensure bootstrap general board", "error", err)
+		exitCode = 1
+		return
+	}
+	if err := seedPostRankingSnapshots(appCtx, authDB, postRankingRepository); err != nil {
+		slog.Error("failed to seed post ranking snapshots", "error", err)
 		exitCode = 1
 		return
 	}
@@ -366,6 +372,42 @@ func main() {
 		exitCode = 1
 		return
 	}
+}
+
+func seedPostRankingSnapshots(ctx context.Context, db *sql.DB, rankingRepository *inmemory.PostRankingRepository) error {
+	if db == nil || rankingRepository == nil {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx, `
+SELECT id, board_id, published_at, status
+FROM posts
+WHERE status = 'published'
+ORDER BY id ASC
+`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			postID      int64
+			boardID     int64
+			publishedAt sql.NullInt64
+			status      string
+		)
+		if err := rows.Scan(&postID, &boardID, &publishedAt, &status); err != nil {
+			return err
+		}
+		var publishedAtPtr *time.Time
+		if publishedAt.Valid {
+			t := time.Unix(0, publishedAt.Int64)
+			publishedAtPtr = &t
+		}
+		if err := rankingRepository.UpsertPostSnapshot(ctx, postID, boardID, publishedAtPtr, entity.PostStatus(status)); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 type httpShutdowner interface {
