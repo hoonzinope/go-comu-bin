@@ -114,6 +114,7 @@ type PageData struct {
 	WindowValue       string
 	ListBaseURL       string
 	BoardUUID         string
+	BoardName         string
 	TagName           string
 	PostUUID          string
 	EditMode          string

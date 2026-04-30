@@ -61,7 +61,7 @@
     {{end}}
   {{else if eq .Kind "board"}}
     <div class="page-heading">
-      <h1>{{boardName .Shell.BoardMap .BoardUUID}}</h1>
+      <h1>{{if .BoardName}}{{.BoardName}}{{else}}{{boardName .Shell.BoardMap .BoardUUID}}{{end}}</h1>
       <p>Board feed.</p>
     </div>
     {{template "page" (dict "Shell" .Shell "Kind" "feed" "ListBaseURL" (printf "/boards/%s" .BoardUUID) "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
@@ -346,7 +346,7 @@
   {{else if eq .Kind "compose"}}
     <div class="page-heading">
       <h1>{{if eq .EditMode "edit"}}Edit draft{{else if eq .EditMode "draft"}}New draft{{else}}New post{{end}}</h1>
-      <p>{{.BoardUUID}}</p>
+      <p>{{if .BoardName}}{{.BoardName}}{{else}}{{.BoardUUID}}{{end}}</p>
     </div>
     <div class="compose-layout page-main">
       <aside class="panel compose-sidebar">

@@ -325,7 +325,7 @@ func (h *Handler) handleBoardFeed(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", ListBaseURL: "/boards/" + boardUUID, BoardUUID: boardUUID, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", ListBaseURL: "/boards/" + boardUUID, BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleTagFeed(c *gin.Context) {
@@ -399,7 +399,7 @@ func (h *Handler) handleNewPost(c *gin.Context) {
 		return
 	}
 	boardUUID := strings.TrimSpace(c.Param("boardUUID"))
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "compose", BoardUUID: boardUUID, EditMode: "publish"})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "compose", BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), EditMode: "publish"})
 }
 
 func (h *Handler) handleNewDraft(c *gin.Context) {
@@ -408,7 +408,7 @@ func (h *Handler) handleNewDraft(c *gin.Context) {
 		return
 	}
 	boardUUID := strings.TrimSpace(c.Param("boardUUID"))
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "compose", BoardUUID: boardUUID, EditMode: "draft"})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "compose", BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), EditMode: "draft"})
 }
 
 func (h *Handler) handleEditDraft(c *gin.Context) {
@@ -447,7 +447,7 @@ func (h *Handler) handleEditDraft(c *gin.Context) {
 			tagsInput = strings.Join(items, ", ")
 		}
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "compose", PostUUID: postUUID, BoardUUID: boardUUID, PostDetail: draft, EditMode: "edit", TitleInput: titleInput, ContentInput: contentInput, TagsInput: tagsInput})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "compose", PostUUID: postUUID, BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), PostDetail: draft, EditMode: "edit", TitleInput: titleInput, ContentInput: contentInput, TagsInput: tagsInput})
 }
 
 func (h *Handler) handleLoginPage(c *gin.Context) {
@@ -1489,6 +1489,30 @@ func (h *Handler) loadBoards(ctx context.Context) []model.Board {
 		return nil
 	}
 	return list.Boards
+}
+
+func (h *Handler) lookupBoardName(ctx context.Context, shell ShellData, boardUUID string) string {
+	if boardUUID == "" {
+		return ""
+	}
+	if shell.BoardMap != nil {
+		if board, ok := shell.BoardMap[boardUUID]; ok && strings.TrimSpace(board.Name) != "" {
+			return board.Name
+		}
+	}
+	if h.deps.BoardUseCase == nil {
+		return boardUUID
+	}
+	list, err := h.deps.BoardUseCase.GetAllBoards(ctx, 1000, "")
+	if err != nil || list == nil {
+		return boardUUID
+	}
+	for _, board := range list.Boards {
+		if board.UUID == boardUUID && strings.TrimSpace(board.Name) != "" {
+			return board.Name
+		}
+	}
+	return boardUUID
 }
 
 func (h *Handler) loadUnreadCount(ctx context.Context, user *model.User) int {

@@ -374,6 +374,7 @@ export async function confirmPasswordResetThroughUi(page: Page, token: string, n
 }
 
 export async function loginThroughUi(page: Page, credentials: Credentials, redirect = '/me'): Promise<void> {
+  await page.context().clearCookies();
   await page.goto(`/login?redirect=${encodeURIComponent(redirect)}`);
   const form = page.locator('form[action^="/login"]').first();
   await form.locator('input[name="username"]').fill(credentials.username);
