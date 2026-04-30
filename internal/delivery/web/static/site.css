@@ -218,6 +218,18 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   display: grid;
   gap: 1rem;
 }
+.post-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .9rem;
+}
+.post-actions {
+  display: grid;
+  gap: .9rem;
+  padding-top: .25rem;
+}
+.post-actions .button-row {
+  justify-content: flex-start;
+}
 .post-main .markdown {
   margin-top: 0;
 }
@@ -1086,6 +1098,10 @@ body {
   gap: 1.1rem;
 }
 
+.post-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .markdown {
   border-radius: 24px;
   border-color: rgba(29, 39, 48, 0.10);
@@ -1199,6 +1215,9 @@ body {
   .grid-2,
   .auth-grid,
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .post-summary-grid {
     grid-template-columns: 1fr;
   }
 

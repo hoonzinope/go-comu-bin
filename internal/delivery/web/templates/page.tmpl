@@ -144,11 +144,27 @@
           <h1>{{.PostDetail.Post.Title}}</h1>
           <p>{{shortUUID .PostDetail.Post.UUID}} · {{formatTime .PostDetail.Post.UpdatedAt}}</p>
         </div>
-        <div class="meta-row">
-          <span class="chip">{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</span>
-          <span>@{{shortUUID .PostDetail.Post.AuthorUUID}}</span>
-          <span>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</span>
-          <span>{{len .PostDetail.Attachments}} attachments</span>
+        <div class="meta-list post-summary-grid">
+          <div class="meta-item">
+            <span>Board</span>
+            <strong>{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</strong>
+            <small>{{.PostDetail.Post.BoardUUID}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Author</span>
+            <strong>@{{shortUUID .PostDetail.Post.AuthorUUID}}</strong>
+            <small>{{.PostDetail.Post.AuthorUUID}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Timing</span>
+            <strong>{{formatTime .PostDetail.Post.CreatedAt}}</strong>
+            <small>Updated {{formatTime .PostDetail.Post.UpdatedAt}}</small>
+          </div>
+          <div class="meta-item">
+            <span>Activity</span>
+            <strong>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</strong>
+            <small>{{len .PostDetail.Attachments}} attachments · {{len .PostDetail.Reactions}} reactions</small>
+          </div>
         </div>
         {{if .PostDetail.Tags}}
         <div class="chip-row">
@@ -156,6 +172,55 @@
         </div>
         {{end}}
         <div class="markdown">{{renderMarkdown .PostDetail.Post.Content}}</div>
+        <section class="post-actions">
+          <div class="section-title">Actions</div>
+          <div class="button-row">
+            {{if .Shell.IsAuthenticated}}
+            <form action="/posts/{{.PostUUID}}/reactions" method="post">
+              <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+              <input type="hidden" name="reaction_type" value="like">
+              <button class="button {{if reactionActive .PostDetail.MyReactionType "like"}}button-primary is-active{{end}}" type="submit">▲ Upvote</button>
+            </form>
+            <form action="/posts/{{.PostUUID}}/reactions" method="post">
+              <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+              <input type="hidden" name="reaction_type" value="dislike">
+              <button class="button {{if reactionActive .PostDetail.MyReactionType "dislike"}}button-primary is-active{{end}}" type="submit">▼ Downvote</button>
+            </form>
+            <form action="/posts/{{.PostUUID}}/reactions" method="post">
+              <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+              <input type="hidden" name="_method" value="delete">
+              <button class="button button-ghost" type="submit">Remove reaction</button>
+            </form>
+            {{else}}
+            <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to react</a>
+            {{end}}
+          </div>
+          {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
+          <div class="button-row">
+            <a class="button" href="/posts/{{.PostUUID}}/edit">Edit</a>
+            <form action="/posts/{{.PostUUID}}/delete" method="post" style="display:contents">
+              <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+              <button class="button button-danger" type="submit" onclick="return confirm('Delete this post?')">Delete</button>
+            </form>
+          </div>
+          {{end}}
+          <form action="/reports" method="post" class="comment-report-form" x-data="{open:false}">
+            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+            <input type="hidden" name="target_type" value="post">
+            <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
+            <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
+            <select name="reason_code">
+              <option value="spam">Spam</option>
+              <option value="abuse">Abuse</option>
+              <option value="sexual">Sexual</option>
+              <option value="violence">Violence</option>
+              <option value="illegal">Illegal</option>
+              <option value="other">Other</option>
+            </select>
+            <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
+            <button class="button" type="submit">Report</button>
+          </form>
+        </section>
         {{if .PostDetail.Attachments}}
         <section id="attachments">
           <div class="section-title">Attachments</div>
@@ -263,89 +328,6 @@
           {{end}}
         </section>
       </article>
-      <aside class="panel post-sidebar">
-        <div class="section-title">At a glance</div>
-        <div class="meta-list">
-          <div class="meta-item">
-            <span>Board</span>
-            <strong>{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</strong>
-            <small>{{.PostDetail.Post.BoardUUID}}</small>
-          </div>
-          <div class="meta-item">
-            <span>Author</span>
-            <strong>@{{shortUUID .PostDetail.Post.AuthorUUID}}</strong>
-            <small>{{.PostDetail.Post.AuthorUUID}}</small>
-          </div>
-          <div class="meta-item">
-            <span>Created</span>
-            <strong>{{formatTime .PostDetail.Post.CreatedAt}}</strong>
-            <small>{{formatTime .PostDetail.Post.UpdatedAt}}</small>
-          </div>
-          <div class="meta-item">
-            <span>Comments</span>
-            <strong>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}}</strong>
-            <small>{{if .Comments}}{{if .Comments.HasMore}}More available{{else}}Loaded in full{{end}}{{else}}No comments loaded{{end}}</small>
-          </div>
-          <div class="meta-item">
-            <span>Reactions</span>
-            <strong>{{len .PostDetail.Reactions}}</strong>
-            <small>Post-level feedback</small>
-          </div>
-        </div>
-        <div class="section-title">Quick jumps</div>
-        <div class="button-row">
-          <a class="button" href="#comments">Comments</a>
-          {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Attachments</a>{{end}}
-          <a class="button" href="/">Back to feed</a>
-        </div>
-        {{if .Shell.IsAuthenticated}}
-        <div class="section-title">Reactions</div>
-        <div class="button-row">
-          <form action="/posts/{{.PostUUID}}/reactions" method="post">
-            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-            <input type="hidden" name="reaction_type" value="like">
-            <button class="button {{if reactionActive .PostDetail.MyReactionType "like"}}button-primary is-active{{end}}" type="submit">▲ Upvote</button>
-          </form>
-          <form action="/posts/{{.PostUUID}}/reactions" method="post">
-            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-            <input type="hidden" name="reaction_type" value="dislike">
-            <button class="button {{if reactionActive .PostDetail.MyReactionType "dislike"}}button-primary is-active{{end}}" type="submit">▼ Downvote</button>
-          </form>
-          <form action="/posts/{{.PostUUID}}/reactions" method="post">
-            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-            <input type="hidden" name="_method" value="delete">
-            <button class="button button-ghost" type="submit">Remove</button>
-          </form>
-        </div>
-        {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
-        <div class="section-title">Manage</div>
-        <div class="button-row">
-          <a class="button" href="/posts/{{.PostUUID}}/edit">Edit</a>
-          <form action="/posts/{{.PostUUID}}/delete" method="post" style="display:contents">
-            <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-            <button class="button button-danger" type="submit" onclick="return confirm('Delete this post?')">Delete</button>
-          </form>
-        </div>
-        {{end}}
-        <div class="section-title">Report</div>
-        <form action="/reports" method="post" x-data="{open:false}">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="target_type" value="post">
-          <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
-          <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
-          <select name="reason_code">
-            <option value="spam">Spam</option>
-            <option value="abuse">Abuse</option>
-            <option value="sexual">Sexual</option>
-            <option value="violence">Violence</option>
-            <option value="illegal">Illegal</option>
-            <option value="other">Other</option>
-          </select>
-          <textarea name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
-          <button class="button" type="submit">Report</button>
-        </form>
-        {{end}}
-      </aside>
     </div>
     {{if .Shell.IsAuthenticated}}
     <form class="panel form comment-form" action="/posts/{{.PostUUID}}/comments" method="post">

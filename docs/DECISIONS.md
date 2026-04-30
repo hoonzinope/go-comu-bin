@@ -121,6 +121,43 @@
 - `internal/application/model/notification.go`
 - `docs/API.md`
 
+## 2026-04-30 - post detail의 At a glance sidebar를 제거하고 메타/액션을 본문에 흡수한다
+
+상태
+
+- decided
+
+배경
+
+- post detail의 오른쪽 `At a glance` 패널은 정보를 많이 담고 있지만, 본문 읽기 흐름을 끊고 요약 패널처럼 분리돼 보인다.
+- 상세 페이지에서는 board, author, 시간, 댓글 수, 첨부 수, 반응 수, 행동 버튼을 본문 주변에 자연스럽게 배치하는 편이 더 읽기 쉽다.
+- 모바일/태블릿에서 sidebar는 유지비만 늘리고, 핵심 정보는 결국 article 내부로 들어가야 한다.
+
+관찰
+
+- 현재 `internal/delivery/web/templates/page.tmpl`의 post detail은 `post-main`과 `post-sidebar`의 2열 구조다.
+- `At a glance` 패널에는 board, author, created, comments, reactions가 모여 있고, `Quick jumps`와 `Reactions / Manage / Report`도 같은 sidebar에 모여 있다.
+- `internal/delivery/web/static/site.css`는 `post-sidebar`를 sticky sidebar로 가정하고 있다.
+
+결론
+
+- `At a glance` sidebar는 제거한다.
+- board/author/time/comments/attachments/reactions는 제목 아래 summary cards나 meta row로 분산 배치한다.
+- reaction, manage, report는 본문 하단의 actions block으로 이동한다.
+- `Quick jumps`는 제거하고 섹션 제목과 앵커 링크만 남겨도 충분하다.
+
+후속 작업
+
+- post detail template 재배치
+- post detail CSS 정리
+- handler test와 visual snapshot 갱신
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/handler_test.go`
+
 ## 2026-03-27 - runtime cache는 Ristretto-backed adapter로 전환하고 in-memory는 test double로 남긴다
 
 상태

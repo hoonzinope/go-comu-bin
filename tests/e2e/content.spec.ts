@@ -83,9 +83,16 @@ test('creates posts and drafts from the composer and renders them in feed, tag, 
 
   await page.goto(`/posts/${publishedUUID}`);
   await expect(page.getByRole('heading', { name: publishedTitle })).toBeVisible();
-  await expect(page.getByText('At a glance')).toBeVisible();
-  await expect(page.locator('#comments .section-title')).toHaveText('Comments');
-  await expect(page.getByRole('link', { name: 'Back to feed' })).toBeVisible();
+  const postMain = page.locator('article.post-main');
+  await expect(postMain.getByText('Board', { exact: true })).toBeVisible();
+  await expect(postMain.getByText('Author', { exact: true })).toBeVisible();
+  await expect(postMain.getByText('Timing', { exact: true })).toBeVisible();
+  await expect(postMain.getByText('Activity', { exact: true })).toBeVisible();
+  await expect(postMain.getByText('Actions', { exact: true })).toBeVisible();
+  await expect(postMain.locator('#comments .section-title')).toHaveText('Comments');
+  await expect(postMain.getByRole('button', { name: '▲ Upvote' })).toBeVisible();
+  await expect(postMain.getByRole('link', { name: 'Edit' })).toBeVisible();
+  await expect(postMain.getByRole('button', { name: 'Delete' })).toBeVisible();
 });
 
 test('adds a comment and surfaces a notification', async ({ page, request }) => {
