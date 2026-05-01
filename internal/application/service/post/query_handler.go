@@ -121,6 +121,11 @@ func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, s
 		if !ok {
 			return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post list cache payload")
 		}
+		totalCount, err := h.postRepository.CountPublishedPostsByBoardID(ctx, board.ID)
+		if err != nil {
+			return nil, customerror.WrapRepository("count posts by board for post list", err)
+		}
+		list.TotalCount = totalCount
 		return list, nil
 	}
 	feedCursor, err := decodeFeedCursor(string(sortBy), string(window), cursor)
@@ -140,6 +145,11 @@ func (h *postQueryHandler) GetPostsList(ctx context.Context, boardUUID string, s
 	if !ok {
 		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post list cache payload")
 	}
+	totalCount, err := h.postRepository.CountPublishedPostsByBoardID(ctx, board.ID)
+	if err != nil {
+		return nil, customerror.WrapRepository("count posts by board for post list", err)
+	}
+	list.TotalCount = totalCount
 	return list, nil
 }
 
@@ -171,7 +181,11 @@ func (h *postQueryHandler) GetMyDraftPosts(ctx context.Context, authorID int64, 
 	if err != nil {
 		return nil, err
 	}
-	return &model.PostList{Posts: postModels, Limit: limit, Cursor: page.Cursor, HasMore: page.HasMore, NextCursor: page.NextCursor}, nil
+	totalCount, err := h.postRepository.CountDraftPostsByAuthorID(ctx, authorID)
+	if err != nil {
+		return nil, customerror.WrapRepository("count draft posts by author for post list", err)
+	}
+	return &model.PostList{Posts: postModels, Limit: limit, Cursor: page.Cursor, TotalCount: totalCount, HasMore: page.HasMore, NextCursor: page.NextCursor}, nil
 }
 
 func (h *postQueryHandler) GetPostsByTag(ctx context.Context, tagName string, sortValue string, windowValue string, limit int, cursor string) (*model.PostList, error) {
@@ -209,6 +223,15 @@ func (h *postQueryHandler) GetPostsByTag(ctx context.Context, tagName string, so
 		if !ok {
 			return nil, customerror.Mark(customerror.ErrCacheFailure, "decode tag post list cache payload")
 		}
+		postIDs, err := h.loadActiveTagPostIDSet(ctx, tag.ID)
+		if err != nil {
+			return nil, err
+		}
+		totalCount, err := h.countVisiblePostsFromIDs(ctx, postIDs)
+		if err != nil {
+			return nil, err
+		}
+		list.TotalCount = totalCount
 		return list, nil
 	}
 	feedCursor, err := decodeFeedCursor(string(sortBy), string(window), cursor)
@@ -221,13 +244,22 @@ func (h *postQueryHandler) GetPostsByTag(ctx context.Context, tagName string, so
 		if err != nil {
 			return nil, err
 		}
-		return h.loadRankedPosts(ctx, sortBy, window, limit, feedCursor, cursor, func(post *entity.Post) bool {
+		list, err := h.loadRankedPosts(ctx, sortBy, window, limit, feedCursor, cursor, func(post *entity.Post) bool {
 			if post == nil {
 				return false
 			}
 			_, ok := postIDs[post.ID]
 			return ok
 		})
+		if err != nil {
+			return nil, err
+		}
+		totalCount, err := h.countVisiblePostsFromIDs(ctx, postIDs)
+		if err != nil {
+			return nil, err
+		}
+		list.TotalCount = totalCount
+		return list, nil
 	})
 	if err != nil {
 		return nil, svccommon.NormalizeCacheLoadError("load tag post list cache", err)
@@ -269,6 +301,27 @@ func (h *postQueryHandler) SearchPosts(ctx context.Context, query string, sortVa
 	if !ok {
 		return nil, customerror.Mark(customerror.ErrCacheFailure, "decode post search cache payload")
 	}
+	if searchSort == searchSortRelevance {
+		matchingPostIDs, err := h.loadSearchMatchSet(ctx, normalizedQuery)
+		if err != nil {
+			return nil, err
+		}
+		totalCount, err := h.countVisiblePostsFromIDs(ctx, matchingPostIDs)
+		if err != nil {
+			return nil, err
+		}
+		list.TotalCount = totalCount
+	} else {
+		matchingPostIDs, err := h.loadSearchMatchSet(ctx, normalizedQuery)
+		if err != nil {
+			return nil, err
+		}
+		totalCount, err := h.countVisiblePostsFromIDs(ctx, matchingPostIDs)
+		if err != nil {
+			return nil, err
+		}
+		list.TotalCount = totalCount
+	}
 	return list, nil
 }
 
@@ -286,7 +339,16 @@ func (h *postQueryHandler) GetFeed(ctx context.Context, sortValue string, window
 	}
 	cacheKey := key.PostFeedList(string(sortBy), string(window), limit, cursor)
 	value, err := h.cache.GetOrSetWithTTL(ctx, cacheKey, h.cachePolicy.ListTTLSeconds, func(ctx context.Context) (interface{}, error) {
-		return h.loadFeed(ctx, sortBy, window, limit, feedCursor, cursor)
+		list, err := h.loadFeed(ctx, sortBy, window, limit, feedCursor, cursor)
+		if err != nil {
+			return nil, err
+		}
+		totalCount, err := h.countVisiblePublishedPosts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		list.TotalCount = totalCount
+		return list, nil
 	})
 	if err != nil {
 		return nil, svccommon.NormalizeCacheLoadError("load post feed cache", err)
@@ -680,6 +742,56 @@ func (h *postQueryHandler) loadSearchMatchSet(ctx context.Context, normalizedQue
 		}
 	}
 	return matches, nil
+}
+
+func (h *postQueryHandler) countVisiblePublishedPosts(ctx context.Context) (int, error) {
+	boards, err := h.boardRepository.SelectBoardList(ctx, svccommon.MaxPageLimit, 0)
+	if err != nil {
+		return 0, customerror.WrapRepository("select visible boards for post feed count", err)
+	}
+	total := 0
+	for _, board := range boards {
+		if board == nil {
+			continue
+		}
+		count, err := h.postRepository.CountPublishedPostsByBoardID(ctx, board.ID)
+		if err != nil {
+			return 0, customerror.WrapRepository("count published posts by board for post feed", err)
+		}
+		total += count
+	}
+	return total, nil
+}
+
+func (h *postQueryHandler) countVisiblePostsFromIDs(ctx context.Context, ids map[int64]struct{}) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	postIDs := make([]int64, 0, len(ids))
+	for id := range ids {
+		postIDs = append(postIDs, id)
+	}
+	postsByID, err := h.postRepository.SelectPostsByIDsIncludingUnpublished(ctx, postIDs)
+	if err != nil {
+		return 0, customerror.WrapRepository("select posts by ids for post list count", err)
+	}
+	posts := make([]*entity.Post, 0, len(postsByID))
+	for _, post := range postsByID {
+		if post != nil && post.Status == entity.PostStatusPublished {
+			posts = append(posts, post)
+		}
+	}
+	boardVisibility := make(map[int64]bool)
+	if err := h.resolveBoardVisibility(ctx, posts, boardVisibility); err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, post := range posts {
+		if boardVisibility[post.BoardID] {
+			total++
+		}
+	}
+	return total, nil
 }
 
 func normalizeRankingSortWindow(sortValue string, windowValue string, defaultSort port.PostFeedSort, allowBest bool) (port.PostFeedSort, port.PostRankingWindow, error) {

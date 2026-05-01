@@ -27,6 +27,26 @@ func TestBuildPaginationData(t *testing.T) {
 		assert.Equal(t, 0, pagination.NextPage)
 		assert.Equal(t, []int{3, 4, 5}, pagination.Pages)
 	})
+
+	t.Run("uses total pages when available", func(t *testing.T) {
+		pagination := buildPaginationData(3, false, 4)
+		require.NotNil(t, pagination)
+		assert.Equal(t, 3, pagination.Page)
+		assert.Equal(t, 2, pagination.PrevPage)
+		assert.Equal(t, 4, pagination.NextPage)
+		assert.Equal(t, []int{1, 2, 3, 4}, pagination.Pages)
+	})
+
+	t.Run("caps total pages at the browser max", func(t *testing.T) {
+		pagination := buildPaginationData(1000, false, 1200)
+		require.NotNil(t, pagination)
+		assert.Equal(t, 1000, pagination.Page)
+		assert.Equal(t, 999, pagination.PrevPage)
+		assert.Equal(t, 0, pagination.NextPage)
+		assert.Len(t, pagination.Pages, 1000)
+		assert.Equal(t, 1, pagination.Pages[0])
+		assert.Equal(t, 1000, pagination.Pages[len(pagination.Pages)-1])
+	})
 }
 
 func TestLoadSequentialPage(t *testing.T) {

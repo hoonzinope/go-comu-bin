@@ -156,8 +156,9 @@ type PageData struct {
 }
 
 type PaginationData struct {
-	Page     int
-	PrevPage int
-	NextPage int
-	Pages    []int
+	Page       int
+	PrevPage   int
+	NextPage   int
+	Pages      []int
+	TotalPages int
 }

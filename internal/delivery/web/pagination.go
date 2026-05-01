@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/hoonzinope/go-comu-bin/internal/application/model"
 )
 
 const (
@@ -21,9 +23,31 @@ func clampWebPageNumber(page int) int {
 	return page
 }
 
-func buildPaginationData(page int, hasMore bool) *PaginationData {
+func buildPaginationData(page int, hasMore bool, totalPages ...int) *PaginationData {
 	page = clampWebPageNumber(page)
 	pagination := &PaginationData{Page: page}
+	if len(totalPages) > 0 && totalPages[0] > 0 {
+		maxPage := totalPages[0]
+		if maxPage > webMaxPageNumber {
+			maxPage = webMaxPageNumber
+		}
+		if page > maxPage {
+			page = maxPage
+			pagination.Page = page
+		}
+		if page > 1 {
+			pagination.PrevPage = page - 1
+		}
+		if page < maxPage {
+			pagination.NextPage = page + 1
+		}
+		pagination.Pages = make([]int, 0, maxPage)
+		for current := 1; current <= maxPage; current++ {
+			pagination.Pages = append(pagination.Pages, current)
+		}
+		pagination.TotalPages = maxPage
+		return pagination
+	}
 	if page > 1 {
 		pagination.PrevPage = page - 1
 	}
@@ -46,6 +70,24 @@ func buildPaginationData(page int, hasMore bool) *PaginationData {
 		pagination.Pages = append(pagination.Pages, current)
 	}
 	return pagination
+}
+
+func totalPagesFromCount(totalCount, limit int) int {
+	if totalCount <= 0 || limit <= 0 {
+		return 0
+	}
+	totalPages := (totalCount + limit - 1) / limit
+	if totalPages > webMaxPageNumber {
+		return webMaxPageNumber
+	}
+	return totalPages
+}
+
+func totalPagesFromPostList(list *model.PostList) int {
+	if list == nil {
+		return 0
+	}
+	return totalPagesFromCount(list.TotalCount, list.Limit)
 }
 
 func listPageURL(data any, page int) string {

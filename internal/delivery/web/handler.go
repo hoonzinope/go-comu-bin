@@ -330,7 +330,7 @@ func (h *Handler) handleFeed(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "feed", ListBaseURL: "/", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "feed", ListBaseURL: "/", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore, totalPagesFromPostList(feed)), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleBoardFeed(c *gin.Context) {
@@ -358,7 +358,7 @@ func (h *Handler) handleBoardFeed(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", ListBaseURL: "/boards/" + boardUUID, ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "board", ListBaseURL: "/boards/" + boardUUID, ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore, totalPagesFromPostList(feed)), BoardUUID: boardUUID, BoardName: h.lookupBoardName(c.Request.Context(), shell, boardUUID), Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleTagFeed(c *gin.Context) {
@@ -386,7 +386,7 @@ func (h *Handler) handleTagFeed(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "tag", ListBaseURL: "/tags/" + tagName, ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), TagName: tagName, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "tag", ListBaseURL: "/tags/" + tagName, ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore, totalPagesFromPostList(feed)), TagName: tagName, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handleSearch(c *gin.Context) {
@@ -420,7 +420,7 @@ func (h *Handler) handleSearch(c *gin.Context) {
 			return
 		}
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "search", ListBaseURL: "/search", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Query: query, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "search", ListBaseURL: "/search", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore, totalPagesFromPostList(feed)), Query: query, Feed: feed, SortValue: sortValue, WindowValue: windowValue})
 }
 
 func (h *Handler) handlePostDetail(c *gin.Context) {
@@ -795,7 +795,7 @@ func (h *Handler) handleMePage(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "me", ListBaseURL: "/me", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore), Drafts: drafts})
+	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "me", ListBaseURL: "/me", ListLimit: limit, Pagination: buildPaginationData(currentPage, hasMore, totalPagesFromPostList(drafts)), Drafts: drafts})
 }
 
 func (h *Handler) handleMeDeleteSubmit(c *gin.Context) {

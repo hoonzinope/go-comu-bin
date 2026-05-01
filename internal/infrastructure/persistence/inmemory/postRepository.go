@@ -90,6 +90,23 @@ func (r *PostRepository) SelectDraftPostsByAuthorID(ctx context.Context, authorI
 	return r.selectDraftPostsByAuthorID(authorID, limit, lastID)
 }
 
+func (r *PostRepository) CountDraftPostsByAuthorID(ctx context.Context, authorID int64) (int, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, post := range r.postDB.Data {
+		if post.AuthorID == authorID && post.Status == entity.PostStatusDraft {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *PostRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
 	_ = ctx
 	r.coordinator.enter()
@@ -237,6 +254,40 @@ func (r *PostRepository) SelectPosts(ctx context.Context, boardID int64, limit i
 	return r.selectPosts(boardID, limit, lastID)
 }
 
+func (r *PostRepository) CountPublishedPosts(ctx context.Context) (int, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, post := range r.postDB.Data {
+		if post.Status == entity.PostStatusPublished {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *PostRepository) CountPublishedPostsByBoardID(ctx context.Context, boardID int64) (int, error) {
+	_ = ctx
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, post := range r.postDB.Data {
+		if post.BoardID == boardID && post.Status == entity.PostStatusPublished {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *PostRepository) selectPosts(boardID int64, limit int, lastID int64) ([]*entity.Post, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -268,6 +319,40 @@ func (r *PostRepository) SelectPublishedPostsByTagName(ctx context.Context, tagN
 	r.coordinator.enter()
 	defer r.coordinator.exit()
 	return r.selectPublishedPostsByTagName(ctx, tagName, limit, lastID)
+}
+
+func (r *PostRepository) CountPublishedPostsByTagName(ctx context.Context, tagName string) (int, error) {
+	r.coordinator.enter()
+	defer r.coordinator.exit()
+
+	if r.tagRepository == nil || r.postTagRepository == nil {
+		return 0, errors.New("post repository tag dependencies are not attached")
+	}
+
+	tag, err := r.tagRepository.SelectByName(ctx, tagName)
+	if err != nil {
+		return 0, err
+	}
+	if tag == nil {
+		return 0, nil
+	}
+
+	activePostIDs := r.postTagRepository.SelectActivePostIDSetByTagID(tag.ID)
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, post := range r.postDB.Data {
+		if post.Status != entity.PostStatusPublished {
+			continue
+		}
+		if _, exists := activePostIDs[post.ID]; !exists {
+			continue
+		}
+		count++
+	}
+	return count, nil
 }
 
 func (r *PostRepository) selectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {

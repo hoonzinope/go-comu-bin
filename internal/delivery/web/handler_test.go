@@ -843,11 +843,11 @@ func TestHandler_RenderPaginationLinks(t *testing.T) {
 	outboxLastID := "dead-next"
 
 	postUseCase := &testPostUseCase{
-		feedList:   &model.PostList{Posts: []model.Post{{UUID: "feed-post", Title: "Feed post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &feedCursor},
-		boardList:  &model.PostList{Posts: []model.Post{{UUID: "board-post", Title: "Board post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &boardCursor},
-		tagList:    &model.PostList{Posts: []model.Post{{UUID: "tag-post", Title: "Tag post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &tagCursor},
-		searchList: &model.PostList{Posts: []model.Post{{UUID: "search-post", Title: "Search post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &searchCursor},
-		draftList:  &model.PostList{Posts: []model.Post{{UUID: "draft-uuid-2", Title: "Draft next", Content: "Draft body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, HasMore: true, NextCursor: &draftCursor},
+		feedList:   &model.PostList{Posts: []model.Post{{UUID: "feed-post", Title: "Feed post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, TotalCount: 80, HasMore: true, NextCursor: &feedCursor},
+		boardList:  &model.PostList{Posts: []model.Post{{UUID: "board-post", Title: "Board post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, TotalCount: 80, HasMore: true, NextCursor: &boardCursor},
+		tagList:    &model.PostList{Posts: []model.Post{{UUID: "tag-post", Title: "Tag post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, TotalCount: 80, HasMore: true, NextCursor: &tagCursor},
+		searchList: &model.PostList{Posts: []model.Post{{UUID: "search-post", Title: "Search post", Content: "Body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, TotalCount: 80, HasMore: true, NextCursor: &searchCursor},
+		draftList:  &model.PostList{Posts: []model.Post{{UUID: "draft-uuid-2", Title: "Draft next", Content: "Draft body", BoardUUID: "general-uuid", AuthorUUID: "user-uuid"}}, Limit: 20, TotalCount: 80, HasMore: true, NextCursor: &draftCursor},
 	}
 	commentUseCase := &testCommentUseCase{
 		comments: &model.CommentList{
@@ -904,6 +904,9 @@ func TestHandler_RenderPaginationLinks(t *testing.T) {
 			assert.Contains(t, body, "Prev")
 			assert.Contains(t, body, "Next")
 			assert.Contains(t, body, tc.want)
+			if tc.name == "feed" || tc.name == "board" || tc.name == "tag" || tc.name == "search" || tc.name == "drafts" {
+				assert.Contains(t, body, "page=4")
+			}
 		})
 	}
 

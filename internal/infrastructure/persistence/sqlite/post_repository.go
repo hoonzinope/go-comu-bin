@@ -86,6 +86,19 @@ LIMIT ?
 	return posts, nil
 }
 
+func (r *PostRepository) CountDraftPostsByAuthorID(ctx context.Context, authorID int64) (int, error) {
+	row := r.db.QueryRowContext(ctx, `
+SELECT COUNT(*)
+FROM posts
+WHERE author_id = ? AND status = 'draft'
+`, authorID)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *PostRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
 	return r.selectPostUUIDsByIDs(ctx, ids, false)
 }
@@ -143,6 +156,32 @@ LIMIT ?
 	return posts, nil
 }
 
+func (r *PostRepository) CountPublishedPosts(ctx context.Context) (int, error) {
+	row := r.db.QueryRowContext(ctx, `
+SELECT COUNT(*)
+FROM posts
+WHERE status = 'published'
+`)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *PostRepository) CountPublishedPostsByBoardID(ctx context.Context, boardID int64) (int, error) {
+	row := r.db.QueryRowContext(ctx, `
+SELECT COUNT(*)
+FROM posts
+WHERE board_id = ? AND status = 'published'
+`, boardID)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *PostRepository) SelectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {
 	if limit <= 0 {
 		return []*entity.Post{}, nil
@@ -173,6 +212,21 @@ LIMIT ?
 		return nil, err
 	}
 	return posts, nil
+}
+
+func (r *PostRepository) CountPublishedPostsByTagName(ctx context.Context, tagName string) (int, error) {
+	row := r.db.QueryRowContext(ctx, `
+SELECT COUNT(DISTINCT p.id)
+FROM posts p
+JOIN post_tags pt ON pt.post_id = p.id AND pt.status = 'active'
+JOIN tags t ON t.id = pt.tag_id AND t.name = ?
+WHERE p.status = 'published'
+`, tagName)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *PostRepository) ExistsByBoardID(ctx context.Context, boardID int64) (bool, error) {

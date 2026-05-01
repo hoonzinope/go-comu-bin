@@ -660,6 +660,10 @@ func (r postTxRepository) SelectDraftPostsByAuthorID(ctx context.Context, author
 	_ = ctx
 	return r.repo.selectDraftPostsByAuthorID(authorID, limit, lastID)
 }
+func (r postTxRepository) CountDraftPostsByAuthorID(ctx context.Context, authorID int64) (int, error) {
+	_ = ctx
+	return r.repo.CountDraftPostsByAuthorID(ctx, authorID)
+}
 func (r postTxRepository) SelectPostUUIDsByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
 	_ = ctx
 	return r.repo.SelectPostUUIDsByIDs(ctx, ids)
@@ -684,8 +688,20 @@ func (r postTxRepository) SelectPosts(ctx context.Context, boardID int64, limit 
 	_ = ctx
 	return r.repo.selectPosts(boardID, limit, lastID)
 }
+func (r postTxRepository) CountPublishedPosts(ctx context.Context) (int, error) {
+	_ = ctx
+	return r.repo.CountPublishedPosts(ctx)
+}
+func (r postTxRepository) CountPublishedPostsByBoardID(ctx context.Context, boardID int64) (int, error) {
+	_ = ctx
+	return r.repo.CountPublishedPostsByBoardID(ctx, boardID)
+}
 func (r postTxRepository) SelectPublishedPostsByTagName(ctx context.Context, tagName string, limit int, lastID int64) ([]*entity.Post, error) {
 	return r.repo.selectPublishedPostsByTagName(ctx, tagName, limit, lastID)
+}
+func (r postTxRepository) CountPublishedPostsByTagName(ctx context.Context, tagName string) (int, error) {
+	_ = ctx
+	return r.repo.CountPublishedPostsByTagName(ctx, tagName)
 }
 func (r postTxRepository) ExistsByBoardID(ctx context.Context, boardID int64) (bool, error) {
 	_ = ctx

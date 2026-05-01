@@ -46,4 +46,33 @@ func RunPostRepositoryContractTests(t *testing.T, newRepository func() port.Post
 		require.NoError(t, err)
 		assert.False(t, exists)
 	})
+
+	t.Run("counts published, draft, and tagged posts", func(t *testing.T) {
+		repo := newRepository()
+		boardID := int64(10)
+		authorID := int64(1)
+
+		published1, err := repo.Save(context.Background(), entity.NewPost("title-1", "content", authorID, boardID))
+		require.NoError(t, err)
+		published2, err := repo.Save(context.Background(), entity.NewPost("title-2", "content", authorID, boardID))
+		require.NoError(t, err)
+		draft := entity.NewDraftPost("draft", "content", authorID, boardID)
+		_, err = repo.Save(context.Background(), draft)
+		require.NoError(t, err)
+
+		publishedPosts, err := repo.CountPublishedPosts(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, 2, publishedPosts)
+
+		publishedByBoard, err := repo.CountPublishedPostsByBoardID(context.Background(), boardID)
+		require.NoError(t, err)
+		assert.Equal(t, 2, publishedByBoard)
+
+		draftPosts, err := repo.CountDraftPostsByAuthorID(context.Background(), authorID)
+		require.NoError(t, err)
+		assert.Equal(t, 1, draftPosts)
+
+		_ = published1
+		_ = published2
+	})
 }

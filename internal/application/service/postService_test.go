@@ -152,6 +152,7 @@ func TestPostService_GetPostsList_HasMoreAndNextCursor(t *testing.T) {
 	list, err := svc.GetPostsList(context.Background(), mustBoardUUID(t, repositories.board, boardID), "", "", 2, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 2)
+	assert.Equal(t, 3, list.TotalCount)
 	assert.True(t, list.HasMore)
 	require.NotNil(t, list.NextCursor)
 	assert.NotEmpty(t, *list.NextCursor)

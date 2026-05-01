@@ -119,6 +119,7 @@ func TestPostService_SearchPosts_MatchesTitleContentAndTag(t *testing.T) {
 	list, err := svc.SearchPosts(context.Background(), "search", "", "", 10, "")
 	require.NoError(t, err)
 	require.Len(t, list.Posts, 3)
+	assert.Equal(t, 3, list.TotalCount)
 	assert.Equal(t, mustPostUUID(t, repositories.post, titlePostID), list.Posts[0].UUID)
 	assert.Equal(t, mustPostUUID(t, repositories.post, tagPostID), list.Posts[1].UUID)
 	assert.Equal(t, mustPostUUID(t, repositories.post, contentPostID), list.Posts[2].UUID)
