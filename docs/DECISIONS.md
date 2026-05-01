@@ -50,7 +50,7 @@
 
 상태
 
-- decided
+- superseded
 
 배경
 
@@ -268,11 +268,147 @@
 
 관련 문서/코드
 
+## 2026-05-01 - post detail comments는 login CTA와 empty state를 겹쳐 보여주지 않는다
+
+상태
+
+- decided
+
+배경
+
+- 게시물 상세의 comments 섹션에서 guest/no-comments 상태가 `Write a reply` CTA와 `No replies yet` empty state를 연달아 보여줘, 같은 의도를 두 번 설명하는 문제가 있었다.
+- 사용자는 댓글을 남기기 전에 무엇을 해야 하는지만 알면 되므로, 마진/패딩 조정보다 먼저 구조 중복을 없애는 편이 낫다.
+
+관찰
+
+- `internal/delivery/web/templates/page_content.tmpl`은 comments 섹션 상단의 login CTA와 하단의 empty-state를 별도 분기로 렌더링한다.
+- guest/no-comments 상태에서는 두 패널이 같은 섹션 안에서 연속으로 보여, 시각적 밀도보다 역할 중복이 먼저 눈에 띈다.
+- `internal/delivery/web/static/site.css`의 패딩은 두 패널 모두 충분해서, 문제의 핵심은 spacing 자체가 아니라 중복 노출이다.
+
+결론
+
+- comments 섹션은 reply form 또는 로그인 CTA 중 하나만 보여주고, 하단의 별도 empty-state 패널은 제거한다.
+- 댓글이 없다는 사실은 섹션 카운트와 상단 CTA만으로 충분히 전달한다.
+
+후속 작업
+
+- `internal/delivery/web/templates/page_content.tmpl` comments empty-state 제거
+- `internal/delivery/web/handler_test.go` 댓글 섹션 기대값 정리
+- visual snapshot 갱신
+
+관련 문서/코드
+
+## 2026-05-01 - post detail의 외부 링크와 첨부는 읽기 맥락을 유지하는 카드형 레이아웃을 사용한다
+
+상태
+
+- decided
+
+배경
+
+- 본문 안의 원문 링크를 현재 페이지에서 바로 열면 읽기 흐름이 끊겨, 사용자가 원문과 게시물 사이를 오가며 맥락을 잃기 쉽다.
+- 첨부가 하나일 때는 단순 링크보다 카드형 미리보기가 훨씬 더 원문/메타 카드처럼 읽히고, 여러 개일 때는 가로 레일이 탐색 효율이 높다.
+- 상세 페이지의 핵심은 읽기 유지이므로, 링크와 첨부는 모두 현재 문맥을 보존하는 방식으로 보여주는 편이 낫다.
+
+관찰
+
+- `renderMarkdown`은 goldmark와 sanitizer를 거치지만, 외부 링크에 `target`이나 `rel`을 부여하지 않는다.
+- `internal/delivery/web/templates/page_content.tmpl`의 attachments 섹션은 세로 stack과 파일 링크 중심이라, 카드형 미리보기보다 목록에 가깝다.
+- 첨부 모델은 파일 메타데이터를 이미 가지고 있어, 카드 레이아웃으로 바꾸는 데 필요한 정보는 충분하다.
+
+결론
+
+- 본문의 외부 링크는 새 탭으로 열고 `rel="noopener noreferrer"`를 부여해 현재 페이지를 유지한다.
+- 첨부는 카드형 레일로 렌더링하고, 하나면 단일 카드, 여러 개면 가로 스크롤 가능한 rail로 보여준다.
+- 이미지 첨부는 썸네일 미리보기를, 비이미지 첨부는 파일 메타 카드를 보여준다.
+
+후속 작업
+
+- `internal/delivery/web/handler.go` markdown 링크 후처리
+- `internal/delivery/web/templates/page_content.tmpl` attachments 카드 레일화
+- `internal/delivery/web/static/site.css` 카드/rail 스타일 추가
+- visual snapshot 갱신
+
+관련 문서/코드
+
+
 - `internal/delivery/web/templates/page_shared.tmpl`
 - `internal/delivery/web/templates/page_content.tmpl`
 - `internal/delivery/web/templates/page_account.tmpl`
 - `internal/delivery/web/templates/page_admin.tmpl`
 - `internal/delivery/web/static/site.css`
+
+## 2026-05-01 - 모바일 첫 화면은 상단 밀도를 낮추고 vote rail의 조작성을 높인다
+
+상태
+
+- decided
+
+배경
+
+- 현재 공통 shell은 데스크톱에서는 안정적이지만, 좁은 폭에서는 로그인 버튼과 검색이 세로로 쌓이면서 첫 화면의 정보 밀도가 너무 높아진다.
+- feed 카드의 up/down vote 영역은 기능은 있지만 시각적으로는 텍스트 심볼에 가까워, 실제 클릭 가능한 제어로 읽히는 힘이 약하다.
+- 공개 feed는 첫 인상이 중요하므로, 화면 상단은 더 가볍게, 카드 조작부는 더 명확하게 보여줄 필요가 있다.
+
+관찰
+
+- `internal/delivery/web/static/site.css`의 모바일 규칙에서 `topbar-actions`가 전체 폭을 차지하고 `searchbar`가 세로로 분리된다.
+- 동일 화면에서 `vote-rail` 버튼은 충분한 시각적 강조 없이 삼각형 글리프만 보여준다.
+- 현재 개선은 템플릿 구조를 바꾸지 않아도 공통 CSS만으로 전체 public shell에 적용 가능하다.
+
+결론
+
+- 좁은 폭에서는 topbar action chips를 한 줄로 유지하고 searchbar도 가로 배치해, 첫 fold의 세로 점유율을 줄인다.
+- vote rail은 버튼 크기, 배경, 포커스 링을 부여해 클릭 가능한 컨트롤로 인식되게 만든다.
+- 레이아웃과 정보 구조는 유지하고, 인터랙션 affordance만 강화하는 방향으로 수정한다.
+
+후속 작업
+
+- `internal/delivery/web/static/site.css`의 모바일 topbar 규칙 조정
+- `internal/delivery/web/static/site.css`의 vote rail 스타일 보강
+- public shell visual snapshot 재검증
+
+관련 문서/코드
+
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/templates/layout.tmpl`
+- `tests/e2e/visual.spec.ts`
+
+## 2026-05-01 - post detail의 reading map sidebar는 본문 중복이어서 제거한다
+
+상태
+
+- decided
+
+배경
+
+- 게시물 상세의 `Reading map`은 본문 상단에서 이미 보여주는 보드, 태그, 반응, 첨부 요약을 다시 반복하고 있었다.
+- 현재 글처럼 댓글과 첨부가 적은 스토리에서는 보조 정보보다 본문 자체가 우선이므로, 우측 패널이 시각적 잡음으로 느껴진다.
+- 읽기 중심 화면에서는 정보를 더 덧붙이기보다 핵심 본문을 넓게 보여주는 편이 탐색 효율이 높다.
+
+관찰
+
+- `internal/delivery/web/templates/page_content.tmpl`의 `page-post`는 `post-main`과 `post-sidebar`의 2열 구조를 사용한다.
+- `Reading map` 안의 카드와 메트릭은 본문 요약, 보드, 태그, 댓글 수, 첨부 수와 중복된다.
+- `post-sidebar`는 compose 화면의 `compose-sidebar`와 구분되지만, 상세 읽기 화면에서는 독립적인 정보 가치가 낮다.
+
+결론
+
+- 상세 페이지에서는 `Reading map` 사이드바를 제거하고 본문 폭을 넓힌다.
+- 대신 본문 상단 정보와 `Quick actions`만 남겨 읽기와 행동의 균형을 유지한다.
+- compose의 `Writing room`처럼, 상세는 읽기 중심 단일 흐름으로 정리한다.
+
+후속 작업
+
+- `internal/delivery/web/templates/page_content.tmpl`에서 `post-sidebar` 제거
+- `internal/delivery/web/static/site.css`의 상세 레이아웃 규칙 단일 컬럼화
+- visual snapshot 재검증
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page_content.tmpl`
+- `internal/delivery/web/static/site.css`
+- `tests/e2e/visual.spec.ts`
 
 ## 2026-04-30 - post detail body는 raw markdown 저장을 유지하고 서버 렌더링 HTML로 노출한다
 
@@ -445,6 +581,7 @@
 - post detail은 왼쪽 article을 읽기 중심으로 유지하고, 오른쪽 sidebar에 summary, tags, jump links, reaction/manage/report actions를 둔다.
 - compose는 sidebar를 writing room으로 명명하고, publish checks와 field hints를 추가해 글쓰기 화면의 위계를 선명하게 만든다.
 - comment composer는 `write a reply` 계열 copy로 바꿔 thread 참여 감각을 맞춘다.
+- 이후 post detail은 본문 중심 1열 구조로 전환되면서 reading map sidebar는 제거되었다.
 
 후속 작업
 
