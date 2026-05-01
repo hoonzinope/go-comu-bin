@@ -694,7 +694,8 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "New post")
-		assert.Contains(t, rr.Body.String(), "Workspace")
+		assert.Contains(t, rr.Body.String(), "Writing room")
+		assert.Contains(t, rr.Body.String(), "Publishing checks")
 		assert.Contains(t, rr.Body.String(), "Public")
 	})
 
@@ -709,9 +710,10 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.NotContains(t, rr.Body.String(), "At a glance")
 		assert.NotContains(t, rr.Body.String(), "Quick jumps")
 		assert.Contains(t, rr.Body.String(), "Comments")
+		assert.Contains(t, rr.Body.String(), "Reading map")
+		assert.Contains(t, rr.Body.String(), "Quick actions")
 		assert.Contains(t, rr.Body.String(), "Login to react")
-		assert.Contains(t, rr.Body.String(), "Login to comment")
-		assert.Contains(t, rr.Body.String(), "Actions")
+		assert.Contains(t, rr.Body.String(), "Sign in to reply")
 		assert.Contains(t, rr.Body.String(), "post-meta")
 		assert.NotContains(t, rr.Body.String(), "post-summary")
 		assert.Contains(t, rr.Body.String(), "report-toggle")

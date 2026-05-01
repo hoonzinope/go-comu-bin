@@ -382,6 +382,49 @@
 - `internal/delivery/web/templates/layout.tmpl`
 - `internal/delivery/web/templates/page.tmpl`
 - `internal/delivery/web/static/site.css`
+
+## 2026-05-01 - post detail은 reading map sidebar, compose는 writing room sidebar로 분리한다
+
+상태
+
+- decided
+
+배경
+
+- post detail은 본문을 읽는 흐름이 핵심이므로, 제목과 본문은 왼쪽에 두고 보조 정보와 액션은 오른쪽에서 정리하는 편이 더 읽기 쉽다.
+- compose는 글을 쓰는 작업이므로, 화면 자체가 편집면처럼 보여야 하고 검토 체크리스트는 글쓰기 보조 정보로만 노출되는 편이 낫다.
+- 두 화면 모두 공통 카드와 버튼은 유지하되, post detail은 읽기 지도(reading map), compose는 writing room이라는 역할을 분명히 나누는 편이 설계 의도를 전달하기 좋다.
+
+관찰
+
+- 현재 post detail은 본문 아래에 actions, attachments, comments가 이어지고 sidebar는 비어 있어 읽기 보조 역할이 약하다.
+- 현재 compose는 이미 2열 구조지만, sidebar와 form copy가 아직 기능 중심 용어에 머물러 있다.
+- visual snapshot 기준으로 post detail은 byline과 빠른 이동/행동 영역을 좀 더 구조적으로 분리할 필요가 있다.
+
+결론
+
+- post detail은 왼쪽 article을 읽기 중심으로 유지하고, 오른쪽 sidebar에 summary, tags, jump links, reaction/manage/report actions를 둔다.
+- compose는 sidebar를 writing room으로 명명하고, publish checks와 field hints를 추가해 글쓰기 화면의 위계를 선명하게 만든다.
+- comment composer는 `write a reply` 계열 copy로 바꿔 thread 참여 감각을 맞춘다.
+
+후속 작업
+
+- post detail template/sidebar 재배치
+- compose template copy/field hints 정리
+- visual snapshot과 handler test 갱신
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page_content.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/handler_test.go`
+- `tests/e2e/visual.spec.ts`
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/layout.tmpl`
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/static/site.css`
 - `internal/delivery/web/handler_test.go`
 
 ## 2026-04-30 - web shell은 topbar / boards sidebar / mobile menu로 역할을 분리하고 post는 title-summary-body 위계를 유지한다

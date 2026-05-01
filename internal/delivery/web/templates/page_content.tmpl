@@ -111,9 +111,11 @@
         <div class="post-byline">
           <span>@{{shortUUID .PostDetail.Post.AuthorUUID}}</span>
           <span>{{formatTime .PostDetail.Post.CreatedAt}}</span>
-          <span>{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</span>
-          <span>{{len .PostDetail.Attachments}} attachments</span>
-          <span>{{len .PostDetail.Reactions}} reactions</span>
+        </div>
+        <div class="chip-row post-stats">
+          <span class="chip">{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments</span>
+          <span class="chip">{{len .PostDetail.Attachments}} attachments</span>
+          <span class="chip">{{len .PostDetail.Reactions}} reactions</span>
         </div>
       </div>
     </header>
@@ -123,64 +125,6 @@
     </div>
     {{end}}
     <div class="markdown">{{renderMarkdown .PostDetail.Post.Content}}</div>
-    <section class="post-actions">
-      <div class="section-title">Actions</div>
-      <div class="button-row">
-        {{if canInteract .Shell}}
-        <form action="/posts/{{.PostUUID}}/reactions" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="reaction_type" value="like">
-          <button class="button {{if reactionActive .PostDetail.MyReactionType "like"}}button-primary is-active{{end}}" type="submit">▲ Upvote</button>
-        </form>
-        <form action="/posts/{{.PostUUID}}/reactions" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="reaction_type" value="dislike">
-          <button class="button {{if reactionActive .PostDetail.MyReactionType "dislike"}}button-primary is-active{{end}}" type="submit">▼ Downvote</button>
-        </form>
-        <form action="/posts/{{.PostUUID}}/reactions" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="_method" value="delete">
-          <button class="button button-ghost" type="submit">Remove reaction</button>
-        </form>
-        {{else}}
-        <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to react</a>
-        {{end}}
-      </div>
-      <div class="button-row">
-        <a class="button" href="#comments">Comments</a>
-        {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Attachments</a>{{end}}
-      </div>
-      {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
-      <div class="button-row">
-        <a class="button" href="/posts/{{.PostUUID}}/edit">Edit</a>
-        <form class="inline-form" action="/posts/{{.PostUUID}}/delete" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <button class="button button-danger" type="submit" onclick="return confirm('Delete this post?')">Delete</button>
-        </form>
-      </div>
-      {{end}}
-      <details class="secondary-action report-toggle">
-        <summary class="button button-ghost">Report</summary>
-        <form action="/reports" method="post" class="comment-report-form">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="target_type" value="post">
-          <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
-          <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
-          <label for="post-report-reason">Reason</label>
-          <select id="post-report-reason" name="reason_code">
-            <option value="spam">Spam</option>
-            <option value="abuse">Abuse</option>
-            <option value="sexual">Sexual</option>
-            <option value="violence">Violence</option>
-            <option value="illegal">Illegal</option>
-            <option value="other">Other</option>
-          </select>
-          <label for="post-report-detail">Details</label>
-          <textarea id="post-report-detail" name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
-          <button class="button" type="submit">Report</button>
-        </form>
-      </details>
-    </section>
     {{if .PostDetail.Attachments}}
     <section id="attachments">
       <div class="section-title">Attachments</div>
@@ -209,15 +153,15 @@
       {{if canInteract .Shell}}
       <form class="panel form comment-form" action="/posts/{{.PostUUID}}/comments" method="post">
         <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-        <label for="comment-content">Write a comment</label>
+        <label for="comment-content">Write a reply</label>
         <textarea id="comment-content" name="content" rows="5" placeholder="Share your reply"></textarea>
-        <button class="button button-primary" type="submit">Comment</button>
+        <button class="button button-primary" type="submit">Reply</button>
       </form>
       {{else}}
       <div class="panel form comment-form comment-cta">
-        <div class="section-title">Write a comment</div>
+        <div class="section-title">Write a reply</div>
         <p>Sign in to join the discussion before replying.</p>
-        <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to comment</a>
+        <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Sign in to reply</a>
       </div>
       {{end}}
       {{if .Comments}}
@@ -307,6 +251,99 @@
       {{end}}
     </section>
   </article>
+  <aside class="panel post-sidebar">
+    <div class="section-title">Reading map</div>
+    <div class="post-sidecard">
+      <div class="meta-row">
+        <span class="chip">{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</span>
+        {{if .PostDetail.Tags}}
+        {{range .PostDetail.Tags}}<span class="chip">{{.Name}}</span>{{end}}
+        {{end}}
+      </div>
+      <h2>{{.PostDetail.Post.Title}}</h2>
+      <p>{{if .PostDetail.Post.Summary}}{{.PostDetail.Post.Summary}}{{else}}{{truncate (normalizeContent .PostDetail.Post.Content) 180}}{{end}}</p>
+    </div>
+    <div class="meta-list">
+      <div class="meta-item">
+        <span>Board</span>
+        <strong>{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</strong>
+        <div class="meta-note">Open the board feed for nearby threads.</div>
+      </div>
+      <div class="meta-item">
+        <span>Topics</span>
+        <strong>{{if .PostDetail.Tags}}{{len .PostDetail.Tags}}{{else}}0{{end}}</strong>
+        <div class="meta-note">{{if .PostDetail.Tags}}{{range .PostDetail.Tags}}#{{.Name}} {{end}}{{else}}No tags on this thread.{{end}}</div>
+      </div>
+      <div class="meta-item">
+        <span>Signals</span>
+        <strong>{{len .PostDetail.Reactions}} reactions</strong>
+        <div class="meta-note">{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments currently loaded.</div>
+      </div>
+      <div class="meta-item">
+        <span>Assets</span>
+        <strong>{{len .PostDetail.Attachments}} files</strong>
+        <div class="meta-note">{{if .PostDetail.Attachments}}Jump to the attachments list below.{{else}}No attachments are attached to this story.{{end}}</div>
+      </div>
+    </div>
+    <div class="section-title">Quick actions</div>
+    <div class="post-action-stack">
+      <div class="button-row">
+        {{if canInteract .Shell}}
+        <form action="/posts/{{.PostUUID}}/reactions" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="reaction_type" value="like">
+          <button class="button {{if reactionActive .PostDetail.MyReactionType "like"}}button-primary is-active{{end}}" type="submit">▲ Upvote</button>
+        </form>
+        <form action="/posts/{{.PostUUID}}/reactions" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="reaction_type" value="dislike">
+          <button class="button {{if reactionActive .PostDetail.MyReactionType "dislike"}}button-primary is-active{{end}}" type="submit">▼ Downvote</button>
+        </form>
+        <form action="/posts/{{.PostUUID}}/reactions" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="_method" value="delete">
+          <button class="button button-ghost" type="submit">Clear vote</button>
+        </form>
+        {{else}}
+        <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to react</a>
+        {{end}}
+      </div>
+      <div class="button-row">
+        <a class="button" href="#comments">Jump to comments</a>
+        {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Open attachments</a>{{end}}
+      </div>
+      {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
+      <div class="button-row">
+        <a class="button" href="/posts/{{.PostUUID}}/edit">Edit</a>
+        <form class="inline-form" action="/posts/{{.PostUUID}}/delete" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <button class="button button-danger" type="submit" onclick="return confirm('Delete this post?')">Delete</button>
+        </form>
+      </div>
+      {{end}}
+      <details class="secondary-action report-toggle">
+        <summary class="button button-ghost">Report thread</summary>
+        <form action="/reports" method="post" class="comment-report-form">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="target_type" value="post">
+          <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
+          <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
+          <label for="post-report-reason">Reason</label>
+          <select id="post-report-reason" name="reason_code">
+            <option value="spam">Spam</option>
+            <option value="abuse">Abuse</option>
+            <option value="sexual">Sexual</option>
+            <option value="violence">Violence</option>
+            <option value="illegal">Illegal</option>
+            <option value="other">Other</option>
+          </select>
+          <label for="post-report-detail">Details</label>
+          <textarea id="post-report-detail" name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
+          <button class="button" type="submit">Report</button>
+        </form>
+      </details>
+    </div>
+  </aside>
 </div>
 {{end}}
 
@@ -317,45 +354,59 @@
 </div>
 <div class="compose-layout page-main">
   <aside class="panel compose-sidebar">
-    <div class="section-title">Workspace</div>
+    <div class="section-title">Writing room</div>
+    <div class="compose-story-card">
+      <div class="meta-row">
+        <span class="chip">{{boardName $.Shell.BoardMap .BoardUUID}}</span>
+        <span class="chip">{{if eq .EditMode "edit"}}Edit draft{{else if eq .EditMode "draft"}}Save draft{{else}}Publish now{{end}}</span>
+      </div>
+      <h2>{{if eq .EditMode "edit"}}Update the draft{{else if eq .EditMode "draft"}}Hold the draft{{else}}Open a new thread{{end}}</h2>
+      <p>{{if eq .EditMode "edit"}}Refine the draft before sending it live.{{else if eq .EditMode "draft"}}Keep working until the thread is ready.{{else}}Shape the first version of the discussion.{{end}}</p>
+    </div>
     <div class="meta-list">
       <div class="meta-item">
         <span>Board</span>
         <strong>{{boardName $.Shell.BoardMap .BoardUUID}}</strong>
-        <small>{{.BoardUUID}}</small>
+        <div class="meta-note">Draft will be published here.</div>
       </div>
       <div class="meta-item">
         <span>Mode</span>
         <strong>{{if eq .EditMode "edit"}}Draft edit{{else if eq .EditMode "draft"}}Save draft{{else}}Publish now{{end}}</strong>
-        <small>{{if eq .EditMode "edit"}}Update an existing draft{{else if eq .EditMode "draft"}}Keep working before publish{{else}}Create a live post{{end}}</small>
+        <div class="meta-note">{{if eq .EditMode "edit"}}Update an existing draft before publishing.{{else if eq .EditMode "draft"}}Keep working before publishing.{{else}}Create a live thread for the board feed.{{end}}</div>
       </div>
       <div class="meta-item">
         <span>Access</span>
         <strong>Public</strong>
-        <small>Visible on the board feed.</small>
+        <div class="meta-note">Visible on the board feed.</div>
       </div>
       <div class="meta-item">
         <span>Guidance</span>
         <strong>Keep it structured</strong>
-        <small>Use short paragraphs, tags, and markdown headings.</small>
+        <div class="meta-note">Use short paragraphs, tags, and markdown headings.</div>
       </div>
     </div>
-    <div class="section-title">Checklist</div>
+    <div class="section-title">Publishing checks</div>
     <div class="stack">
-      <div class="chip">Title set</div>
+      <div class="chip">Title checked</div>
       <div class="chip">Tags reviewed</div>
-      <div class="chip">Content ready</div>
+      <div class="chip">Body ready</div>
     </div>
   </aside>
   <form class="panel form compose-main" action="{{if eq .EditMode "edit"}}/posts/{{.PostUUID}}{{else if eq .EditMode "draft"}}/boards/{{.BoardUUID}}/posts/drafts{{else}}/boards/{{.BoardUUID}}/posts{{end}}" method="post">
     <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-    <div class="section-title">Content</div>
-    <label for="compose-title">Title</label>
-    <input id="compose-title" type="text" name="title" value="{{.TitleInput}}" placeholder="Post title">
-    <label for="compose-tags">Tags</label>
-    <input id="compose-tags" type="text" name="tags" value="{{.TagsInput}}" placeholder="go, ui, roadmap">
-    <label for="compose-content">Content</label>
-    <textarea id="compose-content" name="content" rows="18" placeholder="Write markdown">{{.ContentInput}}</textarea>
+    <div class="section-title">Draft copy</div>
+    <div class="field-group">
+      {{template "text-field" (dict "ID" "compose-title" "Label" "Title" "Name" "title" "Value" .TitleInput "Placeholder" "Post title")}}
+      <div class="field-hint">Lead with the point readers should remember.</div>
+    </div>
+    <div class="field-group">
+      {{template "text-field" (dict "ID" "compose-tags" "Label" "Tags" "Name" "tags" "Value" .TagsInput "Placeholder" "go, ui, roadmap")}}
+      <div class="field-hint">Comma-separated topics. Keep the set focused.</div>
+    </div>
+    <div class="field-group">
+      {{template "textarea-field" (dict "ID" "compose-content" "Label" "Content" "Name" "content" "Rows" 18 "Value" .ContentInput "Placeholder" "Write markdown")}}
+      <div class="field-hint">Markdown headings, lists, and quotes are supported.</div>
+    </div>
     <div class="button-row">
       {{if eq .EditMode "edit"}}
         <button class="button button-primary" type="submit">Update draft</button>

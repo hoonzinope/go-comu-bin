@@ -25,7 +25,7 @@ const visualSnapshotCss = `
   .meta-list small,
   .table-sub,
   .post-uuid,
-  .post-meta,
+  .post-byline,
   .overlay small,
   .overlay .meta-row,
   .error-panel p {
@@ -92,15 +92,7 @@ test('captures the feed, composer, and post detail surfaces', async ({ page, req
 
   await page.goto(`/posts/${publishedUUID}`);
   await prepareVisualPage(page, 1440, 1600);
-  await expect(page.getByRole('heading', { name: 'Visual feed title' })).toBeVisible();
-  await page.addStyleTag({
-    content: `
-      .post-sidebar .meta-item:nth-child(2),
-      .post-sidebar .meta-item:nth-child(3) {
-        display: none !important;
-      }
-    `,
-  });
+  await expect(page.locator('article.post-main h1.post-title')).toBeVisible();
   await expect(page.locator('main > section.page')).toHaveScreenshot('post-detail-page.png');
 });
 
