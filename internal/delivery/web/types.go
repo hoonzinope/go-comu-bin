@@ -105,6 +105,14 @@ type ShellData struct {
 	BoardMap        map[string]model.Board
 }
 
+type LinkPreview struct {
+	Title       string
+	URL         string
+	Host        string
+	Description string
+	ImageURL    string
+}
+
 type PageData struct {
 	Shell             ShellData
 	Kind              string

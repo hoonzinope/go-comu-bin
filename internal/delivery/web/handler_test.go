@@ -652,6 +652,18 @@ func authRequest(method, path string) (*http.Request, *httptest.ResponseRecorder
 }
 
 func TestHandler_RenderCoreScreens(t *testing.T) {
+	origFetch := fetchLinkPreviewMetadataFunc
+	fetchLinkPreviewMetadataFunc = func(ctx context.Context, rawURL string) linkPreviewMetadata {
+		_ = ctx
+		switch {
+		case strings.Contains(rawURL, "example.com"):
+			return linkPreviewMetadata{Title: "Example Domain", Description: "Example description", ImageURL: "https://example.com/example.jpg"}
+		default:
+			return linkPreviewMetadata{}
+		}
+	}
+	t.Cleanup(func() { fetchLinkPreviewMetadataFunc = origFetch })
+
 	r := newTestWebEngine()
 
 	t.Run("home", func(t *testing.T) {
@@ -713,17 +725,23 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.NotContains(t, rr.Body.String(), "At a glance")
 		assert.NotContains(t, rr.Body.String(), "Quick jumps")
 		assert.Contains(t, rr.Body.String(), "Comments")
-		assert.Contains(t, rr.Body.String(), "Reading map")
+		assert.NotContains(t, rr.Body.String(), "Reading map")
 		assert.Contains(t, rr.Body.String(), "Quick actions")
 		assert.Contains(t, rr.Body.String(), "Login to react")
 		assert.Contains(t, rr.Body.String(), "Sign in to reply")
+		assert.NotContains(t, rr.Body.String(), "No replies yet")
 		assert.Contains(t, rr.Body.String(), "post-meta")
 		assert.NotContains(t, rr.Body.String(), "post-summary")
 		assert.Contains(t, rr.Body.String(), "report-toggle")
 		assert.Contains(t, rr.Body.String(), "Report")
+		assert.Contains(t, rr.Body.String(), "Source links")
+		assert.Contains(t, rr.Body.String(), "link-rail")
+		assert.Contains(t, rr.Body.String(), "link-card")
 		assert.Contains(t, rr.Body.String(), "Attachments")
-		assert.Contains(t, rr.Body.String(), `<a href="https://example.com"`)
+		assert.Contains(t, rr.Body.String(), `<a href="https://example.com" target="_blank" rel="noopener noreferrer nofollow">`)
 		assert.Contains(t, rr.Body.String(), `>docs</a>`)
+		assert.Contains(t, rr.Body.String(), "attachment-rail")
+		assert.Contains(t, rr.Body.String(), "attachment-card")
 		assert.Contains(t, rr.Body.String(), `/api/v1/posts/post-uuid/attachments/attach-uuid/file`)
 		assert.Contains(t, rr.Body.String(), `/api/v1/posts/post-uuid/attachments/attach-uuid/preview`)
 		assert.NotContains(t, rr.Body.String(), "<pre class=\"markdown\">")

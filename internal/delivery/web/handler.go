@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +39,8 @@ var (
 	markdownRenderer = goldmark.New(
 		goldmark.WithExtensions(extension.GFM),
 	)
-	markdownPolicy = bluemonday.UGCPolicy()
+	markdownPolicy              = bluemonday.UGCPolicy()
+	markdownExternalLinkPattern = regexp.MustCompile(`(?i)<a\s+href="(https?://[^"]+)"\s+rel="nofollow">`)
 )
 
 type Handler struct {
@@ -80,6 +82,9 @@ func NewHandler(deps Dependencies) (*Handler, error) {
 		},
 		"renderMarkdown": func(value string) template.HTML {
 			return renderMarkdown(value)
+		},
+		"attachmentIsImage": func(contentType string) bool {
+			return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "image/")
 		},
 		"pageURL": func(base string, params ...any) string {
 			return pageURL(base, params...)
@@ -153,7 +158,9 @@ func renderMarkdown(value string) template.HTML {
 	if err := markdownRenderer.Convert([]byte(value), &buf); err != nil {
 		return template.HTML(template.HTMLEscapeString(value))
 	}
-	return template.HTML(markdownPolicy.SanitizeBytes(buf.Bytes()))
+	sanitized := string(markdownPolicy.SanitizeBytes(buf.Bytes()))
+	sanitized = markdownExternalLinkPattern.ReplaceAllString(sanitized, `<a href="$1" target="_blank" rel="noopener noreferrer nofollow">`)
+	return template.HTML(sanitized)
 }
 
 func pageURL(base string, params ...any) string {
@@ -438,7 +445,19 @@ func (h *Handler) handlePostDetail(c *gin.Context) {
 		h.renderUseCaseError(c, err)
 		return
 	}
-	h.renderPage(c, http.StatusOK, PageData{Shell: shell, Kind: "post", ListBaseURL: "/posts/" + postUUID, PostDetail: detail, PostUUID: postUUID, Comments: comments})
+	var linkPreviews []LinkPreview
+	if detail != nil && detail.Post != nil {
+		linkPreviews = extractLinkPreviewsFromMarkdown(ctx, detail.Post.Content)
+	}
+	h.renderPage(c, http.StatusOK, PageData{
+		Shell:        shell,
+		Kind:         "post",
+		ListBaseURL:  "/posts/" + postUUID,
+		PostDetail:   detail,
+		LinkPreviews: linkPreviews,
+		PostUUID:     postUUID,
+		Comments:     comments,
+	})
 }
 
 func (h *Handler) handleNewPost(c *gin.Context) {

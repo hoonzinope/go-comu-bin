@@ -209,13 +209,21 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 .meta-item small {
   color: rgba(43,52,56,.72);
 }
-.compose-layout, .post-layout {
+.compose-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(18rem, .72fr);
   gap: 1rem;
   align-items: start;
 }
-.compose-sidebar, .post-sidebar {
+.post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  width: min(100%, 72rem);
+  margin: 0 auto;
+}
+.compose-sidebar {
   display: grid;
   gap: .9rem;
 }
@@ -350,11 +358,187 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 .post-main .markdown {
   margin-top: 0;
 }
-.attachment-row {
+.link-rail {
   display: flex;
-  justify-content: space-between;
   gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: .25rem;
+  scroll-snap-type: x proximity;
+}
+
+.link-card {
+  display: grid;
+  grid-template-rows: 12rem auto;
+  gap: 0;
+  flex: 0 0 min(26rem, 88vw);
+  padding: 0;
+  color: inherit;
+  text-decoration: none;
+  scroll-snap-align: start;
+  border-radius: 24px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,241,230,.95));
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    border-color .18s ease;
+  box-shadow: 0 10px 24px rgba(29, 39, 48, 0.06);
+}
+
+.link-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(29, 39, 48, 0.09);
+}
+
+.link-card-media {
+  display: flex;
   align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  background:
+    linear-gradient(135deg, rgba(31, 90, 69, 0.12), rgba(255, 255, 255, 0.92)),
+    var(--surface-alt);
+  border-bottom: var(--border);
+}
+
+.link-card.has-image .link-card-media {
+  background: var(--surface-alt);
+}
+
+.link-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.link-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: rgba(31, 90, 69, 0.10);
+  color: var(--accent);
+}
+
+.link-card-copy {
+  display: grid;
+  gap: .35rem;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.link-card-title {
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+  color: var(--ink);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.link-card-description {
+  font-family: var(--font-body);
+  font-size: .92rem;
+  line-height: 1.45;
+  color: rgba(43,52,56,.78);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.link-card-meta {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(43,52,56,.68);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-rail {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: .25rem;
+  scroll-snap-type: x proximity;
+}
+
+.attachment-card {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+  gap: 1rem;
+  flex: 0 0 min(34rem, 90vw);
+  padding: 0;
+  overflow: hidden;
+  scroll-snap-align: start;
+}
+
+.attachment-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 10.5rem;
+  padding: 1rem;
+  border-right: var(--border);
+  background:
+    linear-gradient(135deg, rgba(31, 90, 69, 0.10), rgba(255, 255, 255, 0.92)),
+    var(--surface-alt);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.attachment-media.is-image {
+  padding: 0;
+  overflow: hidden;
+}
+
+.attachment-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.attachment-copy {
+  display: grid;
+  gap: .6rem;
+  padding: 1rem 1rem 1rem 0;
+  align-content: start;
+}
+
+.attachment-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.attachment-title a:hover {
+  color: var(--accent);
+}
+
+.attachment-meta {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: .72rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(43,52,56,.68);
+}
+
+.attachment-actions {
+  justify-content: flex-start;
+}
+
+.attachment-actions .chip {
+  flex: 0 0 auto;
 }
 .comment-form {
   max-width: none;
@@ -905,7 +1089,23 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
   .post-byline { font-size: .64rem; }
   .feed-item { grid-template-columns: 3.5rem 1fr; }
   .stats-grid { grid-template-columns: 1fr; }
-  .attachment-row { align-items: start; flex-direction: column; }
+  .attachment-rail {
+    grid-auto-columns: minmax(16rem, 88vw);
+  }
+
+  .attachment-card {
+    grid-template-columns: 1fr;
+  }
+
+  .attachment-media {
+    min-height: 12rem;
+    border-right: 0;
+    border-bottom: var(--border);
+  }
+
+  .attachment-copy {
+    padding: 1rem;
+  }
   .comment-form { margin-left: 0; max-width: none; }
   .comment-report-form { max-width: none; }
   .auth-grid { grid-template-columns: 1fr; }
@@ -1397,10 +1597,6 @@ body {
   gap: 1.1rem;
 }
 
-.post-layout {
-  grid-template-columns: minmax(0, 1.08fr) minmax(19rem, .76fr);
-}
-
 .markdown {
   border-radius: 24px;
   border-color: rgba(29, 39, 48, 0.10);
@@ -1425,7 +1621,6 @@ body {
 .comment-form,
 .auth-grid .panel,
 .compose-main,
-.post-sidebar,
 .compose-sidebar,
 .table-row,
 .overlay-link {
@@ -1542,7 +1737,6 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .post-sidebar,
   .compose-sidebar {
     position: static;
   }
@@ -1667,6 +1861,19 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .link-rail {
+    gap: .75rem;
+  }
+
+  .link-card {
+    flex-basis: min(22rem, 88vw);
+    grid-template-rows: 10rem auto;
+  }
+
+  .link-card-media {
+    min-height: 10rem;
+  }
+
   .vote-rail {
     display: flex;
     align-items: center;
@@ -1678,11 +1885,6 @@ body {
 
   .vote-rail strong {
     display: none;
-  }
-
-  .attachment-row {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .comment-form {

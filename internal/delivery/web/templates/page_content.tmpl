@@ -130,29 +130,121 @@
     </div>
     {{end}}
     <div class="markdown">{{renderMarkdown .PostDetail.Post.Content}}</div>
-    {{if .PostDetail.Attachments}}
-    <section id="attachments">
-      <div class="section-title">Attachments</div>
-      <div class="stack">
-        {{range .PostDetail.Attachments}}
-        <div class="panel attachment-row">
-          <div>
-            {{ $attachmentPostUUID := .PostUUID }}{{ if eq $attachmentPostUUID "" }}{{ $attachmentPostUUID = $.PostDetail.Post.UUID }}{{ end }}
-            <div class="table-title"><a href="{{printf "/api/v1/posts/%s/attachments/%s/file" $attachmentPostUUID .UUID}}">{{.FileName}}</a></div>
-            <div class="table-sub">{{.ContentType}} · {{.SizeBytes}} bytes</div>
-            <div class="chip-row">
-              <a class="chip" href="{{printf "/api/v1/posts/%s/attachments/%s/file" $attachmentPostUUID .UUID}}">Open file</a>
-              {{if or $.Shell.IsAdmin (and $.Shell.CurrentUser (eq $.Shell.CurrentUser.UUID $.PostDetail.Post.AuthorUUID))}}
-              <a class="chip" href="{{if .PreviewURL}}{{.PreviewURL}}{{else}}{{printf "/api/v1/posts/%s/attachments/%s/preview" $attachmentPostUUID .UUID}}{{end}}">Preview</a>
-              {{end}}
-            </div>
+    {{if .LinkPreviews}}
+    <section id="source-links">
+      <div class="section-title">Source links <span class="section-count">{{len .LinkPreviews}}</span></div>
+      <div class="link-rail">
+        {{range .LinkPreviews}}
+        <a class="panel link-card{{if .ImageURL}} has-image{{end}}" href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow">
+          <div class="link-card-media">
+            {{if .ImageURL}}
+            <img src="{{.ImageURL}}" alt="{{.Title}}">
+            {{else}}
+            <span class="link-card-icon material-symbols-outlined" aria-hidden="true">open_in_new</span>
+            {{end}}
           </div>
-          <span class="chip">{{shortUUID .UUID}}</span>
-        </div>
+          <div class="link-card-copy">
+            <div class="link-card-title">{{.Title}}</div>
+            {{if .Description}}<div class="link-card-description">{{.Description}}</div>{{end}}
+            <div class="link-card-meta">{{.Host}}</div>
+          </div>
+        </a>
         {{end}}
       </div>
     </section>
     {{end}}
+    {{if .PostDetail.Attachments}}
+    <section id="attachments">
+      <div class="section-title">Attachments <span class="section-count">{{len .PostDetail.Attachments}}</span></div>
+      <div class="attachment-rail">
+        {{range .PostDetail.Attachments}}
+        {{ $attachmentPostUUID := .PostUUID }}{{ if eq $attachmentPostUUID "" }}{{ $attachmentPostUUID = $.PostDetail.Post.UUID }}{{ end }}
+        {{ $fileURL := printf "/api/v1/posts/%s/attachments/%s/file" $attachmentPostUUID .UUID }}
+        {{ $previewURL := .PreviewURL }}{{ if eq $previewURL "" }}{{ $previewURL = printf "/api/v1/posts/%s/attachments/%s/preview" $attachmentPostUUID .UUID }}{{ end }}
+        {{ $isImage := attachmentIsImage .ContentType }}
+        <article class="panel attachment-card">
+          <a class="attachment-media{{if $isImage}} is-image{{end}}" href="{{$fileURL}}" target="_blank" rel="noopener noreferrer" aria-label="Open {{.FileName}} in a new tab">
+            {{if $isImage}}
+            <img src="{{$previewURL}}" alt="{{.FileName}} preview">
+            {{else}}
+            <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
+            {{end}}
+          </a>
+          <div class="attachment-copy">
+            <div class="attachment-title">
+              <a href="{{$fileURL}}" target="_blank" rel="noopener noreferrer">{{.FileName}}</a>
+            </div>
+            <div class="attachment-meta">{{.ContentType}} · {{.SizeBytes}} bytes · {{shortUUID .UUID}}</div>
+            <div class="chip-row attachment-actions">
+              <a class="chip" href="{{$fileURL}}" target="_blank" rel="noopener noreferrer">Open file</a>
+              {{if or $.Shell.IsAdmin (and $.Shell.CurrentUser (eq $.Shell.CurrentUser.UUID $.PostDetail.Post.AuthorUUID))}}
+              <a class="chip" href="{{$previewURL}}" target="_blank" rel="noopener noreferrer">Preview</a>
+              {{end}}
+            </div>
+          </div>
+        </article>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+    <section class="post-action-stack">
+      <div class="section-title">Quick actions</div>
+      <div class="button-row">
+        {{if canInteract .Shell}}
+        <form action="/posts/{{.PostUUID}}/reactions" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="reaction_type" value="like">
+          <button class="button {{if reactionActive .PostDetail.MyReactionType "like"}}button-primary is-active{{end}}" type="submit">▲ Upvote</button>
+        </form>
+        <form action="/posts/{{.PostUUID}}/reactions" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="reaction_type" value="dislike">
+          <button class="button {{if reactionActive .PostDetail.MyReactionType "dislike"}}button-primary is-active{{end}}" type="submit">▼ Downvote</button>
+        </form>
+        <form action="/posts/{{.PostUUID}}/reactions" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="_method" value="delete">
+          <button class="button button-ghost" type="submit">Clear vote</button>
+        </form>
+        {{else}}
+        <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to react</a>
+        {{end}}
+      </div>
+      <div class="button-row">
+        <a class="button" href="#comments">Jump to comments</a>
+        {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Open attachments</a>{{end}}
+      </div>
+      {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
+      <div class="button-row">
+        <a class="button" href="/posts/{{.PostUUID}}/edit">Edit</a>
+        <form class="inline-form" action="/posts/{{.PostUUID}}/delete" method="post">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <button class="button button-danger" type="submit" onclick="return confirm('Delete this post?')">Delete</button>
+        </form>
+      </div>
+      {{end}}
+      <details class="secondary-action report-toggle">
+        <summary class="button button-ghost">Report thread</summary>
+        <form action="/reports" method="post" class="comment-report-form">
+          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+          <input type="hidden" name="target_type" value="post">
+          <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
+          <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
+          <label for="post-report-reason">Reason</label>
+          <select id="post-report-reason" name="reason_code">
+            <option value="spam">Spam</option>
+            <option value="abuse">Abuse</option>
+            <option value="sexual">Sexual</option>
+            <option value="violence">Violence</option>
+            <option value="illegal">Illegal</option>
+            <option value="other">Other</option>
+          </select>
+          <label for="post-report-detail">Details</label>
+          <textarea id="post-report-detail" name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
+          <button class="button" type="submit">Report</button>
+        </form>
+      </details>
+    </section>
     <section id="comments">
       <div class="section-title">Comments <span class="section-count">{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}}</span></div>
       {{if canInteract .Shell}}
@@ -251,116 +343,9 @@
           <a class="button button-primary" href="{{pageURL (printf "/posts/%s" .PostUUID) "comment_limit" .Comments.Limit "comment_cursor" (cursorValue .Comments.NextCursor)}}">Load more comments</a>
         </div>
         {{end}}
-      {{else}}
-        {{if canInteract .Shell}}
-        {{template "empty-state" (dict "Compact" true "Icon" "chat_bubble" "Eyebrow" "No replies yet" "Title" "Start the first reply" "Body" "Use the reply form above to open the discussion." )}}
-        {{else}}
-        <div class="panel empty-state empty-state-compact">
-          <span class="empty-state-icon material-symbols-outlined" aria-hidden="true">chat_bubble</span>
-          <div class="empty-state-copy">
-            <div class="empty-eyebrow">No replies yet</div>
-            <h2>Join the discussion</h2>
-            <p>Sign in to write the first reply and react to comments.</p>
-          </div>
-          <a class="button button-primary empty-cta" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Sign in to reply</a>
-        </div>
-        {{end}}
       {{end}}
     </section>
   </article>
-  <aside class="panel post-sidebar">
-    <div class="section-title">Reading map</div>
-    <div class="post-sidecard">
-      <div class="meta-row">
-        <span class="chip">{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</span>
-        {{if .PostDetail.Tags}}
-        {{range .PostDetail.Tags}}<span class="chip">{{.Name}}</span>{{end}}
-        {{end}}
-      </div>
-      <h2>{{.PostDetail.Post.Title}}</h2>
-      <p>{{if .PostDetail.Post.Summary}}{{.PostDetail.Post.Summary}}{{else}}{{truncate (normalizeContent .PostDetail.Post.Content) 180}}{{end}}</p>
-    </div>
-    <div class="meta-list">
-      <div class="meta-item">
-        <span>Board</span>
-        <strong>{{boardName $.Shell.BoardMap .PostDetail.Post.BoardUUID}}</strong>
-        <div class="meta-note">Open the board feed for nearby threads.</div>
-      </div>
-      <div class="meta-item">
-        <span>Topics</span>
-        <strong>{{if .PostDetail.Tags}}{{len .PostDetail.Tags}}{{else}}0{{end}}</strong>
-        <div class="meta-note">{{if .PostDetail.Tags}}{{range .PostDetail.Tags}}#{{.Name}} {{end}}{{else}}No tags on this thread.{{end}}</div>
-      </div>
-      <div class="meta-item">
-        <span>Signals</span>
-        <strong>{{len .PostDetail.Reactions}} reactions</strong>
-        <div class="meta-note">{{if .Comments}}{{len .Comments.Comments}}{{else}}0{{end}} comments currently loaded.</div>
-      </div>
-      <div class="meta-item">
-        <span>Assets</span>
-        <strong>{{len .PostDetail.Attachments}} files</strong>
-        <div class="meta-note">{{if .PostDetail.Attachments}}Jump to the attachments list below.{{else}}No attachments are attached to this story.{{end}}</div>
-      </div>
-    </div>
-    <div class="section-title">Quick actions</div>
-    <div class="post-action-stack">
-      <div class="button-row">
-        {{if canInteract .Shell}}
-        <form action="/posts/{{.PostUUID}}/reactions" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="reaction_type" value="like">
-          <button class="button {{if reactionActive .PostDetail.MyReactionType "like"}}button-primary is-active{{end}}" type="submit">▲ Upvote</button>
-        </form>
-        <form action="/posts/{{.PostUUID}}/reactions" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="reaction_type" value="dislike">
-          <button class="button {{if reactionActive .PostDetail.MyReactionType "dislike"}}button-primary is-active{{end}}" type="submit">▼ Downvote</button>
-        </form>
-        <form action="/posts/{{.PostUUID}}/reactions" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="_method" value="delete">
-          <button class="button button-ghost" type="submit">Clear vote</button>
-        </form>
-        {{else}}
-        <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Login to react</a>
-        {{end}}
-      </div>
-      <div class="button-row">
-        <a class="button" href="#comments">Jump to comments</a>
-        {{if .PostDetail.Attachments}}<a class="button" href="#attachments">Open attachments</a>{{end}}
-      </div>
-      {{if and .Shell.CurrentUser (eq .Shell.CurrentUser.UUID .PostDetail.Post.AuthorUUID)}}
-      <div class="button-row">
-        <a class="button" href="/posts/{{.PostUUID}}/edit">Edit</a>
-        <form class="inline-form" action="/posts/{{.PostUUID}}/delete" method="post">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <button class="button button-danger" type="submit" onclick="return confirm('Delete this post?')">Delete</button>
-        </form>
-      </div>
-      {{end}}
-      <details class="secondary-action report-toggle">
-        <summary class="button button-ghost">Report thread</summary>
-        <form action="/reports" method="post" class="comment-report-form">
-          <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
-          <input type="hidden" name="target_type" value="post">
-          <input type="hidden" name="target_uuid" value="{{.PostUUID}}">
-          <input type="hidden" name="redirect" value="/posts/{{.PostUUID}}">
-          <label for="post-report-reason">Reason</label>
-          <select id="post-report-reason" name="reason_code">
-            <option value="spam">Spam</option>
-            <option value="abuse">Abuse</option>
-            <option value="sexual">Sexual</option>
-            <option value="violence">Violence</option>
-            <option value="illegal">Illegal</option>
-            <option value="other">Other</option>
-          </select>
-          <label for="post-report-detail">Details</label>
-          <textarea id="post-report-detail" name="reason_detail" rows="2" placeholder="Optional detail"></textarea>
-          <button class="button" type="submit">Report</button>
-        </form>
-      </details>
-    </div>
-  </aside>
 </div>
 {{end}}
 
