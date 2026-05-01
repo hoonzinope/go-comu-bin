@@ -24,6 +24,8 @@ const visualSnapshotCss = `
   .meta-row span:not(.chip),
   .meta-list small,
   .table-sub,
+  .post-uuid,
+  .post-meta,
   .overlay small,
   .overlay .meta-row,
   .error-panel p {

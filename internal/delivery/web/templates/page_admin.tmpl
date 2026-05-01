@@ -1,0 +1,235 @@
+{{define "page-admin-reports"}}
+<div class="page-heading"><h1>Reports</h1><p>Moderation queue.</p></div>
+{{if .Reports}}
+  <div class="panel table-panel">
+    <div class="table-head report-grid">
+      <div>Report</div>
+      <div>Target</div>
+      <div>Decision</div>
+      <div>Action</div>
+    </div>
+    <div class="table-body">
+      {{range .Reports.Reports}}
+      <form class="table-row report-grid" action="/admin/reports/{{.ID}}/resolve" method="post">
+        <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+        <div data-label="Report">
+          <div class="table-title">#{{.ID}} · {{.ReasonCode}}</div>
+          <div class="table-sub">By @{{shortUUID .ReporterUUID}} · {{formatTime .CreatedAt}}</div>
+          <div class="chip-row">
+            <span class="chip {{if eq .Status "pending"}}chip-pending{{else if eq .Status "accepted"}}chip-active{{else if eq .Status "rejected"}}chip-dead{{end}}">{{.Status}}</span>
+            {{if .ResolvedAt}}<span class="chip chip-active">resolved</span>{{end}}
+          </div>
+        </div>
+        <div data-label="Target">
+          <div class="table-title">{{.TargetType}}</div>
+          <div class="table-sub">{{.TargetUUID}}</div>
+          <div class="table-sub">{{if .ResolvedAt}}Resolved{{else}}Awaiting review{{end}}</div>
+        </div>
+        <div class="form" data-label="Decision">
+          {{template "text-field" (dict "ID" (printf "report-status-%d" .ID) "Label" "Status" "Name" "status" "Value" .Status "Placeholder" "accepted / rejected")}}
+          {{template "text-field" (dict "ID" (printf "report-note-%d" .ID) "Label" "Note" "Name" "resolution_note" "Value" .ResolutionNote "Placeholder" "Optional note")}}
+        </div>
+        <div class="button-row" data-label="Action">
+          <button class="button button-primary" type="submit">Resolve</button>
+        </div>
+      </form>
+      {{end}}
+    </div>
+  </div>
+  {{template "pagination" .}}
+{{end}}
+{{end}}
+
+{{define "page-admin-outbox"}}
+<div class="page-heading"><h1>Dead outbox</h1><p>Retry or discard failed messages.</p></div>
+{{if .Outbox}}
+  <div class="panel table-panel">
+    <div class="table-head outbox-grid">
+      <div>Message</div>
+      <div>Schedule</div>
+      <div>Error</div>
+      <div>Action</div>
+    </div>
+    <div class="table-body">
+      {{range .Outbox.Messages}}
+      <div class="table-row outbox-grid">
+        <div data-label="Message">
+          <div class="table-title">{{.EventName}}</div>
+          <div class="table-sub">{{.ID}}</div>
+          <div class="chip-row"><span class="chip chip-dead">dead</span><span class="chip chip-pending">Attempts x{{.AttemptCount}}</span></div>
+        </div>
+        <div data-label="Schedule">
+          <div class="table-title">{{formatTime .OccurredAt}}</div>
+          <div class="table-sub">Retry at {{formatTime .NextAttemptAt}}</div>
+        </div>
+        <div data-label="Error">
+          <div class="table-title">Last error</div>
+          <div class="table-sub">{{.LastError}}</div>
+        </div>
+        <div class="button-row" data-label="Action">
+          <form action="/admin/outbox/dead/{{.ID}}/requeue" method="post">
+            <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+            <button class="button" type="submit">Requeue</button>
+          </form>
+          <form action="/admin/outbox/dead/{{.ID}}/discard" method="post">
+            <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+            <button class="button button-danger" type="submit">Discard</button>
+          </form>
+        </div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{template "pagination" .}}
+{{end}}
+{{end}}
+
+{{define "page-admin-boards"}}
+<div class="page-heading">
+  <h1>Boards</h1>
+  <p>Visibility management.</p>
+</div>
+<form class="panel form" action="/admin/boards" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  <div class="section-title">Create new board</div>
+  {{template "text-field" (dict "ID" "admin-board-name" "Label" "Name" "Name" "name" "Placeholder" "Board name" "Required" true)}}
+  {{template "text-field" (dict "ID" "admin-board-description" "Label" "Description" "Name" "description" "Placeholder" "Short description")}}
+  <button class="button button-primary" type="submit">Create board</button>
+</form>
+{{if .AdminBoards}}
+  <div class="stats-grid">
+    <div class="panel stat-card">
+      <div class="stat-label">Visible</div>
+      <div class="stat-value">{{.BoardVisibleCount}}</div>
+    </div>
+    <div class="panel stat-card">
+      <div class="stat-label">Hidden</div>
+      <div class="stat-value">{{.BoardHiddenCount}}</div>
+    </div>
+    <div class="panel stat-card">
+      <div class="stat-label">Total</div>
+      <div class="stat-value">{{len .AdminBoards.Boards}}</div>
+    </div>
+  </div>
+  <div class="panel table-panel">
+    <div class="table-head">
+      <div>Board</div>
+      <div>Status</div>
+      <div>Action</div>
+    </div>
+    <div class="table-body">
+      {{range .AdminBoards.Boards}}
+      <div class="table-row">
+        <div data-label="Board">
+          <div class="table-title">{{.Name}}</div>
+          <div class="table-sub">{{.UUID}}</div>
+          <div class="table-sub">{{.Description}}</div>
+        </div>
+        <div data-label="Status"><span class="chip {{if .Hidden}}chip-hidden{{else}}chip-active{{end}}">{{if .Hidden}}Hidden{{else}}Visible{{end}}</span></div>
+        <div class="button-row" data-label="Action">
+          <a class="button" href="/admin/boards/{{.UUID}}/edit">Edit</a>
+          <form class="inline-form" action="/admin/boards/{{.UUID}}/visibility" method="post">
+            <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+            {{if .Hidden}}
+              <input type="hidden" name="hidden" value="false">
+              <button class="button" type="submit">Show</button>
+            {{else}}
+              <input type="hidden" name="hidden" value="true">
+              <button class="button button-danger" type="submit">Hide</button>
+            {{end}}
+          </form>
+          <form class="inline-form" action="/admin/boards/{{.UUID}}/delete" method="post">
+            <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+            <button class="button button-danger" type="submit" onclick="return confirm('Delete this board?')">Delete</button>
+          </form>
+        </div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{template "pagination" .}}
+{{else}}
+  <div class="panel empty">No boards available.</div>
+{{end}}
+{{end}}
+
+{{define "page-admin-board-edit"}}
+<div class="page-heading">
+  <h1>Edit Board</h1>
+  {{if .AdminBoardTarget}}<p>{{.AdminBoardTarget.Name}}</p>{{end}}
+</div>
+<form class="panel form" action="/admin/boards/{{.BoardUUID}}" method="post">
+  <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+  {{if .AdminBoardTarget}}
+  {{template "text-field" (dict "ID" "admin-board-edit-name" "Label" "Name" "Name" "name" "Value" .AdminBoardTarget.Name "Required" true)}}
+  {{template "text-field" (dict "ID" "admin-board-edit-description" "Label" "Description" "Name" "description" "Value" .AdminBoardTarget.Description)}}
+  {{else}}
+  {{template "text-field" (dict "ID" "admin-board-edit-name" "Label" "Name" "Name" "name" "Required" true)}}
+  {{template "text-field" (dict "ID" "admin-board-edit-description" "Label" "Description" "Name" "description")}}
+  {{end}}
+  <div class="button-row">
+    <button class="button button-primary" type="submit">Save</button>
+    <a class="button" href="/admin/boards">Cancel</a>
+  </div>
+</form>
+{{end}}
+
+{{define "page-admin-snapshot"}}
+<div class="page-heading">
+  <h1>Admin Snapshot</h1>
+  <p>Board visibility and moderation queue.</p>
+</div>
+<div class="stats-grid">
+  <div class="panel stat-card">
+    <div class="stat-label">Reports</div>
+    <div class="stat-value">{{if .Reports}}{{len .Reports.Reports}}{{else}}0{{end}}</div>
+  </div>
+  <div class="panel stat-card">
+    <div class="stat-label">Dead outbox</div>
+    <div class="stat-value">{{if .Outbox}}{{len .Outbox.Messages}}{{else}}0{{end}}</div>
+  </div>
+  <div class="panel stat-card">
+    <div class="stat-label">Hidden boards</div>
+    <div class="stat-value">{{.BoardHiddenCount}}</div>
+  </div>
+</div>
+<div class="button-row">
+  <a class="button" href="/admin/reports">Reports</a>
+  <a class="button" href="/admin/outbox">Outbox</a>
+  <a class="button" href="/admin/boards">Boards</a>
+</div>
+<div class="panel form" x-data="{userUUID:''}">
+  <h2>User Suspension</h2>
+  <label for="suspension-user-uuid">User UUID</label>
+  <input id="suspension-user-uuid" type="text" x-model="userUUID" placeholder="Enter user UUID">
+  <a class="button button-primary" :href="'/admin/users/'+userUUID+'/suspension'">Manage</a>
+</div>
+{{end}}
+
+{{define "page-admin-suspension"}}
+<div class="page-heading"><h1>User suspension</h1><p>{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}</p></div>
+{{if and .Suspension (eq .Suspension.Status "suspended")}}
+<div class="panel form">
+  <p>This user is currently suspended. Reason: {{.Suspension.Reason}}</p>
+  <form action="/admin/users/{{.Suspension.UserUUID}}/suspension" method="post">
+    <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+    <input type="hidden" name="_method" value="unsuspend">
+    <button class="button button-primary" type="submit">Unsuspend</button>
+  </form>
+</div>
+{{else}}
+<form class="panel form" action="/admin/users/{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}/suspension" method="post">
+  <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+  {{template "text-field" (dict "ID" "suspension-reason" "Label" "Reason" "Name" "reason")}}
+  {{template "text-field" (dict "ID" "suspension-duration" "Label" "Duration" "Name" "duration" "Placeholder" "7d / 15d / 30d / unlimited")}}
+  <button class="button button-primary" type="submit">Suspend</button>
+</form>
+{{end}}
+{{end}}
+
+{{define "page-error"}}
+<div class="panel error-panel">
+  <h1>{{.Shell.Title}}</h1>
+  <p>{{.ErrorMessage}}</p>
+</div>
+{{end}}

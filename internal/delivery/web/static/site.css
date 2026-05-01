@@ -100,7 +100,7 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 }
 .button-ghost { background: transparent; }
 .topbar-actions { display: flex; gap: .5rem; align-items: center; }
-.topbar-action-form { display: contents; }
+.topbar-action-form { display: inline-flex; }
 
 .sidebar {
   position: fixed;
@@ -377,7 +377,17 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   padding: .9rem .5rem;
   background: var(--surface-alt);
 }
+.vote-form {
+  display: flex;
+  width: 100%;
+  margin: 0;
+}
+.inline-form {
+  display: inline-flex;
+  margin: 0;
+}
 .vote-rail button {
+  width: 100%;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -391,6 +401,15 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   flex-wrap: wrap;
   gap: .5rem;
   align-items: center;
+}
+.meta-row > form,
+.button-row > form {
+  display: inline-flex;
+  margin: 0;
+}
+.button-row > form .button,
+.meta-row > form .button {
+  width: 100%;
 }
 .pagination {
   display: flex;

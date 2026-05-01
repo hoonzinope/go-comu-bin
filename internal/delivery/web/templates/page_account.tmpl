@@ -1,0 +1,164 @@
+{{define "page-login"}}
+<div class="auth-grid">
+  <form class="panel form" action="/login{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
+    <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+    <input type="hidden" name="redirect" value="{{.Redirect}}">
+    <h1>Login</h1>
+    {{template "text-field" (dict "ID" "login-username" "Label" "Username" "Name" "username" "Value" .LoginUsername)}}
+    {{template "text-field" (dict "ID" "login-password" "Label" "Password" "Name" "password" "Type" "password")}}
+    <button class="button button-primary" type="submit">Login</button>
+    <a href="/reset-password">Forgot password?</a>
+  </form>
+  <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
+    <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+    <input type="hidden" name="redirect" value="{{.Redirect}}">
+    <h2>Guest to account</h2>
+    {{template "text-field" (dict "ID" "signup-username" "Label" "Username" "Name" "username")}}
+    {{template "text-field" (dict "ID" "signup-email" "Label" "Email" "Name" "email" "Type" "email")}}
+    {{template "text-field" (dict "ID" "signup-password" "Label" "Password" "Name" "password" "Type" "password")}}
+    <button class="button" type="submit">Sign up</button>
+  </form>
+  <form class="panel form guest-login" action="/guest{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
+    <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+    <input type="hidden" name="redirect" value="{{.Redirect}}">
+    <h2>Continue as guest</h2>
+    <p>Enter with a temporary account that stays on this device.</p>
+    <button class="button button-primary" type="submit">Continue as guest</button>
+  </form>
+</div>
+{{end}}
+
+{{define "page-signup"}}
+<form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  <input type="hidden" name="redirect" value="{{.Redirect}}">
+  <h1>Sign up</h1>
+  {{template "text-field" (dict "ID" "signup-only-username" "Label" "Username" "Name" "username")}}
+  {{template "text-field" (dict "ID" "signup-only-email" "Label" "Email" "Name" "email" "Type" "email")}}
+  {{template "text-field" (dict "ID" "signup-only-password" "Label" "Password" "Name" "password" "Type" "password")}}
+  <button class="button button-primary" type="submit">Create account</button>
+</form>
+{{end}}
+
+{{define "page-verify-email"}}
+<form class="panel form" action="/verify-email" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  <h1>Verify email</h1>
+  {{template "text-field" (dict "ID" "verify-email-token" "Label" "Token" "Name" "token" "Value" .VerifyToken)}}
+  <button class="button button-primary" type="submit">Confirm</button>
+</form>
+{{end}}
+
+{{define "page-reset-password"}}
+{{if .ResetToken}}
+<form class="panel form" action="/reset-password" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  <h1>Reset password</h1>
+  {{template "text-field" (dict "ID" "reset-password-token" "Label" "Token" "Name" "token" "Value" .ResetToken)}}
+  {{template "text-field" (dict "ID" "reset-password-new" "Label" "New password" "Name" "new_password" "Type" "password")}}
+  <button class="button button-primary" type="submit">Reset</button>
+</form>
+{{else}}
+<form class="panel form" action="/reset-password" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  <h1>Forgot password</h1>
+  {{template "text-field" (dict "ID" "reset-password-email" "Label" "Email" "Name" "email" "Type" "email" "Required" true)}}
+  <button class="button button-primary" type="submit">Send reset link</button>
+</form>
+{{end}}
+{{end}}
+
+{{define "page-me"}}
+<div class="page-heading">
+  <h1>My page</h1>
+  <p>{{.Shell.CurrentUser.Name}} · {{.Shell.CurrentUser.Email}}</p>
+</div>
+{{if .Shell.CurrentUser.Guest}}
+<div class="panel form">
+  <h2>Guest account</h2>
+  <p>Upgrade to a full account to unlock all features.</p>
+  <a class="button button-primary" href="/me/upgrade">Upgrade account</a>
+</div>
+{{end}}
+{{if and (not .Shell.CurrentUser.Guest) (not .Shell.CurrentUser.EmailVerifiedAt)}}
+<div class="panel form">
+  <h2>Email not verified</h2>
+  <form class="inline-form" action="/me/verify-email" method="post">
+    <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+    <button class="button button-primary" type="submit">Send verification email</button>
+  </form>
+</div>
+{{end}}
+<div class="grid-2">
+{{if not .Shell.CurrentUser.Guest}}
+<form class="panel form" action="/me/delete" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  <h2>Delete account</h2>
+  {{template "text-field" (dict "ID" "me-delete-password" "Label" "Password" "Name" "password" "Type" "password")}}
+  <button class="button button-danger" type="submit">Delete</button>
+</form>
+{{end}}
+  <section class="panel">
+    <h2>Drafts</h2>
+    {{if .Drafts}}
+      {{range .Drafts.Posts}}
+      <div class="list-row"><a href="/posts/{{.UUID}}/edit">{{.Title}}</a><span>{{formatTime .UpdatedAt}}</span></div>
+      {{end}}
+      {{template "pagination" .}}
+    {{else}}
+      <div class="empty">
+        <p>No drafts yet.</p>
+        {{if $.Shell.ComposeURL}}
+        <a class="button empty-cta" href="{{$.Shell.ComposeURL}}">+ Start a draft</a>
+        {{end}}
+      </div>
+    {{end}}
+  </section>
+</div>
+{{end}}
+
+{{define "page-notifications"}}
+<div class="page-heading">
+  <h1>Notifications</h1>
+  <p>Unread: {{.Shell.UnreadCount}}</p>
+</div>
+<form action="/notifications/read-all" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  <button class="button" type="submit">Mark all read</button>
+</form>
+{{if .Notifications}}
+  <div class="stack">
+    {{range .Notifications.Notifications}}
+    <div class="panel">
+      <div class="meta-row"><span>{{.MessageKey}}</span><span>{{formatTime .CreatedAt}}</span>
+        {{if not .ReadAt}}
+        <form class="inline-form" action="/notifications/{{.UUID}}/read" method="post" style="margin-left:auto">
+          <input type="hidden" name="_csrf" value="{{$.Shell.CSRFToken}}">
+          <button class="button" type="submit">Mark read</button>
+        </form>
+        {{end}}
+      </div>
+      <p>{{.PostTitle}}</p>
+    </div>
+    {{end}}
+  </div>
+  {{template "pagination" .}}
+{{end}}
+{{end}}
+
+{{define "page-me-upgrade"}}
+<div class="page-heading">
+  <h1>Upgrade account</h1>
+  <p>Create a full account from your guest session.</p>
+</div>
+<form class="panel form" action="/me/upgrade" method="post">
+  <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+  {{template "text-field" (dict "ID" "me-upgrade-username" "Label" "Username" "Name" "username" "Required" true)}}
+  {{template "text-field" (dict "ID" "me-upgrade-email" "Label" "Email" "Name" "email" "Type" "email" "Required" true)}}
+  {{template "text-field" (dict "ID" "me-upgrade-password" "Label" "Password" "Name" "password" "Type" "password" "Required" true)}}
+  <div class="button-row">
+    <button class="button button-primary" type="submit">Create account</button>
+    <a class="button" href="/me">Cancel</a>
+  </div>
+</form>
+{{end}}

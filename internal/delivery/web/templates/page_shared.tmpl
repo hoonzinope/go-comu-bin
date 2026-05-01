@@ -1,0 +1,72 @@
+{{define "reaction-rail"}}
+<div class="vote-rail" aria-label="Vote controls">
+  {{if .Shell.IsAuthenticated}}
+  <form class="vote-form" action="/posts/{{.Post.UUID}}/reactions" method="post">
+    <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+    <input type="hidden" name="reaction_type" value="like">
+    <button type="submit" aria-label="Upvote {{.Post.Title}}">▲</button>
+  </form>
+  <strong aria-hidden="true">·</strong>
+  <form class="vote-form" action="/posts/{{.Post.UUID}}/reactions" method="post">
+    <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
+    <input type="hidden" name="reaction_type" value="dislike">
+    <button type="submit" aria-label="Downvote {{.Post.Title}}">▼</button>
+  </form>
+  {{else}}
+  <a href="/login?redirect={{queryEscape (printf "/posts/%s" .Post.UUID)}}" aria-label="Login to upvote {{.Post.Title}}">▲</a>
+  <strong aria-hidden="true">·</strong>
+  <a href="/login?redirect={{queryEscape (printf "/posts/%s" .Post.UUID)}}" aria-label="Login to downvote {{.Post.Title}}">▼</a>
+  {{end}}
+</div>
+{{end}}
+
+{{define "post-summary"}}
+<article class="panel feed-item">
+  {{template "reaction-rail" .}}
+  <div class="item-body">
+    <div class="meta-row">
+      <span class="chip">{{boardName .Shell.BoardMap .Post.BoardUUID}}</span>
+      <span>@{{shortUUID .Post.AuthorUUID}}</span>
+      <span>{{formatTime .Post.UpdatedAt}}</span>
+    </div>
+    <h2><a href="/posts/{{.Post.UUID}}">{{.Post.Title}}</a></h2>
+    <p>{{if .Post.Summary}}{{.Post.Summary}}{{else}}{{truncate (normalizeContent .Post.Content) 220}}{{end}}</p>
+  </div>
+</article>
+{{end}}
+
+{{define "text-field"}}
+<label for="{{.ID}}">{{.Label}}</label>
+<input id="{{.ID}}" type="{{if .Type}}{{.Type}}{{else}}text{{end}}" name="{{.Name}}"{{if .Value}} value="{{.Value}}"{{end}}{{if .Placeholder}} placeholder="{{.Placeholder}}"{{end}}{{if .Required}} required{{end}}>
+{{end}}
+
+{{define "textarea-field"}}
+<label for="{{.ID}}">{{.Label}}</label>
+<textarea id="{{.ID}}" name="{{.Name}}" rows="{{if .Rows}}{{.Rows}}{{else}}3{{end}}"{{if .Placeholder}} placeholder="{{.Placeholder}}"{{end}}{{if .Required}} required{{end}}>{{.Value}}</textarea>
+{{end}}
+
+{{define "pagination"}}
+{{if and .Pagination (or (gt .Pagination.PrevPage 0) (gt .Pagination.NextPage 0) (gt (len .Pagination.Pages) 1))}}
+<nav class="pagination" aria-label="Pagination">
+  {{if gt .Pagination.PrevPage 0}}
+  <a class="pagination-link pagination-step" href="{{listPageURL . .Pagination.PrevPage}}">Prev</a>
+  {{else}}
+  <span class="pagination-link pagination-step is-disabled" aria-disabled="true">Prev</span>
+  {{end}}
+  <div class="pagination-pages">
+    {{range .Pagination.Pages}}
+      {{if eq . $.Pagination.Page}}
+      <span class="pagination-link is-current" aria-current="page">{{.}}</span>
+      {{else}}
+      <a class="pagination-link" href="{{listPageURL $ .}}">{{.}}</a>
+      {{end}}
+    {{end}}
+  </div>
+  {{if gt .Pagination.NextPage 0}}
+  <a class="pagination-link pagination-step" href="{{listPageURL . .Pagination.NextPage}}">Next</a>
+  {{else}}
+  <span class="pagination-link pagination-step is-disabled" aria-disabled="true">Next</span>
+  {{end}}
+</nav>
+{{end}}
+{{end}}

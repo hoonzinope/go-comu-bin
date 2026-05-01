@@ -23,8 +23,8 @@
       <a href="/" class="brand-mark">urrrm community</a>
       <span class="brand-sub">tiny community site</span>
     </div>
-    <form class="searchbar" action="/search" method="get">
-      <input type="search" name="q" value="{{.Query}}" placeholder="Search posts, boards, tags">
+    <form class="searchbar" action="/search" method="get" role="search">
+      <input type="search" name="q" value="{{.Query}}" placeholder="Search posts, boards, tags" aria-label="Search posts, boards, tags">
       <button type="submit">Search</button>
     </form>
     <div class="topbar-actions">
