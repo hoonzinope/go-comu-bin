@@ -44,3 +44,19 @@ func TestExtractLinkPreviewsFromMarkdownDeduplicatesRepeatedLinks(t *testing.T) 
 	require.Len(t, links, 1)
 	assert.Equal(t, "source", links[0].Title)
 }
+
+func TestExtractLinkPreviewsFromMarkdownDeduplicatesCanonicalVariants(t *testing.T) {
+	orig := fetchLinkPreviewMetadataFunc
+	fetchLinkPreviewMetadataFunc = func(ctx context.Context, rawURL string) linkPreviewMetadata {
+		_ = ctx
+		_ = rawURL
+		return linkPreviewMetadata{CanonicalURL: "https://example.com/2026/04/29/uber-is-in-the-hotel-business-now-thanks-in-part-to-ai/"}
+	}
+	t.Cleanup(func() { fetchLinkPreviewMetadataFunc = orig })
+
+	links := extractLinkPreviewsFromMarkdown(context.Background(), "[source](https://example.com/2026/4/29/uber-is-in-the-hotel-business-now-thanks-in-part-to-ai/) and [source](https://example.com/2026/04/29/uber-is-in-the-hotel-business-now-thanks-in-part-to-ai/)")
+
+	require.Len(t, links, 1)
+	assert.Equal(t, "https://example.com/2026/4/29/uber-is-in-the-hotel-business-now-thanks-in-part-to-ai/", links[0].URL)
+	assert.Equal(t, "https://example.com/2026/04/29/uber-is-in-the-hotel-business-now-thanks-in-part-to-ai/", links[0].CanonicalURL)
+}

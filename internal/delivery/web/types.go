@@ -106,11 +106,12 @@ type ShellData struct {
 }
 
 type LinkPreview struct {
-	Title       string
-	URL         string
-	Host        string
-	Description string
-	ImageURL    string
+	Title        string
+	URL          string
+	CanonicalURL string
+	Host         string
+	Description  string
+	ImageURL     string
 }
 
 type PageData struct {

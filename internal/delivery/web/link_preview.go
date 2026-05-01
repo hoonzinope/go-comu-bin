@@ -56,7 +56,7 @@ func extractLinkPreviewsFromMarkdown(ctx context.Context, value string) []LinkPr
 		}
 	}
 	walk(doc)
-	return hydrateLinkPreviews(ctx, out)
+	return dedupeLinkPreviews(hydrateLinkPreviews(ctx, out))
 }
 
 func hydrateLinkPreviews(ctx context.Context, previews []LinkPreview) []LinkPreview {
@@ -73,6 +73,9 @@ func hydrateLinkPreviews(ctx context.Context, previews []LinkPreview) []LinkPrev
 		if metadata.Title != "" {
 			out[i].Title = metadata.Title
 		}
+		if metadata.CanonicalURL != "" {
+			out[i].CanonicalURL = metadata.CanonicalURL
+		}
 		if metadata.Description != "" {
 			out[i].Description = metadata.Description
 		}
@@ -84,9 +87,10 @@ func hydrateLinkPreviews(ctx context.Context, previews []LinkPreview) []LinkPrev
 }
 
 type linkPreviewMetadata struct {
-	Title       string
-	Description string
-	ImageURL    string
+	Title        string
+	CanonicalURL string
+	Description  string
+	ImageURL     string
 }
 
 func fetchLinkPreviewMetadata(ctx context.Context, rawURL string) linkPreviewMetadata {
@@ -140,10 +144,19 @@ func extractLinkPreviewMetadata(doc *xhtml.Node, baseURL *url.URL) linkPreviewMe
 			switch {
 			case meta.Title == "" && content != "" && (property == "og:title" || name == "twitter:title"):
 				meta.Title = content
+			case meta.CanonicalURL == "" && content != "" && property == "og:url":
+				meta.CanonicalURL = resolvePreviewURL(baseURL, content)
 			case meta.Description == "" && content != "" && (property == "og:description" || name == "twitter:description"):
 				meta.Description = content
 			case meta.ImageURL == "" && content != "" && (property == "og:image" || name == "twitter:image" || name == "twitter:image:src"):
 				meta.ImageURL = resolvePreviewURL(baseURL, content)
+			}
+		}
+		if node.Type == xhtml.ElementNode && node.Data == "link" {
+			rel := strings.ToLower(strings.TrimSpace(attrValue(node, "rel")))
+			href := strings.TrimSpace(attrValue(node, "href"))
+			if meta.CanonicalURL == "" && href != "" && strings.Contains(rel, "canonical") {
+				meta.CanonicalURL = resolvePreviewURL(baseURL, href)
 			}
 		}
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
@@ -152,9 +165,33 @@ func extractLinkPreviewMetadata(doc *xhtml.Node, baseURL *url.URL) linkPreviewMe
 	}
 	walk(doc)
 	meta.Title = normalizePreviewTitle(meta.Title)
+	meta.CanonicalURL = strings.TrimSpace(meta.CanonicalURL)
 	meta.Description = normalizePreviewText(meta.Description)
 	meta.ImageURL = strings.TrimSpace(meta.ImageURL)
 	return meta
+}
+
+func dedupeLinkPreviews(previews []LinkPreview) []LinkPreview {
+	if len(previews) < 2 {
+		return previews
+	}
+	seen := make(map[string]struct{}, len(previews))
+	out := make([]LinkPreview, 0, len(previews))
+	for _, preview := range previews {
+		key := strings.TrimSpace(preview.CanonicalURL)
+		if key == "" {
+			key = strings.TrimSpace(preview.URL)
+		}
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, preview)
+	}
+	return out
 }
 
 func normalizePreviewTitle(value string) string {
