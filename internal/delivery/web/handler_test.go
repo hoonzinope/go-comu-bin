@@ -1004,9 +1004,26 @@ func TestHandler_RenderEmptyStateSurfaces(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		body := rr.Body.String()
-		assert.Contains(t, body, "No replies yet")
-		assert.Contains(t, body, "Use the reply form above to open the discussion.")
+		assert.Contains(t, body, "Write a reply")
+		assert.NotContains(t, body, "No replies yet")
+		assert.NotContains(t, body, "Use the reply form above to open the discussion.")
 		assert.Contains(t, body, "comment")
+	})
+
+	t.Run("guest comments", func(t *testing.T) {
+		commentUseCase := &testCommentUseCase{comments: &model.CommentList{}}
+		r := newTestWebEngineWithDependencies(&testSessionUseCase{}, &testBoardUseCase{}, &testPostUseCase{}, commentUseCase, &testNotificationUseCase{}, &testReportUseCase{}, &testOutboxAdminUseCase{})
+
+		req := httptest.NewRequest(http.MethodGet, "/posts/post-uuid", nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.Contains(t, body, "Sign in to join the discussion before replying.")
+		assert.Contains(t, body, "Sign in to reply")
+		assert.NotContains(t, body, "No replies yet")
+		assert.NotContains(t, body, "Use the reply form above to open the discussion.")
 	})
 }
 

@@ -131,6 +131,7 @@ type PageData struct {
 	Redirect          string
 	Feed              *model.PostList
 	PostDetail        *model.PostDetail
+	LinkPreviews      []LinkPreview
 	Comments          *model.CommentList
 	Drafts            *model.PostList
 	Notifications     *model.NotificationList
