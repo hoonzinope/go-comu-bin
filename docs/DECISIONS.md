@@ -85,6 +85,82 @@
 - `internal/infrastructure/persistence/mysql/*`
 - `docker-compose.yml`
 
+## 2026-05-01 - web template는 공통 post card partial로 묶고 주요 폼 라벨과 inline form 구조를 정리한다
+
+상태
+
+- decided
+
+배경
+
+- feed와 search가 거의 같은 post card를 각각 따로 렌더링하고 있어, 검색 화면만 reaction form 동작과 마크업이 어긋난다.
+- topbar, comment, compose, auth, admin form들이 label/id 연결이 느슨해서 접근성과 유지보수성이 떨어진다.
+- 여러 곳에서 `display:contents`를 직접 쓰는 구조는 브라우저/보조기기 호환성과 레이아웃 추적을 어렵게 만든다.
+
+관찰
+
+- `internal/delivery/web/templates/page.tmpl`의 feed와 search 분기에는 거의 동일한 post summary 카드가 중복되어 있다.
+- search 분기 카드의 vote rail은 form이 아니라 button만 렌더링돼 실제 reaction 제출 경로가 없다.
+- `internal/delivery/web/templates/page.tmpl` 전반의 form은 visible label이 있어도 입력과 `for`/`id`가 연결되지 않은 경우가 많다.
+- `internal/delivery/web/static/site.css`는 inline form, vote rail, button row를 스타일링할 수 있지만, 템플릿이 이를 일관되게 사용하지 않는다.
+
+결론
+
+- 공통 post summary card와 reaction rail을 partial로 추출해 feed/search가 같은 마크업을 공유하게 한다.
+- 주요 폼 입력은 `id`/`for`로 연결하고, `display:contents`는 가능한 범위에서 제거한다.
+- 보이는 구조를 크게 바꾸지 않는 선에서 inline form과 button row를 CSS로 처리해 유지보수성을 높인다.
+
+후속 작업
+
+- `internal/delivery/web/templates/page.tmpl` 피드/검색 카드 통합
+- `internal/delivery/web/templates/page.tmpl` 폼 레이블 정리
+- `internal/delivery/web/static/site.css` inline form 스타일 추가
+- visual snapshot 갱신
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/static/site.css`
+- `tests/e2e/visual.spec.ts`
+
+## 2026-05-01 - page.tmpl는 shared/content/account/admin partial로 분리해 유지보수 경계를 줄인다
+
+상태
+
+- decided
+
+배경
+
+- `page.tmpl`는 여러 화면의 분기와 렌더링 조각이 한 파일에 집중돼 있어, 작은 수정도 전체 맥락을 읽어야 한다.
+- 이미 공통 필드/카드 partial이 생겼으므로, 다음 단계는 화면 성격별로 파일 경계를 나눠 구조를 안정화하는 것이다.
+- 렌더 출력은 유지하되, template 파일을 기능별로 분리해 이후 디자인 조정과 컴포넌트 정리를 쉽게 만들고자 한다.
+
+관찰
+
+- feed, post, compose 같은 콘텐츠 화면과 login, signup, me, notifications 같은 계정 화면이 같은 파일에 섞여 있다.
+- admin reports, outbox, boards, snapshot, suspension도 같은 템플릿에 있어 구조 파악이 어렵다.
+- Go 템플릿은 여러 `define`을 별도 파일로 나눠도 ParseFS 단계에서 함께 사용할 수 있다.
+
+결론
+
+- `page.tmpl`는 최상위 디스패처만 남기고, 콘텐츠/계정/admin 화면은 별도 template 파일로 이동한다.
+- shared partial은 독립 파일로 유지해 페이지 파일들이 공통 조각을 재사용하도록 한다.
+- 렌더 출력은 바꾸지 않고 파일 경계와 읽는 순서만 정리한다.
+
+후속 작업
+
+- `internal/delivery/web/templates/page.tmpl` 디스패처화
+- `internal/delivery/web/templates/page_shared.tmpl` 생성
+- `internal/delivery/web/templates/page_content.tmpl` 생성
+- `internal/delivery/web/templates/page_account.tmpl` 생성
+- `internal/delivery/web/templates/page_admin.tmpl` 생성
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page.tmpl`
+- `internal/delivery/web/templates/layout.tmpl`
+- `internal/delivery/web/handler.go`
+
 ## 2026-04-30 - post detail body는 raw markdown 저장을 유지하고 서버 렌더링 HTML로 노출한다
 
 상태
