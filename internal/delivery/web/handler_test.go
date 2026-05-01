@@ -674,7 +674,8 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Login")
-		assert.Contains(t, rr.Body.String(), "Guest to account")
+		assert.Contains(t, rr.Body.String(), "Access desk")
+		assert.Contains(t, rr.Body.String(), "Create account")
 		assert.Contains(t, rr.Body.String(), "Continue as guest")
 	})
 
@@ -685,6 +686,8 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "My page")
 		assert.Contains(t, rr.Body.String(), "alice@example.com")
+		assert.Contains(t, rr.Body.String(), "Account overview")
+		assert.Contains(t, rr.Body.String(), "Email not verified")
 		assert.Contains(t, rr.Body.String(), "Draft title")
 	})
 
@@ -765,6 +768,7 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Boards")
+		assert.Contains(t, rr.Body.String(), "Board directory")
 		assert.Contains(t, rr.Body.String(), "Hidden")
 		assert.Contains(t, rr.Body.String(), "Visible")
 		assert.Contains(t, rr.Body.String(), "Show")
@@ -778,6 +782,7 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Moderation queue")
+		assert.Contains(t, rr.Body.String(), "Moderation desk")
 		assert.Contains(t, rr.Body.String(), "Report")
 		assert.Contains(t, rr.Body.String(), "Resolve")
 		assert.Contains(t, rr.Body.String(), "accepted / rejected")
@@ -789,9 +794,21 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "Dead outbox")
+		assert.Contains(t, rr.Body.String(), "Delivery queue")
 		assert.Contains(t, rr.Body.String(), "Attempts")
 		assert.Contains(t, rr.Body.String(), "Requeue")
 		assert.Contains(t, rr.Body.String(), "Discard")
+	})
+
+	t.Run("admin snapshot", func(t *testing.T) {
+		req, rr := authRequest(http.MethodGet, "/admin")
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Admin Snapshot")
+		assert.Contains(t, rr.Body.String(), "Operations snapshot")
+		assert.Contains(t, rr.Body.String(), "Reports")
+		assert.Contains(t, rr.Body.String(), "Boards")
 	})
 }
 

@@ -263,6 +263,38 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   color: rgba(43,52,56,.76);
   line-height: 1.45;
 }
+.surface-hero {
+  display: grid;
+  gap: .65rem;
+  background: linear-gradient(180deg, rgba(246, 241, 231, 0.92), rgba(255, 255, 255, 0.96));
+}
+.surface-hero h1,
+.surface-hero h2 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.06em;
+  line-height: .96;
+}
+.surface-hero h1 {
+  font-size: clamp(1.9rem, 4.6vw, 3rem);
+}
+.surface-hero h2 {
+  font-size: 1.45rem;
+}
+.surface-hero p {
+  margin: 0;
+  color: rgba(43,52,56,.76);
+  line-height: 1.55;
+}
+.surface-hero .chip-row {
+  margin-top: .1rem;
+}
+.auth-hero,
+.admin-hero,
+.account-summary {
+  max-width: none;
+  margin-bottom: 1rem;
+}
 .post-header {
   display: grid;
   gap: .55rem;
@@ -1359,6 +1391,7 @@ body {
 
 .auth-grid {
   gap: 1rem;
+  max-width: 72rem;
 }
 
 .comment-form {

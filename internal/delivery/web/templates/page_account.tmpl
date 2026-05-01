@@ -1,4 +1,14 @@
 {{define "page-login"}}
+<div class="panel surface-hero auth-hero">
+  <div class="page-eyebrow">Access desk</div>
+  <h1>Sign in, create an account, or stay as guest</h1>
+  <p>Keep drafts, reactions, and notifications under one account. Guests stay local until they upgrade.</p>
+  <div class="chip-row">
+    <span class="chip">Persistent account</span>
+    <span class="chip">Guest mode</span>
+    <span class="chip">Password recovery</span>
+  </div>
+</div>
 <div class="auth-grid">
   <form class="panel form" action="/login{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
     <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -12,7 +22,7 @@
   <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
     <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
     <input type="hidden" name="redirect" value="{{.Redirect}}">
-    <h2>Guest to account</h2>
+    <h2>Create account</h2>
     {{template "text-field" (dict "ID" "signup-username" "Label" "Username" "Name" "username")}}
     {{template "text-field" (dict "ID" "signup-email" "Label" "Email" "Name" "email" "Type" "email")}}
     {{template "text-field" (dict "ID" "signup-password" "Label" "Password" "Name" "password" "Type" "password")}}
@@ -29,6 +39,11 @@
 {{end}}
 
 {{define "page-signup"}}
+<div class="panel surface-hero auth-hero">
+  <div class="page-eyebrow">Access desk</div>
+  <h1>Turn a guest session into a full account</h1>
+  <p>Sign up to keep drafts, receive notifications, and recover your account later.</p>
+</div>
 <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
   <input type="hidden" name="redirect" value="{{.Redirect}}">
@@ -41,6 +56,11 @@
 {{end}}
 
 {{define "page-verify-email"}}
+<div class="panel surface-hero auth-hero">
+  <div class="page-eyebrow">Recovery desk</div>
+  <h2>Recovery ready</h2>
+  <p>Confirm the mailbox tied to your account so password recovery and account changes stay available.</p>
+</div>
 <form class="panel form" action="/verify-email" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
   <h1>Verify email</h1>
@@ -51,6 +71,11 @@
 
 {{define "page-reset-password"}}
 {{if .ResetToken}}
+<div class="panel surface-hero auth-hero">
+  <div class="page-eyebrow">Recovery desk</div>
+  <h2>Reset access</h2>
+  <p>Use the token from your inbox to set a new password and keep the same account.</p>
+</div>
 <form class="panel form" action="/reset-password" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
   <h1>Reset password</h1>
@@ -59,6 +84,11 @@
   <button class="button button-primary" type="submit">Reset</button>
 </form>
 {{else}}
+<div class="panel surface-hero auth-hero">
+  <div class="page-eyebrow">Recovery desk</div>
+  <h2>Password help</h2>
+  <p>Enter the email tied to your account and we will send a reset link.</p>
+</div>
 <form class="panel form" action="/reset-password" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
   <h1>Forgot password</h1>
@@ -72,6 +102,16 @@
 <div class="page-heading">
   <h1>My page</h1>
   <p>{{.Shell.CurrentUser.Name}} · {{.Shell.CurrentUser.Email}}</p>
+</div>
+<div class="panel surface-hero account-summary">
+  <div class="page-eyebrow">Account overview</div>
+  <h2>Manage your account from one place</h2>
+  <p>Review guest status, email verification, and draft work before changing account settings.</p>
+  <div class="chip-row">
+    <span class="chip">{{if .Shell.CurrentUser.Guest}}Guest{{else}}Member{{end}}</span>
+    <span class="chip">{{if .Shell.CurrentUser.EmailVerifiedAt}}Email verified{{else}}Email pending{{end}}</span>
+    <span class="chip">{{.Shell.CurrentUser.Role}}</span>
+  </div>
 </div>
 {{if .Shell.CurrentUser.Guest}}
 <div class="panel form">
@@ -147,9 +187,10 @@
 {{end}}
 
 {{define "page-me-upgrade"}}
-<div class="page-heading">
-  <h1>Upgrade account</h1>
-  <p>Create a full account from your guest session.</p>
+<div class="panel surface-hero auth-hero">
+  <div class="page-eyebrow">Upgrade desk</div>
+  <h2>Upgrade path</h2>
+  <p>Create a full account from your guest session to keep drafts, notifications, and recovery options.</p>
 </div>
 <form class="panel form" action="/me/upgrade" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">

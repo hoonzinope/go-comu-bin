@@ -1,5 +1,14 @@
 {{define "page-admin-reports"}}
 <div class="page-heading"><h1>Reports</h1><p>Moderation queue.</p></div>
+<div class="panel surface-hero admin-hero">
+  <div class="page-eyebrow">Moderation desk</div>
+  <p>Review pending flags in order, record short decisions, and keep the queue moving.</p>
+  <div class="chip-row">
+    <span class="chip">Pending review</span>
+    <span class="chip">Decision notes</span>
+    <span class="chip">Audit trail</span>
+  </div>
+</div>
 {{if .Reports}}
   <div class="panel table-panel">
     <div class="table-head report-grid">
@@ -42,6 +51,15 @@
 
 {{define "page-admin-outbox"}}
 <div class="page-heading"><h1>Dead outbox</h1><p>Retry or discard failed messages.</p></div>
+<div class="panel surface-hero admin-hero">
+  <div class="page-eyebrow">Delivery queue</div>
+  <p>Retry failed messages, then discard only when the error is no longer actionable.</p>
+  <div class="chip-row">
+    <span class="chip">Retry path</span>
+    <span class="chip">Dead messages</span>
+    <span class="chip">Failure history</span>
+  </div>
+</div>
 {{if .Outbox}}
   <div class="panel table-panel">
     <div class="table-head outbox-grid">
@@ -87,7 +105,16 @@
 {{define "page-admin-boards"}}
 <div class="page-heading">
   <h1>Boards</h1>
-  <p>Visibility management.</p>
+  <p>Visibility management and board directory.</p>
+</div>
+<div class="panel surface-hero admin-hero">
+  <div class="page-eyebrow">Board directory</div>
+  <p>Create boards, review visibility, and keep descriptions easy to scan.</p>
+  <div class="chip-row">
+    <span class="chip">Create board</span>
+    <span class="chip">Visible / hidden</span>
+    <span class="chip">Directory scan</span>
+  </div>
 </div>
 <form class="panel form" action="/admin/boards" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -177,7 +204,16 @@
 {{define "page-admin-snapshot"}}
 <div class="page-heading">
   <h1>Admin Snapshot</h1>
-  <p>Board visibility and moderation queue.</p>
+  <p>Board visibility, moderation, and outbox health at a glance.</p>
+</div>
+<div class="panel surface-hero admin-hero">
+  <div class="page-eyebrow">Operations snapshot</div>
+  <p>Watch reports, outbox, and board visibility from one place before diving into details.</p>
+  <div class="chip-row">
+    <span class="chip">Reports</span>
+    <span class="chip">Outbox</span>
+    <span class="chip">Boards</span>
+  </div>
 </div>
 <div class="stats-grid">
   <div class="panel stat-card">
@@ -208,6 +244,10 @@
 
 {{define "page-admin-suspension"}}
 <div class="page-heading"><h1>User suspension</h1><p>{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}</p></div>
+<div class="panel surface-hero admin-hero">
+  <div class="page-eyebrow">Account control</div>
+  <p>{{if and .Suspension (eq .Suspension.Status "suspended")}}Review the current suspension and unsuspend only when the reason is closed.{{else}}Apply a temporary suspension with a clear reason and duration.{{end}}</p>
+</div>
 {{if and .Suspension (eq .Suspension.Status "suspended")}}
 <div class="panel form">
   <p>This user is currently suspended. Reason: {{.Suspension.Reason}}</p>

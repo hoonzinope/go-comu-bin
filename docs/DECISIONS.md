@@ -420,6 +420,44 @@
 - `internal/delivery/web/handler_test.go`
 - `tests/e2e/visual.spec.ts`
 
+## 2026-05-01 - auth는 access desk, admin은 operations console로 역할을 분리한다
+
+상태
+
+- decided
+
+배경
+
+- auth 화면은 단순한 로그인 폼보다 계정, 게스트, 복구 흐름을 한 번에 안내하는 access desk에 가까워야 한다.
+- admin 화면은 목록만 나열하는 페이지보다 moderation, board visibility, dead outbox를 한 곳에서 다루는 operations console이어야 한다.
+- my page는 개인 계정 관리와 drafts 확인이 같은 맥락에서 읽히도록 account overview 역할을 분명히 해야 한다.
+
+관찰
+
+- 현재 login/signup/reset/verify 화면은 기능적으로 맞지만, 각 화면의 역할을 시각적으로 설명하는 요약이 부족하다.
+- admin reports/boards/outbox/suspension 화면은 표와 폼은 갖췄지만, 운영 패널로서의 상위 위계가 약하다.
+- my page는 drafts와 account controls가 같이 있지만, 사용자가 무엇을 관리하는지 한 번에 읽히지 않는다.
+
+결론
+
+- login과 signup은 access desk hero를 두고, guest/account/recovery 흐름을 chips와 요약문으로 설명한다.
+- admin 주요 화면은 moderation desk, board directory, delivery queue, account control 같은 운영 역할명을 전면에 둔다.
+- my page는 account overview panel을 추가해 계정 상태와 drafts를 한 화면에서 읽히게 한다.
+
+후속 작업
+
+- account/admin template 재배치
+- auth/admin handler test 업데이트
+- visual snapshot 갱신
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page_account.tmpl`
+- `internal/delivery/web/templates/page_admin.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/handler_test.go`
+- `tests/e2e/visual.spec.ts`
+
 관련 문서/코드
 
 - `internal/delivery/web/templates/layout.tmpl`
