@@ -45,6 +45,20 @@
 <textarea id="{{.ID}}" name="{{.Name}}" rows="{{if .Rows}}{{.Rows}}{{else}}3{{end}}"{{if .Placeholder}} placeholder="{{.Placeholder}}"{{end}}{{if .Required}} required{{end}}>{{.Value}}</textarea>
 {{end}}
 
+{{define "empty-state"}}
+<div class="panel empty-state{{if .Compact}} empty-state-compact{{end}}">
+  <span class="empty-state-icon material-symbols-outlined" aria-hidden="true">{{.Icon}}</span>
+  <div class="empty-state-copy">
+    {{if .Eyebrow}}<div class="empty-eyebrow">{{.Eyebrow}}</div>{{end}}
+    {{if .Title}}<h2>{{.Title}}</h2>{{end}}
+    {{if .Body}}<p>{{.Body}}</p>{{end}}
+  </div>
+  {{if and .ActionLabel .ActionHref}}
+  <a class="button {{if .ActionPrimary}}button-primary{{end}} empty-cta" href="{{.ActionHref}}">{{.ActionLabel}}</a>
+  {{end}}
+</div>
+{{end}}
+
 {{define "pagination"}}
 {{if and .Pagination (or (gt .Pagination.PrevPage 0) (gt .Pagination.NextPage 0) (gt (len .Pagination.Pages) 1))}}
 <nav class="pagination" aria-label="Pagination">

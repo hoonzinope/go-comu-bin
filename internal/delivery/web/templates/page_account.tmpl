@@ -1,8 +1,13 @@
 {{define "page-login"}}
 <div class="panel surface-hero auth-hero">
-  <div class="page-eyebrow">Access desk</div>
-  <h1>Sign in, create an account, or stay as guest</h1>
-  <p>Keep drafts, reactions, and notifications under one account. Guests stay local until they upgrade.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">badge</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Access desk</div>
+      <h1>Sign in, create an account, or stay as guest</h1>
+      <p>Keep drafts, reactions, and notifications under one account. Guests stay local until they upgrade.</p>
+    </div>
+  </div>
   <div class="chip-row">
     <span class="chip">Persistent account</span>
     <span class="chip">Guest mode</span>
@@ -40,9 +45,14 @@
 
 {{define "page-signup"}}
 <div class="panel surface-hero auth-hero">
-  <div class="page-eyebrow">Access desk</div>
-  <h1>Turn a guest session into a full account</h1>
-  <p>Sign up to keep drafts, receive notifications, and recover your account later.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">person_add</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Access desk</div>
+      <h1>Turn a guest session into a full account</h1>
+      <p>Sign up to keep drafts, receive notifications, and recover your account later.</p>
+    </div>
+  </div>
 </div>
 <form class="panel form" action="/signup{{if .Redirect}}?redirect={{queryEscape .Redirect}}{{end}}" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -57,9 +67,14 @@
 
 {{define "page-verify-email"}}
 <div class="panel surface-hero auth-hero">
-  <div class="page-eyebrow">Recovery desk</div>
-  <h2>Recovery ready</h2>
-  <p>Confirm the mailbox tied to your account so password recovery and account changes stay available.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">key</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Recovery desk</div>
+      <h2>Recovery ready</h2>
+      <p>Confirm the mailbox tied to your account so password recovery and account changes stay available.</p>
+    </div>
+  </div>
 </div>
 <form class="panel form" action="/verify-email" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -72,9 +87,14 @@
 {{define "page-reset-password"}}
 {{if .ResetToken}}
 <div class="panel surface-hero auth-hero">
-  <div class="page-eyebrow">Recovery desk</div>
-  <h2>Reset access</h2>
-  <p>Use the token from your inbox to set a new password and keep the same account.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">lock_reset</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Recovery desk</div>
+      <h2>Reset access</h2>
+      <p>Use the token from your inbox to set a new password and keep the same account.</p>
+    </div>
+  </div>
 </div>
 <form class="panel form" action="/reset-password" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -85,9 +105,14 @@
 </form>
 {{else}}
 <div class="panel surface-hero auth-hero">
-  <div class="page-eyebrow">Recovery desk</div>
-  <h2>Password help</h2>
-  <p>Enter the email tied to your account and we will send a reset link.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">mail_lock</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Recovery desk</div>
+      <h2>Password help</h2>
+      <p>Enter the email tied to your account and we will send a reset link.</p>
+    </div>
+  </div>
 </div>
 <form class="panel form" action="/reset-password" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">
@@ -104,9 +129,14 @@
   <p>{{.Shell.CurrentUser.Name}} · {{.Shell.CurrentUser.Email}}</p>
 </div>
 <div class="panel surface-hero account-summary">
-  <div class="page-eyebrow">Account overview</div>
-  <h2>Manage your account from one place</h2>
-  <p>Review guest status, email verification, and draft work before changing account settings.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">account_circle</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Account overview</div>
+      <h2>Manage your account from one place</h2>
+      <p>Review guest status, email verification, and draft work before changing account settings.</p>
+    </div>
+  </div>
   <div class="chip-row">
     <span class="chip">{{if .Shell.CurrentUser.Guest}}Guest{{else}}Member{{end}}</span>
     <span class="chip">{{if .Shell.CurrentUser.EmailVerifiedAt}}Email verified{{else}}Email pending{{end}}</span>
@@ -140,18 +170,13 @@
 {{end}}
   <section class="panel">
     <h2>Drafts</h2>
-    {{if .Drafts}}
+    {{if and .Drafts (gt (len .Drafts.Posts) 0)}}
       {{range .Drafts.Posts}}
       <div class="list-row"><a href="/posts/{{.UUID}}/edit">{{.Title}}</a><span>{{formatTime .UpdatedAt}}</span></div>
       {{end}}
       {{template "pagination" .}}
     {{else}}
-      <div class="empty">
-        <p>No drafts yet.</p>
-        {{if $.Shell.ComposeURL}}
-        <a class="button empty-cta" href="{{$.Shell.ComposeURL}}">+ Start a draft</a>
-        {{end}}
-      </div>
+      {{template "empty-state" (dict "Compact" true "Icon" "draft" "Eyebrow" "No drafts yet" "Title" "Save a draft to come back to it later" "Body" "Drafts keep work in progress close to the feed." "ActionLabel" "+ Start a draft" "ActionHref" $.Shell.ComposeURL "ActionPrimary" true)}}
     {{end}}
   </section>
 </div>
@@ -188,9 +213,14 @@
 
 {{define "page-me-upgrade"}}
 <div class="panel surface-hero auth-hero">
-  <div class="page-eyebrow">Upgrade desk</div>
-  <h2>Upgrade path</h2>
-  <p>Create a full account from your guest session to keep drafts, notifications, and recovery options.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">upgrade</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Upgrade desk</div>
+      <h2>Upgrade path</h2>
+      <p>Create a full account from your guest session to keep drafts, notifications, and recovery options.</p>
+    </div>
+  </div>
 </div>
 <form class="panel form" action="/me/upgrade" method="post">
   <input type="hidden" name="_csrf" value="{{.Shell.CSRFToken}}">

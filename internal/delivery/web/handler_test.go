@@ -914,6 +914,81 @@ func TestHandler_RenderCoreScreens_DisablesNewPostWhenNoBoards(t *testing.T) {
 	assert.NotContains(t, body, "href=\"/login\"")
 }
 
+func TestHandler_RenderEmptyStateSurfaces(t *testing.T) {
+	t.Run("feed", func(t *testing.T) {
+		postUseCase := &testPostUseCase{feedList: &model.PostList{}}
+		r := newTestWebEngineWithDependencies(&testSessionUseCase{}, &testBoardUseCase{}, postUseCase, &testCommentUseCase{}, &testNotificationUseCase{}, &testReportUseCase{}, &testOutboxAdminUseCase{})
+
+		req, rr := authRequest(http.MethodGet, "/")
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.Contains(t, body, "No conversations yet")
+		assert.Contains(t, body, "Start the first thread")
+		assert.Contains(t, body, "Write the first post")
+		assert.Contains(t, body, "empty-state-icon")
+		assert.Contains(t, body, "forum")
+	})
+
+	t.Run("search", func(t *testing.T) {
+		postUseCase := &testPostUseCase{searchList: &model.PostList{}}
+		r := newTestWebEngineWithDependencies(&testSessionUseCase{}, &testBoardUseCase{}, postUseCase, &testCommentUseCase{}, &testNotificationUseCase{}, &testReportUseCase{}, &testOutboxAdminUseCase{})
+
+		req := httptest.NewRequest(http.MethodGet, "/search?q=void", nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.Contains(t, body, "Nothing matched")
+		assert.Contains(t, body, "Try a broader term or browse the full feed")
+		assert.Contains(t, body, "Browse all posts")
+		assert.Contains(t, body, "search_off")
+	})
+
+	t.Run("drafts", func(t *testing.T) {
+		postUseCase := &testPostUseCase{draftList: &model.PostList{}}
+		r := newTestWebEngineWithDependencies(&testSessionUseCase{}, &testBoardUseCase{}, postUseCase, &testCommentUseCase{}, &testNotificationUseCase{}, &testReportUseCase{}, &testOutboxAdminUseCase{})
+
+		req, rr := authRequest(http.MethodGet, "/me")
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.Contains(t, body, "No drafts yet")
+		assert.Contains(t, body, "Save a draft to come back to it later")
+		assert.Contains(t, body, "draft")
+	})
+
+	t.Run("boards", func(t *testing.T) {
+		r := newTestWebEngineWithBoardUseCase(&testSessionUseCase{}, &testBoardUseCaseEmpty{})
+
+		req, rr := authRequest(http.MethodGet, "/admin/boards")
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.Contains(t, body, "No boards yet")
+		assert.Contains(t, body, "Create the first board to shape the directory")
+		assert.Contains(t, body, "dashboard")
+	})
+
+	t.Run("comments", func(t *testing.T) {
+		commentUseCase := &testCommentUseCase{comments: &model.CommentList{}}
+		r := newTestWebEngineWithDependencies(&testSessionUseCase{}, &testBoardUseCase{}, &testPostUseCase{}, commentUseCase, &testNotificationUseCase{}, &testReportUseCase{}, &testOutboxAdminUseCase{})
+
+		req, rr := authRequest(http.MethodGet, "/posts/post-uuid")
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.Contains(t, body, "No replies yet")
+		assert.Contains(t, body, "Use the reply form above to open the discussion.")
+		assert.Contains(t, body, "comment")
+	})
+}
+
 func TestHandler_RenderCoreScreens_AutoIssuesGuestSessionOnPublicPages(t *testing.T) {
 	session := &testSessionUseCase{}
 	r := newTestWebEngineWithSession(session)

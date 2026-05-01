@@ -1,9 +1,12 @@
 {{define "page-feed"}}
 <div class="feed-intro panel">
-  <div class="feed-intro-copy">
-    <div class="page-eyebrow">Community feed</div>
-    <h1>Feed</h1>
-    <p>Read the newest conversations first, then narrow by board, tag, or search.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">dynamic_feed</span>
+    <div class="feed-intro-copy">
+      <div class="page-eyebrow">Community feed</div>
+      <h1>Feed</h1>
+      <p>Read the newest conversations first, then narrow by board, tag, or search.</p>
+    </div>
   </div>
   {{template "page-feed-tabs" .}}
 </div>
@@ -31,13 +34,7 @@
   </div>
   {{template "pagination" .}}
 {{else}}
-  <div class="panel empty community-empty">
-    <div class="empty-eyebrow">No posts yet</div>
-    <p>Be the first to start the discussion.</p>
-    {{if and $.Shell.IsAuthenticated $.Shell.ComposeURL}}
-    <a class="button button-primary empty-cta" href="{{$.Shell.ComposeURL}}">+ Write the first post</a>
-    {{end}}
-  </div>
+  {{template "empty-state" (dict "Icon" "forum" "Eyebrow" "No conversations yet" "Title" "Start the first thread in this feed" "Body" "Once a post appears here, it will show up in the community stream." "ActionLabel" "+ Write the first post" "ActionHref" $.Shell.ComposeURL "ActionPrimary" true)}}
 {{end}}
 {{end}}
 
@@ -84,16 +81,24 @@
     </div>
     {{template "pagination" .}}
   {{else}}
-    <div class="panel empty community-empty">
-      <div class="empty-eyebrow">No results yet</div>
-      <p>Try a broader term or browse the full feed.</p>
+    <div class="panel empty-state empty-state-compact">
+      <span class="empty-state-icon material-symbols-outlined" aria-hidden="true">search_off</span>
+      <div class="empty-state-copy">
+        <div class="empty-eyebrow">Nothing matched</div>
+        <h2>Try a broader term or browse the full feed</h2>
+        <p>Search results only surface posts, boards, and tags that match your query.</p>
+      </div>
       <a class="button empty-cta" href="/">Browse all posts</a>
     </div>
   {{end}}
 {{else}}
-  <div class="panel empty community-empty">
-    <div class="empty-eyebrow">Search ready</div>
-    <p>Enter a term to scan posts, boards, and tags.</p>
+  <div class="panel empty-state empty-state-compact">
+    <span class="empty-state-icon material-symbols-outlined" aria-hidden="true">search</span>
+    <div class="empty-state-copy">
+      <div class="empty-eyebrow">Search ready</div>
+      <h2>Start with a keyword</h2>
+      <p>Search posts, boards, and tags from the top bar.</p>
+    </div>
   </div>
 {{end}}
 {{end}}
@@ -164,7 +169,7 @@
         <a class="button button-primary" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Sign in to reply</a>
       </div>
       {{end}}
-      {{if .Comments}}
+      {{if and .Comments (gt (len .Comments.Comments) 0)}}
         <div class="stack">
           {{range .Comments.Comments}}
           <div class="panel comment" x-data="{editing:false}">
@@ -247,7 +252,19 @@
         </div>
         {{end}}
       {{else}}
-        <div class="empty">No comments yet.</div>
+        {{if canInteract .Shell}}
+        {{template "empty-state" (dict "Compact" true "Icon" "chat_bubble" "Eyebrow" "No replies yet" "Title" "Start the first reply" "Body" "Use the reply form above to open the discussion." )}}
+        {{else}}
+        <div class="panel empty-state empty-state-compact">
+          <span class="empty-state-icon material-symbols-outlined" aria-hidden="true">chat_bubble</span>
+          <div class="empty-state-copy">
+            <div class="empty-eyebrow">No replies yet</div>
+            <h2>Join the discussion</h2>
+            <p>Sign in to write the first reply and react to comments.</p>
+          </div>
+          <a class="button button-primary empty-cta" href="/login?redirect={{queryEscape (printf "/posts/%s" .PostUUID)}}">Sign in to reply</a>
+        </div>
+        {{end}}
       {{end}}
     </section>
   </article>

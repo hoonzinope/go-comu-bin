@@ -1,8 +1,13 @@
 {{define "page-admin-reports"}}
 <div class="page-heading"><h1>Reports</h1><p>Moderation queue.</p></div>
 <div class="panel surface-hero admin-hero">
-  <div class="page-eyebrow">Moderation desk</div>
-  <p>Review pending flags in order, record short decisions, and keep the queue moving.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">shield</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Moderation desk</div>
+      <p>Review pending flags in order, record short decisions, and keep the queue moving.</p>
+    </div>
+  </div>
   <div class="chip-row">
     <span class="chip">Pending review</span>
     <span class="chip">Decision notes</span>
@@ -52,8 +57,13 @@
 {{define "page-admin-outbox"}}
 <div class="page-heading"><h1>Dead outbox</h1><p>Retry or discard failed messages.</p></div>
 <div class="panel surface-hero admin-hero">
-  <div class="page-eyebrow">Delivery queue</div>
-  <p>Retry failed messages, then discard only when the error is no longer actionable.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">inventory_2</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Delivery queue</div>
+      <p>Retry failed messages, then discard only when the error is no longer actionable.</p>
+    </div>
+  </div>
   <div class="chip-row">
     <span class="chip">Retry path</span>
     <span class="chip">Dead messages</span>
@@ -108,8 +118,13 @@
   <p>Visibility management and board directory.</p>
 </div>
 <div class="panel surface-hero admin-hero">
-  <div class="page-eyebrow">Board directory</div>
-  <p>Create boards, review visibility, and keep descriptions easy to scan.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">grid_view</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Board directory</div>
+      <p>Create boards, review visibility, and keep descriptions easy to scan.</p>
+    </div>
+  </div>
   <div class="chip-row">
     <span class="chip">Create board</span>
     <span class="chip">Visible / hidden</span>
@@ -123,7 +138,7 @@
   {{template "text-field" (dict "ID" "admin-board-description" "Label" "Description" "Name" "description" "Placeholder" "Short description")}}
   <button class="button button-primary" type="submit">Create board</button>
 </form>
-{{if .AdminBoards}}
+{{if and .AdminBoards (gt (len .AdminBoards.Boards) 0)}}
   <div class="stats-grid">
     <div class="panel stat-card">
       <div class="stat-label">Visible</div>
@@ -176,7 +191,7 @@
   </div>
   {{template "pagination" .}}
 {{else}}
-  <div class="panel empty">No boards available.</div>
+  {{template "empty-state" (dict "Compact" true "Icon" "dashboard" "Eyebrow" "No boards yet" "Title" "Create the first board to shape the directory" "Body" "Boards keep the community map readable and help posts cluster by topic." )}}
 {{end}}
 {{end}}
 
@@ -207,8 +222,13 @@
   <p>Board visibility, moderation, and outbox health at a glance.</p>
 </div>
 <div class="panel surface-hero admin-hero">
-  <div class="page-eyebrow">Operations snapshot</div>
-  <p>Watch reports, outbox, and board visibility from one place before diving into details.</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">insights</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Operations snapshot</div>
+      <p>Watch reports, outbox, and board visibility from one place before diving into details.</p>
+    </div>
+  </div>
   <div class="chip-row">
     <span class="chip">Reports</span>
     <span class="chip">Outbox</span>
@@ -245,8 +265,13 @@
 {{define "page-admin-suspension"}}
 <div class="page-heading"><h1>User suspension</h1><p>{{if .Suspension}}{{.Suspension.UserUUID}}{{end}}</p></div>
 <div class="panel surface-hero admin-hero">
-  <div class="page-eyebrow">Account control</div>
-  <p>{{if and .Suspension (eq .Suspension.Status "suspended")}}Review the current suspension and unsuspend only when the reason is closed.{{else}}Apply a temporary suspension with a clear reason and duration.{{end}}</p>
+  <div class="surface-hero-mark">
+    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">block</span>
+    <div class="surface-hero-copy">
+      <div class="page-eyebrow">Account control</div>
+      <p>{{if and .Suspension (eq .Suspension.Status "suspended")}}Review the current suspension and unsuspend only when the reason is closed.{{else}}Apply a temporary suspension with a clear reason and duration.{{end}}</p>
+    </div>
+  </div>
 </div>
 {{if and .Suspension (eq .Suspension.Status "suspended")}}
 <div class="panel form">

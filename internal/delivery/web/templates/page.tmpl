@@ -42,7 +42,7 @@
   {{else if eq .Kind "error"}}
     {{template "page-error" .}}
   {{else}}
-    <div class="panel empty">Nothing to render.</div>
+    {{template "empty-state" (dict "Compact" true "Icon" "dashboard" "Eyebrow" "Empty surface" "Title" "Nothing to render" "Body" "Choose a feed, board, or account surface from the community map." )}}
   {{end}}
 </section>
 {{end}}

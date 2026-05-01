@@ -8,6 +8,10 @@
   --accent: #3b6934;
   --accent-soft: #bcf0ae;
   --danger: #9e422c;
+  --font-body: "Work Sans", sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-ui: "Space Grotesk", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --border: 1.5px solid var(--ink);
   --shadow: 4px 4px 0 #1f2629;
   --shadow-offset: 4px;
@@ -22,7 +26,7 @@ html, body {
 }
 body {
   margin: 0;
-  font-family: "Work Sans", sans-serif;
+  font-family: var(--font-body);
   color: var(--ink);
   background:
     linear-gradient(rgba(59,105,52,.04), rgba(59,105,52,.04)) fixed,
@@ -50,14 +54,14 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 .brand-mark {
   display: inline-flex;
   align-items: center;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: -0.05em;
   text-transform: uppercase;
 }
 .brand-sub, .sidebar-kicker, .meta-row, .chip, .bottom-nav, .menu-toggle {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-ui);
   font-size: .72rem;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -546,7 +550,7 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 }
 .meta-row { color: rgba(43,52,56,.72); }
 .chip { padding: .35rem .55rem; }
-.section-title { margin: 1.25rem 0 .75rem; font-family: "Space Grotesk", sans-serif; font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; border-left: 1.5px solid var(--ink); padding-left: .6rem; }
+.section-title { margin: 1.25rem 0 .75rem; font-family: var(--font-ui); font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; border-left: 1.5px solid var(--ink); padding-left: .6rem; }
 .section-count {
   margin-left: .35rem;
   padding: .12rem .45rem;
@@ -600,7 +604,7 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
   overflow: auto;
 }
 .markdown code {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: .92em;
 }
 .markdown a {
@@ -1185,7 +1189,7 @@ body {
 
 .feed-intro {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   padding: 1.1rem 1.2rem;
@@ -1202,7 +1206,7 @@ body {
 
 .page-eyebrow,
 .empty-eyebrow {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-ui);
   font-size: .68rem;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -1221,6 +1225,71 @@ body {
   margin: 0;
   color: var(--outline);
   max-width: 36rem;
+}
+
+.surface-hero-mark {
+  display: flex;
+  align-items: flex-start;
+  gap: .9rem;
+}
+
+.surface-hero-copy,
+.feed-intro-copy,
+.empty-state-copy {
+  display: grid;
+  gap: .35rem;
+}
+
+.surface-hero-icon,
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: var(--border);
+  border-radius: 999px;
+  background: rgba(31, 90, 69, 0.08);
+  color: var(--accent);
+  box-shadow: 0 12px 24px rgba(29, 39, 48, 0.06);
+}
+
+.empty-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  text-align: left;
+  padding: 1.15rem 1.2rem;
+}
+
+.empty-state-compact {
+  padding: 1rem 1.05rem;
+}
+
+.empty-state-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--accent-soft);
+}
+
+.empty-state h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.empty-state p {
+  margin: 0;
+  color: var(--outline);
+  line-height: 1.55;
+}
+
+.empty-state .button {
+  align-self: flex-start;
+  margin-left: auto;
 }
 
 .table-panel {
@@ -1525,6 +1594,15 @@ body {
 
   .page-main {
     max-width: 100%;
+  }
+
+  .empty-state {
+    flex-direction: column;
+  }
+
+  .empty-state .button {
+    width: 100%;
+    margin-left: 0;
   }
 }
 

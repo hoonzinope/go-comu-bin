@@ -235,6 +235,45 @@
 - `internal/infrastructure/persistence/mysql/open.go`
 - `internal/infrastructure/event/outbox/relay.go`
 
+## 2026-05-01 - community UI의 빈 상태와 정보 레이블은 하나의 시각 체계로 묶는다
+
+상태
+
+- decided
+
+배경
+
+- shell, auth, account, admin, content 화면에서 빈 상태의 문구와 밀도가 서로 달라 시각 언어가 분산돼 보인다.
+- 아이콘은 일부 화면에만 흩어져 있고, hero 패널과 empty panel이 같은 톤으로 읽히지 않는다.
+- 4순위 정리는 토큰과 타이포만이 아니라, 정보가 비는 순간에도 같은 브랜드 표정이 유지되도록 하는 작업이 필요하다.
+
+관찰
+
+- `internal/delivery/web/templates/page_content.tmpl`의 feed/search/comments empty state는 각각 다른 문구와 구조를 사용한다.
+- `internal/delivery/web/templates/page_account.tmpl`와 `internal/delivery/web/templates/page_admin.tmpl`는 hero 패널은 있으나 empty panel은 단순 문구에 머문다.
+- `internal/delivery/web/static/site.css`는 font token과 empty panel 스타일이 분산되어 있어, 새 화면 추가 시 기준을 다시 찾기 어렵다.
+
+결론
+
+- `empty-state` 공통 partial을 두고, feed/search/comments/account/admin의 비어 있는 상태를 같은 구조와 톤으로 렌더링한다.
+- hero 패널에도 동일한 아이콘-카피 구조를 적용해 typography와 iconography를 같은 레벨에서 정리한다.
+- font token을 명시적으로 두고, 주요 label/hero/empty 스타일은 그 토큰을 재사용한다.
+
+후속 작업
+
+- `internal/delivery/web/templates/page_shared.tmpl`에 `empty-state` partial 추가
+- `internal/delivery/web/templates/page_content.tmpl`, `page_account.tmpl`, `page_admin.tmpl`의 empty state 교체
+- `internal/delivery/web/static/site.css`에 typography/icon tokens 추가
+- visual snapshot 갱신
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/page_shared.tmpl`
+- `internal/delivery/web/templates/page_content.tmpl`
+- `internal/delivery/web/templates/page_account.tmpl`
+- `internal/delivery/web/templates/page_admin.tmpl`
+- `internal/delivery/web/static/site.css`
+
 ## 2026-04-30 - post detail body는 raw markdown 저장을 유지하고 서버 렌더링 HTML로 노출한다
 
 상태
