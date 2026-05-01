@@ -200,6 +200,41 @@
 - `internal/delivery/web/static/site.css`
 - `tests/e2e/visual.spec.ts`
 
+## 2026-05-01 - outbox fetch는 MySQL에서 결과셋을 닫은 뒤 상태 갱신하도록 정리한다
+
+상태
+
+- decided
+
+배경
+
+- 로컬 `commu-bin` 컨테이너에서 outbox relay가 `driver: bad connection`을 반복 출력했다.
+- 재현해보니 `FetchReady`가 `SELECT` 결과셋을 연 상태로 같은 트랜잭션에서 row별 `UPDATE`를 수행할 때 MySQL 드라이버가 커넥션을 버렸다.
+- 현재 outbox worker는 기본값이 1이지만, driver 안정성은 worker 수와 무관하게 보장되는 편이 좋다.
+
+관찰
+
+- `FetchReady`는 `rows.Next()` 루프 안에서 바로 `UPDATE outbox_messages`를 실행하고 있었다.
+- MySQL은 활성 결과셋이 남아 있는 커넥션에서 추가 쿼리를 받으면 `bad connection`으로 종료될 수 있다.
+- 동일 로직을 임시 Go 프로그램으로 호출하면 `msgs=0 err=driver: bad connection`이 재현됐다.
+
+결론
+
+- `FetchReady`는 먼저 결과셋을 모두 읽고 `rows.Close()`를 호출한 뒤 상태 갱신 쿼리를 수행한다.
+- 이 변경으로 MySQL에서 outbox relay가 더 이상 `bad connection`을 반복하지 않는다.
+- 향후 concurrent worker를 늘릴 경우에는 `FOR UPDATE SKIP LOCKED` 같은 락 전략을 별도로 검토한다.
+
+후속 작업
+
+- `internal/infrastructure/persistence/sqlite/outbox_repository.go`의 fetch/update 순서 유지
+- MySQL outbox 경로에 대한 회귀 테스트 보강 검토
+
+관련 문서/코드
+
+- `internal/infrastructure/persistence/sqlite/outbox_repository.go`
+- `internal/infrastructure/persistence/mysql/open.go`
+- `internal/infrastructure/event/outbox/relay.go`
+
 ## 2026-04-30 - post detail body는 raw markdown 저장을 유지하고 서버 렌더링 HTML로 노출한다
 
 상태

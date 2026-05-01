@@ -95,14 +95,26 @@ LIMIT ?
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	messages := make([]port.OutboxMessage, 0, limit)
+	fetched := make([]outboxMessageRow, 0, limit)
 	for rows.Next() {
 		item, err := scanOutboxMessage(rows)
 		if err != nil {
+			_ = rows.Close()
 			return nil, err
 		}
+		fetched = append(fetched, item)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	messages := make([]port.OutboxMessage, 0, len(fetched))
+	for _, item := range fetched {
 		item.Status = port.OutboxStatusProcessing
 		item.AttemptCount++
 		item.NextAttemptAt = now.Add(r.processingTimeout)
@@ -114,9 +126,6 @@ WHERE sequence = ?
 			return nil, err
 		}
 		messages = append(messages, item.OutboxMessage)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit sqlite outbox fetch transaction: %w", err)
