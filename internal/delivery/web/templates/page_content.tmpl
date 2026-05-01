@@ -1,10 +1,13 @@
 {{define "page-feed"}}
-{{template "page-feed-tabs" .}}
-<div class="page-heading">
-  <h1>Feed</h1>
-  <p>Latest discussion across visible boards.</p>
+<div class="feed-intro panel">
+  <div class="feed-intro-copy">
+    <div class="page-eyebrow">Community feed</div>
+    <h1>Feed</h1>
+    <p>Read the newest conversations first, then narrow by board, tag, or search.</p>
+  </div>
+  {{template "page-feed-tabs" .}}
 </div>
-{{template "page-feed-items" .}}
+{{template "page-feed-list" .}}
 {{end}}
 
 {{define "page-feed-tabs"}}
@@ -15,6 +18,10 @@
 </div>
 {{end}}
 
+{{define "page-feed-list"}}
+{{template "page-feed-items" .}}
+{{end}}
+
 {{define "page-feed-items"}}
 {{if and .Feed (gt (len .Feed.Posts) 0)}}
   <div class="stack">
@@ -23,9 +30,10 @@
     {{end}}
   </div>
   {{template "pagination" .}}
-  {{else}}
-  <div class="panel empty">
-    <p>No posts yet.</p>
+{{else}}
+  <div class="panel empty community-empty">
+    <div class="empty-eyebrow">No posts yet</div>
+    <p>Be the first to start the discussion.</p>
     {{if and $.Shell.IsAuthenticated $.Shell.ComposeURL}}
     <a class="button button-primary empty-cta" href="{{$.Shell.ComposeURL}}">+ Write the first post</a>
     {{end}}
@@ -36,23 +44,25 @@
 {{define "page-board"}}
 <div class="page-heading">
   <h1>{{if .BoardName}}{{.BoardName}}{{else}}{{boardName .Shell.BoardMap .BoardUUID}}{{end}}</h1>
-  <p>Board feed.</p>
+  <p>Board discussion feed.</p>
 </div>
-{{template "page-feed" (dict "Shell" .Shell "ListBaseURL" (printf "/boards/%s" .BoardUUID) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
+{{template "page-feed-tabs" (dict "Shell" .Shell "ListBaseURL" (printf "/boards/%s" .BoardUUID) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
+{{template "page-feed-items" (dict "Shell" .Shell "ListBaseURL" (printf "/boards/%s" .BoardUUID) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
 {{end}}
 
 {{define "page-tag"}}
 <div class="page-heading">
   <h1>#{{.TagName}}</h1>
-  <p>Tag feed.</p>
+  <p>Tag discussion feed.</p>
 </div>
-{{template "page-feed" (dict "Shell" .Shell "ListBaseURL" (printf "/tags/%s" .TagName) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
+{{template "page-feed-tabs" (dict "Shell" .Shell "ListBaseURL" (printf "/tags/%s" .TagName) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
+{{template "page-feed-items" (dict "Shell" .Shell "ListBaseURL" (printf "/tags/%s" .TagName) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
 {{end}}
 
 {{define "page-search"}}
 <div class="page-heading">
   <h1>Search</h1>
-  <p>Query: {{if .Query}}"{{.Query}}"{{else}}enter a search term{{end}}</p>
+  <p>{{if .Query}}Results for "{{.Query}}"{{else}}Enter a term to scan posts, boards, and tags{{end}}</p>
 </div>
 {{if .Query}}
 <div class="tab-strip">
@@ -61,6 +71,10 @@
   <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "top"}}">Top</a>
 </div>
 {{end}}
+{{template "page-search-items" .}}
+{{end}}
+
+{{define "page-search-items"}}
 {{if .Feed}}
   {{if gt (len .Feed.Posts) 0}}
     <div class="stack">
@@ -70,13 +84,17 @@
     </div>
     {{template "pagination" .}}
   {{else}}
-    <div class="panel empty">
-      <p>No results found.</p>
+    <div class="panel empty community-empty">
+      <div class="empty-eyebrow">No results yet</div>
+      <p>Try a broader term or browse the full feed.</p>
       <a class="button empty-cta" href="/">Browse all posts</a>
     </div>
   {{end}}
 {{else}}
-  <div class="panel empty">Search results appear here.</div>
+  <div class="panel empty community-empty">
+    <div class="empty-eyebrow">Search ready</div>
+    <p>Enter a term to scan posts, boards, and tags.</p>
+  </div>
 {{end}}
 {{end}}
 

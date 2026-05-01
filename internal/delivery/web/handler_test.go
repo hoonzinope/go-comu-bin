@@ -740,7 +740,7 @@ func TestHandler_RenderCoreScreens(t *testing.T) {
 		assert.NotContains(t, body, `href="/notifications"`)
 		assert.NotContains(t, body, `href="/logout"`)
 		assert.NotContains(t, body, `sidebar-kicker">Account`)
-		assert.Contains(t, body, `sidebar-dir-title">Directory`)
+		assert.Contains(t, body, `sidebar-dir-title">Community map`)
 		assert.Equal(t, 1, strings.Count(body, `href="/signup"`))
 		assert.Contains(t, body, `href="/login"`)
 		assert.Contains(t, body, `bottom-nav-item`)
@@ -889,7 +889,7 @@ func TestHandler_RenderCoreScreens_DisablesNewPostWhenNoBoards(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rr.Code)
 	body := rr.Body.String()
-	assert.Contains(t, body, "New Post")
+	assert.Contains(t, body, "Start thread")
 	assert.Contains(t, body, "bottom-nav-item is-disabled")
 	assert.Contains(t, body, "aria-disabled=\"true\"")
 	assert.NotContains(t, body, "href=\"/login\"")

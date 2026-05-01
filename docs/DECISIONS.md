@@ -161,6 +161,45 @@
 - `internal/delivery/web/templates/layout.tmpl`
 - `internal/delivery/web/handler.go`
 
+## 2026-05-01 - 커뮤니티 UI는 editorial community hub로 정리하고 feed-first 위계를 강화한다
+
+상태
+
+- decided
+
+배경
+
+- 현재 커뮤니티 shell은 깔끔하지만 전체 톤이 부드럽고 평균적이라, 커뮤니티의 중심 경험인 읽기/탐색/참여 우선순위가 약하게 보인다.
+- 공개 화면은 feed, board, tag, search가 같은 정보 구조를 공유하므로, 시각 언어도 하나의 기준으로 묶는 편이 유지보수와 인지 부담 모두에 유리하다.
+- 커뮤니티 제품 참고 사례들은 대체로 탐색 컨테이너, 명확한 사이드바, 강한 post viewer, 행동 버튼의 일관된 강조를 공통으로 가진다.
+
+관찰
+
+- 현재 shell은 베이지 계열 배경과 둥근 카드, 넓은 여백을 사용해 안정적이지만, 콘텐츠 밀도와 대비가 낮아 핵심 행동이 덜 선명하다.
+- feed 빈 상태와 일반 post card의 대비가 크지 않아, 첫 방문자가 어디서 시작해야 하는지 즉시 읽기 어렵다.
+- sidebar와 topbar는 역할이 나뉘어 있지만, 시각적 무게가 비슷해 어느 쪽이 주요 탐색인지 덜 분명하다.
+
+결론
+
+- 커뮤니티 UI는 editorial community hub로 정의하고, 읽기 가능한 정보 계층을 디자인 목표로 둔다.
+- accent color는 작성, 조인, vote, primary CTA에만 제한적으로 사용하고 나머지는 중성 톤으로 둔다.
+- shell은 탐색, 읽기, 참여의 순서를 분명히 보여주도록 topbar, sidebar, feed card, empty state의 위계를 재조정한다.
+- feed와 board/tag/search는 같은 listing language를 공유하고, post detail은 그 위의 읽기 화면으로 분리한다.
+
+후속 작업
+
+- `layout.tmpl`의 shell 톤과 탐색 라벨 재정의
+- `page_content.tmpl`의 feed/empty state 문구와 정보 밀도 조정
+- `site.css`의 토큰, 카드, sidebar, feed hierarchy 재작성
+- visual snapshot 갱신 및 회귀 확인
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/layout.tmpl`
+- `internal/delivery/web/templates/page_content.tmpl`
+- `internal/delivery/web/static/site.css`
+- `tests/e2e/visual.spec.ts`
+
 ## 2026-04-30 - post detail body는 raw markdown 저장을 유지하고 서버 렌더링 HTML로 노출한다
 
 상태

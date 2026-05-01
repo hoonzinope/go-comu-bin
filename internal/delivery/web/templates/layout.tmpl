@@ -19,12 +19,12 @@
 <body>
 <div class="app-shell" x-data="{menuOpen:false}">
   <header class="topbar">
-    <div class="brand">
+  <div class="brand">
       <a href="/" class="brand-mark">urrrm community</a>
-      <span class="brand-sub">tiny community site</span>
+      <span class="brand-sub">editorial community hub</span>
     </div>
     <form class="searchbar" action="/search" method="get" role="search">
-      <input type="search" name="q" value="{{.Query}}" placeholder="Search posts, boards, tags" aria-label="Search posts, boards, tags">
+      <input type="search" name="q" value="{{.Query}}" placeholder="Search discussions, boards, tags" aria-label="Search discussions, boards, tags">
       <button type="submit">Search</button>
     </form>
     <div class="topbar-actions">
@@ -46,14 +46,14 @@
   </header>
   <aside class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-dir-title">Directory</div>
-      <div class="sidebar-dir-version">Boards / v1</div>
+      <div class="sidebar-dir-title">Community map</div>
+      <div class="sidebar-dir-version">Boards / activity</div>
     </div>
     {{if canInteract .Shell}}
       {{if .Shell.ComposeURL}}
-    <a class="sidebar-new-post" href="{{.Shell.ComposeURL}}">+ New Post</a>
+    <a class="sidebar-new-post" href="{{.Shell.ComposeURL}}">+ Start thread</a>
       {{else}}
-    <span class="sidebar-new-post is-disabled" aria-disabled="true">+ New Post</span>
+    <span class="sidebar-new-post is-disabled" aria-disabled="true">+ Start thread</span>
       {{end}}
     {{end}}
     <div class="sidebar-section">
