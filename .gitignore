@@ -77,3 +77,4 @@ playwright/.last-run.json
 data/playwright-*
 data/uploads-playwright/
 logs/playwright-*
+tests/e2e/visual.spec.ts-snapshots/

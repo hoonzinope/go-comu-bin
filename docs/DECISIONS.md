@@ -5040,6 +5040,35 @@
 후속 작업
 
 - 브라우저 UI가 추가되면 `internal/delivery/web`와 Playwright snapshot baselines를 함께 갱신한다.
+
+## 2026-05-01 - Playwright visual snapshot baselines는 로컬 재생성 산출물로 다룬다
+
+상태
+
+- decided
+
+배경
+
+- `tests/e2e/visual.spec.ts-snapshots`는 화면 회귀 검증에 필요하지만, 화면 스타일을 자주 조정하는 동안에는 저장소 diff를 자주 오염시킨다.
+- snapshot 파일은 테스트 실행 시 로컬에서 재생성할 수 있고, 저장소에는 UI 코드와 회귀 로직만 남기는 편이 관리가 단순하다.
+
+결론
+
+- `tests/e2e/visual.spec.ts-snapshots`는 `.gitignore`에 추가한다.
+- 이미 추적 중인 snapshot 파일은 인덱스에서 제거해 이후 변경이 저장소 diff에 나타나지 않게 한다.
+- 비주얼 회귀가 필요하면 로컬에서 snapshot을 다시 생성해 확인한다.
+
+후속 작업
+
+- `.gitignore` 갱신
+- snapshot 트래킹 해제
+- 로컬 container 재배포 후 검증
+
+관련 문서/코드
+
+- `tests/e2e/visual.spec.ts`
+- `tests/e2e/visual.spec.ts-snapshots`
+- `.gitignore`
 - UI 전용 정책 변경이 생기면 ROADMAP/README/API/TESTING 문서를 같은 커밋에서 다시 맞춘다.
 
 ## 2026-03-28 - Step 4 roadmap drops the generic hook system and keeps only the narrow action dispatcher boundary
