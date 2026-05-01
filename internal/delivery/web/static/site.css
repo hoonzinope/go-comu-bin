@@ -645,11 +645,25 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 }
 .vote-rail button {
   width: 100%;
-  border: none;
-  background: transparent;
+  min-height: 2rem;
+  border: var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--accent);
   cursor: pointer;
+  line-height: 1;
+  box-shadow: 0 10px 18px rgba(29, 39, 48, 0.06);
 }
-.vote-rail button:hover { color: var(--accent); }
+.vote-rail button:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.vote-rail button:focus-visible,
+.vote-rail a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .vote-rail strong { font-variant-numeric: tabular-nums; }
 .item-body h2 { margin: .4rem 0; font-family: "Space Grotesk", sans-serif; letter-spacing: -0.03em; }
 .item-body p { margin: 0; line-height: 1.6; }
@@ -908,7 +922,7 @@ a, button, .button, .nav-link, .tab, .overlay-link, .sidebar-new-post { transiti
 /* ── Feed item: remove panel padding, hover translate ── */
 .panel.feed-item { padding: 0; }
 .item-body { padding: .9rem 1.1rem; }
-article.panel.feed-item:hover { transform: translate(2px, 2px); }
+article.panel.feed-item:hover { transform: translateY(-2px); }
 
 /* ── Button hover states (instant swap, no transition) ── */
 .button:hover:not(:disabled) {
@@ -1065,7 +1079,7 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
     flex: 0 0 auto;
     justify-content: flex-end;
     flex-wrap: wrap;
-    gap: .4rem;
+    gap: .35rem;
   }
   .topbar-actions .chip,
   .menu-toggle {
@@ -1080,8 +1094,17 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
     max-width: none;
     gap: .4rem;
   }
-  .searchbar input { padding: .7rem .8rem; }
-  .searchbar button { padding: .7rem .85rem; }
+  .searchbar input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: .7rem .8rem;
+  }
+  .searchbar button {
+    width: auto;
+    min-width: 5rem;
+    white-space: nowrap;
+    padding: .7rem .85rem;
+  }
   .bottom-nav { display: flex; }
   .grid-2 { grid-template-columns: 1fr; }
   .compose-layout, .post-layout { grid-template-columns: 1fr; }
@@ -1113,7 +1136,12 @@ article.panel.feed-item:hover { transform: translate(2px, 2px); }
   /* bottom nav: larger touch target */
   .bottom-nav-item { padding: .75rem .5rem; min-height: 3.5rem; }
   /* vote buttons: larger touch target */
-  .vote-rail button, .vote-rail a { padding: .5rem .75rem; font-size: 1rem; }
+  .vote-rail button, .vote-rail a {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    font-size: .95rem;
+  }
   /* admin table: card layout */
   .table-head { display: none; }
   .table-body { display: grid; gap: .5rem; padding: .5rem; background: var(--surface-alt); }
@@ -1521,7 +1549,37 @@ body {
 
 .vote-rail button,
 .vote-rail a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  border: var(--border);
   border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--accent);
+  box-shadow: 0 10px 18px rgba(29, 39, 48, 0.06);
+  line-height: 1;
+  text-decoration: none;
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    background-color .18s ease,
+    color .18s ease,
+    border-color .18s ease;
+}
+
+.vote-rail button:hover,
+.vote-rail a:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.vote-rail button:focus-visible,
+.vote-rail a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .item-body {
@@ -1580,13 +1638,11 @@ body {
   margin-right: auto;
 }
 
-.post-layout,
 .compose-layout {
   grid-template-columns: minmax(0, 1.2fr) minmax(18rem, .78fr);
   gap: 1.25rem;
 }
 
-.post-sidebar,
 .compose-sidebar {
   position: sticky;
   top: 6rem;
@@ -1814,22 +1870,32 @@ body {
   }
 
   .topbar-actions {
-    width: 100%;
-    justify-content: space-between;
+    width: auto;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: .35rem;
   }
 
   .topbar-actions .chip,
   .menu-toggle {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     text-align: center;
   }
 
   .searchbar {
-    flex-direction: column;
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .searchbar input {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .searchbar button {
-    width: 100%;
+    width: auto;
+    min-width: 5rem;
+    white-space: nowrap;
   }
 
   .page {
