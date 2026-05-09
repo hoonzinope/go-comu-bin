@@ -1,23 +1,39 @@
 {{define "page-feed"}}
 <div class="feed-intro panel">
-  <div class="surface-hero-mark">
-    <span class="surface-hero-icon material-symbols-outlined" aria-hidden="true">dynamic_feed</span>
-    <div class="feed-intro-copy">
-      <div class="page-eyebrow">Community feed</div>
-      <h1>Feed</h1>
-      <p>Read the newest conversations first, then narrow by board, tag, or search.</p>
+  <div class="feed-intro-copy">
+    <div class="page-eyebrow">Community directory</div>
+    <h1>Boards, latest, and top threads in one place.</h1>
+    <p>Search by board or tag, then skim compact rows with authors, freshness, and a clear path into the thread.</p>
+  </div>
+  <div class="directory-stats" aria-label="Directory stats">
+    <div class="directory-stat">
+      <strong>{{if .Feed}}{{len .Feed.Posts}}{{else}}0{{end}}</strong>
+      <span>threads on this page</span>
+    </div>
+    <div class="directory-stat">
+      <strong>{{len .Shell.Boards}}</strong>
+      <span>boards</span>
+    </div>
+    <div class="directory-stat">
+      <strong>{{if eq .SortValue "latest"}}Latest{{else if eq .SortValue "top"}}Top{{else}}Hot{{end}}</strong>
+      <span>current sort</span>
     </div>
   </div>
   {{template "page-feed-tabs" .}}
+  <div class="board-rail" aria-label="Boards">
+    {{range .Shell.Boards}}
+    <a class="board-pill" href="/boards/{{.UUID}}">{{.Name}}</a>
+    {{end}}
+  </div>
 </div>
 {{template "page-feed-list" .}}
 {{end}}
 
 {{define "page-feed-tabs"}}
 <div class="tab-strip">
-  <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="{{pageURL .ListBaseURL "sort" "hot"}}">Hot</a>
   <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="{{pageURL .ListBaseURL "sort" "latest"}}">Latest</a>
   <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="{{pageURL .ListBaseURL "sort" "top"}}">Top</a>
+  <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="{{pageURL .ListBaseURL "sort" "hot"}}">Hot</a>
 </div>
 {{end}}
 
@@ -34,14 +50,14 @@
   </div>
   {{template "pagination" .}}
 {{else}}
-  {{template "empty-state" (dict "Icon" "forum" "Eyebrow" "No conversations yet" "Title" "Start the first thread in this feed" "Body" "Once a post appears here, it will show up in the community stream." "ActionLabel" "+ Write the first post" "ActionHref" $.Shell.ComposeURL "ActionPrimary" true)}}
+  {{template "empty-state" (dict "Icon" "forum" "Eyebrow" "No threads yet" "Title" "Start the first discussion" "Body" "Once a post appears here, it becomes part of the directory and can be sorted by latest or top." "ActionLabel" "+ Start thread" "ActionHref" $.Shell.ComposeURL "ActionPrimary" true)}}
 {{end}}
 {{end}}
 
 {{define "page-board"}}
 <div class="page-heading">
   <h1>{{if .BoardName}}{{.BoardName}}{{else}}{{boardName .Shell.BoardMap .BoardUUID}}{{end}}</h1>
-  <p>Board discussion feed.</p>
+  <p>Threads in this board use the same latest and top tabs as the main directory.</p>
 </div>
 {{template "page-feed-tabs" (dict "Shell" .Shell "ListBaseURL" (printf "/boards/%s" .BoardUUID) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
 {{template "page-feed-items" (dict "Shell" .Shell "ListBaseURL" (printf "/boards/%s" .BoardUUID) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "BoardUUID" .BoardUUID)}}
@@ -50,7 +66,7 @@
 {{define "page-tag"}}
 <div class="page-heading">
   <h1>#{{.TagName}}</h1>
-  <p>Tag discussion feed.</p>
+  <p>Threads with this tag stay in the same comparison flow as board results.</p>
 </div>
 {{template "page-feed-tabs" (dict "Shell" .Shell "ListBaseURL" (printf "/tags/%s" .TagName) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
 {{template "page-feed-items" (dict "Shell" .Shell "ListBaseURL" (printf "/tags/%s" .TagName) "ListLimit" .ListLimit "Pagination" .Pagination "Feed" .Feed "SortValue" .SortValue "WindowValue" .WindowValue "TagName" .TagName)}}
@@ -59,13 +75,13 @@
 {{define "page-search"}}
 <div class="page-heading">
   <h1>Search</h1>
-  <p>{{if .Query}}Results for "{{.Query}}"{{else}}Enter a term to scan posts, boards, and tags{{end}}</p>
+  <p>{{if .Query}}Results for "{{.Query}}" across threads, boards, and tags{{else}}Search threads, boards, and tags to narrow the directory{{end}}</p>
 </div>
 {{if .Query}}
 <div class="tab-strip">
-  <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "hot"}}">Hot</a>
   <a class="tab {{if eq .SortValue "latest"}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "latest"}}">Latest</a>
   <a class="tab {{if eq .SortValue "top"}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "top"}}">Top</a>
+  <a class="tab {{if or (eq .SortValue "") (eq .SortValue "hot")}}is-active{{end}}" href="{{pageURL .ListBaseURL "q" .Query "sort" "hot"}}">Hot</a>
 </div>
 {{end}}
 {{template "page-search-items" .}}
@@ -85,10 +101,10 @@
       <span class="empty-state-icon material-symbols-outlined" aria-hidden="true">search_off</span>
       <div class="empty-state-copy">
         <div class="empty-eyebrow">Nothing matched</div>
-        <h2>Try a broader term or browse the full feed</h2>
-        <p>Search results only surface posts, boards, and tags that match your query.</p>
+        <h2>Try a broader term or switch boards</h2>
+        <p>Search returns matching threads, boards, and tags so you can move back to the directory quickly.</p>
       </div>
-      <a class="button empty-cta" href="/">Browse all posts</a>
+      <a class="button empty-cta" href="/">Open directory</a>
     </div>
   {{end}}
 {{else}}
@@ -96,8 +112,8 @@
     <span class="empty-state-icon material-symbols-outlined" aria-hidden="true">search</span>
     <div class="empty-state-copy">
       <div class="empty-eyebrow">Search ready</div>
-      <h2>Start with a keyword</h2>
-      <p>Search posts, boards, and tags from the top bar.</p>
+      <h2>Start with a thread title, board, or tag</h2>
+      <p>Use search as the first pass, then compare the results by latest, top, or hot.</p>
     </div>
   </div>
 {{end}}

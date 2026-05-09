@@ -26,6 +26,9 @@ const visualSnapshotCss = `
   .table-sub,
   .post-uuid,
   .post-byline,
+  .thread-card-author,
+  .thread-card-time,
+  .thread-card-stats,
   .overlay small,
   .overlay .meta-row,
   .error-panel p {

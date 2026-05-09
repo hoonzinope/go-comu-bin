@@ -65,7 +65,7 @@ test('creates posts and drafts from the composer and renders them in feed, tag, 
   await expect(page.getByRole('heading', { name: updatedDraftTitle })).toBeVisible();
 
   await page.goto(`/boards/${boardUUID}`);
-  await expect(page.getByText('Board feed.')).toBeVisible();
+  await expect(page.getByText('Threads in this board use the same latest and top tabs as the main directory.')).toBeVisible();
   await expect(page.getByText(publishedTitle)).toBeVisible();
   await expect(page.getByText(updatedDraftTitle)).toBeVisible();
 
@@ -86,9 +86,9 @@ test('creates posts and drafts from the composer and renders them in feed, tag, 
   const postMain = page.locator('article.post-main');
   await expect(postMain.locator('.post-eyebrow')).toContainText(boardName);
   await expect(postMain.locator('.post-summary')).toHaveCount(0);
-  await expect(postMain.locator('.post-byline')).toContainText('comments');
-  await expect(postMain.getByText('Actions', { exact: true })).toBeVisible();
-  await expect(postMain.getByRole('link', { name: 'Comments' })).toBeVisible();
+  await expect(postMain.locator('.post-stats')).toContainText('comments');
+  await expect(postMain.getByText('Quick actions', { exact: true })).toBeVisible();
+  await expect(postMain.getByRole('link', { name: 'Jump to comments' })).toBeVisible();
   await expect(postMain.locator('#comments .section-title')).toContainText('Comments');
   await expect(postMain.locator('form.comment-form')).toBeVisible();
   await expect(postMain.getByRole('button', { name: '▲ Upvote' })).toBeVisible();
@@ -109,7 +109,7 @@ test('adds a comment and surfaces a notification', async ({ page, request }) => 
   await commentForm.locator('textarea[name="content"]').fill('Playwright comment');
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-    commentForm.getByRole('button', { name: 'Comment' }).click(),
+    commentForm.getByRole('button', { name: 'Reply' }).click(),
   ]);
   const commentID = getLatestCommentIDByPostUUIDAndContent(postUUID, 'Playwright comment');
   expect(commentID).toBeGreaterThan(0);

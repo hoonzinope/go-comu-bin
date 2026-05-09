@@ -25,7 +25,7 @@ func TestBuildPaginationData(t *testing.T) {
 		assert.Equal(t, 5, pagination.Page)
 		assert.Equal(t, 4, pagination.PrevPage)
 		assert.Equal(t, 0, pagination.NextPage)
-		assert.Equal(t, []int{3, 4, 5}, pagination.Pages)
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, pagination.Pages)
 	})
 
 	t.Run("uses total pages when available", func(t *testing.T) {
@@ -43,9 +43,18 @@ func TestBuildPaginationData(t *testing.T) {
 		assert.Equal(t, 1000, pagination.Page)
 		assert.Equal(t, 999, pagination.PrevPage)
 		assert.Equal(t, 0, pagination.NextPage)
-		assert.Len(t, pagination.Pages, 1000)
-		assert.Equal(t, 1, pagination.Pages[0])
-		assert.Equal(t, 1000, pagination.Pages[len(pagination.Pages)-1])
+		assert.Equal(t, 1000, pagination.TotalPages)
+		assert.Equal(t, []int{996, 997, 998, 999, 1000}, pagination.Pages)
+	})
+
+	t.Run("shows at most five page numbers from total pages", func(t *testing.T) {
+		pagination := buildPaginationData(20, true, 1000)
+		require.NotNil(t, pagination)
+		assert.Equal(t, 20, pagination.Page)
+		assert.Equal(t, 19, pagination.PrevPage)
+		assert.Equal(t, 21, pagination.NextPage)
+		assert.Equal(t, []int{18, 19, 20, 21, 22}, pagination.Pages)
+		assert.LessOrEqual(t, len(pagination.Pages), 5)
 	})
 }
 

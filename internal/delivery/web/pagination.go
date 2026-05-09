@@ -11,6 +11,7 @@ import (
 const (
 	webMaxPageNumber    = 1000
 	webPageWindowRadius = 2
+	webMaxVisiblePages  = 5
 )
 
 func clampWebPageNumber(page int) int {
@@ -41,10 +42,7 @@ func buildPaginationData(page int, hasMore bool, totalPages ...int) *PaginationD
 		if page < maxPage {
 			pagination.NextPage = page + 1
 		}
-		pagination.Pages = make([]int, 0, maxPage)
-		for current := 1; current <= maxPage; current++ {
-			pagination.Pages = append(pagination.Pages, current)
-		}
+		pagination.Pages = visiblePageWindow(page, maxPage)
 		pagination.TotalPages = maxPage
 		return pagination
 	}
@@ -54,10 +52,6 @@ func buildPaginationData(page int, hasMore bool, totalPages ...int) *PaginationD
 	if hasMore && page < webMaxPageNumber {
 		pagination.NextPage = page + 1
 	}
-	start := page - webPageWindowRadius
-	if start < 1 {
-		start = 1
-	}
 	end := page
 	if hasMore {
 		end = page + webPageWindowRadius
@@ -65,11 +59,36 @@ func buildPaginationData(page int, hasMore bool, totalPages ...int) *PaginationD
 			end = webMaxPageNumber
 		}
 	}
-	pagination.Pages = make([]int, 0, end-start+1)
-	for current := start; current <= end; current++ {
-		pagination.Pages = append(pagination.Pages, current)
-	}
+	pagination.Pages = visiblePageWindow(page, end)
 	return pagination
+}
+
+func visiblePageWindow(page, maxPage int) []int {
+	if maxPage < 1 {
+		return nil
+	}
+	page = clampWebPageNumber(page)
+	if page > maxPage {
+		page = maxPage
+	}
+	windowSize := webMaxVisiblePages
+	if maxPage < windowSize {
+		windowSize = maxPage
+	}
+	start := page - windowSize/2
+	if start < 1 {
+		start = 1
+	}
+	end := start + windowSize - 1
+	if end > maxPage {
+		end = maxPage
+		start = end - windowSize + 1
+	}
+	pages := make([]int, 0, end-start+1)
+	for current := start; current <= end; current++ {
+		pages = append(pages, current)
+	}
+	return pages
 }
 
 func totalPagesFromCount(totalCount, limit int) int {

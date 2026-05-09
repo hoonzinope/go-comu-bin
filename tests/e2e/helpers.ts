@@ -401,7 +401,7 @@ export async function deleteAccountThroughUi(page: Page, password: string): Prom
     page.waitForURL((url) => new URL(url.toString()).pathname === '/', { timeout: 10000 }),
     form.getByRole('button', { name: 'Delete' }).click(),
   ]);
-  await expect(page.getByRole('heading', { name: 'Feed' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Boards, latest, and top threads in one place.' })).toBeVisible();
 }
 
 export async function createVerifiedUser(page: Page, request: APIRequestContext, prefix: string): Promise<Credentials> {

@@ -21,16 +21,33 @@
 {{end}}
 
 {{define "post-summary"}}
-<article class="panel feed-item">
+<article class="panel feed-item thread-card">
   {{template "reaction-rail" .}}
-  <div class="item-body">
-    <div class="meta-row">
+  <div class="item-body thread-card-copy">
+    <div class="meta-row thread-card-meta">
       <span class="chip">{{boardName .Shell.BoardMap .Post.BoardUUID}}</span>
-      <span>@{{shortUUID .Post.AuthorUUID}}</span>
-      <span>{{formatTime .Post.UpdatedAt}}</span>
+      <span class="thread-card-author">@{{shortUUID .Post.AuthorUUID}}</span>
+      <span class="thread-card-time">{{formatTime .Post.UpdatedAt}}</span>
     </div>
-    <h2><a href="/posts/{{.Post.UUID}}">{{.Post.Title}}</a></h2>
-    <p>{{if .Post.Summary}}{{.Post.Summary}}{{else}}{{truncate (normalizeContent .Post.Content) 220}}{{end}}</p>
+    <div class="thread-card-header">
+      <h2 class="thread-card-title"><a href="/posts/{{.Post.UUID}}">{{.Post.Title}}</a></h2>
+      <span class="thread-card-status">Live thread</span>
+    </div>
+    <p class="thread-card-body">{{if .Post.Summary}}{{.Post.Summary}}{{else}}{{truncate (normalizeContent .Post.Content) 220}}{{end}}</p>
+    <div class="thread-card-stats" aria-label="Thread metadata">
+      <span class="thread-stat">
+        <strong>Board</strong>
+        <span>{{boardName .Shell.BoardMap .Post.BoardUUID}}</span>
+      </span>
+      <span class="thread-stat">
+        <strong>Author</strong>
+        <span>@{{shortUUID .Post.AuthorUUID}}</span>
+      </span>
+      <span class="thread-stat">
+        <strong>Updated</strong>
+        <span>{{formatTime .Post.UpdatedAt}}</span>
+      </span>
+    </div>
   </div>
 </article>
 {{end}}

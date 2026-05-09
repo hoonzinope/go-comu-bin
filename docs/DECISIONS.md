@@ -200,6 +200,85 @@
 - `internal/delivery/web/static/site.css`
 - `tests/e2e/visual.spec.ts`
 
+## 2026-05-09 - community directory UI는 boards / latest / top / compact rows로 읽히게 정리한다
+
+상태
+
+- decided
+
+배경
+
+- Lazyweb 참고 화면들은 검색 도구처럼 보이더라도 실제 첫 화면은 board/category 탐색, latest/top tab, 짧은 thread row, 메타 정보 노출을 중심으로 구성된다.
+- 현재 shell은 검색과 비교 흐름은 가지고 있지만, 첫 화면이 여전히 research map처럼 읽혀 실제 커뮤니티 directory 느낌이 약하다.
+- 이 변경은 API나 데이터 모델을 바꾸지 않고, SSR 템플릿과 CSS만으로 첫 화면의 정보 구조를 다시 잡는 작업이다.
+
+관찰
+
+- topbar search와 sidebar board list는 이미 있지만, 문구와 위계가 커뮤니티 directory보다는 내부 리서치 대시보드에 가깝다.
+- feed/search/board/tag 목록은 같은 리스트 구조를 공유하므로, tab 순서와 카드 메타를 맞추면 전체 경험이 한 번에 정리된다.
+- thread summary는 compact row로 보이게 만들 수 있지만, 현재 데이터 계약에서는 댓글/반응 count를 새로 노출하지 않고도 board, author, updated 메타만으로 충분히 읽힌다.
+
+결론
+
+- shell 문구를 discussion directory로 바꾸고, 첫 화면에 boards와 current sort를 보여주는 directory stats와 board rail을 노출한다.
+- tab 순서는 latest / top / hot으로 맞춰 실제 커뮤니티 피드 패턴에 가깝게 읽히도록 정리한다.
+- thread summary는 vote rail과 함께 compact row로 유지하되, board / author / updated 메타를 더 선명하게 보여준다.
+- SSR 템플릿, CSS, web tests만 갱신하고 기존 Go API 계약은 유지한다.
+
+후속 작업
+
+- `internal/delivery/web/templates/layout.tmpl`의 shell 문구 정리
+- `internal/delivery/web/templates/page_content.tmpl`과 `page_shared.tmpl`의 directory/row 구조 반영
+- `internal/delivery/web/static/site.css`의 directory stats, board rail, thread card 스타일 반영
+- `internal/delivery/web` 테스트와 비주얼 스냅샷 검증
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/layout.tmpl`
+- `internal/delivery/web/templates/page_content.tmpl`
+- `internal/delivery/web/templates/page_shared.tmpl`
+- `internal/delivery/web/static/site.css`
+- `internal/delivery/web/handler_test.go`
+
+## 2026-05-09 - Lazyweb 리서치는 커뮤니티 UI를 검색/비교 중심 작업 화면으로 발전시키는 기준으로 사용한다
+
+상태
+
+- decided
+
+배경
+
+- Lazyweb는 특정 사이트의 시각 스타일을 복제하기보다, 유사 제품 화면을 찾고 비교해 개선 후보를 뽑는 디자인 리서치 MCP 흐름에 가깝다.
+- 현재 Web UI는 feed-first 위계와 공통 empty state가 정리됐지만, 상단 검색과 목록 카드가 “무엇을 비교하고 이어서 읽을지”를 충분히 드러내지는 못한다.
+- `go-comu-bin`은 HTML-first 커뮤니티 UI이므로, 무거운 클라이언트 기능보다 SSR 템플릿과 CSS만으로 탐색/비교/참여 흐름을 선명하게 만드는 편이 변경 범위를 작게 유지한다.
+
+관찰
+
+- `layout.tmpl`의 topbar 검색은 모든 화면에 있지만, 브랜드/사이드바 문구는 아직 일반 커뮤니티 탐색에 머문다.
+- `page_content.tmpl`의 feed/search/board/tag 화면은 같은 목록 언어를 공유하지만, 검색 결과를 비교하거나 더 좁혀보라는 리서치 흐름이 약하다.
+- `site.css`는 editorial 톤이 강하고 카드 반경과 장식이 커서, 반복적으로 스캔하는 작업 화면으로는 밀도가 낮다.
+
+결론
+
+- Lazyweb에서 얻는 기준은 `search`, `compare`, `similarity` 흐름으로 해석하고, UI는 검색 우선 커뮤니티 리서치 데스크로 조정한다.
+- 상단 검색은 앱의 1차 행동으로 보이게 하고, 사이드바는 board map보다 research map에 가깝게 라벨링한다.
+- feed/search/board/tag 목록은 한눈에 비교 가능한 thread index로 다듬고, 장식적 카드보다 낮은 반경/높은 대비/일관된 메타 정보에 집중한다.
+- 이 변경은 SSR 템플릿과 CSS 안에서 처리하고, API 계약이나 데이터 모델은 변경하지 않는다.
+
+후속 작업
+
+- `layout.tmpl`의 브랜드 보조문구, 검색 placeholder, 사이드바 라벨을 리서치 중심으로 조정
+- `page_content.tmpl`의 feed/search/empty copy를 검색/비교 흐름에 맞게 조정
+- `site.css`의 컬러 토큰, 반경, topbar/search/sidebar/feed card 밀도 재정의
+- Playwright visual snapshot 갱신 및 회귀 테스트 확인
+
+관련 문서/코드
+
+- `internal/delivery/web/templates/layout.tmpl`
+- `internal/delivery/web/templates/page_content.tmpl`
+- `internal/delivery/web/static/site.css`
+- `tests/e2e/visual.spec.ts`
+
 ## 2026-05-01 - outbox fetch는 MySQL에서 결과셋을 닫은 뒤 상태 갱신하도록 정리한다
 
 상태

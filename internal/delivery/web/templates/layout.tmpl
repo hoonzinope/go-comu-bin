@@ -19,12 +19,12 @@
 <body>
 <div class="app-shell" x-data="{menuOpen:false}">
   <header class="topbar">
-  <div class="brand">
+    <div class="brand">
       <a href="/" class="brand-mark">urrrm community</a>
-      <span class="brand-sub">editorial community hub</span>
+      <span class="brand-sub">discussion directory</span>
     </div>
     <form class="searchbar" action="/search" method="get" role="search">
-      <input type="search" name="q" value="{{.Query}}" placeholder="Search discussions, boards, tags" aria-label="Search discussions, boards, tags">
+      <input type="search" name="q" value="{{.Query}}" placeholder="Search threads, boards, tags" aria-label="Search threads, boards, tags">
       <button type="submit">Search</button>
     </form>
     <div class="topbar-actions">
@@ -46,8 +46,8 @@
   </header>
   <aside class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-dir-title">Community map</div>
-      <div class="sidebar-dir-version">Boards / activity</div>
+      <div class="sidebar-dir-title">Discussion directory</div>
+      <div class="sidebar-dir-version">Boards / latest / top</div>
     </div>
     {{if canInteract .Shell}}
       {{if .Shell.ComposeURL}}
@@ -56,10 +56,18 @@
     <span class="sidebar-new-post is-disabled" aria-disabled="true">+ Start thread</span>
       {{end}}
     {{end}}
-    <div class="sidebar-section">
+    <div class="sidebar-section sidebar-method">
       <div class="sidebar-kicker">Browse</div>
+      <div class="method-list" aria-label="Community workflow">
+        <span><strong>01</strong> Search</span>
+        <span><strong>02</strong> Compare</span>
+        <span><strong>03</strong> Reply</span>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-kicker">Boards</div>
       <nav class="nav-list">
-        <a class="nav-link {{if eq .Shell.ActiveNav "feed"}}is-active{{end}}" href="/">All feed</a>
+        <a class="nav-link {{if eq .Shell.ActiveNav "feed"}}is-active{{end}}" href="/">All threads</a>
         {{range .Shell.Boards}}
         <a class="nav-link" href="/boards/{{.UUID}}">{{.Name}}</a>
         {{end}}

@@ -65,7 +65,8 @@ test('deletes the current account from My page and clears access', async ({ page
 
   await deleteAccountThroughUi(page, credentials.password);
   await page.goto('/me');
-  await expect(page).toHaveURL(/\/login\?redirect=%2Fme$/);
+  await expect(page.getByRole('heading', { name: 'My page' })).toBeVisible();
+  await expect(page.getByText('Guest account')).toBeVisible();
 
   const loginAfterDelete = await request.post('/api/v1/auth/login', {
     data: { username: credentials.username, password: credentials.password },
